@@ -1,0 +1,32 @@
+[
+  {
+    "category_id": "CAT-01",
+    "name": "IT Services",
+    "description": "Information Technology services including software development, infrastructure, and support",
+    "spend_tier": "High",
+    "criticality": "High"
+  },
+  {
+    "category_id": "CAT-02",
+    "name": "Office Supplies",
+    "description": "General office supplies and consumables",
+    "spend_tier": "Medium",
+    "criticality": "Medium"
+  },
+  {
+    "category_id": "CAT-03",
+    "name": "Professional Services",
+    "description": "Consulting and professional advisory services",
+    "spend_tier": "High",
+    "criticality": "High"
+  },
+  {
+    "category_id": "CAT-04",
+    "name": "Facilities Management",
+    "description": "Building maintenance, cleaning, and facility services",
+    "spend_tier": "Medium",
+    "criticality": "Medium"
+  }
+]
+
+

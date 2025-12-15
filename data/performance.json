@@ -1,0 +1,105 @@
+[
+  {
+    "supplier_id": "SUP-001",
+    "category_id": "CAT-01",
+    "overall_score": 7.2,
+    "trend": "Declining",
+    "trend_period_months": 3,
+    "metrics": {
+      "quality": 7.5,
+      "delivery": 6.8,
+      "cost": 7.0,
+      "innovation": 7.5,
+      "responsiveness": 7.0
+    },
+    "issues": [
+      "Delivery delays in last quarter",
+      "Cost overruns on recent projects"
+    ],
+    "last_review_date": "2024-01-15"
+  },
+  {
+    "supplier_id": "SUP-002",
+    "category_id": "CAT-01",
+    "overall_score": 8.5,
+    "trend": "Stable",
+    "trend_period_months": 6,
+    "metrics": {
+      "quality": 8.7,
+      "delivery": 8.5,
+      "cost": 8.3,
+      "innovation": 8.5,
+      "responsiveness": 8.5
+    },
+    "issues": [],
+    "last_review_date": "2024-01-20"
+  },
+  {
+    "supplier_id": "SUP-003",
+    "category_id": "CAT-02",
+    "overall_score": 8.8,
+    "trend": "Stable",
+    "trend_period_months": 12,
+    "metrics": {
+      "quality": 9.0,
+      "delivery": 8.9,
+      "cost": 8.5,
+      "innovation": 8.5,
+      "responsiveness": 9.0
+    },
+    "issues": [],
+    "last_review_date": "2024-01-10"
+  },
+  {
+    "supplier_id": "SUP-004",
+    "category_id": "CAT-03",
+    "overall_score": 8.2,
+    "trend": "Improving",
+    "trend_period_months": 4,
+    "metrics": {
+      "quality": 8.5,
+      "delivery": 8.0,
+      "cost": 8.0,
+      "innovation": 8.5,
+      "responsiveness": 8.0
+    },
+    "issues": [],
+    "last_review_date": "2024-01-18"
+  },
+  {
+    "supplier_id": "SUP-005",
+    "category_id": "CAT-04",
+    "overall_score": 7.0,
+    "trend": "Stable",
+    "trend_period_months": 6,
+    "metrics": {
+      "quality": 7.2,
+      "delivery": 7.0,
+      "cost": 6.8,
+      "innovation": 7.0,
+      "responsiveness": 7.0
+    },
+    "issues": [
+      "Occasional quality issues"
+    ],
+    "last_review_date": "2024-01-12"
+  },
+  {
+    "supplier_id": "SUP-006",
+    "category_id": "CAT-01",
+    "overall_score": 8.0,
+    "trend": "Improving",
+    "trend_period_months": 2,
+    "metrics": {
+      "quality": 8.2,
+      "delivery": 8.0,
+      "cost": 7.8,
+      "innovation": 8.5,
+      "responsiveness": 8.0
+    },
+    "issues": [],
+    "last_review_date": "2024-01-22"
+  }
+]
+
+

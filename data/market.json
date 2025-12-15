@@ -1,0 +1,52 @@
+[
+  {
+    "category_id": "CAT-01",
+    "benchmark_price_range_usd": {
+      "min": 1500000,
+      "max": 3000000,
+      "median": 2200000
+    },
+    "market_trend": "Stable",
+    "supplier_availability": "High",
+    "competitive_intensity": "High",
+    "price_trend": "Slight increase expected"
+  },
+  {
+    "category_id": "CAT-02",
+    "benchmark_price_range_usd": {
+      "min": 300000,
+      "max": 600000,
+      "median": 450000
+    },
+    "market_trend": "Stable",
+    "supplier_availability": "Very High",
+    "competitive_intensity": "Very High",
+    "price_trend": "Stable"
+  },
+  {
+    "category_id": "CAT-03",
+    "benchmark_price_range_usd": {
+      "min": 2000000,
+      "max": 4000000,
+      "median": 3000000
+    },
+    "market_trend": "Growing",
+    "supplier_availability": "Medium",
+    "competitive_intensity": "Medium",
+    "price_trend": "Moderate increase expected"
+  },
+  {
+    "category_id": "CAT-04",
+    "benchmark_price_range_usd": {
+      "min": 600000,
+      "max": 1200000,
+      "median": 900000
+    },
+    "market_trend": "Stable",
+    "supplier_availability": "High",
+    "competitive_intensity": "High",
+    "price_trend": "Stable"
+  }
+]
+
+

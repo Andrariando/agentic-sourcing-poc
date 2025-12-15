@@ -1,0 +1,64 @@
+[
+  {
+    "contract_id": "CON-001",
+    "supplier_id": "SUP-001",
+    "category_id": "CAT-01",
+    "start_date": "2022-02-01",
+    "end_date": "2024-03-01",
+    "expiry_days": 30,
+    "annual_value_usd": 2500000,
+    "renewal_terms": "Auto-renew unless terminated 60 days prior",
+    "status": "Active",
+    "renewal_options": ["Renew", "Renegotiate", "RFx", "Terminate"]
+  },
+  {
+    "contract_id": "CON-002",
+    "supplier_id": "SUP-002",
+    "category_id": "CAT-01",
+    "start_date": "2023-06-01",
+    "end_date": "2025-06-01",
+    "expiry_days": 450,
+    "annual_value_usd": 1800000,
+    "renewal_terms": "Fixed term, no auto-renewal",
+    "status": "Active",
+    "renewal_options": ["Renew", "Renegotiate", "RFx", "Terminate"]
+  },
+  {
+    "contract_id": "CON-003",
+    "supplier_id": "SUP-003",
+    "category_id": "CAT-02",
+    "start_date": "2021-01-01",
+    "end_date": "2024-12-31",
+    "expiry_days": 330,
+    "annual_value_usd": 450000,
+    "renewal_terms": "Auto-renew for 2 years unless terminated",
+    "status": "Active",
+    "renewal_options": ["Renew", "Renegotiate", "RFx", "Terminate"]
+  },
+  {
+    "contract_id": "CON-004",
+    "supplier_id": "SUP-004",
+    "category_id": "CAT-03",
+    "start_date": "2023-03-15",
+    "end_date": "2024-09-15",
+    "expiry_days": 240,
+    "annual_value_usd": 3200000,
+    "renewal_terms": "Fixed term, renewal subject to performance review",
+    "status": "Active",
+    "renewal_options": ["Renew", "Renegotiate", "RFx", "Terminate"]
+  },
+  {
+    "contract_id": "CON-005",
+    "supplier_id": "SUP-005",
+    "category_id": "CAT-04",
+    "start_date": "2022-08-01",
+    "end_date": "2024-08-01",
+    "expiry_days": 210,
+    "annual_value_usd": 850000,
+    "renewal_terms": "Auto-renew unless terminated 90 days prior",
+    "status": "Active",
+    "renewal_options": ["Renew", "Renegotiate", "RFx", "Terminate"]
+  }
+]
+
+

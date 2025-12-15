@@ -1,0 +1,64 @@
+[
+  {
+    "case_id": "CASE-0001",
+    "name": "IT Services Contract Renewal",
+    "category_id": "CAT-01",
+    "contract_id": "CON-001",
+    "supplier_id": "SUP-001",
+    "dtp_stage": "DTP-01",
+    "trigger_source": "Signal",
+    "created_date": "2024-02-01",
+    "status": "In Progress",
+    "summary": "Contract CON-001 expiring in 30 days with declining performance trend"
+  },
+  {
+    "case_id": "CASE-0002",
+    "name": "Office Supplies Review",
+    "category_id": "CAT-02",
+    "contract_id": "CON-003",
+    "supplier_id": "SUP-003",
+    "dtp_stage": "DTP-01",
+    "trigger_source": "User",
+    "created_date": "2024-01-15",
+    "status": "In Progress",
+    "summary": "Review renewal options for office supplies contract"
+  },
+  {
+    "case_id": "CASE-0003",
+    "name": "Professional Services RFx",
+    "category_id": "CAT-03",
+    "contract_id": "CON-004",
+    "supplier_id": "SUP-004",
+    "dtp_stage": "DTP-03",
+    "trigger_source": "User",
+    "created_date": "2024-01-20",
+    "status": "In Progress",
+    "summary": "Launch RFx process for professional services category"
+  },
+  {
+    "case_id": "CASE-0004",
+    "name": "Facilities Management Negotiation",
+    "category_id": "CAT-04",
+    "contract_id": "CON-005",
+    "supplier_id": "SUP-005",
+    "dtp_stage": "DTP-04",
+    "trigger_source": "User",
+    "created_date": "2024-01-25",
+    "status": "In Progress",
+    "summary": "Negotiate terms for facilities management services"
+  },
+  {
+    "case_id": "CASE-0005",
+    "name": "IT Hardware Sourcing",
+    "category_id": "CAT-01",
+    "contract_id": null,
+    "supplier_id": null,
+    "dtp_stage": "DTP-02",
+    "trigger_source": "User",
+    "created_date": "2024-02-05",
+    "status": "Open",
+    "summary": "New sourcing initiative for IT hardware procurement"
+  }
+]
+
+

@@ -1,0 +1,58 @@
+[
+  {
+    "supplier_id": "SUP-001",
+    "name": "TechSolutions Inc",
+    "category_id": "CAT-01",
+    "status": "Active",
+    "tier": "Tier 1",
+    "years_relationship": 5,
+    "location": "North America"
+  },
+  {
+    "supplier_id": "SUP-002",
+    "name": "GlobalIT Partners",
+    "category_id": "CAT-01",
+    "status": "Active",
+    "tier": "Tier 2",
+    "years_relationship": 2,
+    "location": "Global"
+  },
+  {
+    "supplier_id": "SUP-003",
+    "name": "OfficeMax Supply Co",
+    "category_id": "CAT-02",
+    "status": "Active",
+    "tier": "Tier 1",
+    "years_relationship": 8,
+    "location": "North America"
+  },
+  {
+    "supplier_id": "SUP-004",
+    "name": "ConsultPro Advisors",
+    "category_id": "CAT-03",
+    "status": "Active",
+    "tier": "Tier 1",
+    "years_relationship": 4,
+    "location": "Global"
+  },
+  {
+    "supplier_id": "SUP-005",
+    "name": "FacilityCare Services",
+    "category_id": "CAT-04",
+    "status": "Active",
+    "tier": "Tier 2",
+    "years_relationship": 3,
+    "location": "Regional"
+  },
+  {
+    "supplier_id": "SUP-006",
+    "name": "ITInnovate Systems",
+    "category_id": "CAT-01",
+    "status": "Active",
+    "tier": "Tier 2",
+    "years_relationship": 1,
+    "location": "North America"
+  }
+]
+
+

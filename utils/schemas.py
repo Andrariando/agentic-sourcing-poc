@@ -1,0 +1,213 @@
+"""
+Pydantic schemas for the agentic sourcing pipeline system.
+All agent outputs must reference IDs (CAT-xx, SUP-xxx, CON-xxx).
+"""
+from typing import Optional, List, Dict, Any, Union, Literal
+from pydantic import BaseModel, Field
+from datetime import datetime
+from enum import Enum
+
+
+class DTPStage(str, Enum):
+    """Dynamic Transaction Pipeline stages"""
+    DTP_01 = "DTP-01"  # Strategy
+    DTP_02 = "DTP-02"  # Planning
+    DTP_03 = "DTP-03"  # Sourcing
+    DTP_04 = "DTP-04"  # Negotiation
+    DTP_05 = "DTP-05"  # Contracting
+    DTP_06 = "DTP-06"  # Execution
+
+
+class TriggerSource(str, Enum):
+    USER = "User"
+    SIGNAL = "Signal"
+
+
+class CaseStatus(str, Enum):
+    IN_PROGRESS = "In Progress"
+    WAITING_HUMAN = "Waiting for Human Decision"
+    COMPLETED = "Completed"
+    REJECTED = "Rejected"
+
+
+class DecisionImpact(str, Enum):
+    """Materiality of an agent recommendation"""
+    LOW = "Low"
+    MEDIUM = "Medium"
+    HIGH = "High"
+
+
+class SignalRegisterEntry(BaseModel):
+    """Persistent signal register entry"""
+    signal_type: str  # ContractExpiry | PerformanceDecline | SpendSpike | ComplianceRisk
+    severity: Literal["Low", "Medium", "High"]
+    confidence: float
+    source: Literal["system", "agent"]
+    timestamp: str
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class DTPPolicyContext(BaseModel):
+    """Policy constraints injected into the Supervisor"""
+    allowed_actions: List[str] = Field(default_factory=list)
+    mandatory_checks: List[str] = Field(default_factory=list)
+    human_required_for: List[str] = Field(default_factory=list)
+
+
+class CaseSummary(BaseModel):
+    """Compact structured summary maintained by Supervisor"""
+    case_id: str
+    category_id: str
+    contract_id: Optional[str] = None
+    supplier_id: Optional[str] = None
+    dtp_stage: str
+    trigger_source: str
+    status: str
+    created_date: str
+    summary_text: str
+    key_findings: List[str] = Field(default_factory=list)
+    recommended_action: Optional[str] = None
+
+
+class Signal(BaseModel):
+    """Signal definition"""
+    signal_id: str
+    signal_type: str  # e.g., "Contract Expiry", "Performance Alert"
+    category_id: str
+    contract_id: Optional[str] = None
+    supplier_id: Optional[str] = None
+    severity: str  # "High", "Medium", "Low"
+    description: str
+    detected_date: str
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class HumanDecision(BaseModel):
+    """Human decision for HIL workflow"""
+    decision: Literal["Approve", "Reject"]
+    reason: Optional[str] = None
+    edited_fields: Dict[str, Any] = Field(default_factory=dict)
+    timestamp: str
+    user_id: Optional[str] = None
+
+
+class BudgetState(BaseModel):
+    """Token budget tracking"""
+    tokens_used: int = 0
+    tokens_remaining: int = 3000
+    cost_usd: float = 0.0
+    model_calls: int = 0
+    tier_1_calls: int = 0
+    tier_2_calls: int = 0
+
+
+class CacheMeta(BaseModel):
+    """Cache metadata"""
+    cache_hit: bool = False
+    cache_key: Optional[str] = None
+    input_hash: Optional[str] = None
+    schema_version: str = "1.0"
+
+
+class AgentActionLog(BaseModel):
+    """Detailed agent action log with LLM input/output"""
+    timestamp: str
+    case_id: str
+    dtp_stage: str
+    trigger_source: str
+    agent_name: str
+    task_name: str
+    model_used: str
+    token_input: int = 0
+    token_output: int = 0
+    token_total: int = 0
+    estimated_cost_usd: float = 0.0
+    cache_hit: bool = False
+    cache_key: Optional[str] = None
+    input_hash: Optional[str] = None
+    llm_input_payload: Dict[str, Any] = Field(default_factory=dict)
+    output_payload: Dict[str, Any] = Field(default_factory=dict)
+    output_summary: str = ""
+    guardrail_events: List[str] = Field(default_factory=list)
+
+
+# Agent Output Schemas
+
+class SignalAssessment(BaseModel):
+    """Signal Interpretation Agent output"""
+    signal_id: str
+    category_id: str
+    assessment: str
+    recommended_action: Literal["Renew", "Renegotiate", "RFx", "Monitor", "Terminate"]
+    confidence: float = Field(ge=0.0, le=1.0)
+    rationale: List[str] = Field(default_factory=list)
+    urgency_score: int = Field(ge=1, le=10)
+    contract_id: Optional[str] = None
+    supplier_id: Optional[str] = None
+    decision_impact: DecisionImpact = DecisionImpact.MEDIUM
+
+
+class StrategyRecommendation(BaseModel):
+    """Strategy Agent output (DTP-01)"""
+    case_id: str
+    category_id: str
+    recommended_strategy: Literal["Renew", "Renegotiate", "RFx", "Terminate", "Monitor"]
+    confidence: float = Field(ge=0.0, le=1.0)
+    rationale: List[str] = Field(default_factory=list)
+    contract_id: Optional[str] = None
+    supplier_id: Optional[str] = None
+    estimated_savings_potential: Optional[float] = None
+    risk_assessment: str = ""
+    timeline_recommendation: str = ""
+    decision_impact: DecisionImpact = DecisionImpact.MEDIUM
+
+
+class SupplierShortlist(BaseModel):
+    """Supplier Evaluation Agent output (DTP-03/04)"""
+    case_id: str
+    category_id: str
+    shortlisted_suppliers: List[Dict[str, Any]] = Field(default_factory=list)
+    # Each supplier dict must include supplier_id: "SUP-xxx"
+    evaluation_criteria: List[str] = Field(default_factory=list)
+    recommendation: str
+    top_choice_supplier_id: Optional[str] = None
+    comparison_summary: str = ""
+    decision_impact: DecisionImpact = DecisionImpact.MEDIUM
+
+
+class NegotiationPlan(BaseModel):
+    """Negotiation Support Agent output (DTP-04)"""
+    case_id: str
+    category_id: str
+    supplier_id: str
+    negotiation_objectives: List[str] = Field(default_factory=list)
+    target_terms: Dict[str, Any] = Field(default_factory=dict)
+    leverage_points: List[str] = Field(default_factory=list)
+    fallback_positions: Dict[str, Any] = Field(default_factory=dict)
+    timeline: str = ""
+    risk_mitigation: List[str] = Field(default_factory=list)
+    decision_impact: DecisionImpact = DecisionImpact.HIGH
+
+
+class Case(BaseModel):
+    """Full case model"""
+    case_id: str
+    name: str
+    category_id: str
+    contract_id: Optional[str] = None
+    supplier_id: Optional[str] = None
+    dtp_stage: str
+    trigger_source: str
+    user_intent: Optional[str] = None
+    created_date: str
+    updated_date: str
+    created_timestamp: str  # ISO format timestamp
+    updated_timestamp: str  # ISO format timestamp
+    status: str
+    summary: CaseSummary
+    latest_agent_output: Optional[Union[SignalAssessment, StrategyRecommendation, SupplierShortlist, NegotiationPlan]] = None
+    latest_agent_name: Optional[str] = None
+    activity_log: List[AgentActionLog] = Field(default_factory=list)
+    human_decision: Optional[HumanDecision] = None
+
+

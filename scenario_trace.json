@@ -1,0 +1,39 @@
+{
+  "case_id": "CASE-0001",
+  "user_intent": "What is the next best action I should take on this case?",
+  "status": "In Progress",
+  "steps": [
+    {
+      "step": 1,
+      "dtp_stage": "DTP-01",
+      "agent_name": "Supervisor",
+      "decision_summary": "Supervisor reviewed case. Updated case summary. Status: In Progress\n\u2022 Received output from None agent\n\u2022 Decision: Routing to Strategy agent",
+      "hil_triggered": false,
+      "halted": false
+    },
+    {
+      "step": 2,
+      "dtp_stage": "DTP-01",
+      "agent_name": "Strategy",
+      "decision_summary": "Recommended: RFx",
+      "hil_triggered": false,
+      "halted": false
+    },
+    {
+      "step": 3,
+      "dtp_stage": "DTP-01",
+      "agent_name": "Supervisor",
+      "decision_summary": "Supervisor reviewed case. Updated case summary. Status: In Progress\n\u2022 Received output from Strategy agent (StrategyRecommendation)\n\u2022 Decision: Waiting for human approval (HIL governance)",
+      "hil_triggered": false,
+      "halted": false
+    },
+    {
+      "step": 4,
+      "dtp_stage": "DTP-01",
+      "agent_name": "Workflow",
+      "decision_summary": "Workflow paused - waiting for human decision. Human must inject decision externally via inject_human_decision().",
+      "hil_triggered": true,
+      "halted": true
+    }
+  ]
+}
