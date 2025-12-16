@@ -5,7 +5,7 @@ ARCHITECTURE: Rules > Retrieval > LLM Narration
 - Rules are applied deterministically BEFORE LLM calls
 - LLM is used ONLY for summarization, not decision-making
 """
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from utils.schemas import StrategyRecommendation, CaseSummary, DecisionImpact
 from utils.data_loader import get_contract, get_performance, get_market_data, get_category, get_requirements
 from utils.rules import RuleEngine
