@@ -24,7 +24,9 @@ class StrategyAgent(BaseAgent):
         self,
         case_summary: CaseSummary,
         user_intent: str = "",
-        use_cache: bool = True
+        use_cache: bool = True,
+        allowed_strategies: Optional[list[str]] = None,
+        trigger_type: Optional[str] = None
     ) -> tuple[StrategyRecommendation, Dict[str, Any], Dict[str, Any], int, int]:
         """
         Recommend sourcing strategy following Rules > Retrieval > LLM pattern.
@@ -99,7 +101,8 @@ class StrategyAgent(BaseAgent):
         # STEP 5: No rule matched - use LLM for summarization ONLY (Priority 5)
         # LLM does NOT make decisions, only summarizes retrieved data
         prompt = self._build_summarization_prompt(
-            case_summary, user_intent, contract, performance, market, category, requirements
+            case_summary, user_intent, contract, performance, market, category, requirements,
+            allowed_strategies=allowed_strategies, trigger_type=trigger_type
         )
         
         llm_input_payload = {
@@ -186,9 +189,26 @@ class StrategyAgent(BaseAgent):
         performance: Optional[Dict[str, Any]],
         market: Optional[Dict[str, Any]],
         category: Optional[Dict[str, Any]],
-        requirements: Optional[Dict[str, Any]]
+        requirements: Optional[Dict[str, Any]],
+        allowed_strategies: Optional[list[str]] = None,
+        trigger_type: Optional[str] = None
     ) -> str:
         """Build prompt for LLM summarization (NOT decision-making)."""
+        # Build strategy constraint text
+        strategy_constraint = ""
+        strategy_options = '"Renew" | "Renegotiate" | "RFx" | "Terminate" | "Monitor"'
+        
+        if allowed_strategies:
+            strategy_options = " | ".join([f'"{s}"' for s in allowed_strategies])
+            if trigger_type == "Renewal":
+                strategy_constraint = f"\n- POLICY CONSTRAINT: For {trigger_type} cases, only these strategies are allowed: {', '.join(allowed_strategies)}. You MUST choose from this list."
+            else:
+                strategy_constraint = f"\n- ALLOWED STRATEGIES: You MUST choose from: {', '.join(allowed_strategies)}"
+        
+        task_strategy_note = "   (choose from: Renew, Renegotiate, RFx, Terminate, Monitor)"
+        if allowed_strategies and trigger_type:
+            task_strategy_note = f"   IMPORTANT: For this {trigger_type} case, you MUST choose from: {', '.join(allowed_strategies)}"
+        
         return f"""You are a Strategy Agent for dynamic sourcing pipelines (DTP-01).
 
 Your role is LIMITED to:
@@ -200,7 +220,7 @@ IMPORTANT CONSTRAINTS:
 - You do NOT make strategy decisions (rules determine strategy when applicable)
 - You do NOT override policy rules
 - You do NOT invent criteria
-- You ONLY summarize and explain retrieved data
+- You ONLY summarize and explain retrieved data{strategy_constraint}
 
 Case Summary:
 {case_summary.model_dump_json() if hasattr(case_summary, 'model_dump_json') else json.dumps(dict(case_summary))}
@@ -226,13 +246,14 @@ Your task: Provide a clear, grounded summary explaining:
 1. What the retrieved data shows
 2. Key factors to consider (contract timing, performance trends, market conditions)
 3. Risks and opportunities based on the data
-4. Recommended strategy based on data analysis (choose from: Renew, Renegotiate, RFx, Terminate, Monitor)
+4. Recommended strategy based on data analysis
+{task_strategy_note}
 
 Respond with a JSON object matching this schema:
 {{
   "case_id": "{case_summary.case_id}",
   "category_id": "{case_summary.category_id}",
-  "recommended_strategy": "Renew" | "Renegotiate" | "RFx" | "Terminate" | "Monitor",
+  "recommended_strategy": {strategy_options},
   "confidence": 0.0-1.0,
   "rationale": ["bullet point 1", "bullet point 2", "bullet point 3"],
   "contract_id": "{case_summary.contract_id or ''}" or null,

@@ -6,7 +6,7 @@ from utils.schemas import (
     CaseSummary, HumanDecision, BudgetState, CacheMeta,
     AgentActionLog, SignalAssessment, StrategyRecommendation,
     SupplierShortlist, NegotiationPlan, DTPPolicyContext,
-    SignalRegisterEntry
+    SignalRegisterEntry, ClarificationRequest, OutOfScopeNotice
 )
 
 
@@ -21,7 +21,9 @@ class PipelineState(TypedDict):
         StrategyRecommendation,
         SupplierShortlist,
         NegotiationPlan,
-        SignalAssessment
+        SignalAssessment,
+        ClarificationRequest,
+        OutOfScopeNotice
     ]]
     latest_agent_name: Optional[str]
     activity_log: List[AgentActionLog]  # Current run
@@ -35,4 +37,9 @@ class PipelineState(TypedDict):
     iteration_count: int  # Track number of Supervisor iterations
     dtp_policy_context: DTPPolicyContext  # Policy constraints per DTP stage
     signal_register: List[SignalRegisterEntry]  # Persistent signals driving decisions
+    trigger_type: Optional[str]  # "Renewal" | "Savings" | "Risk" | "Monitoring" (from CaseTrigger)
+    clarification_reason: Optional[str]  # Reason for clarification request
+    missing_fields: Optional[List[str]]  # Fields missing that require clarification
+    policy_ambiguity: Optional[str]  # Policy ambiguity requiring clarification
+    multiple_paths: Optional[List[str]]  # Multiple valid paths requiring human choice
 

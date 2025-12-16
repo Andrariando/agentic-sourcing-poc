@@ -87,3 +87,5 @@ def generate_signal_from_contract(contract_id: str) -> Dict[str, Any]:
     }
 
 
+
+

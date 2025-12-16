@@ -21,6 +21,7 @@ class DTPStage(str, Enum):
 class TriggerSource(str, Enum):
     USER = "User"
     SIGNAL = "Signal"
+    SYSTEM = "System"  # Proactive system-initiated cases
 
 
 class CaseStatus(str, Enum):
@@ -52,6 +53,8 @@ class DTPPolicyContext(BaseModel):
     allowed_actions: List[str] = Field(default_factory=list)
     mandatory_checks: List[str] = Field(default_factory=list)
     human_required_for: List[str] = Field(default_factory=list)
+    allowed_strategies: Optional[List[str]] = None  # For renewal constraints (e.g., ["Renew", "Renegotiate", "Terminate"])
+    allow_rfx_for_renewals: bool = False  # Whether RFx is allowed for renewal cases
 
 
 class CaseSummary(BaseModel):
@@ -189,6 +192,36 @@ class NegotiationPlan(BaseModel):
     decision_impact: DecisionImpact = DecisionImpact.HIGH
 
 
+class CaseTrigger(BaseModel):
+    """Proactive case trigger from signal aggregation"""
+    trigger_type: Literal["Renewal", "Savings", "Risk", "Monitoring"]
+    category_id: str
+    supplier_id: Optional[str] = None
+    contract_id: Optional[str] = None
+    urgency: Literal["Low", "Medium", "High"]
+    triggering_signals: List[str] = Field(default_factory=list)
+    recommended_entry_stage: Literal["DTP-01"] = "DTP-01"
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ClarificationRequest(BaseModel):
+    """Case Clarifier Agent output - targeted questions for humans"""
+    reason: str
+    questions: List[str] = Field(default_factory=list)
+    suggested_options: Optional[List[str]] = None
+    missing_information: List[str] = Field(default_factory=list)
+    context_summary: str = ""
+
+
+class OutOfScopeNotice(BaseModel):
+    """Notice when requested action is out of agent capabilities"""
+    requested_action: str
+    reason: str
+    suggested_next_steps: List[str] = Field(default_factory=list)
+    alternative_actions: Optional[List[str]] = None
+    external_action_required: bool = False
+
+
 class Case(BaseModel):
     """Full case model"""
     case_id: str
@@ -205,7 +238,7 @@ class Case(BaseModel):
     updated_timestamp: str  # ISO format timestamp
     status: str
     summary: CaseSummary
-    latest_agent_output: Optional[Union[SignalAssessment, StrategyRecommendation, SupplierShortlist, NegotiationPlan]] = None
+    latest_agent_output: Optional[Union[SignalAssessment, StrategyRecommendation, SupplierShortlist, NegotiationPlan, ClarificationRequest, OutOfScopeNotice]] = None
     latest_agent_name: Optional[str] = None
     activity_log: List[AgentActionLog] = Field(default_factory=list)
     human_decision: Optional[HumanDecision] = None

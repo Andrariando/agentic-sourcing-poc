@@ -8,7 +8,7 @@ from utils.state import PipelineState
 from utils.schemas import (
     CaseSummary, HumanDecision, BudgetState, AgentActionLog,
     StrategyRecommendation, SupplierShortlist, NegotiationPlan, SignalAssessment,
-    SignalRegisterEntry
+    SignalRegisterEntry, ClarificationRequest, OutOfScopeNotice, CaseTrigger
 )
 from utils.token_accounting import create_initial_budget_state, update_budget_state, calculate_cost
 from utils.logging_utils import create_agent_log, add_log_to_state
@@ -18,6 +18,9 @@ from agents.strategy_agent import StrategyAgent
 from agents.supplier_agent import SupplierEvaluationAgent
 from agents.negotiation_agent import NegotiationSupportAgent
 from agents.signal_agent import SignalInterpretationAgent
+from agents.case_clarifier_agent import CaseClarifierAgent
+from utils.policy_loader import PolicyLoader
+from utils.signal_aggregator import SignalAggregator
 from datetime import datetime
 import json
 
@@ -66,6 +69,15 @@ def get_signal_agent(state: PipelineState):
     cache_key = f"signal_{tier}"
     if cache_key not in _agent_cache:
         _agent_cache[cache_key] = SignalInterpretationAgent(tier=tier)
+    return _agent_cache[cache_key]
+
+
+def get_case_clarifier_agent(state: PipelineState):
+    """Get case clarifier agent with appropriate tier"""
+    tier = 2 if state.get("use_tier_2") else 1
+    cache_key = f"clarifier_{tier}"
+    if cache_key not in _agent_cache:
+        _agent_cache[cache_key] = CaseClarifierAgent(tier=tier)
     return _agent_cache[cache_key]
 
 
@@ -180,22 +192,57 @@ def supervisor_node(state: PipelineState) -> PipelineState:
     
     state["case_summary"] = updated_summary
     
-    # Supervisor decides if human approval is needed
-    # This is the key decision point where Supervisor coordinates with humans
+    # Load policy context with trigger type for renewal constraints
+    policy_loader = PolicyLoader()
+    trigger_type = state.get("trigger_type")  # From CaseTrigger if proactive
     policy_context = state.get("dtp_policy_context", {})
+    
+    # If policy context is not loaded, load it now
+    if not policy_context or (isinstance(policy_context, dict) and not policy_context):
+        policy_context = policy_loader.load_policy_for_stage(
+            state["dtp_stage"],
+            case_summary.category_id,
+            trigger_type
+        )
+        state["dtp_policy_context"] = policy_context
+    
+    # Enhanced routing with confidence and capability checks
+    user_intent = state.get("user_intent", "")
+    next_agent, routing_reason, clarification_request = supervisor.determine_next_agent_with_confidence(
+        state["dtp_stage"],
+        latest_output,
+        policy_context,
+        trigger_type
+    )
+    
+    # Check if clarification is needed
+    needs_clarification = False
+    if latest_output:
+        confidence = getattr(latest_output, "confidence", None)
+        missing_fields = []  # Could be populated from validation
+        needs_clarification = supervisor.should_request_clarification(
+            case_summary,
+            latest_output,
+            confidence,
+            missing_fields
+        )
+    
+    # If clarification needed, set up for clarifier agent
+    if needs_clarification and routing_reason in ["low_confidence_clarification", "medium_confidence_policy_requires_human"]:
+        state["clarification_reason"] = routing_reason
+        if confidence is not None:
+            state["missing_fields"] = []  # Could be enhanced with actual missing fields
+        next_agent = "CaseClarifier"
+    
+    # Supervisor decides if human approval is needed
     waiting_for_human, wait_reason = supervisor.should_wait_for_human(
         state["dtp_stage"],
         latest_output,
         policy_context
     )
     state["waiting_for_human"] = waiting_for_human
-    # Store reason for logging
     if waiting_for_human:
         state["wait_reason"] = wait_reason
-    
-    # Supervisor determines next action
-    user_intent = state.get("user_intent", "")
-    next_agent = supervisor.determine_next_agent(state["dtp_stage"], latest_output, policy_context)
     
     # Create log entry for supervisor action
     output_summary = f"Supervisor reviewed case. Updated case summary. Status: {updated_summary.status}"
@@ -207,9 +254,11 @@ def supervisor_node(state: PipelineState) -> PipelineState:
             output_summary += f" ({output_type})"
     
     if waiting_for_human:
-        output_summary += "\n• Decision: Waiting for human approval (HIL governance)"
+        output_summary += f"\n• Decision: Waiting for human approval (HIL governance) - {wait_reason}"
+    elif next_agent == "CaseClarifier":
+        output_summary += f"\n• Decision: Requesting clarification ({routing_reason})"
     elif next_agent:
-        output_summary += f"\n• Decision: Routing to {next_agent} agent"
+        output_summary += f"\n• Decision: Routing to {next_agent} agent ({routing_reason})"
     else:
         output_summary += f"\n• Decision: No further agent action needed for DTP-{state['dtp_stage']}"
         if user_intent:
@@ -274,11 +323,24 @@ def strategy_node(state: PipelineState) -> PipelineState:
         return state
     
     try:
-        # Call agent
+        # Get policy constraints for renewal cases
+        policy_context = state.get("dtp_policy_context", {})
+        trigger_type = state.get("trigger_type")  # From CaseTrigger if proactive case
+        allowed_strategies = None
+        
+        if policy_context:
+            if isinstance(policy_context, dict):
+                allowed_strategies = policy_context.get("allowed_strategies")
+            else:
+                allowed_strategies = getattr(policy_context, "allowed_strategies", None)
+        
+        # Call agent with policy constraints
         recommendation, llm_input, output_dict, input_tokens, output_tokens = strategy_agent.recommend_strategy(
             case_summary,
             user_intent,
-            use_cache=True
+            use_cache=True,
+            allowed_strategies=allowed_strategies,
+            trigger_type=trigger_type
         )
         
         # Update budget
@@ -610,6 +672,92 @@ def signal_interpretation_node(state: PipelineState, signal: dict) -> PipelineSt
     return state
 
 
+def case_clarifier_node(state: PipelineState) -> PipelineState:
+    """Case Clarifier Agent node - generates targeted questions for humans"""
+    case_summary = state["case_summary"]
+    budget_state = state["budget_state"]
+    latest_output = state.get("latest_agent_output")
+    
+    # Get agent with appropriate tier
+    clarifier_agent = get_case_clarifier_agent(state)
+    
+    # Build context for clarification
+    context = {
+        "reason": state.get("clarification_reason", "Information needed for decision"),
+        "confidence": getattr(latest_output, "confidence", None) if latest_output else None,
+        "missing_fields": state.get("missing_fields", []),
+        "policy_ambiguity": state.get("policy_ambiguity"),
+        "multiple_paths": state.get("multiple_paths", [])
+    }
+    
+    # Check budget
+    if budget_state.tokens_used >= 3000:
+        fallback = clarifier_agent.create_fallback_output(
+            ClarificationRequest,
+            case_summary.case_id,
+            case_summary.category_id,
+            context.get("reason", "Information needed")
+        )
+        state["latest_agent_output"] = fallback
+        state["latest_agent_name"] = "CaseClarifier"
+        return state
+    
+    try:
+        clarification, llm_input, output_dict, input_tokens, output_tokens = clarifier_agent.request_clarification(
+            case_summary,
+            latest_output,
+            context,
+            use_cache=True
+        )
+        
+        tier = 2 if state.get("use_tier_2") else 1
+        updated_budget, budget_exceeded = update_budget_state(
+            budget_state,
+            tier=tier,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens
+        )
+        state["budget_state"] = updated_budget
+        
+        tier = 2 if state.get("use_tier_2") else 1
+        cost = calculate_cost(tier, input_tokens, output_tokens)
+        log = create_agent_log(
+            case_id=case_summary.case_id,
+            dtp_stage=state["dtp_stage"],
+            trigger_source=state["trigger_source"],
+            agent_name="CaseClarifier",
+            task_name="Request Clarification",
+            model_used="gpt-4o" if tier == 2 else "gpt-4o-mini",
+            token_input=input_tokens,
+            token_output=output_tokens,
+            estimated_cost_usd=cost,
+            cache_hit=False,
+            cache_key=None,
+            input_hash=None,
+            llm_input_payload=llm_input,
+            output_payload=output_dict,
+            output_summary=f"Clarification requested: {clarification.reason}",
+            guardrail_events=["Budget exceeded"] if budget_exceeded else []
+        )
+        state = add_log_to_state(state, log)
+        
+        state["latest_agent_output"] = clarification
+        state["latest_agent_name"] = "CaseClarifier"
+        
+    except Exception as e:
+        fallback = clarifier_agent.create_fallback_output(
+            ClarificationRequest,
+            case_summary.case_id,
+            case_summary.category_id,
+            context.get("reason", "Information needed")
+        )
+        state["latest_agent_output"] = fallback
+        state["latest_agent_name"] = "CaseClarifier"
+        state["error_state"] = {"error": str(e), "used_fallback": True}
+    
+    return state
+
+
 def wait_for_human_node(state: PipelineState) -> PipelineState:
     """
     WAIT_FOR_HUMAN node - pauses workflow for human decision.
@@ -803,6 +951,7 @@ def create_workflow_graph():
     workflow.add_node("strategy", strategy_node)
     workflow.add_node("supplier_evaluation", supplier_evaluation_node)
     workflow.add_node("negotiation", negotiation_node)
+    workflow.add_node("case_clarifier", case_clarifier_node)
     workflow.add_node("wait_for_human", wait_for_human_node)
     workflow.add_node("process_decision", process_human_decision)
     
@@ -810,7 +959,7 @@ def create_workflow_graph():
     workflow.set_entry_point("supervisor")
     
     # Add edges - Supervisor is the central coordinator
-    def route_from_supervisor(state: PipelineState) -> Literal["strategy", "supplier_evaluation", "negotiation", "wait_for_human", "end"]:
+    def route_from_supervisor(state: PipelineState) -> Literal["strategy", "supplier_evaluation", "negotiation", "case_clarifier", "wait_for_human", "end"]:
         """
         Supervisor routing logic - decides which agent to allocate task to.
         
@@ -841,18 +990,24 @@ def create_workflow_graph():
         # If we just received output from an agent, Supervisor has already reviewed it
         # Now Supervisor decides next step based on the output
         if latest_output and latest_agent_name:
-            # Check if Supervisor determined we need human approval
+            # Use enhanced routing with confidence and capability checks
             supervisor = get_supervisor()
+            trigger_type = state.get("trigger_type")
+            next_agent, routing_reason, clarification_request = supervisor.determine_next_agent_with_confidence(
+                dtp_stage, latest_output, policy_context, trigger_type
+            )
+            
+            # Check if clarification is needed
+            if routing_reason in ["low_confidence_clarification", "medium_confidence_policy_requires_human"]:
+                return "case_clarifier"
+            
+            # Check if Supervisor determined we need human approval
             waiting_for_human, wait_reason = supervisor.should_wait_for_human(dtp_stage, latest_output, policy_context)
             
             if waiting_for_human:
                 # Supervisor requires human approval before proceeding
-                # This will route to wait_for_human node, which ENDs the workflow
-                state["wait_reason"] = wait_reason  # Store reason for logging
+                state["wait_reason"] = wait_reason
                 return "wait_for_human"
-            
-            # Supervisor reviewed the output and determined next action
-            next_agent = supervisor.determine_next_agent(dtp_stage, latest_output)
             
             # Loop prevention: Don't route to same agent-output combination twice
             agent_key = f"{latest_agent_name}_{type(latest_output).__name__}"
@@ -873,6 +1028,8 @@ def create_workflow_graph():
                 return "supplier_evaluation"
             elif next_agent == "NegotiationSupport":
                 return "negotiation"
+            elif next_agent == "CaseClarifier":
+                return "case_clarifier"
             else:
                 # Supervisor determined no further agent action needed
                 return "end"
@@ -910,6 +1067,7 @@ def create_workflow_graph():
             "strategy": "strategy",
             "supplier_evaluation": "supplier_evaluation",
             "negotiation": "negotiation",
+            "case_clarifier": "case_clarifier",
             "wait_for_human": "wait_for_human",
             "end": END
         }
@@ -921,6 +1079,7 @@ def create_workflow_graph():
     workflow.add_edge("strategy", "supervisor")  # Strategy agent reports back to Supervisor
     workflow.add_edge("supplier_evaluation", "supervisor")  # Supplier agent reports back to Supervisor
     workflow.add_edge("negotiation", "supervisor")  # Negotiation agent reports back to Supervisor
+    workflow.add_edge("case_clarifier", "supervisor")  # Case Clarifier reports back to Supervisor
     
     # CRITICAL: wait_for_human should END the workflow (pause it)
     # Human decision must be injected externally via inject_human_decision()
