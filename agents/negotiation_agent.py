@@ -3,7 +3,7 @@ Negotiation Support Agent (DTP-04) - Creates negotiation plans.
 """
 from typing import Dict, Any
 from utils.schemas import NegotiationPlan, CaseSummary
-from utils.data_loader import get_contract, get_performance, get_market_data
+from utils.data_loader import get_contract, get_performance, get_market_data, get_category, get_requirements, get_supplier
 from agents.base_agent import BaseAgent
 import json
 
@@ -39,13 +39,19 @@ class NegotiationSupportAgent(BaseAgent):
         contract = None
         performance = None
         market = None
+        category = None
+        requirements = None
+        supplier = None
         
         if case_summary.contract_id:
             contract = get_contract(case_summary.contract_id)
         if supplier_id:
             performance = get_performance(supplier_id)
+            supplier = get_supplier(supplier_id)
         if case_summary.category_id:
             market = get_market_data(case_summary.category_id)
+            category = get_category(case_summary.category_id)
+            requirements = get_requirements(case_summary.category_id)
         
         # Build prompt
         prompt = f"""You are a Negotiation Support Agent for dynamic sourcing pipelines (DTP-04).
@@ -90,8 +96,11 @@ Provide ONLY valid JSON, no markdown formatting."""
             "case_summary": case_summary.model_dump() if hasattr(case_summary, "model_dump") else dict(case_summary),
             "supplier_id": supplier_id,
             "contract": contract,
+            "supplier": supplier,
             "performance": performance,
-            "market": market
+            "market": market,
+            "category": category,
+            "requirements": requirements
         }
         
         try:

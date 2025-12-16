@@ -1,0 +1,52 @@
+
+================================================================================
+METHODOLOGY SECTION 1: Assignment 2: State of the Practice and Methodology
+================================================================================
+
+State of the Practice
+
+Designing an intelligent sourcing system requires understanding how sourcing decisions are made today, the analytical methods that support them, and how artificial intelligence is currently applied in procurement. This section reviews academic views on sourcing, established procurement models, current analytics and AI applications, and industry trends toward digital orchestration. Together, these insights clarify what works well today, where gaps still exist, and what capabilities a next-generation, agentic AI-enabled sourcing system must offer.
+
+Academic and industry research describe sourcing as a structured decision process guided by clear logic, reliable data, and coordinated activities across the sourcing cycle. Classical sourcing literature treats sourcing as a design problem that aligns requirements, market conditions, supplier capabilities, and incentives to maximize value. Seshadri (2005) frames this as a mechanism design challenge where sourcing policies must coordinate prices and performance with organizational goals. More recent procurement texts position sourcing as a continuous strategic process. Monczka et al. (2020) highlight the need for integrated category strategies, cross-functional collaboration, and ongoing supplier development rather than one-time buying. These foundations show that effective sourcing depends on well-defined decision points, consistent evaluation criteria, and a stable information environment all essential for any intelligent sourcing system.
+
+The literature also shows that different business models fit different categories and supply markets. Keith et al. (2016) outline how organizations choose among transactional, relational, and outcome-based models to drive long-term value. This suggests that an intelligent sourcing system must support more than simple price comparisons and instead enable richer evaluations of supplier capabilities, relationship structures, and value propositions.
+
+Research on analytics and artificial intelligence demonstrates how digital tools can support these decisions. Wamba et al. (2020) explain how big data and machine learning improve forecasting, risk visibility, and operational insight. Guida (2023) highlights emerging applications such as supplier scoring, risk classification, and document extraction that help structure the early stages of sourcing. Cannas (2024) notes that these tools are increasingly embedded in procurement workflows, but their usefulness depends on high-quality, consistent, and accessible data. Current procurement systems also use optimization engines for award scenario analysis and rule-based workflows for compliance. While these tools enhance efficiency, they typically operate as isolated components and do not connect upstream requirements with downstream negotiation logic.
+
+Industry reports point to similar trends. McKinsey (2024) shows that leading organizations now use AI-assisted recommendations to speed category strategies, spot opportunities, and shorten cycle times. Keelvar (2025) demonstrates how modern AI assistants can draft event documents, structure evaluations, and generate award scenarios while keeping processes auditable. These developments suggest that configurable digital orchestration is now possible systems can accelerate work while buyers retain decision authority.
+
+A recurring theme across literature is the importance of responsible system design. Accenture (2025) finds that high-performing organizations rely on algorithms for consistent, repeatable analysis but reserve judgment calls, trade-offs, and approvals for humans. Effective collaboration requires transparency, feedback loops, and learning mechanisms. This aligns with the Sponsor’s requirement that the proof-of-concept system keep humans involved in key decision points rather than operating fully autonomously.
+
+Overall, the literature reflects a clear shift from manual judgment toward data-driven and analytics-supported sourcing. However, current tools remain fragmented, with limited ability to connect reasoning across the sourcing cycle or integrate signals from contracts, demand forecasts, supplier performance, and market intelligence. This gap defines the opportunity for the project: to test whether a modular, agentic AI system can unify these elements and improve decision consistency, speed, transparency, and control within the Sponsor’s IT Support category.
+
+
+================================================================================
+METHODOLOGY SECTION 2: Methodology
+================================================================================
+
+The methodology for this project is designed to provide a structured, transparent, and reproducible process for developing and evaluating a proof-of-concept intelligent sourcing system for the Sponsor’s IT Support procurement category. The approach is grounded in the Sponsor’s Desktop Procedures (DTP-01 to DTP-06), which define the sequencing, responsibilities, and compliance requirements for end-to-end sourcing activities. These procedures serve as the organizing framework for modeling the decision logic, designing the agentic system, and determining the data and evaluation needs of the POC.
+
+Modelling the Sourcing Process
+
+The starting point for the design is the Sponsor’s DTP 01 to DTP 06. Each procedure specifies required tasks, inputs, approvals, and checks. Rather than treating these as narrative documents, the project rewrites them as a series of explicit decisions. For each decision, the team identifies what information is required, which constraints apply, and whether the decision is fully deterministic, benefits from quantitative analysis, or primarily involves documentation and explanation.
+
+The table below summarizes the most consequential decisions across DTP 01 to DTP 06. These decisions were selected because they shape the sourcing outcome and will later be implemented within the agentic system. The appropriate mechanism involving Large Language Model (LLM) and Machine Learning (ML) are also introduced to guide the core decision making.
+
+Table 1. Dynamic Sourcing Decision Modeling Across DTP 01 to DTP 06
+
+*RFX is a general term that stands for "Request for X, and it refers to the entire category of procurement documents used to solicit bids, proposals, or information from vendors. The most common types include Request for Information (RFI), Request for Proposal (RFP), and Request for Quotation (RFQ), each with a different primary purpose in the purchasing process.
+
+This decision mapping serves two purposes within the methodology. First, it provides a clear rationale for why certain technical mechanisms are needed and where they should be applied. Second, it establishes a direct link between the Sponsor’s sourcing logic and the system architecture that is developed in the next stage of the methodology. The mechanisms identified in the final column become the design requirements for the hybrid decision support components described in the next section. In turn, these mechanisms are later organized into functional agents that follow the DTP workflow.
+
+Mapping Decisions to Decision Support Mechanism
+
+The next step is to group these decisions into mechanism types that describe how the system should support them. Some decisions are entirely governed by policy and can be encoded as rules. Others benefit from retrieval of relevant information from internal documents and external intelligence sources. Some require simple analytical treatment of numerical data. Finally, several tasks involve drafting structured text that follows organizational patterns. Table 2 summarizes these mechanism types and links them back to the decision categories introduced above.
+
+Table 2. Decision Support Mechanism by Decision Type
+
+This mapping view confirms that the proof of concept does not attempt to automate awards or complex predictions. Instead, it uses analytic tools where they provide structure and relies on retrieval and templates where human judgment remains central.
+
+Agentic System Design
+
+The mechanisms described in the previous section are implemented through a set of functional agents that mirror the sequencing and intent of DTP 01 through DTP 06. Each agent supports a specific segment of the sourcing process and uses only the analytical logic required for that stage. Figure 2 illustrates how these agents interact with the data and memory layers while keeping the sourcing professional firmly in the loop.
+

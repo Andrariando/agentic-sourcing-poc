@@ -44,6 +44,12 @@ def get_market_data(category_id: str) -> Optional[Dict[str, Any]]:
     return next((m for m in market if m["category_id"] == category_id), None)
 
 
+def get_requirements(category_id: str) -> Optional[Dict[str, Any]]:
+    """Get requirements data by category ID"""
+    requirements = load_json_data("requirements.json")
+    return next((r for r in requirements if r["category_id"] == category_id), None)
+
+
 def get_suppliers_by_category(category_id: str) -> List[Dict[str, Any]]:
     """Get all suppliers for a category"""
     suppliers = load_json_data("suppliers.json")

@@ -36,8 +36,10 @@ class SupplierEvaluationAgent(BaseAgent):
         # Gather context
         suppliers = get_suppliers_by_category(case_summary.category_id)
         market = get_market_data(case_summary.category_id)
+        category = get_category(case_summary.category_id)
+        requirements = get_requirements(case_summary.category_id)
         
-        # Get performance for each supplier
+        # Get performance for each supplier (with full details)
         suppliers_with_perf = []
         for supplier in suppliers:
             perf = get_performance(supplier["supplier_id"])
@@ -58,11 +60,19 @@ Available Suppliers for Category {case_summary.category_id}:
 Market Context:
 {json.dumps(market, indent=2) if market else "No market data"}
 
+Category Information:
+{json.dumps(category, indent=2) if category else "No category data"}
+
+Category Requirements:
+{json.dumps(requirements, indent=2) if requirements else "No requirements data"}
+
 Evaluate suppliers and create a shortlist. Consider:
-1. Performance scores and trends
-2. Supplier tier and relationship history
-3. Market benchmarks
-4. Fit for the category requirements
+1. Performance scores, trends, history, incidents, cost variance, and relationship quality
+2. Supplier tier, relationship history, certifications, financial stability, geographic coverage
+3. Supplier strengths, weaknesses, capabilities, and specializations
+4. Market benchmarks, key suppliers, pricing drivers, and emerging trends
+5. Fit for category requirements (must-have and nice-to-have) and evaluation criteria
+6. Compliance status and regulatory requirements alignment
 
 IMPORTANT: All supplier references must use supplier_id format "SUP-xxx"
 
@@ -90,7 +100,9 @@ Provide ONLY valid JSON, no markdown formatting."""
         llm_input_payload = {
             "case_summary": case_summary.model_dump() if hasattr(case_summary, "model_dump") else dict(case_summary),
             "suppliers": suppliers_with_perf,
-            "market": market
+            "market": market,
+            "category": category,
+            "requirements": requirements
         }
         
         try:

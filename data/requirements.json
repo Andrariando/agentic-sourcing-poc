@@ -1,0 +1,235 @@
+[
+  {
+    "category_id": "CAT-01",
+    "requirements_type": "Technical",
+    "must_have": [
+      {
+        "requirement_id": "REQ-IT-001",
+        "description": "24/7 technical support with guaranteed response times",
+        "priority": "Critical",
+        "evaluation_method": "SLA verification"
+      },
+      {
+        "requirement_id": "REQ-IT-002",
+        "description": "ISO 27001 or SOC 2 Type II security certification",
+        "priority": "Critical",
+        "evaluation_method": "Certification verification"
+      },
+      {
+        "requirement_id": "REQ-IT-003",
+        "description": "99.5% or higher uptime SLA",
+        "priority": "Critical",
+        "evaluation_method": "Historical performance review"
+      },
+      {
+        "requirement_id": "REQ-IT-004",
+        "description": "Disaster recovery and business continuity plan",
+        "priority": "Critical",
+        "evaluation_method": "Documentation review"
+      },
+      {
+        "requirement_id": "REQ-IT-005",
+        "description": "Integration capability with existing systems",
+        "priority": "High",
+        "evaluation_method": "Technical assessment"
+      }
+    ],
+    "nice_to_have": [
+      {
+        "requirement_id": "REQ-IT-006",
+        "description": "Global service coverage with local support",
+        "priority": "Medium",
+        "evaluation_method": "Geographic coverage review"
+      },
+      {
+        "requirement_id": "REQ-IT-007",
+        "description": "AI/ML capabilities and innovation roadmap",
+        "priority": "Medium",
+        "evaluation_method": "Capability demonstration"
+      },
+      {
+        "requirement_id": "REQ-IT-008",
+        "description": "Sustainability initiatives and carbon-neutral options",
+        "priority": "Low",
+        "evaluation_method": "Sustainability report review"
+      }
+    ],
+    "evaluation_weights": {
+      "technical_capability": 0.25,
+      "service_quality": 0.20,
+      "cost": 0.20,
+      "innovation": 0.15,
+      "security_compliance": 0.20
+    }
+  },
+  {
+    "category_id": "CAT-02",
+    "requirements_type": "Operational",
+    "must_have": [
+      {
+        "requirement_id": "REQ-OFF-001",
+        "description": "E-procurement platform integration",
+        "priority": "Critical",
+        "evaluation_method": "Integration testing"
+      },
+      {
+        "requirement_id": "REQ-OFF-002",
+        "description": "Bulk ordering capability with volume discounts",
+        "priority": "High",
+        "evaluation_method": "Pricing structure review"
+      },
+      {
+        "requirement_id": "REQ-OFF-003",
+        "description": "Delivery within 2 business days",
+        "priority": "High",
+        "evaluation_method": "SLA verification"
+      },
+      {
+        "requirement_id": "REQ-OFF-004",
+        "description": "Competitive pricing relative to market benchmarks",
+        "priority": "High",
+        "evaluation_method": "Price comparison"
+      }
+    ],
+    "nice_to_have": [
+      {
+        "requirement_id": "REQ-OFF-005",
+        "description": "Sustainable/eco-friendly product options",
+        "priority": "Medium",
+        "evaluation_method": "Product catalog review"
+      },
+      {
+        "requirement_id": "REQ-OFF-006",
+        "description": "Custom branding capabilities",
+        "priority": "Low",
+        "evaluation_method": "Capability demonstration"
+      },
+      {
+        "requirement_id": "REQ-OFF-007",
+        "description": "Consignment inventory options",
+        "priority": "Low",
+        "evaluation_method": "Service offering review"
+      }
+    ],
+    "evaluation_weights": {
+      "price": 0.40,
+      "product_quality": 0.25,
+      "delivery_performance": 0.20,
+      "sustainability": 0.15
+    }
+  },
+  {
+    "category_id": "CAT-03",
+    "requirements_type": "Professional",
+    "must_have": [
+      {
+        "requirement_id": "REQ-PROF-001",
+        "description": "Relevant industry experience (minimum 5 years)",
+        "priority": "Critical",
+        "evaluation_method": "Case study and reference review"
+      },
+      {
+        "requirement_id": "REQ-PROF-002",
+        "description": "Qualified team members with relevant certifications",
+        "priority": "Critical",
+        "evaluation_method": "Team credentials review"
+      },
+      {
+        "requirement_id": "REQ-PROF-003",
+        "description": "Clear project methodology and approach",
+        "priority": "High",
+        "evaluation_method": "Proposal evaluation"
+      },
+      {
+        "requirement_id": "REQ-PROF-004",
+        "description": "Proven track record with client references",
+        "priority": "High",
+        "evaluation_method": "Reference checks"
+      }
+    ],
+    "nice_to_have": [
+      {
+        "requirement_id": "REQ-PROF-005",
+        "description": "Industry thought leadership and publications",
+        "priority": "Medium",
+        "evaluation_method": "Public profile review"
+      },
+      {
+        "requirement_id": "REQ-PROF-006",
+        "description": "Innovative approaches and methodologies",
+        "priority": "Medium",
+        "evaluation_method": "Proposal innovation assessment"
+      },
+      {
+        "requirement_id": "REQ-PROF-007",
+        "description": "Flexible engagement models (retainer, project-based, outcome-based)",
+        "priority": "Low",
+        "evaluation_method": "Contract flexibility review"
+      }
+    ],
+    "evaluation_weights": {
+      "expertise_experience": 0.30,
+      "project_approach": 0.25,
+      "cost": 0.20,
+      "team_quality": 0.15,
+      "references_track_record": 0.10
+    }
+  },
+  {
+    "category_id": "CAT-04",
+    "requirements_type": "Operational",
+    "must_have": [
+      {
+        "requirement_id": "REQ-FAC-001",
+        "description": "OSHA compliance and safety certifications",
+        "priority": "Critical",
+        "evaluation_method": "Certification verification"
+      },
+      {
+        "requirement_id": "REQ-FAC-002",
+        "description": "Comprehensive insurance coverage",
+        "priority": "Critical",
+        "evaluation_method": "Insurance certificate review"
+      },
+      {
+        "requirement_id": "REQ-FAC-003",
+        "description": "24/7 emergency response capability",
+        "priority": "Critical",
+        "evaluation_method": "Service capability review"
+      },
+      {
+        "requirement_id": "REQ-FAC-004",
+        "description": "Service level agreements with performance metrics",
+        "priority": "High",
+        "evaluation_method": "SLA documentation review"
+      }
+    ],
+    "nice_to_have": [
+      {
+        "requirement_id": "REQ-FAC-005",
+        "description": "Smart building technology integration",
+        "priority": "Medium",
+        "evaluation_method": "Technology capability assessment"
+      },
+      {
+        "requirement_id": "REQ-FAC-006",
+        "description": "Sustainability and energy efficiency programs",
+        "priority": "Medium",
+        "evaluation_method": "Sustainability report review"
+      },
+      {
+        "requirement_id": "REQ-FAC-007",
+        "description": "Predictive maintenance capabilities",
+        "priority": "Low",
+        "evaluation_method": "Capability demonstration"
+      }
+    ],
+    "evaluation_weights": {
+      "service_quality": 0.30,
+      "cost": 0.25,
+      "safety_compliance": 0.20,
+      "reliability": 0.15,
+      "technology_capabilities": 0.10
+    }
+  }
+]

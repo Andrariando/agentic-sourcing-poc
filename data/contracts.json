@@ -9,7 +9,33 @@
     "annual_value_usd": 2500000,
     "renewal_terms": "Auto-renew unless terminated 60 days prior",
     "status": "Active",
-    "renewal_options": ["Renew", "Renegotiate", "RFx", "Terminate"]
+    "renewal_options": ["Renew", "Renegotiate", "RFx", "Terminate"],
+    "contract_terms": {
+      "pricing_model": "Fixed monthly fee with usage-based components",
+      "minimum_commitment": "$200K annually",
+      "price_escalation": "3% annual increase",
+      "termination_clause": "90-day notice required, 10% early termination fee",
+      "payment_terms": "Net 30",
+      "volume_discounts": "5% discount for annual prepayment"
+    },
+    "sla_metrics": {
+      "uptime_target": "99.9%",
+      "response_time_target": "2 hours for critical issues",
+      "resolution_time_target": "24 hours for P1 issues",
+      "availability_penalty": "$5000 per incident below SLA",
+      "performance_bonus": "Up to 5% annual bonus for exceeding targets"
+    },
+    "risk_factors": [
+      "Single supplier dependency",
+      "Limited geographic redundancy",
+      "Recent performance decline noted"
+    ],
+    "incumbent_advantages": [
+      "5 years of relationship history",
+      "Deep integration with existing systems",
+      "Knowledge of internal processes"
+    ],
+    "renewal_clauses": "Auto-renew for 2 years unless terminated 60 days prior to expiry. Renewal terms subject to performance review."
   },
   {
     "contract_id": "CON-002",
@@ -21,7 +47,32 @@
     "annual_value_usd": 1800000,
     "renewal_terms": "Fixed term, no auto-renewal",
     "status": "Active",
-    "renewal_options": ["Renew", "Renegotiate", "RFx", "Terminate"]
+    "renewal_options": ["Renew", "Renegotiate", "RFx", "Terminate"],
+    "contract_terms": {
+      "pricing_model": "Time and materials with monthly retainer",
+      "minimum_commitment": "$150K annually",
+      "price_escalation": "Annual CPI adjustment",
+      "termination_clause": "60-day notice, no termination fee",
+      "payment_terms": "Net 45",
+      "volume_discounts": "Tiered pricing based on monthly hours"
+    },
+    "sla_metrics": {
+      "uptime_target": "99.5%",
+      "response_time_target": "4 hours for critical issues",
+      "resolution_time_target": "48 hours for P1 issues",
+      "availability_penalty": "$3000 per incident below SLA",
+      "performance_bonus": "None"
+    },
+    "risk_factors": [
+      "Shorter relationship history (2 years)",
+      "Limited service scope compared to alternatives"
+    ],
+    "incumbent_advantages": [
+      "Competitive pricing",
+      "Good performance track record",
+      "Flexible contract terms"
+    ],
+    "renewal_clauses": "Fixed term contract, no auto-renewal. Renewal requires new contract negotiation at least 90 days before expiry."
   },
   {
     "contract_id": "CON-003",
@@ -33,7 +84,30 @@
     "annual_value_usd": 450000,
     "renewal_terms": "Auto-renew for 2 years unless terminated",
     "status": "Active",
-    "renewal_options": ["Renew", "Renegotiate", "RFx", "Terminate"]
+    "renewal_options": ["Renew", "Renegotiate", "RFx", "Terminate"],
+    "contract_terms": {
+      "pricing_model": "Fixed annual pricing with quarterly adjustments",
+      "minimum_commitment": "$400K annually",
+      "price_escalation": "2% annual increase",
+      "termination_clause": "30-day notice, no penalty",
+      "payment_terms": "Net 30",
+      "volume_discounts": "10% discount for orders over $50K"
+    },
+    "sla_metrics": {
+      "uptime_target": "99.0%",
+      "response_time_target": "1 business day",
+      "resolution_time_target": "3 business days",
+      "availability_penalty": "$1000 per incident below SLA",
+      "performance_bonus": "2% annual bonus for zero SLA breaches"
+    },
+    "risk_factors": [],
+    "incumbent_advantages": [
+      "8 years of relationship history",
+      "Excellent performance record",
+      "Strong supply chain reliability",
+      "Best-in-class pricing"
+    ],
+    "renewal_clauses": "Auto-renew for 2 additional years unless terminated 30 days prior to expiry. Pricing subject to 2% annual escalation."
   },
   {
     "contract_id": "CON-004",
@@ -45,7 +119,32 @@
     "annual_value_usd": 3200000,
     "renewal_terms": "Fixed term, renewal subject to performance review",
     "status": "Active",
-    "renewal_options": ["Renew", "Renegotiate", "RFx", "Terminate"]
+    "renewal_options": ["Renew", "Renegotiate", "RFx", "Terminate"],
+    "contract_terms": {
+      "pricing_model": "Project-based with retainers",
+      "minimum_commitment": "$250K annually",
+      "price_escalation": "Subject to negotiation",
+      "termination_clause": "90-day notice for projects, 30-day for retainer",
+      "payment_terms": "Milestone-based with 30% upfront",
+      "volume_discounts": "Discounted rates for multiple concurrent projects"
+    },
+    "sla_metrics": {
+      "uptime_target": "N/A (project-based)",
+      "response_time_target": "24 hours for project inquiries",
+      "resolution_time_target": "Project milestone completion per agreement",
+      "availability_penalty": "Milestone delay penalties as per project agreement",
+      "performance_bonus": "Success fees for exceeding project objectives"
+    },
+    "risk_factors": [
+      "High-value contract requiring careful management",
+      "Project-based delivery creates variability"
+    ],
+    "incumbent_advantages": [
+      "Specialized expertise in category",
+      "Strong track record on recent projects",
+      "Improved performance trend over last 4 months"
+    ],
+    "renewal_clauses": "Fixed term contract. Renewal subject to performance review and business case approval. Negotiation window opens 180 days before expiry."
   },
   {
     "contract_id": "CON-005",
@@ -57,8 +156,138 @@
     "annual_value_usd": 850000,
     "renewal_terms": "Auto-renew unless terminated 90 days prior",
     "status": "Active",
-    "renewal_options": ["Renew", "Renegotiate", "RFx", "Terminate"]
+    "renewal_options": ["Renew", "Renegotiate", "RFx", "Terminate"],
+    "contract_terms": {
+      "pricing_model": "Fixed monthly fee per facility",
+      "minimum_commitment": "$800K annually",
+      "price_escalation": "3.5% annual increase",
+      "termination_clause": "90-day notice, 15% early termination fee",
+      "payment_terms": "Net 30",
+      "volume_discounts": "None"
+    },
+    "sla_metrics": {
+      "uptime_target": "98.5%",
+      "response_time_target": "4 hours for emergency issues",
+      "resolution_time_target": "48 hours for standard issues",
+      "availability_penalty": "$2000 per incident below SLA",
+      "performance_bonus": "Quarterly bonus for exceeding quality metrics"
+    },
+    "risk_factors": [
+      "Occasional quality issues reported",
+      "Price escalation higher than market average"
+    ],
+    "incumbent_advantages": [
+      "Established service coverage",
+      "Familiarity with facilities",
+      "Competitive baseline pricing"
+    ],
+    "renewal_clauses": "Auto-renew for 2 years unless terminated 90 days prior. Renewal pricing subject to 3.5% annual escalation unless renegotiated."
+  },
+  {
+    "contract_id": "CON-006",
+    "supplier_id": "SUP-006",
+    "category_id": "CAT-01",
+    "start_date": "2023-09-01",
+    "end_date": "2025-09-01",
+    "expiry_days": 540,
+    "annual_value_usd": 1200000,
+    "renewal_terms": "Fixed term, renewal subject to evaluation",
+    "status": "Active",
+    "renewal_options": ["Renew", "Renegotiate", "RFx", "Terminate"],
+    "contract_terms": {
+      "pricing_model": "Subscription-based with per-user tiers",
+      "minimum_commitment": "$1M annually",
+      "price_escalation": "Per-user pricing reviewed annually",
+      "termination_clause": "60-day notice, no termination fee",
+      "payment_terms": "Net 30, quarterly invoicing",
+      "volume_discounts": "Tiered discounts based on user count"
+    },
+    "sla_metrics": {
+      "uptime_target": "99.95%",
+      "response_time_target": "1 hour for critical issues",
+      "resolution_time_target": "12 hours for P1 issues",
+      "availability_penalty": "$10000 per incident below SLA",
+      "performance_bonus": "Up to 10% annual credit for exceeding SLA targets"
+    },
+    "risk_factors": [],
+    "incumbent_advantages": [
+      "Strong innovation capabilities",
+      "Improving performance trend",
+      "Competitive pricing with volume discounts",
+      "Modern technology stack"
+    ],
+    "renewal_clauses": "Fixed term contract. Renewal evaluation begins 180 days before expiry. Performance and pricing will be benchmarked against market alternatives."
+  },
+  {
+    "contract_id": "CON-007",
+    "supplier_id": "SUP-001",
+    "category_id": "CAT-01",
+    "start_date": "2021-05-01",
+    "end_date": "2024-05-01",
+    "expiry_days": 90,
+    "annual_value_usd": 2100000,
+    "renewal_terms": "Fixed term, no auto-renewal",
+    "status": "Active",
+    "renewal_options": ["Renew", "Renegotiate", "RFx", "Terminate"],
+    "contract_terms": {
+      "pricing_model": "Fixed annual fee with tiered service levels",
+      "minimum_commitment": "$2M annually",
+      "price_escalation": "2.5% annual increase",
+      "termination_clause": "120-day notice, 5% early termination fee",
+      "payment_terms": "Net 45, monthly invoicing",
+      "volume_discounts": "15% discount for multi-year commitment"
+    },
+    "sla_metrics": {
+      "uptime_target": "99.7%",
+      "response_time_target": "3 hours for critical issues",
+      "resolution_time_target": "36 hours for P1 issues",
+      "availability_penalty": "$7500 per incident below SLA",
+      "performance_bonus": "3% annual bonus for zero breaches"
+    },
+    "risk_factors": [
+      "Performance declining over last 3 months",
+      "Expiring in 90 days - urgent decision needed"
+    ],
+    "incumbent_advantages": [
+      "Longest relationship (5+ years)",
+      "Comprehensive service coverage",
+      "Established integrations"
+    ],
+    "renewal_clauses": "Fixed term contract expiring in 90 days. No auto-renewal. Must decide on renewal, renegotiation, or RFx within next 30 days to allow sufficient transition time if needed."
+  },
+  {
+    "contract_id": "CON-008",
+    "supplier_id": "SUP-002",
+    "category_id": "CAT-01",
+    "start_date": "2023-11-01",
+    "end_date": "2026-11-01",
+    "expiry_days": 690,
+    "annual_value_usd": 1950000,
+    "renewal_terms": "Fixed term, early renewal option available",
+    "status": "Active",
+    "renewal_options": ["Renew", "Renegotiate", "RFx", "Terminate"],
+    "contract_terms": {
+      "pricing_model": "Hybrid fixed and usage-based",
+      "minimum_commitment": "$1.8M annually",
+      "price_escalation": "CPI-based adjustment annually",
+      "termination_clause": "90-day notice after year 1, 5% fee",
+      "payment_terms": "Net 30",
+      "volume_discounts": "Usage tiers with decreasing unit costs"
+    },
+    "sla_metrics": {
+      "uptime_target": "99.8%",
+      "response_time_target": "2.5 hours for critical issues",
+      "resolution_time_target": "30 hours for P1 issues",
+      "availability_penalty": "$6000 per incident below SLA",
+      "performance_bonus": "Quarterly performance credits"
+    },
+    "risk_factors": [],
+    "incumbent_advantages": [
+      "Stable performance over 6 months",
+      "Competitive pricing structure",
+      "Global service coverage",
+      "Good scalability options"
+    ],
+    "renewal_clauses": "Fixed term with early renewal option available 12 months before expiry. Renewal terms will be benchmarked against market rates."
   }
 ]
-
-

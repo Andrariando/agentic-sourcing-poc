@@ -14,9 +14,63 @@
     },
     "issues": [
       "Delivery delays in last quarter",
-      "Cost overruns on recent projects"
+      "Cost overruns on recent projects",
+      "Response time degradation noted"
     ],
-    "last_review_date": "2024-01-15"
+    "last_review_date": "2024-01-15",
+    "performance_history": [
+      {"quarter": "Q1 2023", "score": 8.5, "trend": "Stable"},
+      {"quarter": "Q2 2023", "score": 8.3, "trend": "Stable"},
+      {"quarter": "Q3 2023", "score": 8.0, "trend": "Declining"},
+      {"quarter": "Q4 2023", "score": 7.5, "trend": "Declining"},
+      {"quarter": "Q1 2024", "score": 7.2, "trend": "Declining"}
+    ],
+    "incident_log": [
+      {
+        "date": "2024-01-10",
+        "severity": "High",
+        "description": "Critical system outage - 4 hour downtime",
+        "resolution_time": "6 hours",
+        "impact": "Service disruption affecting 500+ users"
+      },
+      {
+        "date": "2023-12-15",
+        "severity": "Medium",
+        "description": "Delayed project milestone delivery",
+        "resolution_time": "N/A",
+        "impact": "2 week delay in project timeline"
+      },
+      {
+        "date": "2023-11-20",
+        "severity": "Medium",
+        "description": "Cost overrun on Q4 project - 15% above budget",
+        "resolution_time": "N/A",
+        "impact": "$75K budget variance"
+      }
+    ],
+    "cost_variance": {
+      "budget_2023": 2500000,
+      "actual_2023": 2687500,
+      "variance_percent": 7.5,
+      "trend": "Increasing",
+      "explanation": "Unforeseen complexity in migration project led to cost overruns"
+    },
+    "innovation_contributions": [
+      "Proposed automation solution reducing manual effort by 30%",
+      "Introduced new security framework improvements"
+    ],
+    "relationship_quality": {
+      "stakeholder_satisfaction": 6.5,
+      "communication_rating": 7.0,
+      "collaboration_rating": 6.8,
+      "trust_level": "Moderate"
+    },
+    "compliance_status": {
+      "regulatory_compliance": "Compliant",
+      "sla_compliance": "85% (below target)",
+      "security_audit": "Passed with minor findings",
+      "last_audit_date": "2023-11-01"
+    }
   },
   {
     "supplier_id": "SUP-002",
@@ -32,7 +86,44 @@
       "responsiveness": 8.5
     },
     "issues": [],
-    "last_review_date": "2024-01-20"
+    "last_review_date": "2024-01-20",
+    "performance_history": [
+      {"quarter": "Q3 2023", "score": 8.4, "trend": "Stable"},
+      {"quarter": "Q4 2023", "score": 8.5, "trend": "Stable"},
+      {"quarter": "Q1 2024", "score": 8.5, "trend": "Stable"}
+    ],
+    "incident_log": [
+      {
+        "date": "2023-12-05",
+        "severity": "Low",
+        "description": "Minor service interruption - 30 minutes",
+        "resolution_time": "45 minutes",
+        "impact": "Limited impact, resolved quickly"
+      }
+    ],
+    "cost_variance": {
+      "budget_2023": 1800000,
+      "actual_2023": 1764000,
+      "variance_percent": -2.0,
+      "trend": "Favorable",
+      "explanation": "Under budget due to efficient delivery and volume discounts"
+    },
+    "innovation_contributions": [
+      "Implemented new monitoring tools improving visibility",
+      "Proposed cost optimization strategies saving $50K annually"
+    ],
+    "relationship_quality": {
+      "stakeholder_satisfaction": 8.5,
+      "communication_rating": 8.7,
+      "collaboration_rating": 8.5,
+      "trust_level": "High"
+    },
+    "compliance_status": {
+      "regulatory_compliance": "Compliant",
+      "sla_compliance": "98% (exceeds target)",
+      "security_audit": "Passed with no findings",
+      "last_audit_date": "2023-12-15"
+    }
   },
   {
     "supplier_id": "SUP-003",
@@ -48,7 +139,38 @@
       "responsiveness": 9.0
     },
     "issues": [],
-    "last_review_date": "2024-01-10"
+    "last_review_date": "2024-01-10",
+    "performance_history": [
+      {"quarter": "Q1 2023", "score": 8.7, "trend": "Stable"},
+      {"quarter": "Q2 2023", "score": 8.8, "trend": "Stable"},
+      {"quarter": "Q3 2023", "score": 8.8, "trend": "Stable"},
+      {"quarter": "Q4 2023", "score": 8.8, "trend": "Stable"},
+      {"quarter": "Q1 2024", "score": 8.8, "trend": "Stable"}
+    ],
+    "incident_log": [],
+    "cost_variance": {
+      "budget_2023": 450000,
+      "actual_2023": 445500,
+      "variance_percent": -1.0,
+      "trend": "Favorable",
+      "explanation": "Consistently on or under budget with reliable delivery"
+    },
+    "innovation_contributions": [
+      "Introduced sustainable product alternatives",
+      "Implemented e-procurement integration improving efficiency"
+    ],
+    "relationship_quality": {
+      "stakeholder_satisfaction": 9.0,
+      "communication_rating": 9.0,
+      "collaboration_rating": 8.9,
+      "trust_level": "Very High"
+    },
+    "compliance_status": {
+      "regulatory_compliance": "Compliant",
+      "sla_compliance": "100% (exceeds target)",
+      "security_audit": "Passed with no findings",
+      "last_audit_date": "2023-10-01"
+    }
   },
   {
     "supplier_id": "SUP-004",
@@ -64,7 +186,36 @@
       "responsiveness": 8.0
     },
     "issues": [],
-    "last_review_date": "2024-01-18"
+    "last_review_date": "2024-01-18",
+    "performance_history": [
+      {"quarter": "Q3 2023", "score": 7.8, "trend": "Improving"},
+      {"quarter": "Q4 2023", "score": 8.0, "trend": "Improving"},
+      {"quarter": "Q1 2024", "score": 8.2, "trend": "Improving"}
+    ],
+    "incident_log": [],
+    "cost_variance": {
+      "budget_2023": 3200000,
+      "actual_2023": 3168000,
+      "variance_percent": -1.0,
+      "trend": "Favorable",
+      "explanation": "Improved project estimation accuracy and delivery efficiency"
+    },
+    "innovation_contributions": [
+      "Delivered innovative solution exceeding project objectives",
+      "Provided strategic insights driving business value"
+    ],
+    "relationship_quality": {
+      "stakeholder_satisfaction": 8.2,
+      "communication_rating": 8.0,
+      "collaboration_rating": 8.3,
+      "trust_level": "High"
+    },
+    "compliance_status": {
+      "regulatory_compliance": "Compliant",
+      "sla_compliance": "95% (meets target)",
+      "security_audit": "Passed with minor findings",
+      "last_audit_date": "2023-11-15"
+    }
   },
   {
     "supplier_id": "SUP-005",
@@ -80,9 +231,54 @@
       "responsiveness": 7.0
     },
     "issues": [
-      "Occasional quality issues"
+      "Occasional quality issues",
+      "Inconsistent service delivery"
     ],
-    "last_review_date": "2024-01-12"
+    "last_review_date": "2024-01-12",
+    "performance_history": [
+      {"quarter": "Q3 2023", "score": 7.0, "trend": "Stable"},
+      {"quarter": "Q4 2023", "score": 7.0, "trend": "Stable"},
+      {"quarter": "Q1 2024", "score": 7.0, "trend": "Stable"}
+    ],
+    "incident_log": [
+      {
+        "date": "2024-01-05",
+        "severity": "Medium",
+        "description": "Quality issue with cleaning service",
+        "resolution_time": "2 days",
+        "impact": "Required re-cleaning of affected areas"
+      },
+      {
+        "date": "2023-12-10",
+        "severity": "Low",
+        "description": "Maintenance schedule delay",
+        "resolution_time": "1 day",
+        "impact": "Minor inconvenience, no service disruption"
+      }
+    ],
+    "cost_variance": {
+      "budget_2023": 850000,
+      "actual_2023": 867000,
+      "variance_percent": 2.0,
+      "trend": "Stable",
+      "explanation": "Slight overage due to additional service requests"
+    },
+    "innovation_contributions": [
+      "Proposed efficiency improvements in service delivery",
+      "Introduced new cleaning methods"
+    ],
+    "relationship_quality": {
+      "stakeholder_satisfaction": 7.0,
+      "communication_rating": 7.0,
+      "collaboration_rating": 7.0,
+      "trust_level": "Moderate"
+    },
+    "compliance_status": {
+      "regulatory_compliance": "Compliant",
+      "sla_compliance": "88% (below target)",
+      "security_audit": "Passed with minor findings",
+      "last_audit_date": "2023-09-15"
+    }
   },
   {
     "supplier_id": "SUP-006",
@@ -98,8 +294,223 @@
       "responsiveness": 8.0
     },
     "issues": [],
-    "last_review_date": "2024-01-22"
+    "last_review_date": "2024-01-22",
+    "performance_history": [
+      {"quarter": "Q4 2023", "score": 7.8, "trend": "Improving"},
+      {"quarter": "Q1 2024", "score": 8.0, "trend": "Improving"}
+    ],
+    "incident_log": [],
+    "cost_variance": {
+      "budget_2023": 1200000,
+      "actual_2023": 1176000,
+      "variance_percent": -2.0,
+      "trend": "Favorable",
+      "explanation": "Efficient cloud-native delivery model reducing costs"
+    },
+    "innovation_contributions": [
+      "Introduced modern technology stack improvements",
+      "Implemented DevOps best practices",
+      "Proposed cost optimization strategies"
+    ],
+    "relationship_quality": {
+      "stakeholder_satisfaction": 8.0,
+      "communication_rating": 8.2,
+      "collaboration_rating": 8.0,
+      "trust_level": "High"
+    },
+    "compliance_status": {
+      "regulatory_compliance": "Compliant",
+      "sla_compliance": "96% (meets target)",
+      "security_audit": "Passed with no findings",
+      "last_audit_date": "2024-01-05"
+    }
+  },
+  {
+    "supplier_id": "SUP-007",
+    "category_id": "CAT-01",
+    "overall_score": 9.0,
+    "trend": "Stable",
+    "trend_period_months": 24,
+    "metrics": {
+      "quality": 9.2,
+      "delivery": 9.0,
+      "cost": 8.8,
+      "innovation": 9.5,
+      "responsiveness": 9.0
+    },
+    "issues": [],
+    "last_review_date": "2024-01-25",
+    "performance_history": [
+      {"quarter": "Q1 2023", "score": 8.9, "trend": "Stable"},
+      {"quarter": "Q2 2023", "score": 9.0, "trend": "Stable"},
+      {"quarter": "Q3 2023", "score": 9.0, "trend": "Stable"},
+      {"quarter": "Q4 2023", "score": 9.0, "trend": "Stable"},
+      {"quarter": "Q1 2024", "score": 9.0, "trend": "Stable"}
+    ],
+    "incident_log": [],
+    "cost_variance": {
+      "budget_2023": 5000000,
+      "actual_2023": 4950000,
+      "variance_percent": -1.0,
+      "trend": "Favorable",
+      "explanation": "Consistent delivery within budget, efficiency improvements"
+    },
+    "innovation_contributions": [
+      "Industry-leading cloud transformation methodologies",
+      "Cutting-edge security solutions",
+      "Continuous innovation pipeline"
+    ],
+    "relationship_quality": {
+      "stakeholder_satisfaction": 9.0,
+      "communication_rating": 9.2,
+      "collaboration_rating": 9.0,
+      "trust_level": "Very High"
+    },
+    "compliance_status": {
+      "regulatory_compliance": "Compliant",
+      "sla_compliance": "99.5% (exceeds target)",
+      "security_audit": "Passed with excellence rating",
+      "last_audit_date": "2024-01-10"
+    }
+  },
+  {
+    "supplier_id": "SUP-008",
+    "category_id": "CAT-03",
+    "overall_score": 8.3,
+    "trend": "Stable",
+    "trend_period_months": 12,
+    "metrics": {
+      "quality": 8.5,
+      "delivery": 8.2,
+      "cost": 8.0,
+      "innovation": 8.5,
+      "responsiveness": 8.3
+    },
+    "issues": [],
+    "last_review_date": "2024-01-20",
+    "performance_history": [
+      {"quarter": "Q1 2023", "score": 8.2, "trend": "Stable"},
+      {"quarter": "Q2 2023", "score": 8.3, "trend": "Stable"},
+      {"quarter": "Q3 2023", "score": 8.3, "trend": "Stable"},
+      {"quarter": "Q4 2023", "score": 8.3, "trend": "Stable"}
+    ],
+    "incident_log": [],
+    "cost_variance": {
+      "budget_2023": 2000000,
+      "actual_2023": 1960000,
+      "variance_percent": -2.0,
+      "trend": "Favorable",
+      "explanation": "Efficient project delivery and resource utilization"
+    },
+    "innovation_contributions": [
+      "Advanced analytics solutions",
+      "Data-driven insights driving business value"
+    ],
+    "relationship_quality": {
+      "stakeholder_satisfaction": 8.3,
+      "communication_rating": 8.2,
+      "collaboration_rating": 8.4,
+      "trust_level": "High"
+    },
+    "compliance_status": {
+      "regulatory_compliance": "Compliant",
+      "sla_compliance": "94% (meets target)",
+      "security_audit": "Passed with no findings",
+      "last_audit_date": "2023-12-01"
+    }
+  },
+  {
+    "supplier_id": "SUP-009",
+    "category_id": "CAT-02",
+    "overall_score": 8.1,
+    "trend": "Stable",
+    "trend_period_months": 18,
+    "metrics": {
+      "quality": 8.2,
+      "delivery": 8.0,
+      "cost": 8.0,
+      "innovation": 8.3,
+      "responsiveness": 8.1
+    },
+    "issues": [],
+    "last_review_date": "2024-01-15",
+    "performance_history": [
+      {"quarter": "Q2 2023", "score": 8.0, "trend": "Stable"},
+      {"quarter": "Q3 2023", "score": 8.1, "trend": "Stable"},
+      {"quarter": "Q4 2023", "score": 8.1, "trend": "Stable"},
+      {"quarter": "Q1 2024", "score": 8.1, "trend": "Stable"}
+    ],
+    "incident_log": [],
+    "cost_variance": {
+      "budget_2023": 400000,
+      "actual_2023": 396000,
+      "variance_percent": -1.0,
+      "trend": "Favorable",
+      "explanation": "Competitive pricing with sustainable products"
+    },
+    "innovation_contributions": [
+      "Sustainable product alternatives",
+      "Carbon-neutral delivery options",
+      "Innovative eco-friendly solutions"
+    ],
+    "relationship_quality": {
+      "stakeholder_satisfaction": 8.1,
+      "communication_rating": 8.0,
+      "collaboration_rating": 8.2,
+      "trust_level": "High"
+    },
+    "compliance_status": {
+      "regulatory_compliance": "Compliant",
+      "sla_compliance": "95% (meets target)",
+      "security_audit": "Passed with no findings",
+      "last_audit_date": "2023-11-01"
+    }
+  },
+  {
+    "supplier_id": "SUP-010",
+    "category_id": "CAT-04",
+    "overall_score": 8.7,
+    "trend": "Stable",
+    "trend_period_months": 36,
+    "metrics": {
+      "quality": 8.8,
+      "delivery": 8.7,
+      "cost": 8.5,
+      "innovation": 8.8,
+      "responsiveness": 8.7
+    },
+    "issues": [],
+    "last_review_date": "2024-01-18",
+    "performance_history": [
+      {"quarter": "Q1 2023", "score": 8.6, "trend": "Stable"},
+      {"quarter": "Q2 2023", "score": 8.7, "trend": "Stable"},
+      {"quarter": "Q3 2023", "score": 8.7, "trend": "Stable"},
+      {"quarter": "Q4 2023", "score": 8.7, "trend": "Stable"}
+    ],
+    "incident_log": [],
+    "cost_variance": {
+      "budget_2023": 1200000,
+      "actual_2023": 1188000,
+      "variance_percent": -1.0,
+      "trend": "Favorable",
+      "explanation": "Efficient facility management reducing maintenance costs"
+    },
+    "innovation_contributions": [
+      "Smart building technology integration",
+      "Energy efficiency improvements",
+      "Predictive maintenance solutions"
+    ],
+    "relationship_quality": {
+      "stakeholder_satisfaction": 8.7,
+      "communication_rating": 8.8,
+      "collaboration_rating": 8.7,
+      "trust_level": "Very High"
+    },
+    "compliance_status": {
+      "regulatory_compliance": "Compliant",
+      "sla_compliance": "98% (exceeds target)",
+      "security_audit": "Passed with excellence rating",
+      "last_audit_date": "2024-01-05"
+    }
   }
 ]
-
-

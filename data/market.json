@@ -9,7 +9,55 @@
     "market_trend": "Stable",
     "supplier_availability": "High",
     "competitive_intensity": "High",
-    "price_trend": "Slight increase expected"
+    "price_trend": "Slight increase expected",
+    "key_suppliers": [
+      {
+        "supplier_id": "SUP-007",
+        "market_position": "Market leader",
+        "market_share_percent": 25
+      },
+      {
+        "supplier_id": "SUP-001",
+        "market_position": "Established player",
+        "market_share_percent": 15
+      },
+      {
+        "supplier_id": "SUP-002",
+        "market_position": "Growing competitor",
+        "market_share_percent": 12
+      }
+    ],
+    "pricing_drivers": [
+      "Technology stack complexity",
+      "Service level requirements",
+      "Geographic coverage needs",
+      "Integration requirements",
+      "Innovation and modernization demands"
+    ],
+    "emerging_trends": [
+      "Shift toward cloud-native solutions",
+      "Increased focus on AI/ML capabilities",
+      "Demand for DevSecOps integration",
+      "Growing importance of sustainability",
+      "Remote-first service delivery models"
+    ],
+    "risk_factors": [
+      "Rapid technology evolution requiring supplier adaptability",
+      "Cybersecurity threats requiring robust security capabilities",
+      "Talent shortages affecting service delivery",
+      "Regulatory changes in data privacy"
+    ],
+    "benchmark_metrics": {
+      "average_contract_length_years": 3,
+      "typical_price_escalation_percent": 2.5,
+      "average_sla_uptime_target": "99.5%",
+      "typical_response_time_hours": 3,
+      "average_implementation_time_weeks": 12,
+      "typical_termination_notice_days": 90
+    },
+    "market_maturity": "Mature",
+    "barriers_to_entry": "Medium - requires technical expertise and certifications",
+    "switching_costs": "High - due to integration complexity"
   },
   {
     "category_id": "CAT-02",
@@ -21,7 +69,50 @@
     "market_trend": "Stable",
     "supplier_availability": "Very High",
     "competitive_intensity": "Very High",
-    "price_trend": "Stable"
+    "price_trend": "Stable",
+    "key_suppliers": [
+      {
+        "supplier_id": "SUP-003",
+        "market_position": "Market leader",
+        "market_share_percent": 20
+      },
+      {
+        "supplier_id": "SUP-009",
+        "market_position": "Emerging competitor",
+        "market_share_percent": 8
+      }
+    ],
+    "pricing_drivers": [
+      "Order volume and frequency",
+      "Product mix and customization",
+      "Delivery requirements",
+      "Sustainability preferences",
+      "Integration with e-procurement systems"
+    ],
+    "emerging_trends": [
+      "Strong shift toward sustainable/eco-friendly products",
+      "E-procurement platform integration",
+      "On-demand ordering models",
+      "Custom product sourcing",
+      "Waste reduction initiatives"
+    ],
+    "risk_factors": [
+      "Supply chain disruptions affecting availability",
+      "Price volatility in raw materials",
+      "Sustainability compliance requirements",
+      "Low switching costs enabling frequent supplier changes"
+    ],
+    "benchmark_metrics": {
+      "average_contract_length_years": 2,
+      "typical_price_escalation_percent": 2.0,
+      "average_sla_uptime_target": "99.0%",
+      "typical_response_time_hours": 24,
+      "average_implementation_time_weeks": 2,
+      "typical_termination_notice_days": 30
+    },
+    "market_maturity": "Very Mature",
+    "barriers_to_entry": "Low - commoditized products",
+    "switching_costs": "Low - minimal integration required"
   },
   {
     "category_id": "CAT-03",
@@ -33,7 +124,50 @@
     "market_trend": "Growing",
     "supplier_availability": "Medium",
     "competitive_intensity": "Medium",
-    "price_trend": "Moderate increase expected"
+    "price_trend": "Moderate increase expected",
+    "key_suppliers": [
+      {
+        "supplier_id": "SUP-004",
+        "market_position": "Established player",
+        "market_share_percent": 18
+      },
+      {
+        "supplier_id": "SUP-008",
+        "market_position": "Specialized player",
+        "market_share_percent": 10
+      }
+    ],
+    "pricing_drivers": [
+      "Project complexity and scope",
+      "Expertise and specialization required",
+      "Project duration and timeline",
+      "Team size and seniority",
+      "Outcome-based vs time-based pricing"
+    ],
+    "emerging_trends": [
+      "Increased demand for digital transformation consulting",
+      "Focus on data analytics and AI/ML strategy",
+      "Agile and outcome-based engagement models",
+      "Remote consulting delivery",
+      "Industry-specific specialization"
+    ],
+    "risk_factors": [
+      "Talent availability affecting project delivery",
+      "Scope creep and project management challenges",
+      "Variable quality across different engagements",
+      "Dependency on key personnel"
+    ],
+    "benchmark_metrics": {
+      "average_contract_length_years": 1.5,
+      "typical_price_escalation_percent": 3.0,
+      "average_sla_uptime_target": "N/A (project-based)",
+      "typical_response_time_hours": 24,
+      "average_implementation_time_weeks": "Variable (8-24 weeks)",
+      "typical_termination_notice_days": 30
+    },
+    "market_maturity": "Growing",
+    "barriers_to_entry": "Medium - requires expertise and reputation",
+    "switching_costs": "Medium - depends on project phase"
   },
   {
     "category_id": "CAT-04",
@@ -45,8 +179,49 @@
     "market_trend": "Stable",
     "supplier_availability": "High",
     "competitive_intensity": "High",
-    "price_trend": "Stable"
+    "price_trend": "Stable",
+    "key_suppliers": [
+      {
+        "supplier_id": "SUP-010",
+        "market_position": "Market leader",
+        "market_share_percent": 22
+      },
+      {
+        "supplier_id": "SUP-005",
+        "market_position": "Regional player",
+        "market_share_percent": 12
+      }
+    ],
+    "pricing_drivers": [
+      "Facility size and number",
+      "Service scope and frequency",
+      "Technology and automation requirements",
+      "Compliance and safety standards",
+      "Geographic coverage needs"
+    ],
+    "emerging_trends": [
+      "Smart building technology integration",
+      "Sustainability and energy efficiency focus",
+      "Predictive maintenance adoption",
+      "Integrated facility management platforms",
+      "Health and safety enhancements post-pandemic"
+    ],
+    "risk_factors": [
+      "Labor availability and cost pressures",
+      "Compliance and safety regulations",
+      "Weather-related service disruptions",
+      "Energy cost volatility"
+    ],
+    "benchmark_metrics": {
+      "average_contract_length_years": 3,
+      "typical_price_escalation_percent": 3.0,
+      "average_sla_uptime_target": "98.5%",
+      "typical_response_time_hours": 4,
+      "average_implementation_time_weeks": 4,
+      "typical_termination_notice_days": 90
+    },
+    "market_maturity": "Mature",
+    "barriers_to_entry": "Medium - requires operational scale and certifications",
+    "switching_costs": "Medium - transition period required"
   }
 ]
-
-

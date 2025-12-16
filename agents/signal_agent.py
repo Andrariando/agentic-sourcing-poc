@@ -3,7 +3,7 @@ Signal Interpretation Agent - Interprets signals and recommends actions.
 """
 from typing import Dict, Any
 from utils.schemas import SignalAssessment, CaseSummary
-from utils.data_loader import get_contract, get_performance, get_market_data
+from utils.data_loader import get_contract, get_performance, get_market_data, get_category, get_requirements, get_supplier
 from agents.base_agent import BaseAgent
 import json
 
@@ -39,13 +39,19 @@ class SignalInterpretationAgent(BaseAgent):
         contract = None
         performance = None
         market = None
+        category = None
+        requirements = None
+        supplier = None
         
         if signal.get("contract_id"):
             contract = get_contract(signal["contract_id"])
         if signal.get("supplier_id"):
             performance = get_performance(signal["supplier_id"])
+            supplier = get_supplier(signal["supplier_id"])
         if signal.get("category_id"):
             market = get_market_data(signal["category_id"])
+            category = get_category(signal["category_id"])
+            requirements = get_requirements(signal["category_id"])
         
         # Build prompt
         prompt = f"""You are a Signal Interpretation Agent for dynamic sourcing pipelines.
@@ -94,8 +100,11 @@ Provide ONLY valid JSON, no markdown formatting."""
             "signal": signal,
             "case_summary": case_summary.model_dump() if hasattr(case_summary, "model_dump") else dict(case_summary),
             "contract": contract,
+            "supplier": supplier,
             "performance": performance,
-            "market": market
+            "market": market,
+            "category": category,
+            "requirements": requirements
         }
         
         try:

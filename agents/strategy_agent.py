@@ -3,7 +3,7 @@ Strategy Agent (DTP-01) - Recommends sourcing strategy.
 """
 from typing import Dict, Any
 from utils.schemas import StrategyRecommendation, CaseSummary
-from utils.data_loader import get_contract, get_performance, get_market_data, get_category
+from utils.data_loader import get_contract, get_performance, get_market_data, get_category, get_requirements
 from agents.base_agent import BaseAgent
 import json
 
@@ -40,6 +40,7 @@ class StrategyAgent(BaseAgent):
         performance = None
         market = None
         category = None
+        requirements = None
         
         if case_summary.contract_id:
             contract = get_contract(case_summary.contract_id)
@@ -48,6 +49,7 @@ class StrategyAgent(BaseAgent):
         if case_summary.category_id:
             market = get_market_data(case_summary.category_id)
             category = get_category(case_summary.category_id)
+            requirements = get_requirements(case_summary.category_id)
         
         # Build prompt
         prompt = f"""You are a Strategy Agent for dynamic sourcing pipelines (DTP-01).
@@ -104,7 +106,8 @@ Provide ONLY valid JSON, no markdown formatting."""
             "contract": contract,
             "performance": performance,
             "market": market,
-            "category": category
+            "category": category,
+            "requirements": requirements
         }
         
         try:
