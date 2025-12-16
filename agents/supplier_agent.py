@@ -3,7 +3,7 @@ Supplier Evaluation Agent (DTP-03/04) - Evaluates and shortlists suppliers.
 """
 from typing import Dict, Any
 from utils.schemas import SupplierShortlist, CaseSummary
-from utils.data_loader import get_suppliers_by_category, get_performance, get_market_data
+from utils.data_loader import get_suppliers_by_category, get_performance, get_market_data, get_category, get_requirements
 from agents.base_agent import BaseAgent
 import json
 
@@ -31,6 +31,27 @@ class SupplierEvaluationAgent(BaseAgent):
                 case_summary
             )
             if cache_meta.cache_hit and cached_value:
+                # #region debug_log_h1_cache_hit
+                try:
+                    from pathlib import Path
+                    debug_path = Path(r"c:\Users\Diandra Riando\OneDrive\Documents\Capstone\Cursor Code\.cursor\debug.log")
+                    with open(debug_path, "a", encoding="utf-8") as f:
+                        f.write(json.dumps({
+                            "sessionId": "debug-session",
+                            "runId": "pre-fix",
+                            "hypothesisId": "H2",
+                            "location": "agents/supplier_agent.py:evaluate_suppliers",
+                            "message": "SupplierEvaluationAgent cache hit",
+                            "data": {
+                                "case_id": case_summary.case_id,
+                                "category_id": case_summary.category_id,
+                                "cache_key": cache_meta.cache_key
+                            },
+                            "timestamp": __import__("time").time()
+                        }) + "\n")
+                except Exception:
+                    pass
+                # #endregion debug_log_h1_cache_hit
                 return cached_value, {}, {}
         
         # Gather context
@@ -109,6 +130,29 @@ Provide ONLY valid JSON, no markdown formatting."""
             shortlist, output_dict, input_tokens, output_tokens = self.call_llm_with_schema(
                 prompt, SupplierShortlist, retry_on_invalid=True
             )
+
+            # #region debug_log_h1_llm_shortlist
+            try:
+                from pathlib import Path
+                debug_path = Path(r"c:\Users\Diandra Riando\OneDrive\Documents\Capstone\Cursor Code\.cursor\debug.log")
+                with open(debug_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps({
+                        "sessionId": "debug-session",
+                        "runId": "pre-fix",
+                        "hypothesisId": "H2",
+                        "location": "agents/supplier_agent.py:evaluate_suppliers",
+                        "message": "LLM-produced supplier shortlist",
+                        "data": {
+                            "case_id": case_summary.case_id,
+                            "category_id": case_summary.category_id,
+                            "shortlisted_count": len(shortlist.shortlisted_suppliers),
+                            "used_fallback": False
+                        },
+                        "timestamp": __import__("time").time()
+                    }) + "\n")
+            except Exception:
+                pass
+            # #endregion debug_log_h1_llm_shortlist
             
             # Cache result
             if use_cache:
@@ -123,7 +167,33 @@ Provide ONLY valid JSON, no markdown formatting."""
             return shortlist, llm_input_payload, output_dict, input_tokens, output_tokens
         except Exception as e:
             # Fallback
-            return self.create_fallback_output(SupplierShortlist, case_summary.case_id, case_summary.category_id), llm_input_payload, {}, 0, 0
+            fallback = self.create_fallback_output(SupplierShortlist, case_summary.case_id, case_summary.category_id)
+
+            # #region debug_log_h2_fallback
+            try:
+                from pathlib import Path
+                debug_path = Path(r"c:\Users\Diandra Riando\OneDrive\Documents\Capstone\Cursor Code\.cursor\debug.log")
+                with open(debug_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps({
+                        "sessionId": "debug-session",
+                        "runId": "pre-fix",
+                        "hypothesisId": "H2",
+                        "location": "agents/supplier_agent.py:evaluate_suppliers",
+                        "message": "SupplierEvaluationAgent used fallback output",
+                        "data": {
+                            "case_id": case_summary.case_id,
+                            "category_id": case_summary.category_id,
+                            "exception_type": type(e).__name__,
+                            "shortlisted_count": len(fallback.shortlisted_suppliers),
+                            "recommendation": fallback.recommendation
+                        },
+                        "timestamp": __import__("time").time()
+                    }) + "\n")
+            except Exception:
+                pass
+            # #endregion debug_log_h2_fallback
+
+            return fallback, llm_input_payload, {}, 0, 0
     
     def create_fallback_output(self, schema: type, case_id: str, category_id: str) -> SupplierShortlist:
         """Fallback output when LLM fails"""

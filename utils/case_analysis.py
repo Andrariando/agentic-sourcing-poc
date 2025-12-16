@@ -63,6 +63,38 @@ def get_recommended_action(case: Case) -> Tuple[Optional[str], Optional[str], li
     Returns (action_label, action_type, rationale_bullets)
     """
     if case.latest_agent_output:
+        # #region debug_log_h1_recommended_action_input
+        try:
+            import json as _json
+            from pathlib import Path as _Path
+            debug_path = _Path(r"c:\Users\Diandra Riando\OneDrive\Documents\Capstone\Cursor Code\.cursor\debug.log")
+            latest_type = type(case.latest_agent_output).__name__
+            latest_payload = {}
+            try:
+                if hasattr(case.latest_agent_output, "model_dump"):
+                    latest_payload = case.latest_agent_output.model_dump()
+            except Exception:
+                latest_payload = {"warning": "could_not_serialize_latest_agent_output"}
+            with open(debug_path, "a", encoding="utf-8") as f:
+                f.write(_json.dumps({
+                    "sessionId": "debug-session",
+                    "runId": "pre-fix",
+                    "hypothesisId": "H1",
+                    "location": "utils/case_analysis.py:get_recommended_action",
+                    "message": "get_recommended_action input",
+                    "data": {
+                        "case_id": case.case_id,
+                        "dtp_stage": case.dtp_stage,
+                        "latest_agent_name": case.latest_agent_name,
+                        "latest_agent_type": latest_type,
+                        "latest_agent_output": latest_payload
+                    },
+                    "timestamp": __import__("time").time()
+                }) + "\n")
+        except Exception:
+            pass
+        # #endregion debug_log_h1_recommended_action_input
+
         if isinstance(case.latest_agent_output, StrategyRecommendation):
             strategy = case.latest_agent_output.recommended_strategy
             if strategy == "RFx":
@@ -73,9 +105,35 @@ def get_recommended_action(case: Case) -> Tuple[Optional[str], Optional[str], li
                 return ("Proceed with Renewal", "renewal", case.latest_agent_output.rationale[:3])
         
         elif isinstance(case.latest_agent_output, SupplierShortlist):
+            shortlist = case.latest_agent_output
+
+            # #region debug_log_h1_shortlist_branch
+            try:
+                import json as _json2
+                from pathlib import Path as _Path2
+                debug_path = _Path2(r"c:\Users\Diandra Riando\OneDrive\Documents\Capstone\Cursor Code\.cursor\debug.log")
+                with open(debug_path, "a", encoding="utf-8") as f:
+                    f.write(_json2.dumps({
+                        "sessionId": "debug-session",
+                        "runId": "pre-fix",
+                        "hypothesisId": "H1",
+                        "location": "utils/case_analysis.py:get_recommended_action",
+                        "message": "SupplierShortlist branch reached",
+                        "data": {
+                            "case_id": case.case_id,
+                            "dtp_stage": case.dtp_stage,
+                            "shortlisted_count": len(shortlist.shortlisted_suppliers),
+                            "recommendation": shortlist.recommendation
+                        },
+                        "timestamp": __import__("time").time()
+                    }) + "\n")
+            except Exception:
+                pass
+            # #endregion debug_log_h1_shortlist_branch
+
             return ("Review Supplier Shortlist", "review_shortlist", [
-                f"{len(case.latest_agent_output.shortlisted_suppliers)} suppliers evaluated",
-                case.latest_agent_output.recommendation
+                f"{len(shortlist.shortlisted_suppliers)} suppliers evaluated",
+                shortlist.recommendation
             ])
         
         elif isinstance(case.latest_agent_output, NegotiationPlan):

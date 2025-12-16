@@ -183,12 +183,15 @@ def supervisor_node(state: PipelineState) -> PipelineState:
     # Supervisor decides if human approval is needed
     # This is the key decision point where Supervisor coordinates with humans
     policy_context = state.get("dtp_policy_context", {})
-    waiting_for_human = supervisor.should_wait_for_human(
+    waiting_for_human, wait_reason = supervisor.should_wait_for_human(
         state["dtp_stage"],
         latest_output,
         policy_context
     )
     state["waiting_for_human"] = waiting_for_human
+    # Store reason for logging
+    if waiting_for_human:
+        state["wait_reason"] = wait_reason
     
     # Supervisor determines next action
     user_intent = state.get("user_intent", "")
@@ -683,13 +686,19 @@ def process_human_decision(state: PipelineState) -> PipelineState:
                 if hasattr(output, key):
                     setattr(output, key, value)
         
-        # Advance DTP stage if needed
+        # Advance DTP stage if needed (with validation)
         policy_context = state.get("dtp_policy_context", {})
         supervisor = get_supervisor()
         old_stage = state["dtp_stage"]
-        new_stage = supervisor.advance_dtp_stage(old_stage, policy_context)
-        state["dtp_stage"] = new_stage
-        state["case_summary"].dtp_stage = new_stage
+        new_stage, error_msg = supervisor.advance_dtp_stage(old_stage, policy_context)
+        
+        if error_msg:
+            # Transition validation failed - log error but don't advance
+            state["error_state"] = {"error": "DTP transition validation failed", "reason": error_msg}
+            state["case_summary"].status = "In Progress"  # Stay at current stage
+        else:
+            state["dtp_stage"] = new_stage
+            state["case_summary"].dtp_stage = new_stage
         
         state["waiting_for_human"] = False
         # If we reached terminal stage, mark completed; else in-progress
@@ -834,11 +843,12 @@ def create_workflow_graph():
         if latest_output and latest_agent_name:
             # Check if Supervisor determined we need human approval
             supervisor = get_supervisor()
-            waiting_for_human = supervisor.should_wait_for_human(dtp_stage, latest_output, policy_context)
+            waiting_for_human, wait_reason = supervisor.should_wait_for_human(dtp_stage, latest_output, policy_context)
             
             if waiting_for_human:
                 # Supervisor requires human approval before proceeding
                 # This will route to wait_for_human node, which ENDs the workflow
+                state["wait_reason"] = wait_reason  # Store reason for logging
                 return "wait_for_human"
             
             # Supervisor reviewed the output and determined next action

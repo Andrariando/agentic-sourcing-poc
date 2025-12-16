@@ -1,15 +1,19 @@
 """
 Supervisor Agent - Central coordinator managing case state and DTP stage transitions.
 Only Supervisor can update case_summary and dtp_stage.
+
+ARCHITECTURE: Supervisor is deterministic (no LLM calls).
 """
 from typing import Dict, Any, Optional, Union
 from utils.schemas import (
     CaseSummary, 
     StrategyRecommendation, 
     SupplierShortlist, 
-    NegotiationPlan
+    NegotiationPlan,
+    DTPPolicyContext
 )
 from utils.state import PipelineState
+from utils.rules import RuleEngine
 from utils.data_loader import get_category
 from datetime import datetime
 from pydantic import BaseModel
@@ -25,10 +29,18 @@ def _policy_list(policy_context: Optional[Union[Dict[str, Any], BaseModel]], key
 
 
 class SupervisorAgent:
-    """Supervisor Agent - manages case state transitions"""
+    """Supervisor Agent - manages case state transitions (deterministic, no LLM)"""
     
     def __init__(self):
         self.name = "Supervisor"
+        self.rule_engine = RuleEngine()
+    
+    def validate_state(self, state: PipelineState) -> tuple[bool, Optional[str]]:
+        """
+        Validate state completeness and correctness.
+        Returns (is_valid, error_message)
+        """
+        return self.rule_engine.validate_state(state)
     
     def update_case_summary(
         self,
@@ -56,8 +68,16 @@ class SupervisorAgent:
         
         return updated_summary
     
-    def advance_dtp_stage(self, current_stage: str, policy_context: Optional[Union[Dict[str, Any], BaseModel]]) -> str:
-        """Advance to next DTP stage using explicit transition policy"""
+    def advance_dtp_stage(
+        self,
+        current_stage: str,
+        policy_context: Optional[Union[Dict[str, Any], BaseModel]]
+    ) -> tuple[str, Optional[str]]:
+        """
+        Advance to next DTP stage using explicit transition policy.
+        Returns (new_stage, error_message)
+        """
+        # Validate transition using rule engine
         allowed_transitions = {
             "DTP-01": ["DTP-02"],
             "DTP-02": ["DTP-03", "DTP-04"],
@@ -66,11 +86,31 @@ class SupervisorAgent:
             "DTP-05": ["DTP-06"],
             "DTP-06": ["DTP-06"],  # Terminal
         }
+        
+        # Convert dict to DTPPolicyContext if needed
+        if isinstance(policy_context, dict):
+            policy_context = DTPPolicyContext(**policy_context) if policy_context else None
+        
+        # Get allowed transitions from policy or defaults
         stage_allowed = _policy_list(policy_context, "allowed_actions") or allowed_transitions.get(current_stage, [])
-        # Pick the first allowed transition; if none, stay
-        return stage_allowed[0] if stage_allowed else current_stage
+        
+        if not stage_allowed:
+            return current_stage, f"No allowed transitions from {current_stage}"
+        
+        # Pick the first allowed transition
+        next_stage = stage_allowed[0]
+        
+        # Validate transition
+        is_valid, error_msg = self.rule_engine.validate_dtp_transition(
+            current_stage, next_stage, policy_context
+        )
+        
+        if not is_valid:
+            return current_stage, error_msg
+        
+        return next_stage, None
     
-    def determine_next_agent(self, dtp_stage: str, latest_output: Any, policy_context: Optional[Union[Dict[str, Any], BaseModel]] = None) -> str:
+    def determine_next_agent(self, dtp_stage: str, latest_output: Any, policy_context: Optional[Union[Dict[str, Any], BaseModel]] = None) -> Optional[str]:
         """
         Determine which agent should run next based on DTP stage and agent outputs.
         This is the core allocation logic - Supervisor decides task allocation.
@@ -101,13 +141,23 @@ class SupervisorAgent:
         else:
             return None  # No agent needed
     
-    def should_wait_for_human(self, dtp_stage: str, latest_output: Any, policy_context: Optional[Union[Dict[str, Any], BaseModel]]) -> bool:
+    def should_wait_for_human(
+        self,
+        dtp_stage: str,
+        latest_output: Any,
+        policy_context: Optional[Union[Dict[str, Any], BaseModel]]
+    ) -> tuple[bool, str]:
         """
-        Determine if we should wait for human decision with policy + materiality.
-        Current rule: any agent output that changes direction requires human review.
+        Determine if we should wait for human decision using rule engine.
+        Returns (requires_human, reason)
+        
+        IMPROVED: Checks policy + materiality instead of always returning True.
         """
-        if latest_output:
-            return True  # Require explicit human approval for every agent recommendation
-        return False
+        # Convert dict to DTPPolicyContext if needed
+        if isinstance(policy_context, dict):
+            policy_context = DTPPolicyContext(**policy_context) if policy_context else None
+        
+        # Use rule engine to determine if human approval required
+        return self.rule_engine.should_require_human(latest_output, dtp_stage, policy_context)
 
 
