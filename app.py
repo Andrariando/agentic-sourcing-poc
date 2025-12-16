@@ -6,7 +6,7 @@ import json
 import os
 import pandas as pd
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 from dotenv import load_dotenv
 from pathlib import Path
@@ -1462,67 +1462,179 @@ st.markdown(header_html, unsafe_allow_html=True)
 
 # Main content - Cases Management Page
 if st.session_state.selected_case_id is None:
-    # Cases title - aligned to left
-    st.markdown('<div style="margin-top: 10px; margin-bottom: 15px;"><h3>Cases</h3></div>', unsafe_allow_html=True)
-
-    # Metrics row - world-class tiles
+    # 1. Purpose Framing Block (Top of Page)
     st.markdown(
         """
-        <div class="card">
-            <div class="card-header">
-                <span>Metrics</span>
-                <span class="card-subtitle">Illustrative / Synthetic</span>
-            </div>
-            <div class="metric-row">
-                <div class="metric-tile">
-                    <div class="metric-tile-label">Cycle Time Reduction</div>
-                    <div class="metric-tile-value">-15%</div>
-                    <div class="metric-tile-caption">Vs. legacy process baseline</div>
-                </div>
-                <div class="metric-tile">
-                    <div class="metric-tile-label">Decision Consistency</div>
-                    <div class="metric-tile-value">92%</div>
-                    <div class="metric-tile-caption">Aligned to playbook / policy</div>
-                </div>
-                <div class="metric-tile">
-                    <div class="metric-tile-label">Knowledge Reuse</div>
-                    <div class="metric-tile-value">60%</div>
-                    <div class="metric-tile-caption">Cases reusing prior signals</div>
-                </div>
+        <div style="margin-top: 20px; margin-bottom: 24px; padding: 20px 24px; background-color: #F8FAFF; border-left: 4px solid #003A8F; border-radius: 4px;">
+            <h2 style="margin: 0 0 8px 0; font-size: 1.5rem; font-weight: 600; color: #0B2D56;">Active Sourcing Decisions</h2>
+            <p style="margin: 0; font-size: 0.95rem; line-height: 1.6; color: #4A4A4A;">
+                Each case represents a sourcing decision evaluated through an agent-orchestrated DTP workflow, combining enterprise signals, policy guardrails, and historical knowledge.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+    
+    # 2. Define What a "Case" Is (Explicitly)
+    st.markdown(
+        """
+        <div style="margin-bottom: 20px; padding: 12px 16px; background-color: #FAFAFA; border: 1px solid #E0E0E0; border-radius: 4px;">
+            <div style="font-size: 0.9rem; color: #4A4A4A; line-height: 1.5;">
+                <strong>What is a case?</strong> A case is created when contract, performance, or risk signals trigger a sourcing review (e.g., renew, renegotiate, RFx, or exit).
             </div>
         </div>
         """,
         unsafe_allow_html=True
     )
     
-    # Filters and search
+    # 3. Reframe Metrics as System-Level Signals
+    st.markdown(
+        """
+        <div class="card" style="margin-bottom: 24px;">
+            <div class="card-header">
+                <span>System-Level Outcomes (Illustrative)</span>
+            </div>
+            <div class="metric-row">
+                <div class="metric-tile">
+                    <div class="metric-tile-label">
+                        Cycle Time Reduction
+                        <span style="cursor: help; margin-left: 4px; color: #6B7280;" title="Definition: Time saved vs. legacy manual process&#10;Baseline: Traditional sourcing cycle (45-60 days)&#10;Evaluation scope: End-to-end DTP workflow execution">ⓘ</span>
+                    </div>
+                    <div class="metric-tile-value">-15%</div>
+                    <div class="metric-tile-caption">Vs. legacy process baseline</div>
+                </div>
+                <div class="metric-tile">
+                    <div class="metric-tile-label">
+                        Decision Consistency
+                        <span style="cursor: help; margin-left: 4px; color: #6B7280;" title="Definition: Alignment with enterprise playbook and policy guardrails&#10;Baseline: Manual decision variance (estimated 70-75%)&#10;Evaluation scope: Strategy recommendations vs. policy rules">ⓘ</span>
+                    </div>
+                    <div class="metric-tile-value">92%</div>
+                    <div class="metric-tile-caption">Aligned to playbook / policy</div>
+                </div>
+                <div class="metric-tile">
+                    <div class="metric-tile-label">
+                        Knowledge Reuse
+                        <span style="cursor: help; margin-left: 4px; color: #6B7280;" title="Definition: Cases leveraging prior signals and agent outputs&#10;Baseline: Zero reuse in manual process&#10;Evaluation scope: Cache hits and signal register matches">ⓘ</span>
+                    </div>
+                    <div class="metric-tile-value">60%</div>
+                    <div class="metric-tile-caption">Cases reusing prior signals</div>
+                </div>
+            </div>
+            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #E0E0E0; font-size: 0.8rem; color: #6B7280; font-style: italic;">
+                Results shown are from synthetic pilot cases and intended for directional evaluation only.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+    
+    # 4. Make Agentic Value Visible (Without Diagrams)
+    st.markdown(
+        """
+        <div style="margin-bottom: 24px; padding: 16px 20px; background-color: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 4px;">
+            <div style="font-size: 0.85rem; font-weight: 600; color: #374151; margin-bottom: 10px;">How Decisions Are Produced</div>
+            <div style="font-size: 0.85rem; color: #6B7280; line-height: 1.8;">
+                • Signals interpreted by specialized agents (contract, performance, risk)<br>
+                • Supervisor agent enforces DTP logic and policy guardrails<br>
+                • Recommendations logged with rationale for auditability
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+    
+    # 5. Add Scale & Scope Cues
+    all_cases = list(st.session_state.cases.values())
+    active_cases = [c for c in all_cases if c.status in ["Open", "In Progress", "Waiting for Human Decision"]]
+    closed_cases = [c for c in all_cases if c.status in ["Closed", "Rejected"]]
+    dtp_stages_present = sorted(list(set([c.dtp_stage for c in all_cases])))
+    dtp_range = f"{dtp_stages_present[0]} to {dtp_stages_present[-1]}" if len(dtp_stages_present) > 1 else dtp_stages_present[0] if dtp_stages_present else "N/A"
+    
+    st.markdown(
+        f"""
+        <div style="margin-bottom: 20px; padding: 10px 16px; background-color: #FFFFFF; border-bottom: 1px solid #E0E0E0;">
+            <div style="font-size: 0.9rem; color: #4A4A4A;">
+                <strong>{len(all_cases)} cases evaluated</strong> · <strong>{len(active_cases)} active</strong> · spanning {dtp_range}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+    
+    # 6. Make Filters Teach the Sourcing Model
+    st.markdown('<div style="margin-bottom: 12px; font-size: 0.9rem; color: #4A4A4A; font-weight: 500;">Filter Cases</div>', unsafe_allow_html=True)
+    
+    # Filters and search - reordered to reflect sourcing model
     col1, col2, col3, col4, col5 = st.columns([1.5, 1.5, 1.5, 1.5, 2])
     with col1:
-        status_filter = st.selectbox("Status", ["All", "Open", "In Progress", "Closed", "Waiting for Human Decision", "Rejected"], key="status_filter", label_visibility="collapsed")
-        st.caption("Status")
+        status_filter = st.selectbox(
+            "Case Status",
+            ["All", "Open", "In Progress", "Closed", "Waiting for Human Decision", "Rejected"],
+            key="status_filter",
+            label_visibility="collapsed"
+        )
+        st.caption("Case Status")
     with col2:
-        type_filter = st.selectbox("Type", ["All", "Sourcing", "Supplier Evaluation", "Market Analysis", "Contract Review", "RFI Process", "Vendor Assessment", "Category Strategy"], key="type_filter", label_visibility="collapsed")
-        st.caption("Type")
+        dtp_filter_options = ["All", "DTP-01 (Strategy)", "DTP-02 (Planning)", "DTP-03 (Sourcing)", "DTP-04 (Negotiation)", "DTP-05 (Contracting)", "DTP-06 (Execution)"]
+        dtp_filter_display = st.selectbox(
+            "DTP Stage",
+            dtp_filter_options,
+            key="dtp_filter",
+            label_visibility="collapsed"
+        )
+        st.caption("DTP Stage")
+        # Extract DTP stage code from display value
+        if dtp_filter_display != "All":
+            dtp_stage_filter = dtp_filter_display.split(" ")[0]
+        else:
+            dtp_stage_filter = "All"
     with col3:
-        type_filter2 = st.selectbox("Type", ["All", "Sourcing", "Supplier Evaluation"], key="type_filter2", label_visibility="collapsed")
-        st.caption("Type")
+        categories = sorted(list(set([c.category_id for c in all_cases])))
+        category_options = ["All"] + categories
+        category_filter = st.selectbox(
+            "Category",
+            category_options,
+            key="category_filter",
+            label_visibility="collapsed"
+        )
+        st.caption("Category")
     with col4:
-        date_filter = st.selectbox("Date", ["All", "Today", "This Week", "This Month"], key="date_filter", label_visibility="collapsed")
-        st.caption("Date")
+        decision_outcomes = ["All", "Approve", "Reject", "Pending"]
+        decision_filter = st.selectbox(
+            "Decision Outcome",
+            decision_outcomes,
+            key="decision_filter",
+            label_visibility="collapsed"
+        )
+        st.caption("Decision Outcome")
     with col5:
-        search_query = st.text_input("Q Search", placeholder="Search cases...", key="search_input", label_visibility="collapsed")
+        date_filter = st.selectbox(
+            "Date",
+            ["All", "Today", "This Week", "This Month"],
+            key="date_filter",
+            label_visibility="collapsed"
+        )
+        st.caption("Date")
+        search_query = st.text_input(
+            "Search",
+            placeholder="Search cases...",
+            key="search_input",
+            label_visibility="collapsed"
+        )
         # Clear filters / summary row
         filters_active = (
             status_filter != "All"
-            or type_filter != "All"
-            or type_filter2 != "All"
+            or dtp_stage_filter != "All"
+            or category_filter != "All"
+            or decision_filter != "All"
             or date_filter != "All"
             or bool(search_query)
         )
         active_count = sum([
             int(status_filter != "All"),
-            int(type_filter != "All"),
-            int(type_filter2 != "All"),
+            int(dtp_stage_filter != "All"),
+            int(category_filter != "All"),
+            int(decision_filter != "All"),
             int(date_filter != "All"),
             int(bool(search_query)),
         ])
@@ -1530,31 +1642,54 @@ if st.session_state.selected_case_id is None:
             st.caption(f"Filters ({active_count})")
             if st.button("Clear filters", key="clear_filters", help="Reset all filters to defaults"):
                 st.session_state.status_filter = "All"
-                st.session_state.type_filter = "All"
-                st.session_state.type_filter2 = "All"
+                st.session_state.dtp_filter = "All"
+                st.session_state.category_filter = "All"
+                st.session_state.decision_filter = "All"
                 st.session_state.date_filter = "All"
                 st.session_state.search_input = ""
                 st.rerun()
     
     st.markdown("<br>", unsafe_allow_html=True)
     
+    # 7. Improve Case Exploration Affordance
+    st.markdown(
+        """
+        <div style="margin-bottom: 16px; padding: 10px 14px; background-color: #F0F4F8; border-left: 3px solid #003A8F; border-radius: 3px;">
+            <div style="font-size: 0.85rem; color: #4A4A4A;">
+                Select a case to inspect signals, agent recommendations, and decision rationale.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+    
     # Cases table
     cases_list = list(st.session_state.cases.values())
     
-    # Apply filters
+    # Apply filters - updated to match new filter structure
     if status_filter != "All":
         cases_list = [c for c in cases_list if c.status == status_filter]
-    if type_filter != "All":
-        # Map type filter to DTP stage
-        type_to_stage = {
-            "Sourcing": "DTP-03",
-            "Supplier Evaluation": "DTP-03",
-            "Market Analysis": "DTP-02",
-            "Contract Review": "DTP-04",
-            "Category Strategy": "DTP-01"
-        }
-        if type_filter in type_to_stage:
-            cases_list = [c for c in cases_list if c.dtp_stage == type_to_stage[type_filter]]
+    if dtp_stage_filter != "All":
+        cases_list = [c for c in cases_list if c.dtp_stage == dtp_stage_filter]
+    if category_filter != "All":
+        cases_list = [c for c in cases_list if c.category_id == category_filter]
+    if decision_filter != "All":
+        if decision_filter == "Approve":
+            cases_list = [c for c in cases_list if c.human_decision and c.human_decision.decision == "Approve"]
+        elif decision_filter == "Reject":
+            cases_list = [c for c in cases_list if c.human_decision and c.human_decision.decision == "Reject"]
+        elif decision_filter == "Pending":
+            cases_list = [c for c in cases_list if c.status == "Waiting for Human Decision"]
+    if date_filter != "All":
+        now = datetime.now()
+        if date_filter == "Today":
+            cases_list = [c for c in cases_list if c.updated_date == now.strftime("%Y-%m-%d")]
+        elif date_filter == "This Week":
+            week_ago = now - timedelta(days=7)
+            cases_list = [c for c in cases_list if datetime.fromisoformat(c.updated_timestamp.replace('Z', '+00:00')).replace(tzinfo=None) >= week_ago]
+        elif date_filter == "This Month":
+            month_ago = now - timedelta(days=30)
+            cases_list = [c for c in cases_list if datetime.fromisoformat(c.updated_timestamp.replace('Z', '+00:00')).replace(tzinfo=None) >= month_ago]
     if search_query:
         cases_list = [c for c in cases_list if search_query.lower() in c.name.lower() or search_query.lower() in c.case_id.lower()]
     
