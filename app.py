@@ -1537,19 +1537,19 @@ if st.session_state.selected_case_id is None:
         <div style="margin-top: 20px; margin-bottom: 24px; padding: 20px 24px; background-color: #F8FAFF; border-left: 4px solid #003A8F; border-radius: 4px;">
             <h2 style="margin: 0 0 8px 0; font-size: 1.5rem; font-weight: 600; color: #0B2D56;">Active Sourcing Decisions</h2>
             <p style="margin: 0; font-size: 0.95rem; line-height: 1.6; color: #4A4A4A;">
-                Each case represents a sourcing decision evaluated through an agent-orchestrated DTP workflow, combining enterprise signals, policy guardrails, and historical knowledge.
+                Each case represents a sourcing decision evaluated through a Supervisor-orchestrated DTP workflow, combining deterministic signal detection, policy guardrails, specialized agent reasoning, and governed knowledge retrieval.
             </p>
         </div>
         """,
         unsafe_allow_html=True
     )
     
-    # 2. Define What a "Case" Is (Explicitly)
+    # 2. Define What a "Case" Is (Explicitly) - Aligned with new logic
     st.markdown(
         """
         <div style="margin-bottom: 20px; padding: 12px 16px; background-color: #FAFAFA; border: 1px solid #E0E0E0; border-radius: 4px;">
-            <div style="font-size: 0.9rem; color: #4A4A4A; line-height: 1.5;">
-                <strong>What is a case?</strong> A case is created when contract, performance, or risk signals trigger a sourcing review (e.g., renew, renegotiate, RFx, or exit).
+            <div style="font-size: 0.9rem; color: #4A4A4A; line-height: 1.6;">
+                <strong>What is a case?</strong> A case is created when the <strong>Sourcing Signal Layer</strong> (deterministic, non-agent) scans contracts, performance metrics, and market data to detect signals (renewals, savings opportunities, risks) and emits a case trigger. The case is then evaluated through the DTP workflow with strategy options (e.g., renew, renegotiate, RFx, or exit).
             </div>
         </div>
         """,
@@ -1575,7 +1575,7 @@ if st.session_state.selected_case_id is None:
                 <div class="metric-tile">
                     <div class="metric-tile-label">
                         Decision Consistency
-                        <span style="cursor: help; margin-left: 4px; color: #6B7280;" title="Definition: Alignment with enterprise playbook and policy guardrails&#10;Baseline: Manual decision variance (estimated 70-75%)&#10;Evaluation scope: Strategy recommendations vs. policy rules">ⓘ</span>
+                        <span style="cursor: help; margin-left: 4px; color: #6B7280;" title="Definition: Alignment with enterprise playbook and policy guardrails enforced by Supervisor Agent&#10;Baseline: Manual decision variance (estimated 70-75%)&#10;Evaluation scope: All agent outputs (Strategy, Supplier Scoring, RFx, Negotiation, Contract, Implementation) vs. PolicyLoader rules and RuleEngine constraints">ⓘ</span>
                     </div>
                     <div class="metric-tile-value">92%</div>
                     <div class="metric-tile-caption">Aligned to playbook / policy</div>
@@ -1583,10 +1583,10 @@ if st.session_state.selected_case_id is None:
                 <div class="metric-tile">
                     <div class="metric-tile-label">
                         Knowledge Reuse
-                        <span style="cursor: help; margin-left: 4px; color: #6B7280;" title="Definition: Cases leveraging prior signals and agent outputs&#10;Baseline: Zero reuse in manual process&#10;Evaluation scope: Cache hits and signal register matches">ⓘ</span>
+                        <span style="cursor: help; margin-left: 4px; color: #6B7280;" title="Definition: Cases leveraging Vector Knowledge Layer (templates, playbooks, historical cases) and cached agent outputs&#10;Baseline: Zero reuse in manual process&#10;Evaluation scope: Cache hits, template reuse, and signal register matches">ⓘ</span>
                     </div>
                     <div class="metric-tile-value">60%</div>
-                    <div class="metric-tile-caption">Cases reusing prior signals</div>
+                    <div class="metric-tile-caption">Cases reusing knowledge & signals</div>
                 </div>
             </div>
             <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #E0E0E0; font-size: 0.8rem; color: #6B7280; font-style: italic;">
@@ -1597,15 +1597,20 @@ if st.session_state.selected_case_id is None:
         unsafe_allow_html=True
     )
     
-    # 4. Make Agentic Value Visible (Without Diagrams)
+    # 4. Make Agentic Value Visible (Without Diagrams) - Aligned with new logic
     st.markdown(
         """
         <div style="margin-bottom: 24px; padding: 16px 20px; background-color: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 4px;">
-            <div style="font-size: 0.85rem; font-weight: 600; color: #374151; margin-bottom: 10px;">How Decisions Are Produced</div>
-            <div style="font-size: 0.85rem; color: #6B7280; line-height: 1.8;">
-                • Signals interpreted by specialized agents (contract, performance, risk)<br>
-                • Supervisor agent enforces DTP logic and policy guardrails<br>
-                • Recommendations logged with rationale for auditability
+            <div style="font-size: 0.85rem; font-weight: 600; color: #374151; margin-bottom: 12px;">How Decisions Are Produced</div>
+            <div style="font-size: 0.85rem; color: #6B7280; line-height: 2.0;">
+                <div style="margin-bottom: 8px;"><strong>1. Signal Detection (Deterministic):</strong> The Sourcing Signal Layer scans data and emits case triggers—it does <em>not</em> make decisions, only initiates cases.</div>
+                <div style="margin-bottom: 8px;"><strong>2. Supervisor Orchestration:</strong> The Supervisor Agent (deterministic) is the <em>only orchestrator</em>—it enforces DTP logic, policy guardrails, and routes tasks to specialized agents.</div>
+                <div style="margin-bottom: 8px;"><strong>3. Specialized Agents (7 functional agents):</strong> Strategy, Supplier Scoring, RFx Draft, Negotiation Support, Contract Support, Implementation, and Case Clarifier. LLMs reason within policy constraints (synthesize, explain, structure) but do <em>not</em> make decisions.</div>
+                <div style="margin-bottom: 8px;"><strong>4. Knowledge Grounding:</strong> Vector Knowledge Layer provides read-only access to templates, playbooks, and historical cases to ground reasoning—never overrides rules or policies.</div>
+                <div><strong>5. Human-in-the-Loop:</strong> Recommendations are logged with rationale. Policy-required approvals pause workflow for human review (Approve/Edit/Reject).</div>
+            </div>
+            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #E5E7EB; font-size: 0.8rem; color: #6B7280; font-style: italic;">
+                <strong>Core Principle:</strong> LLMs reason within bounded constraints; the Supervisor + policies decide what happens next. The chat narrates Supervisor decisions—it never makes autonomous choices.
             </div>
         </div>
         """,
