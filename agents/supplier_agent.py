@@ -1,18 +1,39 @@
 """
-Supplier Evaluation Agent (DTP-03/04) - Evaluates and shortlists suppliers.
+Supplier Scoring Agent (DTP-02/03) - Table 3 alignment.
+
+Per Table 3:
+- Converts human-defined evaluation criteria into structured score inputs
+- Processes historical performance and risk data
+- Analytical Logic: Deterministic scoring logic; ML performance normalization;
+  rule-based eligibility checks; optional explanatory generation
+- Does NOT select winners (that's a human decision)
+
+LLM reasoning allowed:
+- Explains differences between suppliers
+- Summarizes risks
+- Structures comparisons
 """
-from typing import Dict, Any
+from typing import Dict, Any, Optional, List
 from utils.schemas import SupplierShortlist, CaseSummary
 from utils.data_loader import get_suppliers_by_category, get_performance, get_market_data, get_category, get_requirements
+from utils.rules import RuleEngine
+from utils.knowledge_layer import get_vector_context
 from agents.base_agent import BaseAgent
 import json
 
 
 class SupplierEvaluationAgent(BaseAgent):
-    """Supplier Evaluation Agent for DTP-03/04"""
+    """
+    Supplier Scoring Agent for DTP-02/03 (Table 3 aligned).
+    
+    Converts human-defined criteria into structured scores.
+    Uses deterministic eligibility checks + LLM reasoning for explanations.
+    Does NOT select winners - only scores and structures comparisons.
+    """
     
     def __init__(self, tier: int = 1):
         super().__init__("SupplierEvaluation", tier)
+        self.rule_engine = RuleEngine()
     
     def evaluate_suppliers(
         self,
@@ -69,14 +90,76 @@ class SupplierEvaluationAgent(BaseAgent):
                 "performance": perf
             })
         
-        # Build prompt
-        prompt = f"""You are a Supplier Evaluation Agent for dynamic sourcing pipelines (DTP-03/04).
+        # STEP 1: Apply deterministic eligibility checks (Table 3: rule-based eligibility checks)
+        # Filter suppliers using RuleEngine eligibility rules (must-haves only)
+        eligible_suppliers = []
+        for supplier_data in suppliers_with_perf:
+            supplier = supplier_data["supplier"]
+            performance = supplier_data["performance"]
+            
+            # Apply deterministic scoring rules (returns 0.0 if fails eligibility, None if requires scoring)
+            rule_score = self.rule_engine.apply_supplier_scoring_rules(
+                supplier, performance, requirements
+            )
+            
+            if rule_score is not None and rule_score == 0.0:
+                # Failed eligibility check (below threshold or missing must-haves) - exclude
+                continue
+            else:
+                # Passed eligibility or requires scoring - include for LLM evaluation
+                eligible_suppliers.append(supplier_data)
+        
+        # If no eligible suppliers after deterministic filtering, return empty shortlist
+        if not eligible_suppliers:
+            empty_shortlist = SupplierShortlist(
+                case_id=case_summary.case_id,
+                category_id=case_summary.category_id,
+                shortlisted_suppliers=[],
+                evaluation_criteria=requirements.get("must_have", []) if requirements else [],
+                recommendation="No suppliers passed eligibility checks (performance threshold or must-have requirements)",
+                comparison_summary="All suppliers filtered out by deterministic eligibility rules"
+            )
+            llm_input_payload = {
+                "case_summary": case_summary.model_dump() if hasattr(case_summary, "model_dump") else dict(case_summary),
+                "eligible_suppliers_count": 0,
+                "filtered_out_count": len(suppliers_with_perf),
+                "deterministic_filtering_applied": True
+            }
+            return empty_shortlist, llm_input_payload, {}, 0, 0
+        
+        # STEP 2: Normalize performance data (Table 3: ML performance normalization)
+        # For POC, we do simple normalization here. In production, this would use ML models.
+        normalized_suppliers = []
+        for supplier_data in eligible_suppliers:
+            supplier = supplier_data["supplier"]
+            performance = supplier_data["performance"]
+            
+            # Simple normalization: scale performance score to 0-10 range
+            perf_score = performance.get("overall_score", 5.0) if performance else 5.0
+            normalized_score = min(10.0, max(0.0, perf_score))  # Already in 0-10 range in data
+            
+            normalized_suppliers.append({
+                "supplier": supplier,
+                "performance": performance,
+                "normalized_score": normalized_score
+            })
+        
+        # Build prompt aligned with Table 3: LLM reasons to explain differences, summarize risks, structure comparisons
+        # IMPORTANT: Does NOT select winners - that's a human decision
+        prompt = f"""You are a Supplier Scoring Agent for dynamic sourcing pipelines (DTP-02/03).
+
+Your role (Table 3 alignment):
+- Convert human-defined evaluation criteria into structured score inputs
+- Process historical performance and risk data
+- Structure comparisons and explain differences
+- Summarize risks and opportunities
+- You do NOT select winners - you provide structured scores and explanations
 
 Case Summary:
 {case_summary.model_dump_json() if hasattr(case_summary, 'model_dump_json') else json.dumps(dict(case_summary))}
 
-Available Suppliers for Category {case_summary.category_id}:
-{json.dumps(suppliers_with_perf, indent=2)}
+Eligible Suppliers for Category {case_summary.category_id} (after deterministic eligibility filtering):
+{json.dumps(normalized_suppliers, indent=2)}
 
 Market Context:
 {json.dumps(market, indent=2) if market else "No market data"}
@@ -84,18 +167,20 @@ Market Context:
 Category Information:
 {json.dumps(category, indent=2) if category else "No category data"}
 
-Category Requirements:
+Category Requirements (Human-defined evaluation criteria):
 {json.dumps(requirements, indent=2) if requirements else "No requirements data"}
 
-Evaluate suppliers and create a shortlist. Consider:
-1. Performance scores, trends, history, incidents, cost variance, and relationship quality
-2. Supplier tier, relationship history, certifications, financial stability, geographic coverage
-3. Supplier strengths, weaknesses, capabilities, and specializations
-4. Market benchmarks, key suppliers, pricing drivers, and emerging trends
-5. Fit for category requirements (must-have and nice-to-have) and evaluation criteria
-6. Compliance status and regulatory requirements alignment
+Your task:
+1. Score each eligible supplier based on performance data and category requirements
+2. Structure comparisons to highlight differences
+3. Explain risks and opportunities for each supplier
+4. Provide structured shortlist with scores and explanations
 
-IMPORTANT: All supplier references must use supplier_id format "SUP-xxx"
+IMPORTANT CONSTRAINTS:
+- All supplier references must use supplier_id format "SUP-xxx"
+- You do NOT select winners - only score and explain
+- top_choice_supplier_id is OPTIONAL and non-binding (human makes final choice)
+- Focus on explaining differences and summarizing risks
 
 Respond with a JSON object matching this schema:
 {{
@@ -111,19 +196,22 @@ Respond with a JSON object matching this schema:
     }}
   ],
   "evaluation_criteria": ["criterion1", "criterion2"],
-  "recommendation": "Brief recommendation text",
-  "top_choice_supplier_id": "SUP-xxx" or null,
-  "comparison_summary": "Brief comparison of shortlisted suppliers"
+  "recommendation": "Brief recommendation text explaining the scoring and comparisons",
+  "top_choice_supplier_id": "SUP-xxx" or null (optional, non-binding),
+  "comparison_summary": "Structured comparison explaining differences between suppliers"
 }}
 
 Provide ONLY valid JSON, no markdown formatting."""
 
         llm_input_payload = {
             "case_summary": case_summary.model_dump() if hasattr(case_summary, "model_dump") else dict(case_summary),
-            "suppliers": suppliers_with_perf,
+            "eligible_suppliers_count": len(eligible_suppliers),
+            "filtered_out_count": len(suppliers_with_perf) - len(eligible_suppliers),
+            "normalized_suppliers": normalized_suppliers,
             "market": market,
             "category": category,
-            "requirements": requirements
+            "requirements": requirements,
+            "deterministic_filtering_applied": True
         }
         
         try:

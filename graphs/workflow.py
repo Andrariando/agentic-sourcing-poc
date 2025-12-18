@@ -8,7 +8,8 @@ from utils.state import PipelineState
 from utils.schemas import (
     CaseSummary, HumanDecision, BudgetState, AgentActionLog,
     StrategyRecommendation, SupplierShortlist, NegotiationPlan, SignalAssessment,
-    SignalRegisterEntry, ClarificationRequest, OutOfScopeNotice, CaseTrigger
+    SignalRegisterEntry, ClarificationRequest, OutOfScopeNotice, CaseTrigger,
+    RFxDraft, ContractExtraction, ImplementationPlan
 )
 from utils.token_accounting import create_initial_budget_state, update_budget_state, calculate_cost
 from utils.logging_utils import create_agent_log, add_log_to_state
@@ -19,6 +20,9 @@ from agents.supplier_agent import SupplierEvaluationAgent
 from agents.negotiation_agent import NegotiationSupportAgent
 from agents.signal_agent import SignalInterpretationAgent
 from agents.case_clarifier_agent import CaseClarifierAgent
+from agents.rfx_draft_agent import RFxDraftAgent
+from agents.contract_support_agent import ContractSupportAgent
+from agents.implementation_agent import ImplementationAgent
 from utils.policy_loader import PolicyLoader
 from utils.signal_aggregator import SignalAggregator
 from datetime import datetime
@@ -78,6 +82,33 @@ def get_case_clarifier_agent(state: PipelineState):
     cache_key = f"clarifier_{tier}"
     if cache_key not in _agent_cache:
         _agent_cache[cache_key] = CaseClarifierAgent(tier=tier)
+    return _agent_cache[cache_key]
+
+
+def get_rfx_draft_agent(state: PipelineState):
+    """Get RFx draft agent with appropriate tier"""
+    tier = 2 if state.get("use_tier_2") else 1
+    cache_key = f"rfx_draft_{tier}"
+    if cache_key not in _agent_cache:
+        _agent_cache[cache_key] = RFxDraftAgent(tier=tier)
+    return _agent_cache[cache_key]
+
+
+def get_contract_support_agent(state: PipelineState):
+    """Get contract support agent with appropriate tier"""
+    tier = 2 if state.get("use_tier_2") else 1
+    cache_key = f"contract_support_{tier}"
+    if cache_key not in _agent_cache:
+        _agent_cache[cache_key] = ContractSupportAgent(tier=tier)
+    return _agent_cache[cache_key]
+
+
+def get_implementation_agent(state: PipelineState):
+    """Get implementation agent with appropriate tier"""
+    tier = 2 if state.get("use_tier_2") else 1
+    cache_key = f"implementation_{tier}"
+    if cache_key not in _agent_cache:
+        _agent_cache[cache_key] = ImplementationAgent(tier=tier)
     return _agent_cache[cache_key]
 
 
@@ -156,10 +187,18 @@ def supervisor_node(state: PipelineState) -> PipelineState:
             task_description = "Review Strategy Recommendation & Update Case Summary"
         elif isinstance(latest_output, SupplierShortlist):
             task_description = "Review Supplier Shortlist & Update Case Summary"
+        elif isinstance(latest_output, RFxDraft):
+            task_description = "Review RFx Draft & Update Case Summary"
         elif isinstance(latest_output, NegotiationPlan):
             task_description = "Review Negotiation Plan & Update Case Summary"
+        elif isinstance(latest_output, ContractExtraction):
+            task_description = "Review Contract Extraction & Update Case Summary"
+        elif isinstance(latest_output, ImplementationPlan):
+            task_description = "Review Implementation Plan & Update Case Summary"
         elif isinstance(latest_output, SignalAssessment):
             task_description = "Review Signal Assessment & Update Case Summary"
+        elif isinstance(latest_output, ClarificationRequest):
+            task_description = "Review Clarification Request"
     
     # Note: Human decision processing is now handled above in the task_description section
     
@@ -175,9 +214,18 @@ def supervisor_node(state: PipelineState) -> PipelineState:
         elif isinstance(latest_output, SupplierShortlist):
             key_findings = [f"Shortlisted {len(latest_output.shortlisted_suppliers)} suppliers"]
             recommended_action = latest_output.recommendation
+        elif isinstance(latest_output, RFxDraft):
+            key_findings = [f"RFx draft created with {len(latest_output.rfx_sections)} sections"]
+            recommended_action = "Review RFx draft completeness"
         elif isinstance(latest_output, NegotiationPlan):
             key_findings = latest_output.negotiation_objectives
             recommended_action = "Proceed with negotiation"
+        elif isinstance(latest_output, ContractExtraction):
+            key_findings = [f"Extracted {len(latest_output.extracted_terms)} contract terms"]
+            recommended_action = "Review contract extraction"
+        elif isinstance(latest_output, ImplementationPlan):
+            key_findings = [f"Implementation plan with {len(latest_output.rollout_steps)} steps"]
+            recommended_action = "Proceed with implementation"
         elif isinstance(latest_output, SignalAssessment):
             key_findings = latest_output.rationale
             recommended_action = latest_output.recommended_action
@@ -672,6 +720,275 @@ def signal_interpretation_node(state: PipelineState, signal: dict) -> PipelineSt
     return state
 
 
+def rfx_draft_node(state: PipelineState) -> PipelineState:
+    """RFx Draft Agent node (DTP-03) - Table 3 aligned"""
+    case_summary = state["case_summary"]
+    budget_state = state["budget_state"]
+    
+    # Get agent with appropriate tier
+    rfx_agent = get_rfx_draft_agent(state)
+    
+    # Check budget
+    if budget_state.tokens_used >= 3000:
+        fallback = rfx_agent.create_fallback_output(
+            RFxDraft,
+            case_summary.case_id,
+            case_summary.category_id
+        )
+        state["latest_agent_output"] = fallback
+        state["latest_agent_name"] = "RFxDraft"
+        return state
+    
+    try:
+        rfx_draft, llm_input, output_dict, input_tokens, output_tokens = rfx_agent.create_rfx_draft(
+            case_summary,
+            use_cache=True
+        )
+        
+        tier = 2 if state.get("use_tier_2") else 1
+        updated_budget, budget_exceeded = update_budget_state(
+            budget_state,
+            tier=tier,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens
+        )
+        state["budget_state"] = updated_budget
+        
+        cache_meta, _ = get_cache_meta(
+            case_summary.case_id,
+            "RFxDraft",
+            "rfx_draft",
+            case_summary
+        )
+        
+        tier = 2 if state.get("use_tier_2") else 1
+        cost = calculate_cost(tier, input_tokens, output_tokens)
+        log = create_agent_log(
+            case_id=case_summary.case_id,
+            dtp_stage=state["dtp_stage"],
+            trigger_source=state["trigger_source"],
+            agent_name="RFxDraft",
+            task_name="Create RFx Draft",
+            model_used="gpt-4o" if tier == 2 else "gpt-4o-mini",
+            token_input=input_tokens,
+            token_output=output_tokens,
+            estimated_cost_usd=cost,
+            cache_hit=cache_meta.cache_hit,
+            cache_key=cache_meta.cache_key,
+            input_hash=cache_meta.input_hash,
+            llm_input_payload=llm_input,
+            output_payload=output_dict,
+            output_summary=f"Created RFx draft with {len(rfx_draft.rfx_sections)} sections",
+            guardrail_events=["Budget exceeded"] if budget_exceeded else []
+        )
+        state = add_log_to_state(state, log)
+        
+        state["latest_agent_output"] = rfx_draft
+        state["latest_agent_name"] = "RFxDraft"
+        
+    except Exception as e:
+        fallback = rfx_agent.create_fallback_output(
+            RFxDraft,
+            case_summary.case_id,
+            case_summary.category_id
+        )
+        state["latest_agent_output"] = fallback
+        state["latest_agent_name"] = "RFxDraft"
+        state["error_state"] = {"error": str(e), "used_fallback": True}
+    
+    return state
+
+
+def contract_support_node(state: PipelineState) -> PipelineState:
+    """Contract Support Agent node (DTP-04/05) - Table 3 aligned"""
+    case_summary = state["case_summary"]
+    budget_state = state["budget_state"]
+    
+    # Get agent with appropriate tier
+    contract_agent = get_contract_support_agent(state)
+    
+    # Get supplier_id from latest output or case summary
+    supplier_id = case_summary.supplier_id
+    if not supplier_id and state.get("latest_agent_output"):
+        if isinstance(state["latest_agent_output"], NegotiationPlan):
+            supplier_id = state["latest_agent_output"].supplier_id
+        elif isinstance(state["latest_agent_output"], SupplierShortlist):
+            supplier_id = state["latest_agent_output"].top_choice_supplier_id
+    
+    if not supplier_id:
+        state["error_state"] = {"error": "No supplier_id available for contract extraction"}
+        return state
+    
+    # Check budget
+    if budget_state.tokens_used >= 3000:
+        fallback = contract_agent.create_fallback_output(
+            ContractExtraction,
+            case_summary.case_id,
+            case_summary.category_id,
+            supplier_id
+        )
+        state["latest_agent_output"] = fallback
+        state["latest_agent_name"] = "ContractSupport"
+        return state
+    
+    try:
+        extraction, llm_input, output_dict, input_tokens, output_tokens = contract_agent.extract_contract_terms(
+            case_summary,
+            supplier_id,
+            use_cache=True
+        )
+        
+        tier = 2 if state.get("use_tier_2") else 1
+        updated_budget, budget_exceeded = update_budget_state(
+            budget_state,
+            tier=tier,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens
+        )
+        state["budget_state"] = updated_budget
+        
+        cache_meta, _ = get_cache_meta(
+            case_summary.case_id,
+            "ContractSupport",
+            "contract_extraction",
+            case_summary,
+            additional_inputs={"supplier_id": supplier_id}
+        )
+        
+        tier = 2 if state.get("use_tier_2") else 1
+        cost = calculate_cost(tier, input_tokens, output_tokens)
+        log = create_agent_log(
+            case_id=case_summary.case_id,
+            dtp_stage=state["dtp_stage"],
+            trigger_source=state["trigger_source"],
+            agent_name="ContractSupport",
+            task_name="Extract Contract Terms",
+            model_used="gpt-4o" if tier == 2 else "gpt-4o-mini",
+            token_input=input_tokens,
+            token_output=output_tokens,
+            estimated_cost_usd=cost,
+            cache_hit=cache_meta.cache_hit,
+            cache_key=cache_meta.cache_key,
+            input_hash=cache_meta.input_hash,
+            llm_input_payload=llm_input,
+            output_payload=output_dict,
+            output_summary=f"Extracted contract terms for {supplier_id}",
+            guardrail_events=["Budget exceeded"] if budget_exceeded else []
+        )
+        state = add_log_to_state(state, log)
+        
+        state["latest_agent_output"] = extraction
+        state["latest_agent_name"] = "ContractSupport"
+        
+    except Exception as e:
+        fallback = contract_agent.create_fallback_output(
+            ContractExtraction,
+            case_summary.case_id,
+            case_summary.category_id,
+            supplier_id
+        )
+        state["latest_agent_output"] = fallback
+        state["latest_agent_name"] = "ContractSupport"
+        state["error_state"] = {"error": str(e), "used_fallback": True}
+    
+    return state
+
+
+def implementation_node(state: PipelineState) -> PipelineState:
+    """Implementation Agent node (DTP-05/06) - Table 3 aligned"""
+    case_summary = state["case_summary"]
+    budget_state = state["budget_state"]
+    
+    # Get agent with appropriate tier
+    implementation_agent = get_implementation_agent(state)
+    
+    # Get supplier_id from latest output or case summary
+    supplier_id = case_summary.supplier_id
+    if not supplier_id and state.get("latest_agent_output"):
+        if isinstance(state["latest_agent_output"], ContractExtraction):
+            supplier_id = state["latest_agent_output"].supplier_id
+        elif isinstance(state["latest_agent_output"], NegotiationPlan):
+            supplier_id = state["latest_agent_output"].supplier_id
+    
+    if not supplier_id:
+        state["error_state"] = {"error": "No supplier_id available for implementation plan"}
+        return state
+    
+    # Check budget
+    if budget_state.tokens_used >= 3000:
+        fallback = implementation_agent.create_fallback_output(
+            ImplementationPlan,
+            case_summary.case_id,
+            case_summary.category_id,
+            supplier_id
+        )
+        state["latest_agent_output"] = fallback
+        state["latest_agent_name"] = "Implementation"
+        return state
+    
+    try:
+        implementation_plan, llm_input, output_dict, input_tokens, output_tokens = implementation_agent.create_implementation_plan(
+            case_summary,
+            supplier_id,
+            use_cache=True
+        )
+        
+        tier = 2 if state.get("use_tier_2") else 1
+        updated_budget, budget_exceeded = update_budget_state(
+            budget_state,
+            tier=tier,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens
+        )
+        state["budget_state"] = updated_budget
+        
+        cache_meta, _ = get_cache_meta(
+            case_summary.case_id,
+            "Implementation",
+            "implementation_plan",
+            case_summary,
+            additional_inputs={"supplier_id": supplier_id}
+        )
+        
+        tier = 2 if state.get("use_tier_2") else 1
+        cost = calculate_cost(tier, input_tokens, output_tokens)
+        log = create_agent_log(
+            case_id=case_summary.case_id,
+            dtp_stage=state["dtp_stage"],
+            trigger_source=state["trigger_source"],
+            agent_name="Implementation",
+            task_name="Create Implementation Plan",
+            model_used="gpt-4o" if tier == 2 else "gpt-4o-mini",
+            token_input=input_tokens,
+            token_output=output_tokens,
+            estimated_cost_usd=cost,
+            cache_hit=cache_meta.cache_hit,
+            cache_key=cache_meta.cache_key,
+            input_hash=cache_meta.input_hash,
+            llm_input_payload=llm_input,
+            output_payload=output_dict,
+            output_summary=f"Created implementation plan with {len(implementation_plan.rollout_steps)} steps",
+            guardrail_events=["Budget exceeded"] if budget_exceeded else []
+        )
+        state = add_log_to_state(state, log)
+        
+        state["latest_agent_output"] = implementation_plan
+        state["latest_agent_name"] = "Implementation"
+        
+    except Exception as e:
+        fallback = implementation_agent.create_fallback_output(
+            ImplementationPlan,
+            case_summary.case_id,
+            case_summary.category_id,
+            supplier_id
+        )
+        state["latest_agent_output"] = fallback
+        state["latest_agent_name"] = "Implementation"
+        state["error_state"] = {"error": str(e), "used_fallback": True}
+    
+    return state
+
+
 def case_clarifier_node(state: PipelineState) -> PipelineState:
     """Case Clarifier Agent node - generates targeted questions for humans"""
     case_summary = state["case_summary"]
@@ -946,11 +1263,14 @@ def create_workflow_graph():
     """Create the LangGraph workflow"""
     workflow = StateGraph(PipelineState)
     
-    # Add nodes
+    # Add nodes (Table 3 aligned)
     workflow.add_node("supervisor", supervisor_node)
     workflow.add_node("strategy", strategy_node)
-    workflow.add_node("supplier_evaluation", supplier_evaluation_node)
-    workflow.add_node("negotiation", negotiation_node)
+    workflow.add_node("supplier_evaluation", supplier_evaluation_node)  # Supplier Scoring Agent (DTP-02/03)
+    workflow.add_node("rfx_draft", rfx_draft_node)  # RFx Draft Agent (DTP-03)
+    workflow.add_node("negotiation", negotiation_node)  # Negotiation Support Agent (DTP-04)
+    workflow.add_node("contract_support", contract_support_node)  # Contract Support Agent (DTP-04/05)
+    workflow.add_node("implementation", implementation_node)  # Implementation Agent (DTP-05/06)
     workflow.add_node("case_clarifier", case_clarifier_node)
     workflow.add_node("wait_for_human", wait_for_human_node)
     workflow.add_node("process_decision", process_human_decision)
@@ -959,7 +1279,7 @@ def create_workflow_graph():
     workflow.set_entry_point("supervisor")
     
     # Add edges - Supervisor is the central coordinator
-    def route_from_supervisor(state: PipelineState) -> Literal["strategy", "supplier_evaluation", "negotiation", "case_clarifier", "wait_for_human", "end"]:
+    def route_from_supervisor(state: PipelineState) -> Literal["strategy", "supplier_evaluation", "rfx_draft", "negotiation", "contract_support", "implementation", "case_clarifier", "wait_for_human", "end"]:
         """
         Supervisor routing logic - decides which agent to allocate task to.
         
@@ -1021,13 +1341,19 @@ def create_workflow_graph():
                 visited_agents = visited_agents[-5:]  # Keep only last 5
             state["visited_agents"] = visited_agents
             
-            # If Supervisor says we need another agent, route there
+            # If Supervisor says we need another agent, route there (Table 3 alignment)
             if next_agent == "Strategy":
                 return "strategy"
             elif next_agent == "SupplierEvaluation":
                 return "supplier_evaluation"
+            elif next_agent == "RFxDraft":
+                return "rfx_draft"
             elif next_agent == "NegotiationSupport":
                 return "negotiation"
+            elif next_agent == "ContractSupport":
+                return "contract_support"
+            elif next_agent == "Implementation":
+                return "implementation"
             elif next_agent == "CaseClarifier":
                 return "case_clarifier"
             else:
@@ -1066,7 +1392,10 @@ def create_workflow_graph():
         {
             "strategy": "strategy",
             "supplier_evaluation": "supplier_evaluation",
+            "rfx_draft": "rfx_draft",
             "negotiation": "negotiation",
+            "contract_support": "contract_support",
+            "implementation": "implementation",
             "case_clarifier": "case_clarifier",
             "wait_for_human": "wait_for_human",
             "end": END
@@ -1077,8 +1406,11 @@ def create_workflow_graph():
     # This ensures Supervisor is always in control and can coordinate with humans
     # Flow: Supervisor → Agent → Supervisor → (Human/Next Agent/End)
     workflow.add_edge("strategy", "supervisor")  # Strategy agent reports back to Supervisor
-    workflow.add_edge("supplier_evaluation", "supervisor")  # Supplier agent reports back to Supervisor
-    workflow.add_edge("negotiation", "supervisor")  # Negotiation agent reports back to Supervisor
+    workflow.add_edge("supplier_evaluation", "supervisor")  # Supplier Scoring agent reports back to Supervisor
+    workflow.add_edge("rfx_draft", "supervisor")  # RFx Draft agent reports back to Supervisor
+    workflow.add_edge("negotiation", "supervisor")  # Negotiation Support agent reports back to Supervisor
+    workflow.add_edge("contract_support", "supervisor")  # Contract Support agent reports back to Supervisor
+    workflow.add_edge("implementation", "supervisor")  # Implementation agent reports back to Supervisor
     workflow.add_edge("case_clarifier", "supervisor")  # Case Clarifier reports back to Supervisor
     
     # CRITICAL: wait_for_human should END the workflow (pause it)

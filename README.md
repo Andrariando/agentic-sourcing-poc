@@ -60,11 +60,22 @@ The app will be available at `http://localhost:8501`
 
 ## Architecture
 
-- **LangGraph**: Orchestrates agent workflow with state management
-- **Supervisor Agent**: Central coordinator managing case state and DTP stage transitions
-- **Specialist Agents**: Signal Interpretation, Strategy, Supplier Evaluation, Negotiation Support
-- **Human-in-the-Loop**: WAIT_FOR_HUMAN node for approval/rejection of agent outputs
-- **Token Guardrails**: Tiered model strategy with per-case budget limits
+- **Sourcing Signal Layer (deterministic, non-agent)**: Scans contracts, performance, and simple spend/benchmark signals to emit `CaseTrigger` objects that **initiate cases at DTP‑01**.  
+  - This layer does **not** renew, renegotiate, terminate, or award contracts – it only emits **signals** that a case should be opened.
+- **LangGraph**: Orchestrates the sourcing workflow with explicit state management.
+- **Supervisor Agent**: Deterministic central coordinator that owns case state, DTP stage transitions, and all routing/approval logic. Only the Supervisor can update `CaseSummary` or advance stages.
+- **Specialist Agents**: Signal Interpretation, Strategy, Supplier Evaluation, Negotiation Support, Case Clarifier (all LLM-powered but **state-less**).
+- **Vector Knowledge Layer (read-only)**: Conceptual layer providing governed, stage-scoped retrieval of DTP procedures, category strategies, RFx templates, contract clauses, and historical sourcing cases. Retrieval **grounds** reasoning but never overrides rules or policies.
+- **Human-in-the-Loop**: `WAIT_FOR_HUMAN` node explicitly pauses the workflow when policy or materiality requires human approval (Approve/Edit/Reject).
+- **Token Guardrails**: Tiered model strategy with per-case budget limits.
+
+### Governance Principles
+
+- **Rules & Policies First**: `RuleEngine` and `PolicyLoader` enforce what is allowed before any LLM narration.
+- **Supervisor Authority**: SupervisorAgent is the only orchestrator; LLM agents cannot change stages or status.
+- **System-Initiated Renewals**: All proactive renewal behavior is framed as **system-initiated case creation at DTP‑01**, never as automatic renewal/termination.
+- **LLMs as Narrators**: LLM agents summarize, explain, and propose – they do **not** make awards or policy decisions.
+- **Chatbot UX is Read-Only**: The GPT-like chat in the UI only explains what the Supervisor + policies have already allowed; it never bypasses governance.
 
 ## Data
 
@@ -82,6 +93,7 @@ All data is synthetic and anonymized for demonstration purposes. Data files are 
 - All metrics and outputs are illustrative and synthetic
 - Token usage is tracked and limited per case (3,000 token hard cap)
 - Agent outputs are cached using SHA-256 input hashing
+
 
 
 

@@ -1,14 +1,24 @@
 """
-Strategy Agent (DTP-01) - Applies rules first, then uses LLM for summarization only.
+Strategy Agent (DTP-01) - Table 3 alignment.
 
-ARCHITECTURE: Rules > Retrieval > LLM Narration
-- Rules are applied deterministically BEFORE LLM calls
-- LLM is used ONLY for summarization, not decision-making
+Per capstone requirements:
+- Rules-first, retrieval-second, LLM-third
+- Deterministic rules applied first
+- If rules do not resolve:
+  - LLM reasons within allowed_strategies from PolicyLoader
+  - Explains tradeoffs
+- LLM reasoning is bounded and non-authoritative
+
+Table 3 alignment:
+- Rules > Retrieval > LLM reasoning (within policy constraints)
+- LLM synthesizes information, explains tradeoffs, structures options
+- LLM does NOT have decision authority (Supervisor enforces policy)
 """
 from typing import Dict, Any, Optional
 from utils.schemas import StrategyRecommendation, CaseSummary, DecisionImpact
 from utils.data_loader import get_contract, get_performance, get_market_data, get_category, get_requirements
 from utils.rules import RuleEngine
+from utils.knowledge_layer import get_vector_context
 from agents.base_agent import BaseAgent
 import json
 
@@ -98,11 +108,19 @@ class StrategyAgent(BaseAgent):
             # Return with zero tokens (no LLM call)
             return recommendation, llm_input_payload, output_dict, 0, 0
         
-        # STEP 5: No rule matched - use LLM for summarization ONLY (Priority 5)
-        # LLM does NOT make decisions, only summarizes retrieved data
+        # STEP 5: No rule matched - use LLM for bounded reasoning (Table 3 alignment)
+        # LLM reasons within policy constraints (allowed_strategies), explains tradeoffs, structures options
+        # Retrieve category strategy from Vector Knowledge Layer for grounding
+        category_strategy_context = get_vector_context(
+            category_id=case_summary.category_id,
+            dtp_stage="DTP-01",
+            topic="category_strategy"
+        )
+        
         prompt = self._build_summarization_prompt(
             case_summary, user_intent, contract, performance, market, category, requirements,
-            allowed_strategies=allowed_strategies, trigger_type=trigger_type
+            allowed_strategies=allowed_strategies, trigger_type=trigger_type,
+            category_strategy_context=category_strategy_context
         )
         
         llm_input_payload = {
@@ -191,7 +209,8 @@ class StrategyAgent(BaseAgent):
         category: Optional[Dict[str, Any]],
         requirements: Optional[Dict[str, Any]],
         allowed_strategies: Optional[list[str]] = None,
-        trigger_type: Optional[str] = None
+        trigger_type: Optional[str] = None,
+        category_strategy_context: Optional[Dict[str, Any]] = None
     ) -> str:
         """Build prompt for LLM summarization (NOT decision-making)."""
         # Build strategy constraint text
@@ -211,16 +230,20 @@ class StrategyAgent(BaseAgent):
         
         return f"""You are a Strategy Agent for dynamic sourcing pipelines (DTP-01).
 
-Your role is LIMITED to:
-1. Summarizing the retrieved contract, performance, and market data
-2. Explaining the context and implications
-3. Providing narrative rationale for strategy consideration
+Your role (capstone alignment):
+1. Synthesize information from retrieved data (contract, performance, market, category)
+2. Explain tradeoffs between strategy options
+3. Structure options within policy constraints
+4. Provide reasoned rationale for strategy consideration
 
 IMPORTANT CONSTRAINTS:
-- You do NOT make strategy decisions (rules determine strategy when applicable)
-- You do NOT override policy rules
-- You do NOT invent criteria
-- You ONLY summarize and explain retrieved data{strategy_constraint}
+- You reason WITHIN the allowed_strategies from PolicyLoader (policy constraints)
+- You do NOT override policy rules or make autonomous decisions
+- You do NOT invent criteria or bypass Supervisor authority
+- Your reasoning is bounded and non-authoritative{strategy_constraint}
+
+Category Strategy Context (for grounding only, not binding):
+{json.dumps(category_strategy_context, indent=2) if category_strategy_context else "None"}
 
 Case Summary:
 {case_summary.model_dump_json() if hasattr(case_summary, 'model_dump_json') else json.dumps(dict(case_summary))}

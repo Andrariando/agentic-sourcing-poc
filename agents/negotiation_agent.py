@@ -1,15 +1,30 @@
 """
-Negotiation Support Agent (DTP-04) - Creates negotiation plans.
+Negotiation Support Agent (DTP-04) - Table 3 alignment.
+
+Per Table 3:
+- Highlights bid differences, identifies negotiation levers
+- Provides structured insights
+- Analytical Logic: Structured bid comparison; ML price anomaly detection;
+  benchmark retrieval; negotiation heuristics
+- NO award decisions
+- NO policy enforcement
 """
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from utils.schemas import NegotiationPlan, CaseSummary
 from utils.data_loader import get_contract, get_performance, get_market_data, get_category, get_requirements, get_supplier
+from utils.knowledge_layer import get_vector_context
 from agents.base_agent import BaseAgent
 import json
 
 
 class NegotiationSupportAgent(BaseAgent):
-    """Negotiation Support Agent for DTP-04"""
+    """
+    Negotiation Support Agent for DTP-04 (Table 3 aligned).
+    
+    Comparative and advisory only.
+    LLM reasons to: identify leverage, explain gaps, suggest scenarios.
+    NO award decisions. NO policy enforcement.
+    """
     
     def __init__(self, tier: int = 1):
         super().__init__("NegotiationSupport", tier)
@@ -53,8 +68,23 @@ class NegotiationSupportAgent(BaseAgent):
             category = get_category(case_summary.category_id)
             requirements = get_requirements(case_summary.category_id)
         
-        # Build prompt
+        # Retrieve negotiation playbook from Vector Knowledge Layer (Table 3: benchmark retrieval, negotiation heuristics)
+        negotiation_playbook = get_vector_context(
+            category_id=case_summary.category_id,
+            dtp_stage="DTP-04",
+            topic="negotiation_playbook"
+        )
+        
+        # Build prompt aligned with Table 3: comparative and advisory only
         prompt = f"""You are a Negotiation Support Agent for dynamic sourcing pipelines (DTP-04).
+
+Your role (Table 3 alignment):
+- Highlight bid differences and identify negotiation levers
+- Provide structured insights (comparative and advisory only)
+- Use benchmarks and negotiation heuristics from playbook
+- LLM reasons to: identify leverage, explain gaps, suggest scenarios
+- NO award decisions (human makes final choice)
+- NO policy enforcement (Supervisor enforces policy)
 
 Case Summary:
 {case_summary.model_dump_json() if hasattr(case_summary, 'model_dump_json') else json.dumps(dict(case_summary))}
@@ -70,12 +100,20 @@ Supplier Performance:
 Market Context:
 {json.dumps(market, indent=2) if market else "No market data"}
 
-Create a negotiation plan. Consider:
-1. Current contract terms and pricing
-2. Supplier performance and relationship
-3. Market benchmarks
-4. Leverage points and negotiation objectives
-5. Risk mitigation strategies
+Create a negotiation plan (comparative and advisory). Consider:
+1. Current contract terms and pricing (bid comparison)
+2. Supplier performance and relationship (context)
+3. Market benchmarks (from playbook - for grounding only)
+4. Leverage points (identify gaps and opportunities)
+5. Negotiation scenarios (suggest approaches, do not decide)
+
+Negotiation Playbook Context (for grounding only):
+{json.dumps(negotiation_playbook, indent=2) if negotiation_playbook else "None"}
+
+IMPORTANT:
+- This plan is advisory - you do NOT make award decisions
+- Policy enforcement is handled by Supervisor + humans
+- Use benchmarks and heuristics as context, not as binding rules
 
 Respond with a JSON object matching this schema:
 {{

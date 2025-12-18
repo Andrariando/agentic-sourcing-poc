@@ -192,6 +192,41 @@ class NegotiationPlan(BaseModel):
     decision_impact: DecisionImpact = DecisionImpact.HIGH
 
 
+class RFxDraft(BaseModel):
+    """RFx Draft Agent output (DTP-03) - Table 3 aligned"""
+    case_id: str
+    category_id: str
+    rfx_sections: Dict[str, str] = Field(default_factory=dict)  # Overview, Requirements, Evaluation Criteria, Timeline, Terms & Conditions
+    completeness_check: Dict[str, bool] = Field(default_factory=dict)  # Rule-based completeness checks
+    template_source: str = ""  # Which template was used
+    explanation: str = ""  # LLM explanation of intent and adaptations
+
+
+class ContractExtraction(BaseModel):
+    """Contract Support Agent output (DTP-04/05) - Table 3 aligned"""
+    case_id: str
+    category_id: str
+    supplier_id: str
+    extracted_terms: Dict[str, Any] = Field(default_factory=dict)  # Template-guided extracted terms
+    validation_results: Dict[str, bool] = Field(default_factory=dict)  # Rule-based field validation
+    mapping_explanations: Dict[str, str] = Field(default_factory=dict)  # LLM explanations of term mappings
+    inconsistencies: List[str] = Field(default_factory=list)  # Flagged inconsistencies
+    template_guidance: str = ""  # Which template/clause library was used
+
+
+class ImplementationPlan(BaseModel):
+    """Implementation Agent output (DTP-05/06) - Table 3 aligned"""
+    case_id: str
+    category_id: str
+    supplier_id: str
+    rollout_steps: List[Dict[str, Any]] = Field(default_factory=list)  # Deterministic rollout steps
+    projected_savings: Optional[float] = None  # Deterministic calculation
+    service_impacts: Dict[str, Any] = Field(default_factory=dict)  # Structured service impact summary
+    kpi_summary: Dict[str, Any] = Field(default_factory=dict)  # LLM-structured KPI explanation
+    explanation: str = ""  # LLM explanation of impacts and KPIs
+    playbook_source: str = ""  # Which rollout playbook was used
+
+
 class CaseTrigger(BaseModel):
     """Proactive case trigger from signal aggregation"""
     trigger_type: Literal["Renewal", "Savings", "Risk", "Monitoring"]
@@ -238,7 +273,11 @@ class Case(BaseModel):
     updated_timestamp: str  # ISO format timestamp
     status: str
     summary: CaseSummary
-    latest_agent_output: Optional[Union[SignalAssessment, StrategyRecommendation, SupplierShortlist, NegotiationPlan, ClarificationRequest, OutOfScopeNotice]] = None
+    latest_agent_output: Optional[Union[
+        SignalAssessment, StrategyRecommendation, SupplierShortlist, NegotiationPlan,
+        RFxDraft, ContractExtraction, ImplementationPlan,
+        ClarificationRequest, OutOfScopeNotice
+    ]] = None
     latest_agent_name: Optional[str] = None
     activity_log: List[AgentActionLog] = Field(default_factory=list)
     human_decision: Optional[HumanDecision] = None

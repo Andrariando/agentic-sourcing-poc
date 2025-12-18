@@ -6,18 +6,18 @@ This document summarizes the implementation of **Priority A (Proactive Sourcing 
 
 ## ✅ Priority A — Proactive Sourcing & Renewal Intelligence
 
-### 1. Signal Aggregation Layer (`utils/signal_aggregator.py`)
+### 1. Sourcing Signal Layer (`utils/signal_aggregator.py`)
 
-**Purpose:** Proactively scan contracts and suppliers to identify renewal opportunities, savings potential, and risk signals.
+**Purpose:** Deterministic **Sourcing Signal Layer** that scans contracts and suppliers to identify renewal, savings, and risk **signals**. It emits `CaseTrigger` objects only and never makes sourcing decisions.
 
 **Key Features:**
-- `scan_for_renewals()`: Identifies contracts expiring within 90 days
-- `scan_for_savings_opportunities()`: Detects spend anomalies vs market benchmarks
-- `scan_for_risk_signals()`: Flags performance degradation and compliance issues
-- `aggregate_all_signals()`: Comprehensive scanning across all signal types
-- `create_case_from_trigger()`: Converts CaseTrigger to case creation payload
+- `scan_for_renewals()`: Identifies contracts expiring within 90 days and emits **renewal signals**.
+- `scan_for_savings_opportunities()`: Detects spend anomalies vs market benchmarks and emits **savings signals**.
+- `scan_for_risk_signals()`: Flags performance degradation and incident patterns as **risk signals**.
+- `aggregate_all_signals()`: Comprehensive scanning across all signal types.
+- `create_case_from_trigger()`: Converts `CaseTrigger` into a **system-initiated case payload at DTP‑01**.
 
-**Usage:**
+**Usage (signal emission, not decision):**
 ```python
 from utils.signal_aggregator import SignalAggregator
 
@@ -28,7 +28,7 @@ triggers = aggregator.aggregate_all_signals()  # Returns List[CaseTrigger]
 case_payload = aggregator.create_case_from_trigger(trigger, existing_case_ids)
 ```
 
-**CaseTrigger Schema:**
+**CaseTrigger Schema (signal, not decision):**
 ```python
 class CaseTrigger(BaseModel):
     trigger_type: Literal["Renewal", "Savings", "Risk", "Monitoring"]
@@ -75,9 +75,9 @@ class DTPPolicyContext(BaseModel):
     allow_rfx_for_renewals: bool  # NEW: Whether RFx allowed for renewals
 ```
 
-### 3. Supervisor Proactive Case Creation
+### 3. Supervisor Proactive Case Initiation
 
-**Enhancement:** Supervisor can now create cases from CaseTrigger objects.
+**Enhancement:** Supervisor can now create **system-initiated cases at DTP‑01** from `CaseTrigger` objects produced by the Sourcing Signal Layer.
 
 **Method:**
 ```python
@@ -87,7 +87,9 @@ supervisor.create_case_from_trigger(trigger: CaseTrigger, existing_case_ids: Lis
 **Integration:** The workflow can now be triggered proactively by:
 1. Scanning for signals
 2. Generating CaseTrigger objects
-3. Creating cases automatically (tagged as "System" trigger_source)
+3. Creating cases automatically (tagged as `"System"` trigger_source) at **DTP‑01**
+
+> Guardrail: This does **not** renew, renegotiate, or terminate contracts. It only initiates cases; all outcomes still flow through Supervisor + policies + human approvals.
 
 ## ✅ Priority B — Collaborative Supervisor Behavior
 
@@ -300,3 +302,4 @@ recommendation = strategy_agent.recommend_strategy(
 
 **Implementation Date:** 2025-01-12  
 **Status:** ✅ Complete - Ready for testing
+

@@ -1,12 +1,20 @@
 """
-Signal Aggregation Layer - Proactive scanning for renewal & savings opportunities.
+Sourcing Signal Layer (deterministic, NOT an agent).
 
-This module scans contracts and supplier performance data to identify:
-- Contract expiration windows (< 90 days)
-- Performance degradation (SLA, quality, delivery)
-- Spend anomalies or missed savings opportunities
+This module implements the **Sourcing Signal Layer** for the capstone POC.
+It performs **read‑only, deterministic scanning** of:
+- Contract metadata and expiry windows (< 90 days)
+- Supplier performance (SLA, quality, delivery)
+- Simple spend / benchmark anomalies
 
-Outputs CaseTrigger objects for Supervisor to create proactive cases.
+It **emits CaseTrigger objects only** (signals) which the Supervisor or UI
+can use to **initiate new sourcing cases at DTP‑01**.
+
+IMPORTANT GOVERNANCE:
+- This layer does **NOT** renew, renegotiate, terminate, or award contracts.
+- It does **NOT** make sourcing decisions or recommendations.
+- It only performs **signal emission / case triggering**, so that the
+  Supervisor + policies + humans can decide what happens next.
 """
 from typing import List, Dict, Any, Optional
 from utils.schemas import CaseTrigger
@@ -19,7 +27,11 @@ from datetime import datetime, timedelta
 
 class SignalAggregator:
     """
-    Aggregates signals across contracts and suppliers to generate proactive case triggers.
+    Deterministic Sourcing Signal Layer implementation.
+
+    Aggregates raw contract / performance / spend signals into structured
+    CaseTrigger objects. These triggers are **inputs** into the agentic
+    workflow – they are not themselves decisions.
     """
     
     def __init__(self):
@@ -30,7 +42,15 @@ class SignalAggregator:
     def scan_for_renewals(self) -> List[CaseTrigger]:
         """
         Scan contracts for upcoming renewals.
-        Returns list of CaseTrigger objects for contracts expiring soon.
+
+        Returns:
+            List[CaseTrigger]: Renewal **signals** indicating that a contract
+            is entering a renewal window and a **case should be initiated at
+            DTP‑01**.
+
+        NOTE: These are **case triggers only** – they do not recommend
+        Renew / Renegotiate / Terminate. That logic is owned by the
+        Strategy Agent + Supervisor + policies.
         """
         triggers = []
         contracts = load_json_data("contracts.json")
@@ -90,8 +110,14 @@ class SignalAggregator:
     
     def scan_for_savings_opportunities(self) -> List[CaseTrigger]:
         """
-        Scan for savings opportunities (spend anomalies, market shifts).
-        Returns list of CaseTrigger objects for potential savings cases.
+        Scan for potential savings signals (simple spend / benchmark anomalies).
+
+        Returns:
+            List[CaseTrigger]: Savings **signals** suggesting a case should be
+            opened at DTP‑01 for structured evaluation.
+
+        This layer does **not** quantify savings or choose a strategy – it only
+        emits signals that a review is warranted.
         """
         triggers = []
         contracts = load_json_data("contracts.json")
@@ -139,8 +165,11 @@ class SignalAggregator:
     
     def scan_for_risk_signals(self) -> List[CaseTrigger]:
         """
-        Scan for risk signals (performance degradation, compliance issues).
-        Returns list of CaseTrigger objects for risk cases.
+        Scan for risk signals (performance degradation, incident history).
+
+        Returns:
+            List[CaseTrigger]: Risk **signals** that should create / update a
+            sourcing case at DTP‑01 for further human + policy review.
         """
         triggers = []
         suppliers = load_json_data("suppliers.json")
@@ -200,8 +229,13 @@ class SignalAggregator:
     
     def aggregate_all_signals(self) -> List[CaseTrigger]:
         """
-        Aggregate all signal types and return comprehensive list of case triggers.
-        This is the main entry point for proactive scanning.
+        Aggregate all signal types and return a comprehensive list of
+        CaseTrigger objects.
+
+        This is the main entry point for deterministic, **pre‑case** scanning.
+        The result is a prioritized list of potential cases the system can
+        **initiate at DTP‑01** (system‑initiated case creation), but **no
+        sourcing decision is made here**.
         """
         all_triggers = []
         
@@ -225,8 +259,15 @@ class SignalAggregator:
     
     def create_case_from_trigger(self, trigger: CaseTrigger, existing_case_ids: List[str]) -> Optional[Dict[str, Any]]:
         """
-        Convert a CaseTrigger into a case creation payload.
-        Returns None if case already exists for this trigger.
+        Convert a CaseTrigger into a **case initiation payload** for DTP‑01.
+
+        This helper is a deterministic bridge between the Sourcing Signal Layer
+        and the case management layer. It **does not** decide the outcome of
+        the case – it only proposes that a case be created.
+
+        Returns:
+            Dict[str, Any] | None: Payload for system‑initiated case creation,
+            or None if a case likely already exists (to avoid duplicates).
         """
         # Check if case already exists for this contract/supplier combination
         # This prevents duplicate proactive cases
@@ -235,8 +276,9 @@ class SignalAggregator:
             if trigger.contract_id and case_id.endswith(trigger.contract_id[-3:]):
                 return None  # Case likely exists
         
-        # Generate case summary text
-        summary_parts = [f"{trigger.trigger_type} opportunity detected"]
+        # Generate case summary text for initial CaseSummary.summary_text
+        # This is a neutral description of the signal, NOT a decision.
+        summary_parts = [f"{trigger.trigger_type} signal detected"]
         if trigger.contract_id:
             summary_parts.append(f"Contract: {trigger.contract_id}")
         if trigger.supplier_id:
@@ -254,3 +296,4 @@ class SignalAggregator:
             "summary_text": " | ".join(summary_parts),
             "metadata": trigger.metadata
         }
+

@@ -2,13 +2,23 @@
 Supervisor Agent - Central coordinator managing case state and DTP stage transitions.
 Only Supervisor can update case_summary and dtp_stage.
 
-ARCHITECTURE: Supervisor is deterministic (no LLM calls).
+ARCHITECTURE (NON‑NEGOTIABLE CONSTRAINTS):
+- Supervisor is deterministic (no LLM calls).
+- Supervisor is the **only orchestrator** of the LangGraph workflow.
+- RuleEngine + PolicyLoader + Supervisor decide what is **allowed**.
+- WAIT_FOR_HUMAN gates all human‑in‑the‑loop decisions.
+- LLM‑powered agents **never** change case state directly; they only
+  propose structured outputs which the Supervisor reviews.
 
-ENHANCED CAPABILITIES:
-- Proactive case creation from CaseTrigger
-- Confidence-aware routing
-- Capability registry for out-of-scope detection
-- Integration with CaseClarifierAgent for collaborative questions
+ENHANCED CAPABILITIES (POC EXTENSIONS, STILL DETERMINISTIC):
+- Proactive case initiation from CaseTrigger objects (system‑initiated DTP‑01).
+- Confidence‑aware routing to either proceed, clarify, or wait for human.
+- Capability registry for explicit out‑of‑scope detection.
+- Integration with CaseClarifierAgent for collaborative questions.
+
+GOVERNANCE STATEMENT:
+    “The chatbot experience in the UI never decides what happens next; it only
+    explains what the Supervisor + policies have already determined is allowed.”
 """
 from typing import Dict, Any, Optional, Union, Literal, Tuple
 from utils.schemas import (
@@ -38,11 +48,14 @@ def _policy_list(policy_context: Optional[Union[Dict[str, Any], BaseModel]], key
     return getattr(policy_context, key, []) or []
 
 
-# Agent Capability Registry - defines what each agent can do
+# Agent Capability Registry - defines what each agent can do (Table 3 alignment)
 AGENT_CAPABILITIES = {
     "Strategy": ["Renew", "Renegotiate", "RFx", "Terminate", "Monitor"],
-    "SupplierEvaluation": ["SupplierShortlist"],
+    "SupplierEvaluation": ["SupplierShortlist"],  # Supplier Scoring Agent (Table 3)
+    "RFxDraft": ["RFxDraft"],  # RFx Draft Agent (Table 3)
     "NegotiationSupport": ["NegotiationPlan"],
+    "ContractSupport": ["ContractExtraction"],  # Contract Support Agent (Table 3)
+    "Implementation": ["ImplementationPlan"],  # Implementation Agent (Table 3)
     "SignalInterpretation": ["SignalAssessment"],
     "CaseClarifier": ["ClarificationRequest"]
 }
@@ -140,27 +153,74 @@ class SupervisorAgent:
         """
         allowed_actions = _policy_list(policy_context, "allowed_actions")
 
-        # If we just received supplier shortlist, check if negotiation is needed
-        if latest_output and isinstance(latest_output, SupplierShortlist):
-            if dtp_stage == "DTP-04" and latest_output.top_choice_supplier_id:
-                return "NegotiationSupport"
+        # Table 3 routing logic: Route based on DTP stage and agent outputs
         
-        # If we just received strategy recommendation, determine next step
+        # If we just received strategy recommendation (DTP-01 output), determine next step
         if latest_output and isinstance(latest_output, StrategyRecommendation):
             if latest_output.recommended_strategy in ["RFx", "Renegotiate"]:
+                # DTP-02: Supplier Scoring Agent (Table 3: DTP-02/03)
                 return "SupplierEvaluation"
             elif latest_output.recommended_strategy == "Renew":
-                return None  # Renewal doesn't need supplier evaluation
+                return None  # Renewal path may not need supplier evaluation
         
-        # Route based on DTP stage
+        # If we just received supplier shortlist (DTP-02/03 output), route to RFx or Negotiation
+        if latest_output and isinstance(latest_output, SupplierShortlist):
+            if dtp_stage == "DTP-03":
+                # DTP-03: RFx Draft Agent (Table 3: DTP-03)
+                return "RFxDraft"
+            elif dtp_stage == "DTP-04" and latest_output.top_choice_supplier_id:
+                # DTP-04: Negotiation Support Agent (Table 3: DTP-04)
+                return "NegotiationSupport"
+        
+        # If we just received RFx draft (DTP-03 output), route to Negotiation
+        if latest_output and isinstance(latest_output, RFxDraft):
+            if dtp_stage == "DTP-03":
+                # After RFx draft, proceed to supplier evaluation or negotiation
+                return "SupplierEvaluation"  # Or could route to Negotiation if supplier already selected
+        
+        # If we just received negotiation plan (DTP-04 output), route to Contract Support
+        if latest_output and isinstance(latest_output, NegotiationPlan):
+            # DTP-04/05: Contract Support Agent (Table 3: DTP-04/05)
+            return "ContractSupport"
+        
+        # If we just received contract extraction (DTP-04/05 output), route to Implementation
+        if latest_output and isinstance(latest_output, ContractExtraction):
+            # DTP-05/06: Implementation Agent (Table 3: DTP-05/06)
+            return "Implementation"
+        
+        # Route based on DTP stage (initial task allocation)
         if dtp_stage == "DTP-01":
             return "Strategy" if (not allowed_actions or "DTP-02" in allowed_actions) else None
-        elif dtp_stage in ["DTP-03", "DTP-04"]:
+        elif dtp_stage == "DTP-02":
+            # DTP-02: Supplier Scoring Agent (Table 3: DTP-02/03)
             return "SupplierEvaluation"
+        elif dtp_stage == "DTP-03":
+            # DTP-03: RFx Draft Agent or Supplier Evaluation (Table 3)
+            # Check if we already have supplier shortlist - if so, route to RFx Draft
+            if latest_output and isinstance(latest_output, SupplierShortlist):
+                return "RFxDraft"
+            else:
+                return "SupplierEvaluation"  # Need supplier evaluation first
         elif dtp_stage == "DTP-04":
-            # If we're at negotiation stage and have supplier shortlist
+            # DTP-04: Negotiation Support Agent or Contract Support (Table 3)
             if latest_output and isinstance(latest_output, SupplierShortlist):
                 return "NegotiationSupport"
+            elif latest_output and isinstance(latest_output, NegotiationPlan):
+                return "ContractSupport"
+            else:
+                return "NegotiationSupport"  # Default to negotiation
+        elif dtp_stage == "DTP-05":
+            # DTP-05: Contract Support Agent or Implementation Agent (Table 3)
+            if latest_output and isinstance(latest_output, ContractExtraction):
+                return "Implementation"
+            else:
+                return "ContractSupport"  # Need contract extraction first
+        elif dtp_stage == "DTP-06":
+            # DTP-06: Implementation Agent (Table 3: DTP-05/06)
+            if not latest_output or not isinstance(latest_output, ImplementationPlan):
+                return "Implementation"
+            else:
+                return None  # Implementation complete
         else:
             return None  # No agent needed
     

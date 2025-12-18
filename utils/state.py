@@ -6,7 +6,8 @@ from utils.schemas import (
     CaseSummary, HumanDecision, BudgetState, CacheMeta,
     AgentActionLog, SignalAssessment, StrategyRecommendation,
     SupplierShortlist, NegotiationPlan, DTPPolicyContext,
-    SignalRegisterEntry, ClarificationRequest, OutOfScopeNotice
+    SignalRegisterEntry, ClarificationRequest, OutOfScopeNotice,
+    RFxDraft, ContractExtraction, ImplementationPlan
 )
 
 
@@ -23,7 +24,10 @@ class PipelineState(TypedDict):
         NegotiationPlan,
         SignalAssessment,
         ClarificationRequest,
-        OutOfScopeNotice
+        OutOfScopeNotice,
+        RFxDraft,
+        ContractExtraction,
+        ImplementationPlan
     ]]
     latest_agent_name: Optional[str]
     activity_log: List[AgentActionLog]  # Current run

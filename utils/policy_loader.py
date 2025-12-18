@@ -168,3 +168,4 @@ class PolicyLoader:
             "allow_rfx": policy.allow_rfx_for_renewals,
             "default_strategies": ["Renew", "Renegotiate", "Terminate"]
         }
+

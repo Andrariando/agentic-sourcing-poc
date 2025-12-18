@@ -32,7 +32,8 @@ from utils.schemas import (
     Case, CaseSummary, Signal, HumanDecision, AgentActionLog,
     StrategyRecommendation, SupplierShortlist, NegotiationPlan, SignalAssessment,
     TriggerSource, CaseStatus, BudgetState, CacheMeta,
-    DTPPolicyContext, SignalRegisterEntry, DecisionImpact
+    DTPPolicyContext, SignalRegisterEntry, DecisionImpact,
+    ClarificationRequest, RFxDraft, ContractExtraction, ImplementationPlan,
 )
 from utils.state import PipelineState
 from utils.data_loader import (
@@ -777,7 +778,10 @@ if "cases" not in st.session_state:
 
 if "signals" not in st.session_state:
     st.session_state.signals: list[Dict[str, Any]] = []
-    # Generate signals from contracts
+    # Generate simple, read-only **signals** from contracts.
+    # This mirrors the behavior of the Sourcing Signal Layer:
+    # - It surfaces renewal / risk signals so humans can initiate cases.
+    # - It does NOT renew, renegotiate, or terminate contracts by itself.
     contracts = load_json_data("contracts.json")
     for contract in contracts:
         if contract["expiry_days"] <= 90:  # Only show near-term expiries
@@ -871,13 +875,21 @@ def is_status_query(user_intent: str) -> bool:
 
 
 def generate_status_response(case: Case) -> str:
-    """Generate a natural, conversational response about case status"""
+    """
+    Generate a natural, conversational response about case status.
+
+    UX framing:
+    - (1) What has been evaluated so far (grounded in case + activity_log)
+    - (2) What is allowed next (per DTP stage + policy)
+    - (3) What is suggested (non-binding, not an autonomous decision)
+    - (4) What the human can do next (explicit choice / decision point)
+    """
     from utils.dtp_stages import get_dtp_stage_display
     
     response_parts = []
     
-    # Start with a friendly greeting
-    response_parts.append(f"Here's the latest update on **{case.case_id}**:")
+    # Start with a friendly, Supervisor-like narration
+    response_parts.append(f"Here's the latest update on **{case.case_id}** from the sourcing workflow:")
     
     # Current status in natural language
     stage_display = get_dtp_stage_display(case.dtp_stage)
@@ -900,8 +912,17 @@ def generate_status_response(case: Case) -> str:
             response_parts.append(f"🔍 I've evaluated the market and shortlisted **{supplier_count} suppliers**.")
             if case.latest_agent_output.top_choice_supplier_id:
                 response_parts.append(f"My top recommendation is **{case.latest_agent_output.top_choice_supplier_id}**.")
+        elif isinstance(case.latest_agent_output, RFxDraft):
+            sections_count = len(case.latest_agent_output.rfx_sections)
+            response_parts.append(f"📄 I've created an RFx draft with **{sections_count} sections** ready for your review.")
         elif isinstance(case.latest_agent_output, NegotiationPlan):
             response_parts.append(f"💼 I've prepared a negotiation plan with **{len(case.latest_agent_output.negotiation_objectives)} key objectives** ready for your review.")
+        elif isinstance(case.latest_agent_output, ContractExtraction):
+            terms_count = len(case.latest_agent_output.extracted_terms)
+            response_parts.append(f"📋 I've extracted **{terms_count} contract terms** ready for contracting review.")
+        elif isinstance(case.latest_agent_output, ImplementationPlan):
+            steps_count = len(case.latest_agent_output.rollout_steps)
+            response_parts.append(f"🚀 I've created an implementation plan with **{steps_count} rollout steps** ready for your review.")
     
     # Recent activity
     if case.activity_log:
@@ -909,9 +930,9 @@ def generate_status_response(case: Case) -> str:
         activity_date = recent_activity.timestamp[:10]
         response_parts.append(f"📝 The most recent activity was on {activity_date}: {recent_activity.agent_name} completed '{recent_activity.task_name}'.")
     
-    # Next steps in natural language
+    # Next steps in natural language, explicitly calling out human role
     if case.status == "Waiting for Human Decision":
-        response_parts.append("👤 **Your action needed:** Please review the recommendation above and let me know if you'd like to approve or make changes.")
+        response_parts.append("👤 **Your decision needed:** Please review the latest output and let me know if you'd like to approve, edit, or reject it. I won't proceed without your call.")
     elif case.dtp_stage == "DTP-01":
         response_parts.append("➡️ **What's next:** Once you review the strategy recommendation, we can move forward with supplier evaluation.")
     elif case.dtp_stage in ["DTP-03", "DTP-04"]:
@@ -1040,13 +1061,18 @@ def run_copilot(case_id: str, user_intent: str, use_tier_2: bool = False):
         st.error("OPENAI_API_KEY environment variable not set. Please set it in your .env file or environment.")
         return
     
-    # Initialize chat responses if needed
+    # Initialize **case-scoped conversational memory**.
+    # - chat_responses is keyed by case_id to avoid cross-case leakage.
+    # - This is append-only and auditable within the current session.
+    # - It complements (but does NOT replace) PipelineState and CaseSummary.
     if "chat_responses" not in st.session_state:
         st.session_state.chat_responses = {}
     if case_id not in st.session_state.chat_responses:
         st.session_state.chat_responses[case_id] = []
     
-    # Add user message immediately to chat history (before processing)
+    # Add user message immediately to chat history (before processing).
+    # The Supervisor + agents operate on structured state; the chat layer
+    # simply narrates what has already been determined to be allowed.
     st.session_state.chat_responses[case_id].append({
         "user": user_intent,
         "assistant": "🤔 Let me process that for you...",
@@ -1219,7 +1245,11 @@ def run_copilot(case_id: str, user_intent: str, use_tier_2: bool = False):
         if final_state.get("waiting_for_human"):
             case.status = "Waiting for Human Decision"
         
-        # Generate conversational response for chat
+        # Generate conversational response for chat.
+        # UX PRINCIPLE:
+        # - SupervisorAgent is the conceptual narrator of the workflow.
+        # - The chat never decides what happens next; it explains
+        #   what the Supervisor + policies have already allowed.
         if "chat_responses" not in st.session_state:
             st.session_state.chat_responses = {}
         if case_id not in st.session_state.chat_responses:
@@ -1239,12 +1269,51 @@ def run_copilot(case_id: str, user_intent: str, use_tier_2: bool = False):
                 if case.latest_agent_output.comparison_summary:
                     assistant_response += f" {case.latest_agent_output.comparison_summary[:100]}..."
                 assistant_response += " Would you like me to prepare a detailed comparison or start the negotiation process?"
+            elif isinstance(case.latest_agent_output, RFxDraft):
+                sections_count = len(case.latest_agent_output.rfx_sections)
+                completeness = case.latest_agent_output.completeness_check
+                assistant_response = f"I've created an RFx draft with **{sections_count} sections** based on the template and category requirements."
+                if completeness.get("all_sections_filled"):
+                    assistant_response += " All required sections have been filled."
+                else:
+                    assistant_response += " Some sections may need additional review."
+                assistant_response += " The draft is ready for your review. Would you like me to proceed with supplier evaluation next?"
             elif isinstance(case.latest_agent_output, NegotiationPlan):
                 objectives_count = len(case.latest_agent_output.negotiation_objectives)
                 assistant_response = f"Excellent! I've prepared a comprehensive negotiation plan with **{objectives_count} key objectives**."
                 if case.latest_agent_output.leverage_points:
                     assistant_response += f" I've identified several leverage points we can use: {', '.join(case.latest_agent_output.leverage_points[:2])}."
-                assistant_response += " The plan is ready for your review. Should I proceed with initiating negotiations?"
+                assistant_response += " The plan is ready for your review. Policy still requires your approval before any negotiation is initiated."
+            elif isinstance(case.latest_agent_output, ContractExtraction):
+                terms_count = len(case.latest_agent_output.extracted_terms)
+                validation = case.latest_agent_output.validation_results
+                assistant_response = f"I've extracted **{terms_count} contract terms** using template-guided extraction."
+                if validation.get("required_fields_present"):
+                    assistant_response += " All required fields are present."
+                if case.latest_agent_output.inconsistencies:
+                    assistant_response += f" I've flagged {len(case.latest_agent_output.inconsistencies)} inconsistencies that need your review."
+                assistant_response += " The extracted terms are ready for contracting. Would you like me to proceed with the implementation plan?"
+            elif isinstance(case.latest_agent_output, ImplementationPlan):
+                steps_count = len(case.latest_agent_output.rollout_steps)
+                savings = case.latest_agent_output.projected_savings
+                assistant_response = f"I've created an implementation plan with **{steps_count} rollout steps**."
+                if savings:
+                    assistant_response += f" Projected savings: **${savings:,.2f}** (deterministic calculation)."
+                assistant_response += " The plan includes structured KPIs and impact explanations. Ready for your review and approval."
+            elif isinstance(case.latest_agent_output, ClarificationRequest):
+                # Case Clarifier Agent output: render as natural follow-up questions,
+                # not as an error. This is a collaboration request, not a failure.
+                cr = case.latest_agent_output
+                assistant_response = f"Before I can proceed, I need a bit more context: **{cr.reason}**.\n\n"
+                if cr.questions:
+                    assistant_response += "Here are the key questions I need you to answer:\n"
+                    for q in cr.questions:
+                        assistant_response += f"- {q}\n"
+                if cr.suggested_options:
+                    assistant_response += "\nYou can pick from these options or provide your own wording:\n"
+                    for opt in cr.suggested_options:
+                        assistant_response += f"- {opt}\n"
+                assistant_response += "\nOnce you respond, I'll route your answer through the Supervisor so we stay within policy."
         else:
             # Fallback if no output yet - but show what actually happened
             activity_count = len(final_state.get("activity_log", []))
