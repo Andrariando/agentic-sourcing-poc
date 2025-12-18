@@ -6,7 +6,7 @@ Per Table 3:
 - Analytical Logic: Deterministic calculations; retrieval of rollout playbooks;
   structured reporting templates
 """
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from utils.schemas import ImplementationPlan, CaseSummary
 from utils.data_loader import get_category, get_contract, get_supplier
 from utils.knowledge_layer import get_vector_context
