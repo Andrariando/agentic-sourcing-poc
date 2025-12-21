@@ -150,30 +150,35 @@ class CollaborationEngine:
         insights = []
         
         # Pull from CaseMemory if available
+        # Use getattr with defaults for backwards compatibility with older CaseMemory objects
         if case_memory:
             # Check for prior strategy decisions
-            if case_memory.recommended_strategy:
+            recommended_strategy = getattr(case_memory, 'recommended_strategy', None) or getattr(case_memory, 'current_strategy', None)
+            if recommended_strategy:
                 insights.append(
-                    f"We've been leaning toward a **{case_memory.recommended_strategy}** approach"
+                    f"We've been leaning toward a **{recommended_strategy}** approach"
                 )
             
             # Check for key decisions
-            if case_memory.key_decisions:
-                recent = case_memory.key_decisions[-1] if case_memory.key_decisions else None
+            key_decisions = getattr(case_memory, 'key_decisions', [])
+            if key_decisions:
+                recent = key_decisions[-1] if key_decisions else None
                 if recent:
                     insights.append(f"Previously, we decided: _{recent}_")
             
             # Check for flagged risks
-            if case_memory.flagged_risks:
-                risks = case_memory.flagged_risks[:2]
+            flagged_risks = getattr(case_memory, 'flagged_risks', [])
+            if flagged_risks:
+                risks = flagged_risks[:2]
                 if risks:
                     insights.append(f"Key risks on the radar: {', '.join(risks)}")
             
             # Check for active contradictions
-            if case_memory.active_contradictions:
+            active_contradictions = getattr(case_memory, 'active_contradictions', [])
+            if active_contradictions:
                 insights.append(
                     f"⚠️ There's some conflicting information we should address: "
-                    f"{case_memory.active_contradictions[0]}"
+                    f"{active_contradictions[0]}"
                 )
         
         # Pull from latest agent output if available
@@ -271,11 +276,12 @@ class CollaborationEngine:
             f"What's on your mind? I can help you think through any concerns before we continue."
         )
         
-        # Add context if available
-        if case_memory and case_memory.key_decisions:
+        # Add context if available (use getattr for backwards compatibility)
+        key_decisions = getattr(case_memory, 'key_decisions', []) if case_memory else []
+        if key_decisions:
             response += (
                 f"\n\nFor reference, here's what we've established so far:\n"
-                f"- {case_memory.key_decisions[-1]}"
+                f"- {key_decisions[-1]}"
             )
         
         response += (

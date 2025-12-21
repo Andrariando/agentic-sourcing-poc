@@ -1216,12 +1216,13 @@ def run_copilot(case_id: str, user_intent: str, use_tier_2: bool = False):
             case_memory=case_memory
         )
         
-        # Record in memory
-        case_memory.record_collaboration_turn(
-            user_input=user_intent,
-            topic="interruption",
-            insight="User paused for reconsideration"
-        )
+        # Record in memory (use hasattr for backwards compatibility)
+        if hasattr(case_memory, 'record_collaboration_turn'):
+            case_memory.record_collaboration_turn(
+                user_input=user_intent,
+                topic="interruption",
+                insight="User paused for reconsideration"
+            )
         
         # Update chat response
         if st.session_state.chat_responses[case_id] and st.session_state.chat_responses[case_id][-1].get("pending"):
@@ -1256,12 +1257,13 @@ def run_copilot(case_id: str, user_intent: str, use_tier_2: bool = False):
             latest_agent_output=case.latest_agent_output
         )
         
-        # Record collaboration turn in memory
-        case_memory.record_collaboration_turn(
-            user_input=user_intent,
-            topic=case.dtp_stage,
-            insight=f"Collaborative discussion at {case.dtp_stage}"
-        )
+        # Record collaboration turn in memory (use hasattr for backwards compatibility)
+        if hasattr(case_memory, 'record_collaboration_turn'):
+            case_memory.record_collaboration_turn(
+                user_input=user_intent,
+                topic=case.dtp_stage,
+                insight=f"Collaborative discussion at {case.dtp_stage}"
+            )
         
         # Update chat response (no workflow executed)
         if st.session_state.chat_responses[case_id] and st.session_state.chat_responses[case_id][-1].get("pending"):
@@ -1283,13 +1285,14 @@ def run_copilot(case_id: str, user_intent: str, use_tier_2: bool = False):
     # EXECUTION MODE: Run workflow, produce recommendations
     # =========================================================================
     # If we get here, intent is EXECUTION - proceed with existing workflow logic
-    # Record intent shift for audit trail
-    if case_memory.total_collaboration_turns > 0:
-        case_memory.record_intent_shift(
-            from_intent="COLLABORATIVE",
-            to_intent="EXECUTION",
-            trigger=user_intent
-        )
+    # Record intent shift for audit trail (use getattr for backwards compatibility)
+    if getattr(case_memory, 'total_collaboration_turns', 0) > 0:
+        if hasattr(case_memory, 'record_intent_shift'):
+            case_memory.record_intent_shift(
+                from_intent="COLLABORATIVE",
+                to_intent="EXECUTION",
+                trigger=user_intent
+            )
     
     # Check if this is a status/progress query (not action/recommendation)
     intent_lower = user_intent.lower()
