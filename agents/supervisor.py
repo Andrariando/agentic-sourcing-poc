@@ -30,7 +30,9 @@ from utils.schemas import (
     CaseTrigger,
     ClarificationRequest,
     OutOfScopeNotice,
-    RFxDraft
+    RFxDraft,
+    ContractExtraction,
+    ImplementationPlan
 )
 from utils.state import PipelineState
 from utils.rules import RuleEngine
