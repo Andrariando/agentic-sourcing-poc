@@ -2,6 +2,7 @@
 LangGraph State definition for the agentic sourcing pipeline.
 """
 from typing import TypedDict, Optional, List, Union, Dict, Any
+from typing import TYPE_CHECKING
 from utils.schemas import (
     CaseSummary, HumanDecision, BudgetState, CacheMeta,
     AgentActionLog, SignalAssessment, StrategyRecommendation,
@@ -9,6 +10,9 @@ from utils.schemas import (
     SignalRegisterEntry, ClarificationRequest, OutOfScopeNotice,
     RFxDraft, ContractExtraction, ImplementationPlan
 )
+
+if TYPE_CHECKING:
+    from utils.case_memory import CaseMemory
 
 
 class PipelineState(TypedDict):
@@ -46,4 +50,12 @@ class PipelineState(TypedDict):
     missing_fields: Optional[List[str]]  # Fields missing that require clarification
     policy_ambiguity: Optional[str]  # Policy ambiguity requiring clarification
     multiple_paths: Optional[List[str]]  # Multiple valid paths requiring human choice
+    
+    # PHASE 2 additions
+    case_memory: Optional[Any]  # CaseMemory object for structured memory
+    output_history: Optional[List[Dict[str, Any]]]  # History of agent outputs for contradiction detection
+    detected_contradictions: Optional[List[str]]  # Contradictions detected in this run
+    validation_violations: Optional[List[str]]  # Agent output validation violations
+    validation_warnings: Optional[List[str]]  # Agent output validation warnings
+    guardrail_events: Optional[List[str]]  # All guardrail events (validation, contradictions, etc.)
 

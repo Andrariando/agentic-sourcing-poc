@@ -25,6 +25,9 @@ from agents.contract_support_agent import ContractSupportAgent
 from agents.implementation_agent import ImplementationAgent
 from utils.policy_loader import PolicyLoader
 from utils.signal_aggregator import SignalAggregator
+from utils.agent_validator import validate_agent_output, ValidationResult
+from utils.contradiction_detector import detect_contradictions, Contradiction
+from utils.case_memory import CaseMemory, update_memory_from_workflow_result
 from datetime import datetime
 import json
 
@@ -182,6 +185,7 @@ def supervisor_node(state: PipelineState) -> PipelineState:
             return state
     
     # If we just received output from a specialized agent, review it
+    # PHASE 2: Validate agent output and detect contradictions
     if latest_output:
         if isinstance(latest_output, StrategyRecommendation):
             task_description = "Review Strategy Recommendation & Update Case Summary"
@@ -199,6 +203,62 @@ def supervisor_node(state: PipelineState) -> PipelineState:
             task_description = "Review Signal Assessment & Update Case Summary"
         elif isinstance(latest_output, ClarificationRequest):
             task_description = "Review Clarification Request"
+        
+        # PHASE 2 - OBJECTIVE C: Validate agent output in code
+        policy_context_for_validation = state.get("dtp_policy_context", {})
+        validation_context = {}
+        if policy_context_for_validation:
+            if hasattr(policy_context_for_validation, "allowed_strategies"):
+                validation_context["allowed_strategies"] = policy_context_for_validation.allowed_strategies
+            elif isinstance(policy_context_for_validation, dict):
+                validation_context["allowed_strategies"] = policy_context_for_validation.get("allowed_strategies")
+        
+        validation_result = validate_agent_output(latest_agent_name, latest_output, validation_context)
+        
+        if not validation_result.is_valid:
+            # Log validation violations
+            state["validation_violations"] = validation_result.violations
+            # Add to guardrail events
+            if "guardrail_events" not in state:
+                state["guardrail_events"] = []
+            for violation in validation_result.violations:
+                state["guardrail_events"].append(f"VALIDATION: {violation}")
+        
+        if validation_result.warnings:
+            if "validation_warnings" not in state:
+                state["validation_warnings"] = []
+            state["validation_warnings"].extend(validation_result.warnings)
+        
+        # PHASE 2 - OBJECTIVE E: Detect contradictions
+        # Get previous outputs from state history if available
+        previous_outputs = []
+        output_history = state.get("output_history", [])
+        for hist in output_history[-5:]:  # Check last 5 outputs
+            if hist.get("output") is not None:
+                previous_outputs.append((hist.get("agent", "Unknown"), hist.get("output")))
+        
+        # Get memory state for contradiction checking
+        case_memory = state.get("case_memory")
+        memory_state = None
+        if case_memory and hasattr(case_memory, "current_strategy"):
+            memory_state = {
+                "current_strategy": case_memory.current_strategy,
+                "current_supplier_choice": case_memory.current_supplier_choice,
+                "human_decisions": case_memory.human_decisions if hasattr(case_memory, "human_decisions") else []
+            }
+        
+        contradictions = detect_contradictions(
+            latest_output, latest_agent_name, previous_outputs, memory_state
+        )
+        
+        if contradictions:
+            # Store contradictions for surfacing to user
+            state["detected_contradictions"] = [c.description for c in contradictions]
+            # Add to guardrail events
+            for c in contradictions:
+                if "guardrail_events" not in state:
+                    state["guardrail_events"] = []
+                state["guardrail_events"].append(f"CONTRADICTION ({c.severity}): {c.description}")
     
     # Note: Human decision processing is now handled above in the task_description section
     
@@ -239,6 +299,34 @@ def supervisor_node(state: PipelineState) -> PipelineState:
     )
     
     state["case_summary"] = updated_summary
+    
+    # PHASE 2 - OBJECTIVE A: Update case memory after agent output
+    case_memory = state.get("case_memory")
+    if case_memory is None:
+        from utils.case_memory import create_case_memory
+        case_memory = create_case_memory(case_summary.case_id)
+        state["case_memory"] = case_memory
+    
+    if latest_output and latest_agent_name:
+        update_memory_from_workflow_result(
+            case_memory,
+            latest_agent_name,
+            latest_output,
+            user_intent=state.get("user_intent")
+        )
+        
+        # Store output in history for contradiction detection
+        if "output_history" not in state:
+            state["output_history"] = []
+        state["output_history"].append({
+            "agent": latest_agent_name,
+            "output": latest_output,
+            "output_type": type(latest_output).__name__,
+            "timestamp": datetime.now().isoformat()
+        })
+        # Keep only last 10 outputs
+        if len(state["output_history"]) > 10:
+            state["output_history"] = state["output_history"][-10:]
     
     # Load policy context with trigger type for renewal constraints
     policy_loader = PolicyLoader()

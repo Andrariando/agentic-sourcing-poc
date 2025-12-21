@@ -45,6 +45,8 @@ from utils.case_analysis import get_decision_signal, get_recommended_action, get
 from utils.token_accounting import create_initial_budget_state
 from graphs.workflow import get_workflow_graph
 from agents.signal_agent import SignalInterpretationAgent
+from utils.response_adapter import get_response_adapter
+from utils.case_memory import CaseMemory, create_case_memory, update_memory_from_workflow_result
 
 # Simple parser for HIL decisions issued via chat
 def parse_hil_decision(user_intent: str) -> Optional[str]:
@@ -1255,6 +1257,36 @@ def run_copilot(case_id: str, user_intent: str, use_tier_2: bool = False):
         if case_id not in st.session_state.chat_responses:
             st.session_state.chat_responses[case_id] = []
         
+        # PHASE 2 - OBJECTIVE A: Update case memory from workflow result
+        case_memory = final_state.get("case_memory")
+        if case_memory is None:
+            case_memory = create_case_memory(case_id)
+        
+        if case.latest_agent_output and case.latest_agent_name:
+            update_memory_from_workflow_result(
+                case_memory,
+                case.latest_agent_name,
+                case.latest_agent_output,
+                user_intent=user_intent
+            )
+        
+        # Store memory in session state for persistence within session
+        if "case_memories" not in st.session_state:
+            st.session_state.case_memories = {}
+        st.session_state.case_memories[case_id] = case_memory
+        
+        # PHASE 2 - OBJECTIVE E: Get detected contradictions
+        detected_contradictions = final_state.get("detected_contradictions", [])
+        
+        # PHASE 2 - OBJECTIVE B: Use ResponseAdapter for response generation
+        response_adapter = get_response_adapter()
+        case_state_dict = {
+            "case_id": case.case_id,
+            "dtp_stage": case.dtp_stage,
+            "status": case.status,
+            "category_id": case.category_id,
+        }
+        
         # Create natural, conversational response based on agent output
         assistant_response = ""
         if case.latest_agent_output:
@@ -1314,7 +1346,26 @@ def run_copilot(case_id: str, user_intent: str, use_tier_2: bool = False):
                     for opt in cr.suggested_options:
                         assistant_response += f"- {opt}\n"
                 assistant_response += "\nOnce you respond, I'll route your answer through the Supervisor so we stay within policy."
-        else:
+            else:
+                # PHASE 2: Use ResponseAdapter for unknown output types
+                assistant_response = response_adapter.generate_response(
+                    case.latest_agent_output,
+                    case_state_dict,
+                    memory=case_memory,
+                    user_intent=user_intent,
+                    waiting_for_human=final_state.get("waiting_for_human", False),
+                    contradictions=detected_contradictions
+                )
+        
+        # PHASE 2 - OBJECTIVE E: Add contradiction warnings to response
+        if detected_contradictions and assistant_response:
+            contradiction_warning = "\n\n---\n⚠️ **Heads up:** I've detected some conflicting information:\n"
+            for c in detected_contradictions[:3]:
+                contradiction_warning += f"• {c}\n"
+            contradiction_warning += "\nPlease review and let me know how you'd like to proceed."
+            assistant_response += contradiction_warning
+        
+        if not case.latest_agent_output:
             # Fallback if no output yet - but show what actually happened
             activity_count = len(final_state.get("activity_log", []))
             if activity_count > 0:

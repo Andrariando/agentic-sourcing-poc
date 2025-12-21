@@ -297,3 +297,4 @@ class SignalAggregator:
             "metadata": trigger.metadata
         }
 
+
