@@ -6,6 +6,7 @@ Generates collaborative, human-like responses that:
 - Frame options without recommendation
 - Ask clarifying questions appropriate to the DTP stage
 - Signal readiness to execute only if user wants
+- EXTRACT AND ACKNOWLEDGE BINDING CONSTRAINTS (PHASE 3)
 
 Design Principles:
 - Bypasses Supervisor and LangGraph entirely
@@ -13,8 +14,9 @@ Design Principles:
 - Curious, not directive
 - Consultant-operator hybrid (MIT-style)
 - Never says "collaboration mode" explicitly
+- User constraints are AUTHORITATIVE and shape all future reasoning
 """
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 import random
 from utils.collaboration_templates import (
     get_collaboration_template,
@@ -25,6 +27,12 @@ from utils.collaboration_templates import (
 )
 from utils.case_memory import CaseMemory
 from utils.dtp_stages import get_dtp_stage_display
+from utils.execution_constraints import ExecutionConstraints, create_execution_constraints
+from utils.constraint_extractor import (
+    get_constraint_extractor,
+    generate_constraint_acknowledgment,
+    ExtractionResult,
+)
 
 
 class CollaborationEngine:
@@ -72,9 +80,12 @@ class CollaborationEngine:
         case_memory: Optional[CaseMemory] = None,
         case_context: Optional[Dict[str, Any]] = None,
         latest_agent_output: Any = None,
-    ) -> str:
+        execution_constraints: Optional[ExecutionConstraints] = None,
+    ) -> Tuple[str, Optional[ExecutionConstraints], Optional[ExtractionResult]]:
         """
         Generate a collaborative response for the given context.
+        
+        PHASE 3: Now also extracts binding constraints from user input.
         
         Args:
             user_input: The user's message
@@ -83,18 +94,41 @@ class CollaborationEngine:
             case_memory: Optional CaseMemory object for context
             case_context: Optional additional case context
             latest_agent_output: Optional latest agent output for reference
+            execution_constraints: Optional existing constraints to update
         
         Returns:
-            A collaborative, human-like response string
+            Tuple of:
+            - A collaborative, human-like response string
+            - Updated ExecutionConstraints (or new one if none provided)
+            - ExtractionResult with constraint extraction details
         """
         template = get_collaboration_template(dtp_stage)
         stage_display = get_dtp_stage_display(dtp_stage)
         
+        # Initialize or use existing constraints
+        if execution_constraints is None:
+            execution_constraints = create_execution_constraints()
+        
+        # PHASE 3: Extract binding constraints from user input
+        extractor = get_constraint_extractor()
+        extraction_result = extractor.extract_constraints(
+            user_input=user_input,
+            dtp_stage=dtp_stage,
+            constraints=execution_constraints
+        )
+        
         # Build response parts
         parts = []
         
-        # 1. Opening - acknowledge and engage
-        parts.append(self._generate_opening(user_input, dtp_stage, case_memory))
+        # 0. CRITICAL: Acknowledge extracted constraints FIRST (builds trust)
+        if extraction_result.constraints_extracted > 0:
+            acknowledgment = generate_constraint_acknowledgment(extraction_result)
+            if acknowledgment:
+                parts.append(acknowledgment)
+        
+        # 1. Opening - acknowledge and engage (only if no constraints)
+        if extraction_result.constraints_extracted == 0:
+            parts.append(self._generate_opening(user_input, dtp_stage, case_memory))
         
         # 2. Context reference - what we know
         if case_memory or case_context or latest_agent_output:
@@ -103,6 +137,12 @@ class CollaborationEngine:
             )
             if context_ref:
                 parts.append(context_ref)
+        
+        # 2.5 Show active constraints if any exist
+        if execution_constraints.has_any_constraints():
+            constraints_summary = self._summarize_active_constraints(execution_constraints)
+            if constraints_summary:
+                parts.append(constraints_summary)
         
         # 3. Option framing - what paths exist (without recommending)
         parts.append(self._frame_options(dtp_stage, user_input))
@@ -113,7 +153,22 @@ class CollaborationEngine:
         # 5. Transition offer - signal readiness to execute
         parts.append(self._offer_transition(dtp_stage))
         
-        return "\n\n".join(parts)
+        return "\n\n".join(parts), execution_constraints, extraction_result
+    
+    def _summarize_active_constraints(self, constraints: ExecutionConstraints) -> Optional[str]:
+        """Summarize active constraints for transparency."""
+        active = constraints.get_active_constraints_summary()
+        if not active:
+            return None
+        
+        if len(active) <= 2:
+            return None  # Don't clutter with minimal constraints
+        
+        return (
+            "**Your stated preferences so far:**\n" +
+            "\n".join(f"• {c}" for c in active[:4]) +
+            ("\n• ..." if len(active) > 4 else "")
+        )
     
     def _generate_opening(
         self,

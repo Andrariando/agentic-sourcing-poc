@@ -13,6 +13,7 @@ from utils.schemas import (
 
 if TYPE_CHECKING:
     from utils.case_memory import CaseMemory
+    from utils.execution_constraints import ExecutionConstraints
 
 
 class PipelineState(TypedDict):
@@ -58,4 +59,9 @@ class PipelineState(TypedDict):
     validation_violations: Optional[List[str]]  # Agent output validation violations
     validation_warnings: Optional[List[str]]  # Agent output validation warnings
     guardrail_events: Optional[List[str]]  # All guardrail events (validation, contradictions, etc.)
+    
+    # PHASE 3: Collaboration Mode - Execution Constraints
+    # Binding constraints extracted from user collaboration inputs.
+    # These MUST be consumed by all decision agents and override default logic.
+    execution_constraints: Optional[Any]  # ExecutionConstraints object
 

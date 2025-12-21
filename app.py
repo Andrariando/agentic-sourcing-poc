@@ -49,6 +49,7 @@ from utils.response_adapter import get_response_adapter
 from utils.case_memory import CaseMemory, create_case_memory, update_memory_from_workflow_result
 from utils.intent_classifier import classify_intent, is_mid_stage_interruption, IntentClassification
 from utils.collaboration_engine import get_collaboration_engine
+from utils.execution_constraints import ExecutionConstraints, create_execution_constraints
 
 # Simple parser for HIL decisions issued via chat
 def parse_hil_decision(user_intent: str) -> Optional[str]:
@@ -1206,6 +1207,13 @@ def run_copilot(case_id: str, user_intent: str, use_tier_2: bool = False):
         st.session_state.case_memories[case_id] = create_case_memory(case_id)
     case_memory = st.session_state.case_memories[case_id]
     
+    # PHASE 3: Get or create execution constraints (binding user preferences)
+    if "execution_constraints" not in st.session_state:
+        st.session_state.execution_constraints = {}
+    if case_id not in st.session_state.execution_constraints:
+        st.session_state.execution_constraints[case_id] = create_execution_constraints()
+    execution_constraints = st.session_state.execution_constraints[case_id]
+    
     # Check for mid-stage interruption (user pausing execution)
     if is_mid_stage_interruption(user_intent):
         # User is interrupting - enter Collaboration Mode
@@ -1240,11 +1248,13 @@ def run_copilot(case_id: str, user_intent: str, use_tier_2: bool = False):
     
     # COLLABORATION MODE: Sense-making, discussion, clarification
     # Does NOT advance DTP stage, invoke LangGraph, or call decision agents
+    # PHASE 3: Now extracts and stores binding constraints from user input
     if intent_classification.intent == "COLLABORATIVE":
         collab_engine = get_collaboration_engine()
         
         # Generate collaborative response (bypasses Supervisor and LangGraph entirely)
-        response = collab_engine.generate_response(
+        # PHASE 3: Now returns (response, updated_constraints, extraction_result)
+        response, updated_constraints, extraction_result = collab_engine.generate_response(
             user_input=user_intent,
             case_id=case_id,
             dtp_stage=case.dtp_stage,
@@ -1254,20 +1264,29 @@ def run_copilot(case_id: str, user_intent: str, use_tier_2: bool = False):
                 "status": case.status,
                 "trigger_source": case.trigger_source
             },
-            latest_agent_output=case.latest_agent_output
+            latest_agent_output=case.latest_agent_output,
+            execution_constraints=execution_constraints
         )
+        
+        # PHASE 3: Store updated constraints (binding user preferences)
+        if updated_constraints:
+            st.session_state.execution_constraints[case_id] = updated_constraints
         
         # Record collaboration turn in memory (use hasattr for backwards compatibility)
         if hasattr(case_memory, 'record_collaboration_turn'):
+            # Include constraint extraction info in the insight
+            insight = f"Collaborative discussion at {case.dtp_stage}"
+            if extraction_result and extraction_result.constraints_extracted > 0:
+                insight += f" - extracted {extraction_result.constraints_extracted} constraint(s)"
             case_memory.record_collaboration_turn(
                 user_input=user_intent,
                 topic=case.dtp_stage,
-                insight=f"Collaborative discussion at {case.dtp_stage}"
+                insight=insight
             )
         
         # Update chat response (no workflow executed)
         if st.session_state.chat_responses[case_id] and st.session_state.chat_responses[case_id][-1].get("pending"):
-            st.session_state.chat_responses[case_id][-1] = {
+            chat_entry = {
                 "user": user_intent,
                 "assistant": response,
                 "timestamp": datetime.now().isoformat(),
@@ -1275,6 +1294,13 @@ def run_copilot(case_id: str, user_intent: str, use_tier_2: bool = False):
                 "classification_confidence": intent_classification.confidence,
                 "matched_patterns": intent_classification.matched_patterns[:3]
             }
+            # PHASE 3: Include constraint extraction metadata
+            if extraction_result and extraction_result.constraints_extracted > 0:
+                chat_entry["constraints_extracted"] = extraction_result.constraints_extracted
+                chat_entry["constraint_details"] = [
+                    {"field": d[0], "value": d[1]} for d in extraction_result.constraint_details
+                ]
+            st.session_state.chat_responses[case_id][-1] = chat_entry
         
         case.user_intent = user_intent
         st.session_state.cases[case_id] = case
@@ -1360,8 +1386,10 @@ def run_copilot(case_id: str, user_intent: str, use_tier_2: bool = False):
         "iteration_count": 0,  # Track Supervisor iterations
         "dtp_policy_context": build_policy_context(case.dtp_stage),
         "signal_register": initial_signal_register(),
+        # PHASE 3: Pass execution constraints (binding user preferences from collaboration)
+        "execution_constraints": execution_constraints,
     }
-    
+
     # Store tier preference for agent initialization
     workflow_state["use_tier_2"] = use_tier_2
     

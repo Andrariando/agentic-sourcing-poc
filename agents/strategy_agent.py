@@ -13,14 +13,22 @@ Table 3 alignment:
 - Rules > Retrieval > LLM reasoning (within policy constraints)
 - LLM synthesizes information, explains tradeoffs, structures options
 - LLM does NOT have decision authority (Supervisor enforces policy)
+
+PHASE 3: ExecutionConstraints Integration
+- Agents MUST consume execution_constraints as hard inputs
+- Constraints override default logic when they conflict
+- If constraints cannot be satisfied, agent MUST explain why
 """
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, TYPE_CHECKING
 from utils.schemas import StrategyRecommendation, CaseSummary, DecisionImpact
 from utils.data_loader import get_contract, get_performance, get_market_data, get_category, get_requirements
 from utils.rules import RuleEngine
 from utils.knowledge_layer import get_vector_context
 from agents.base_agent import BaseAgent
 import json
+
+if TYPE_CHECKING:
+    from utils.execution_constraints import ExecutionConstraints
 
 
 class StrategyAgent(BaseAgent):
@@ -36,10 +44,15 @@ class StrategyAgent(BaseAgent):
         user_intent: str = "",
         use_cache: bool = True,
         allowed_strategies: Optional[list[str]] = None,
-        trigger_type: Optional[str] = None
+        trigger_type: Optional[str] = None,
+        execution_constraints: Optional["ExecutionConstraints"] = None
     ) -> tuple[StrategyRecommendation, Dict[str, Any], Dict[str, Any], int, int]:
         """
         Recommend sourcing strategy following Rules > Retrieval > LLM pattern.
+        
+        PHASE 3: Now accepts execution_constraints which MUST be factored into reasoning.
+        Constraints are binding and override default logic.
+        
         Returns (recommendation, llm_input_payload, output_payload, input_tokens, output_tokens)
         """
         # STEP 1: Check cache
@@ -120,7 +133,8 @@ class StrategyAgent(BaseAgent):
         prompt = self._build_summarization_prompt(
             case_summary, user_intent, contract, performance, market, category, requirements,
             allowed_strategies=allowed_strategies, trigger_type=trigger_type,
-            category_strategy_context=category_strategy_context
+            category_strategy_context=category_strategy_context,
+            execution_constraints=execution_constraints
         )
         
         llm_input_payload = {
@@ -210,25 +224,33 @@ class StrategyAgent(BaseAgent):
         requirements: Optional[Dict[str, Any]],
         allowed_strategies: Optional[list[str]] = None,
         trigger_type: Optional[str] = None,
-        category_strategy_context: Optional[Dict[str, Any]] = None
+        category_strategy_context: Optional[Dict[str, Any]] = None,
+        execution_constraints: Optional["ExecutionConstraints"] = None
     ) -> str:
         """Build prompt for LLM summarization (NOT decision-making)."""
         # Build strategy constraint text
         strategy_constraint = ""
         strategy_options = '"Renew" | "Renegotiate" | "RFx" | "Terminate" | "Monitor"'
-        
+
         if allowed_strategies:
             strategy_options = " | ".join([f'"{s}"' for s in allowed_strategies])
             if trigger_type == "Renewal":
                 strategy_constraint = f"\n- POLICY CONSTRAINT: For {trigger_type} cases, only these strategies are allowed: {', '.join(allowed_strategies)}. You MUST choose from this list."
             else:
                 strategy_constraint = f"\n- ALLOWED STRATEGIES: You MUST choose from: {', '.join(allowed_strategies)}"
-        
+
         task_strategy_note = "   (choose from: Renew, Renegotiate, RFx, Terminate, Monitor)"
         if allowed_strategies and trigger_type:
             task_strategy_note = f"   IMPORTANT: For this {trigger_type} case, you MUST choose from: {', '.join(allowed_strategies)}"
-        
+
+        # PHASE 3: Build execution constraints injection
+        constraints_injection = ""
+        if execution_constraints and hasattr(execution_constraints, 'get_prompt_injection'):
+            constraints_injection = execution_constraints.get_prompt_injection()
+
         return f"""You are a Strategy Agent for dynamic sourcing pipelines (DTP-01).
+
+{constraints_injection}
 
 Your role (capstone alignment):
 1. Synthesize information from retrieved data (contract, performance, market, category)

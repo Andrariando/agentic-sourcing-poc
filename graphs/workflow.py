@@ -28,6 +28,7 @@ from utils.signal_aggregator import SignalAggregator
 from utils.agent_validator import validate_agent_output, ValidationResult
 from utils.contradiction_detector import detect_contradictions, Contradiction
 from utils.case_memory import CaseMemory, update_memory_from_workflow_result
+from utils.execution_constraints import ExecutionConstraints
 from datetime import datetime
 import json
 
@@ -536,13 +537,17 @@ def strategy_node(state: PipelineState) -> PipelineState:
             else:
                 allowed_strategies = getattr(policy_context, "allowed_strategies", None)
         
-        # Call agent with policy constraints
+        # PHASE 3: Get execution constraints (binding user preferences)
+        execution_constraints = state.get("execution_constraints")
+        
+        # Call agent with policy constraints AND execution constraints
         recommendation, llm_input, output_dict, input_tokens, output_tokens = strategy_agent.recommend_strategy(
             case_summary,
             user_intent,
             use_cache=True,
             allowed_strategies=allowed_strategies,
-            trigger_type=trigger_type
+            trigger_type=trigger_type,
+            execution_constraints=execution_constraints
         )
         
         # Update budget
@@ -625,9 +630,13 @@ def supplier_evaluation_node(state: PipelineState) -> PipelineState:
         return state
     
     try:
+        # PHASE 3: Get execution constraints (binding user preferences)
+        execution_constraints = state.get("execution_constraints")
+        
         shortlist, llm_input, output_dict, input_tokens, output_tokens = supplier_agent.evaluate_suppliers(
             case_summary,
-            use_cache=True
+            use_cache=True,
+            execution_constraints=execution_constraints
         )
         
         tier = 2 if state.get("use_tier_2") else 1

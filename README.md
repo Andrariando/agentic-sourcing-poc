@@ -1,101 +1,164 @@
 # Agentic AI for Dynamic Sourcing Pipelines - Research POC
 
-A research proof-of-concept web application demonstrating agentic orchestration, human-in-the-loop governance, and traceability for dynamic sourcing pipeline management.
+A research proof-of-concept web application demonstrating **agentic orchestration**, **human-in-the-loop governance**, and a **human-like collaborative assistant** for dynamic sourcing pipeline management.
 
-## Deployment
+> 📖 **For detailed architecture documentation, see [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md)**
 
-This Streamlit app is deployable to Streamlit Community Cloud or equivalent platforms.
+---
+
+## Key Features
+
+### 🤝 Collaboration Mode
+The chatbot behaves like a thoughtful human assistant:
+- **Discusses before executing** — Asks clarifying questions, surfaces tradeoffs
+- **Extracts binding constraints** — "I don't mind disruption" becomes a hard constraint
+- **Acknowledges preferences** — Immediately confirms what it heard
+- **Transitions explicitly** — Only executes when user says "proceed"
+
+### 🔒 Governance First
+- **Rules > LLM** — Deterministic rules applied before any LLM reasoning
+- **Supervisor Authority** — Only the Supervisor can change case state
+- **Human-in-the-Loop** — Significant decisions require human approval
+
+### 🎯 DTP Pipeline (DTP-01 to DTP-06)
+Strategy → Planning → Sourcing → Negotiation → Contracting → Execution
+
+---
+
+## Quick Start
 
 ### Prerequisites
-
 - Python 3.9+
 - OpenAI API key
 
-### Environment Variables
-
-Set the following environment variable:
-
-```bash
-OPENAI_API_KEY=your_api_key_here
-```
-
-For local development, create a `.env` file in the root directory:
-
-```
-OPENAI_API_KEY=your_api_key_here
-```
-
 ### Installation
 
-1. Clone this repository
-2. Install dependencies:
-
 ```bash
+# Install dependencies
 pip install -r requirements.txt
-```
 
-### Running Locally
+# Set API key (or create .env file)
+export OPENAI_API_KEY=your_api_key_here
 
-```bash
+# Run
 streamlit run app.py
 ```
 
 The app will be available at `http://localhost:8501`
 
-### Deployment to Streamlit Community Cloud
+---
 
-1. Push this repository to GitHub
-2. Go to [Streamlit Community Cloud](https://streamlit.io/cloud)
-3. Connect your GitHub repository
-4. Set the `OPENAI_API_KEY` environment variable in the Streamlit Cloud settings
-5. Deploy
+## How It Works
 
-## Demo Steps
+### Two Interaction Modes
 
-1. **Overview Tab**: View case summaries and status
-2. **Signals Tab**: Evaluate signals and create cases from signals
-3. **Copilot Tab**: Enter user intent and run the agentic workflow
-4. **Agent Activity Tab**: Inspect detailed agent logs with LLM inputs/outputs
-5. **Case Trace Tab**: View timeline of case progression through DTP stages
+| Mode | Trigger Examples | Behavior |
+|------|------------------|----------|
+| **Collaboration** | "What are the options?", "Help me think..." | Discussion, no workflow execution |
+| **Execution** | "Proceed", "Run analysis", "Recommend" | Workflow execution with constraints |
 
-## Architecture
+### Constraint Extraction
 
-- **Sourcing Signal Layer (deterministic, non-agent)**: Scans contracts, performance, and simple spend/benchmark signals to emit `CaseTrigger` objects that **initiate cases at DTP‑01**.  
-  - This layer does **not** renew, renegotiate, terminate, or award contracts – it only emits **signals** that a case should be opened.
-- **LangGraph**: Orchestrates the sourcing workflow with explicit state management.
-- **Supervisor Agent**: Deterministic central coordinator that owns case state, DTP stage transitions, and all routing/approval logic. Only the Supervisor can update `CaseSummary` or advance stages.
-- **Specialist Agents**: Signal Interpretation, Strategy, Supplier Evaluation, Negotiation Support, Case Clarifier (all LLM-powered but **state-less**).
-- **Vector Knowledge Layer (read-only)**: Conceptual layer providing governed, stage-scoped retrieval of DTP procedures, category strategies, RFx templates, contract clauses, and historical sourcing cases. Retrieval **grounds** reasoning but never overrides rules or policies.
-- **Human-in-the-Loop**: `WAIT_FOR_HUMAN` node explicitly pauses the workflow when policy or materiality requires human approval (Approve/Edit/Reject).
-- **Token Guardrails**: Tiered model strategy with per-case budget limits.
+User statements automatically become binding constraints:
 
-### Governance Principles
+| User Says | Constraint Extracted |
+|-----------|---------------------|
+| "I don't mind disruption" | `disruption_tolerance = HIGH` |
+| "Budget is fixed" | `budget_flexibility = FIXED` |
+| "Price is the priority" | `priority_criteria = ["price"]` |
+| "Prefer the current supplier" | `supplier_preference = PREFER_INCUMBENT` |
 
-- **Rules & Policies First**: `RuleEngine` and `PolicyLoader` enforce what is allowed before any LLM narration.
-- **Supervisor Authority**: SupervisorAgent is the only orchestrator; LLM agents cannot change stages or status.
-- **System-Initiated Renewals**: All proactive renewal behavior is framed as **system-initiated case creation at DTP‑01**, never as automatic renewal/termination.
-- **LLMs as Narrators**: LLM agents summarize, explain, and propose – they do **not** make awards or policy decisions.
-- **Chatbot UX is Read-Only**: The GPT-like chat in the UI only explains what the Supervisor + policies have already allowed; it never bypasses governance.
+These constraints are injected into agent prompts and **override default logic**.
+
+---
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      USER MESSAGE                            │
+└─────────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+              ┌────────────────────────┐
+              │   INTENT CLASSIFIER    │  (Rule-based, no LLM)
+              │  COLLABORATIVE/EXECUTION│
+              └────────────────────────┘
+                           │
+          ┌────────────────┴────────────────┐
+          ▼                                 ▼
+┌──────────────────────┐        ┌──────────────────────┐
+│  COLLABORATION MODE  │        │   EXECUTION MODE     │
+│                      │        │                      │
+│ • Extract constraints│        │ • LangGraph workflow │
+│ • Ask questions      │        │ • Supervisor agent   │
+│ • Frame options      │        │ • Specialist agents  │
+│ • No DTP advancement │        │ • DTP transitions    │
+└──────────────────────┘        └──────────────────────┘
+          │                                 │
+          └────────────────┬────────────────┘
+                           ▼
+              ┌────────────────────────┐
+              │   SHARED STATE         │
+              │ • CaseMemory           │
+              │ • ExecutionConstraints │
+              └────────────────────────┘
+```
+
+### Key Components
+
+| Component | Purpose | LLM Usage |
+|-----------|---------|-----------|
+| Intent Classifier | Route to COLLABORATIVE or EXECUTION mode | None |
+| Constraint Extractor | Extract binding constraints from user input | None |
+| Collaboration Engine | Generate discussion responses | None |
+| Supervisor Agent | Orchestrate workflow, manage state | None |
+| Strategy Agent | Recommend sourcing strategy (DTP-01) | Summarization only |
+| Supplier Agent | Score and shortlist suppliers (DTP-02/03) | Explanation only |
+
+---
 
 ## Data
 
-All data is synthetic and anonymized for demonstration purposes. Data files are located in `/data`:
-- `categories.json`: Category definitions (CAT-01, CAT-02, ...)
-- `suppliers.json`: Supplier information (SUP-001, SUP-002, ...)
-- `performance.json`: Supplier performance metrics
-- `contracts.json`: Contract details (CON-001, ...)
-- `market.json`: Market benchmark data
-- `cases_seed.json`: Seed cases (CASE-0001, ...)
+All data is synthetic and anonymized. Data files in `/data`:
+- `categories.json` — Category definitions
+- `suppliers.json` — Supplier information
+- `performance.json` — Supplier performance metrics
+- `contracts.json` — Contract details
+- `market.json` — Market benchmark data
+- `cases_seed.json` — Seed cases
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md) | Complete system architecture |
+| [IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md) | Phase 1 implementation details |
+| [PHASE2_CHANGES_SUMMARY.md](PHASE2_CHANGES_SUMMARY.md) | Phase 2 changes |
+
+---
 
 ## Notes
 
-- This is research POC software, not production-ready
+- Research POC software, not production-ready
 - All metrics and outputs are illustrative and synthetic
-- Token usage is tracked and limited per case (3,000 token hard cap)
-- Agent outputs are cached using SHA-256 input hashing
+- Token usage tracked and limited (3,000 token per-case cap)
+- Agent outputs cached using SHA-256 input hashing
 
+---
 
+## Deployment
 
+### Streamlit Community Cloud
 
+1. Push repository to GitHub
+2. Go to [Streamlit Community Cloud](https://streamlit.io/cloud)
+3. Connect your GitHub repository
+4. Set `OPENAI_API_KEY` in Streamlit Cloud settings
+5. Deploy
 
+---
 
+**License:** Research POC — Not for production use

@@ -12,14 +12,21 @@ LLM reasoning allowed:
 - Explains differences between suppliers
 - Summarizes risks
 - Structures comparisons
+
+PHASE 3: ExecutionConstraints Integration
+- Agents MUST consume execution_constraints as hard inputs
+- Supplier preferences, excluded suppliers, priority criteria from constraints
 """
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, TYPE_CHECKING
 from utils.schemas import SupplierShortlist, CaseSummary
 from utils.data_loader import get_suppliers_by_category, get_performance, get_market_data, get_category, get_requirements
 from utils.rules import RuleEngine
 from utils.knowledge_layer import get_vector_context
 from agents.base_agent import BaseAgent
 import json
+
+if TYPE_CHECKING:
+    from utils.execution_constraints import ExecutionConstraints
 
 
 class SupplierEvaluationAgent(BaseAgent):
@@ -38,10 +45,17 @@ class SupplierEvaluationAgent(BaseAgent):
     def evaluate_suppliers(
         self,
         case_summary: CaseSummary,
-        use_cache: bool = True
+        use_cache: bool = True,
+        execution_constraints: Optional["ExecutionConstraints"] = None
     ) -> tuple[SupplierShortlist, Dict[str, Any], Dict[str, Any], int, int]:
         """
         Evaluate and shortlist suppliers for a category.
+        
+        PHASE 3: Now accepts execution_constraints for binding user preferences:
+        - supplier_preference (incumbent vs new)
+        - excluded_suppliers
+        - priority_criteria
+        
         Returns (shortlist, llm_input_payload, output_payload, input_tokens, output_tokens)
         """
         # Check cache
@@ -150,9 +164,16 @@ class SupplierEvaluationAgent(BaseAgent):
                 "normalized_score": normalized_score
             })
         
+        # PHASE 3: Build execution constraints injection
+        constraints_injection = ""
+        if execution_constraints and hasattr(execution_constraints, 'get_prompt_injection'):
+            constraints_injection = execution_constraints.get_prompt_injection()
+        
         # Build prompt aligned with Table 3: LLM reasons to explain differences, summarize risks, structure comparisons
         # IMPORTANT: Does NOT select winners - that's a human decision
         prompt = f"""You are a Supplier Scoring Agent for dynamic sourcing pipelines (DTP-02/03).
+
+{constraints_injection}
 
 Your role (Table 3 alignment):
 - Convert human-defined evaluation criteria into structured score inputs
