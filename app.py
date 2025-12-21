@@ -1886,12 +1886,25 @@ if st.session_state.selected_case_id is None:
     # Debug/Admin tools
     with st.expander("🛠️ Debug Tools", expanded=False):
         st.caption("Admin and debugging utilities")
-        col_debug1, col_debug2 = st.columns([1, 3])
+        col_debug1, col_debug2, col_debug3 = st.columns([1, 1, 2])
         with col_debug1:
             if st.button("Clear Agent Cache", help="Clear all cached agent outputs. Use this if you're seeing stale or error results."):
                 from utils.caching import cache
                 cache.clear()
                 st.success("✅ Cache cleared! All agent outputs will be regenerated on next run.")
+        with col_debug2:
+            if st.button("Reset All Cases", help="Clear all agent outputs from all cases. Use this to fully reset the system."):
+                from utils.caching import cache
+                cache.clear()
+                # Also clear latest_agent_output from all cases
+                for case in st.session_state.cases.values():
+                    case.latest_agent_output = None
+                    case.latest_agent_name = None
+                # Clear workflow state
+                if "workflow_state" in st.session_state:
+                    st.session_state.workflow_state = None
+                st.success("✅ All cases reset! Agent outputs cleared.")
+                st.rerun()
                 st.info("Note: You may need to restart your case workflow for changes to take effect.")
         with col_debug2:
             st.text(f"Session: {len(st.session_state.cases)} cases loaded")

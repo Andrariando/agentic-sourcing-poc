@@ -122,6 +122,9 @@ class BaseAgent:
         Normalize LLM output to fix common schema mismatches.
         Converts objects to strings where string lists are expected.
         """
+        # Debug: Print what we're normalizing
+        print(f"🔧 Normalizing LLM output for {schema.__name__}")
+        
         # Fields that should be List[str] but LLM sometimes returns List[Dict]
         string_list_fields = [
             "evaluation_criteria",
@@ -138,50 +141,59 @@ class BaseAgent:
         ]
         
         for field in string_list_fields:
-            if field in data and isinstance(data[field], list):
-                normalized = []
-                for item in data[field]:
-                    if isinstance(item, str):
-                        normalized.append(item)
-                    elif isinstance(item, dict):
-                        # Convert dict to string - try common keys first
-                        if "name" in item:
-                            normalized.append(str(item["name"]))
-                        elif "criterion" in item:
-                            normalized.append(str(item["criterion"]))
-                        elif "description" in item:
-                            normalized.append(str(item["description"]))
-                        elif "text" in item:
-                            normalized.append(str(item["text"]))
-                        elif "value" in item:
-                            normalized.append(str(item["value"]))
+            if field in data:
+                original = data[field]
+                if isinstance(original, list):
+                    normalized = []
+                    for item in original:
+                        if isinstance(item, str):
+                            normalized.append(item)
+                        elif isinstance(item, dict):
+                            # Convert dict to string - try common keys first
+                            extracted = None
+                            for key in ["name", "criterion", "criteria", "description", "text", "value", "title", "label"]:
+                                if key in item:
+                                    extracted = str(item[key])
+                                    break
+                            if extracted is None:
+                                # Just use the first value or stringify the whole thing
+                                values = list(item.values())
+                                extracted = str(values[0]) if values else str(item)
+                            normalized.append(extracted)
+                        elif item is None:
+                            continue  # Skip None values
                         else:
-                            # Just use the first value or stringify the whole thing
-                            values = list(item.values())
-                            if values:
-                                normalized.append(str(values[0]))
-                            else:
-                                normalized.append(str(item))
-                    else:
-                        normalized.append(str(item))
-                data[field] = normalized
+                            normalized.append(str(item))
+                    data[field] = normalized
+                    if original != normalized:
+                        print(f"  📝 Normalized {field}: {type(original[0]).__name__ if original else 'empty'} → strings")
+                elif original is None:
+                    data[field] = []  # Convert None to empty list
+                elif isinstance(original, str):
+                    data[field] = [original]  # Convert single string to list
         
         # Normalize nested structures (like shortlisted_suppliers)
         if "shortlisted_suppliers" in data and isinstance(data["shortlisted_suppliers"], list):
             for supplier in data["shortlisted_suppliers"]:
                 if isinstance(supplier, dict):
                     for field in ["strengths", "concerns"]:
-                        if field in supplier and isinstance(supplier[field], list):
-                            normalized = []
-                            for item in supplier[field]:
-                                if isinstance(item, str):
-                                    normalized.append(item)
-                                elif isinstance(item, dict):
-                                    values = list(item.values())
-                                    normalized.append(str(values[0]) if values else str(item))
-                                else:
-                                    normalized.append(str(item))
-                            supplier[field] = normalized
+                        if field in supplier:
+                            original = supplier[field]
+                            if isinstance(original, list):
+                                normalized = []
+                                for item in original:
+                                    if isinstance(item, str):
+                                        normalized.append(item)
+                                    elif isinstance(item, dict):
+                                        values = list(item.values())
+                                        normalized.append(str(values[0]) if values else str(item))
+                                    elif item is not None:
+                                        normalized.append(str(item))
+                                supplier[field] = normalized
+                            elif original is None:
+                                supplier[field] = []
+                            elif isinstance(original, str):
+                                supplier[field] = [original]
         
         return data
     
