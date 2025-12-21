@@ -115,18 +115,20 @@ IMPORTANT:
 - Policy enforcement is handled by Supervisor + humans
 - Use benchmarks and heuristics as context, not as binding rules
 
-Respond with a JSON object matching this schema:
+Respond with a JSON object matching this EXACT schema:
 {{
   "case_id": "{case_summary.case_id}",
   "category_id": "{case_summary.category_id}",
   "supplier_id": "{supplier_id}",
-  "negotiation_objectives": ["objective1", "objective2"],
-  "target_terms": {{"key": "value"}},
-  "leverage_points": ["leverage1", "leverage2"],
-  "fallback_positions": {{"key": "value"}},
-  "timeline": "Recommended negotiation timeline",
-  "risk_mitigation": ["risk1 mitigation", "risk2 mitigation"]
+  "negotiation_objectives": ["Reduce unit price by 10%", "Extend payment terms to Net 45", "Include performance guarantees"],
+  "target_terms": {{"price_reduction": "10%", "payment_terms": "Net 45", "warranty": "24 months"}},
+  "leverage_points": ["Strong market competition available", "Volume commitment can be increased", "Long-term partnership value"],
+  "fallback_positions": {{"minimum_price_reduction": "5%", "alternative_payment": "Net 30"}},
+  "timeline": "Complete negotiations within 3 weeks",
+  "risk_mitigation": ["Document all agreed terms in writing", "Include penalty clauses for non-performance", "Establish escalation procedures"]
 }}
+
+IMPORTANT: All list fields must contain simple strings, not objects.
 
 Provide ONLY valid JSON, no markdown formatting."""
 

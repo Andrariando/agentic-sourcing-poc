@@ -100,27 +100,31 @@ IMPORTANT CONSTRAINTS:
 - Do NOT perform strategic reasoning
 - Focus on structured reporting and impact explanation
 
-Respond with a JSON object matching this schema:
+Respond with a JSON object matching this EXACT schema:
 {{
   "case_id": "{case_summary.case_id}",
   "category_id": "{case_summary.category_id}",
   "supplier_id": "{supplier_id}",
   "rollout_steps": [
-    {{"step": "Step name", "description": "Step description", "timeline": "Timeline"}}
+    {{"step": "Contract Execution", "description": "Finalize and sign contract documents", "timeline": "Week 1"}},
+    {{"step": "Supplier Onboarding", "description": "Complete vendor setup and system access", "timeline": "Week 2-3"}},
+    {{"step": "Service Transition", "description": "Migrate services from incumbent supplier", "timeline": "Week 4-6"}}
   ],
-  "projected_savings": {projected_savings},
+  "projected_savings": {projected_savings if projected_savings else 0},
   "service_impacts": {{
-    "service_level_changes": "Description of service level impacts",
-    "operational_changes": "Description of operational impacts"
+    "service_level_changes": "Improved response times expected with new SLA terms",
+    "operational_changes": "New ordering process will require team training"
   }},
   "kpi_summary": {{
-    "savings_realization": "KPI summary",
-    "service_levels": "KPI summary",
-    "compliance_metrics": "KPI summary"
+    "savings_realization": "Target 10% cost reduction in first year",
+    "service_levels": "99.5% uptime commitment with penalty clauses",
+    "compliance_metrics": "Quarterly audit reports required"
   }},
-  "explanation": "Brief explanation of impacts and implementation plan",
+  "explanation": "This implementation plan follows the standard rollout playbook with adjustments for category-specific requirements",
   "playbook_source": "rollout_playbook from Vector Knowledge Layer"
 }}
+
+IMPORTANT: Ensure all string fields contain actual text values, not null or empty strings.
 
 Provide ONLY valid JSON, no markdown formatting."""
 

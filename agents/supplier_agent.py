@@ -198,7 +198,7 @@ IMPORTANT CONSTRAINTS:
 - top_choice_supplier_id is OPTIONAL and non-binding (human makes final choice)
 - Focus on explaining differences and summarizing risks
 
-Respond with a JSON object matching this schema:
+Respond with a JSON object matching this EXACT schema:
 {{
   "case_id": "{case_summary.case_id}",
   "category_id": "{case_summary.category_id}",
@@ -206,12 +206,12 @@ Respond with a JSON object matching this schema:
     {{
       "supplier_id": "SUP-xxx",
       "name": "Supplier Name",
-      "score": 0.0-10.0,
+      "score": 8.5,
       "strengths": ["strength1", "strength2"],
-      "concerns": ["concern1"] or []
+      "concerns": ["concern1"]
     }}
   ],
-  "evaluation_criteria": ["criterion1", "criterion2"],
+  "evaluation_criteria": ["Price competitiveness", "Quality rating", "Delivery performance"],
   "recommendation": "Brief recommendation text explaining the scoring and comparisons",
   "top_choice_supplier_id": "SUP-xxx" or null (optional, non-binding),
   "comparison_summary": "Structured comparison explaining differences between suppliers"

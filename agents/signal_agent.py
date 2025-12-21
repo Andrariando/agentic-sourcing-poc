@@ -81,18 +81,24 @@ Analyze this signal and provide a structured assessment. Consider:
 3. Market conditions
 4. Risk factors
 
-Respond with a JSON object matching this schema:
+Respond with a JSON object matching this EXACT schema:
 {{
   "signal_id": "{signal.get('signal_id')}",
   "category_id": "{signal.get('category_id')}",
-  "assessment": "Brief assessment text",
-  "recommended_action": "Renew" | "Renegotiate" | "RFx" | "Monitor" | "Terminate",
-  "confidence": 0.0-1.0,
-  "rationale": ["bullet point 1", "bullet point 2"],
-  "urgency_score": 1-10,
-  "contract_id": "{signal.get('contract_id', '')}" or null,
-  "supplier_id": "{signal.get('supplier_id', '')}" or null
+  "assessment": "Contract expiring soon with declining supplier performance indicates need for competitive review",
+  "recommended_action": "RFx",
+  "confidence": 0.85,
+  "rationale": ["Contract expires in 45 days requiring immediate action", "Supplier performance has declined 15% over past quarter"],
+  "urgency_score": 8,
+  "contract_id": "{signal.get('contract_id', '')}",
+  "supplier_id": "{signal.get('supplier_id', '')}"
 }}
+
+IMPORTANT NOTES:
+- "recommended_action" must be exactly one of: "Renew", "Renegotiate", "RFx", "Monitor", or "Terminate"
+- "confidence" must be a decimal number between 0.0 and 1.0 (e.g., 0.85)
+- "urgency_score" must be an integer between 1 and 10 (e.g., 8)
+- "rationale" must be an array of simple strings, not objects
 
 Provide ONLY valid JSON, no markdown formatting."""
 

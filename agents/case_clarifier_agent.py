@@ -151,14 +151,16 @@ IMPORTANT CONSTRAINTS:
 - Focus on decision-making information, not general knowledge
 - Suggested options should be concrete choices, not abstract concepts
 
-Respond with a JSON object matching this schema:
+Respond with a JSON object matching this EXACT schema:
 {{
-  "reason": "Clear explanation of why clarification is needed",
-  "questions": ["Question 1", "Question 2", "Question 3"],
-  "suggested_options": ["Option A", "Option B", "Option C"] or null,
-  "missing_information": ["Missing field 1", "Missing field 2"],
-  "context_summary": "Brief summary of the case context for the human"
+  "reason": "Need clarification on budget constraints before proceeding with supplier evaluation",
+  "questions": ["What is the maximum budget for this category?", "Are there preferred suppliers we should prioritize?", "What is the timeline for making a decision?"],
+  "suggested_options": ["Proceed with current budget estimates", "Wait for finance approval", "Explore cost reduction options first"],
+  "missing_information": ["Budget allocation", "Stakeholder preferences"],
+  "context_summary": "This case involves a contract renewal decision with multiple viable options requiring stakeholder input"
 }}
+
+IMPORTANT: All list fields must contain simple strings, not objects. If there are no suggested options, use an empty array [] not null.
 
 Provide ONLY valid JSON, no markdown formatting."""
         

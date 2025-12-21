@@ -106,16 +106,16 @@ IMPORTANT CONSTRAINTS:
 - Flag inconsistencies for human review
 - Do NOT create new clauses or modify terms
 
-Respond with a JSON object matching this schema:
+Respond with a JSON object matching this EXACT schema:
 {{
   "case_id": "{case_summary.case_id}",
   "category_id": "{case_summary.category_id}",
   "supplier_id": "{supplier_id}",
   "extracted_terms": {{
-    "Service Levels": "Extracted/service level terms",
-    "Payment Terms": "Extracted payment terms",
-    "Termination": "Extracted termination clauses",
-    "Compliance": "Extracted compliance requirements"
+    "Service Levels": "99.5% uptime SLA with 4-hour response time",
+    "Payment Terms": "Net 30 days from invoice date",
+    "Termination": "90-day notice period with cure provisions",
+    "Compliance": "SOC 2 Type II certification required"
   }},
   "validation_results": {{
     "required_fields_present": true,
@@ -123,12 +123,14 @@ Respond with a JSON object matching this schema:
     "payment_terms_valid": true
   }},
   "mapping_explanations": {{
-    "Service Levels": "Explanation of how terms map to clause library",
-    "Payment Terms": "Explanation of mapping"
+    "Service Levels": "Terms align with standard enterprise SLA template",
+    "Payment Terms": "Matches approved payment terms for this category"
   }},
-  "inconsistencies": ["List of flagged inconsistencies if any"],
+  "inconsistencies": ["Termination notice period differs from standard 60-day policy", "Missing liability cap clause"],
   "template_guidance": "contract_clauses from Vector Knowledge Layer"
 }}
+
+IMPORTANT: The "inconsistencies" field must contain simple strings, not objects.
 
 Provide ONLY valid JSON, no markdown formatting."""
 

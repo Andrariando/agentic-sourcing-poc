@@ -272,19 +272,21 @@ Your task: Provide a clear, grounded summary explaining:
 4. Recommended strategy based on data analysis
 {task_strategy_note}
 
-Respond with a JSON object matching this schema:
+Respond with a JSON object matching this EXACT schema:
 {{
   "case_id": "{case_summary.case_id}",
   "category_id": "{case_summary.category_id}",
   "recommended_strategy": {strategy_options},
-  "confidence": 0.0-1.0,
-  "rationale": ["bullet point 1", "bullet point 2", "bullet point 3"],
-  "contract_id": "{case_summary.contract_id or ''}" or null,
-  "supplier_id": "{case_summary.supplier_id or ''}" or null,
-  "estimated_savings_potential": null or number,
-  "risk_assessment": "Brief risk assessment",
-  "timeline_recommendation": "Recommended timeline for action"
+  "confidence": 0.85,
+  "rationale": ["Contract expires in 60 days requiring immediate action", "Supplier performance is declining", "Market conditions favor competitive bidding"],
+  "contract_id": "{case_summary.contract_id or ''}",
+  "supplier_id": "{case_summary.supplier_id or ''}",
+  "estimated_savings_potential": 15000,
+  "risk_assessment": "Medium risk due to contract timeline constraints",
+  "timeline_recommendation": "Initiate RFx process within 2 weeks"
 }}
+
+IMPORTANT: All list fields (like "rationale") must contain simple strings, not objects.
 
 Provide ONLY valid JSON, no markdown formatting."""
     

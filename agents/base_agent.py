@@ -83,15 +83,23 @@ class BaseAgent:
                 json_str = json_str.strip().strip("```").strip()
                 
                 data = json.loads(json_str)
+                
+                # Normalize data to fix common LLM output issues
+                data = self._normalize_llm_output(data, schema)
+                
                 parsed = schema(**data)
                 return parsed, data, int(input_tokens), int(output_tokens)
             except (json.JSONDecodeError, Exception) as e:
                 if retry_on_invalid:
                     # Retry with stricter prompt
-                    strict_prompt = f"{prompt}\n\nIMPORTANT: Respond with ONLY valid JSON, no markdown, no explanations."
+                    strict_prompt = f"{prompt}\n\nIMPORTANT: Respond with ONLY valid JSON, no markdown, no explanations. All list fields must contain simple strings, not objects."
                     response = self.llm.invoke(strict_prompt)
                     content = response.content.strip().strip("```").strip()
                     data = json.loads(content)
+                    
+                    # Normalize data to fix common LLM output issues
+                    data = self._normalize_llm_output(data, schema)
+                    
                     parsed = schema(**data)
                     return parsed, data, int(input_tokens), int(output_tokens)
                 else:
@@ -108,6 +116,74 @@ class BaseAgent:
                 raise ValueError(f"Network connection error. Please check your internet connection. Error: {e}")
             else:
                 raise ValueError(f"LLM call failed: {e}")
+    
+    def _normalize_llm_output(self, data: Dict[str, Any], schema: type[BaseModel]) -> Dict[str, Any]:
+        """
+        Normalize LLM output to fix common schema mismatches.
+        Converts objects to strings where string lists are expected.
+        """
+        # Fields that should be List[str] but LLM sometimes returns List[Dict]
+        string_list_fields = [
+            "evaluation_criteria",
+            "rationale", 
+            "strengths",
+            "concerns",
+            "leverage_points",
+            "risk_mitigation",
+            "negotiation_objectives",
+            "questions",
+            "missing_information",
+            "suggested_options",
+            "inconsistencies"
+        ]
+        
+        for field in string_list_fields:
+            if field in data and isinstance(data[field], list):
+                normalized = []
+                for item in data[field]:
+                    if isinstance(item, str):
+                        normalized.append(item)
+                    elif isinstance(item, dict):
+                        # Convert dict to string - try common keys first
+                        if "name" in item:
+                            normalized.append(str(item["name"]))
+                        elif "criterion" in item:
+                            normalized.append(str(item["criterion"]))
+                        elif "description" in item:
+                            normalized.append(str(item["description"]))
+                        elif "text" in item:
+                            normalized.append(str(item["text"]))
+                        elif "value" in item:
+                            normalized.append(str(item["value"]))
+                        else:
+                            # Just use the first value or stringify the whole thing
+                            values = list(item.values())
+                            if values:
+                                normalized.append(str(values[0]))
+                            else:
+                                normalized.append(str(item))
+                    else:
+                        normalized.append(str(item))
+                data[field] = normalized
+        
+        # Normalize nested structures (like shortlisted_suppliers)
+        if "shortlisted_suppliers" in data and isinstance(data["shortlisted_suppliers"], list):
+            for supplier in data["shortlisted_suppliers"]:
+                if isinstance(supplier, dict):
+                    for field in ["strengths", "concerns"]:
+                        if field in supplier and isinstance(supplier[field], list):
+                            normalized = []
+                            for item in supplier[field]:
+                                if isinstance(item, str):
+                                    normalized.append(item)
+                                elif isinstance(item, dict):
+                                    values = list(item.values())
+                                    normalized.append(str(values[0]) if values else str(item))
+                                else:
+                                    normalized.append(str(item))
+                            supplier[field] = normalized
+        
+        return data
     
     def create_fallback_output(self, schema: type[BaseModel], case_id: str, category_id: str) -> BaseModel:
         """Create fallback output when LLM fails"""
