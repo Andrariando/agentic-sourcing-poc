@@ -2068,9 +2068,12 @@ else:
             
             # Reset workflow state if present
             if "workflow_state" in st.session_state and st.session_state.workflow_state is not None:
-                workflow_case_summary = st.session_state.workflow_state.get("case_summary", {})
-                if workflow_case_summary and workflow_case_summary.get("case_id") == selected_case.case_id:
-                    st.session_state.workflow_state = None
+                workflow_case_summary = st.session_state.workflow_state.get("case_summary")
+                if workflow_case_summary:
+                    # Handle both dict and Pydantic CaseSummary objects
+                    wf_case_id = workflow_case_summary.get("case_id") if isinstance(workflow_case_summary, dict) else getattr(workflow_case_summary, "case_id", None)
+                    if wf_case_id == selected_case.case_id:
+                        st.session_state.workflow_state = None
             
             # Reset case latest output if it's an error
             if selected_case.latest_agent_output:
