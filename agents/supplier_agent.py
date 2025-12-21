@@ -311,15 +311,15 @@ Provide ONLY valid JSON, no markdown formatting."""
             # DO NOT cache fallback/error results - they should be retried
             return fallback, llm_input_payload, {}, 0, 0
     
-    def create_fallback_output(self, schema: type, case_id: str, category_id: str) -> SupplierShortlist:
-        """Fallback output when LLM fails"""
+    def create_fallback_output(self, schema: type, case_id: str, category_id: str, error_msg: str = "") -> SupplierShortlist:
+        """Fallback output when LLM fails (deprecated - use inline fallback in except block)"""
         return SupplierShortlist(
             case_id=case_id,
             category_id=category_id,
             shortlisted_suppliers=[],
             evaluation_criteria=["Fallback evaluation"],
-            recommendation="Unable to evaluate suppliers - using fallback",
-            comparison_summary="Fallback output due to processing error"
+            recommendation=f"Unable to evaluate suppliers - {error_msg}" if error_msg else "Unable to evaluate suppliers - fallback invoked",
+            comparison_summary="Fallback output - check logs for details"
         )
 
 

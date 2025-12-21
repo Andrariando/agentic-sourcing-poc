@@ -547,10 +547,12 @@ def supplier_evaluation_node(state: PipelineState) -> PipelineState:
     
     # Check budget
     if budget_state.tokens_used >= 3000:
+        print(f"⚠️ SupplierEvaluation budget exceeded: {budget_state.tokens_used} tokens used")
         fallback = supplier_agent.create_fallback_output(
             SupplierShortlist,
             case_summary.case_id,
-            case_summary.category_id
+            case_summary.category_id,
+            error_msg="budget limit exceeded (3000 tokens)"
         )
         state["latest_agent_output"] = fallback
         state["latest_agent_name"] = "SupplierEvaluation"
@@ -604,10 +606,12 @@ def supplier_evaluation_node(state: PipelineState) -> PipelineState:
         state["latest_agent_name"] = "SupplierEvaluation"
         
     except Exception as e:
+        print(f"⚠️ SupplierEvaluation workflow node exception: {type(e).__name__}: {str(e)}")
         fallback = supplier_agent.create_fallback_output(
             SupplierShortlist,
             case_summary.case_id,
-            case_summary.category_id
+            case_summary.category_id,
+            error_msg=f"{type(e).__name__}: {str(e)[:100]}"
         )
         state["latest_agent_output"] = fallback
         state["latest_agent_name"] = "SupplierEvaluation"
@@ -1418,16 +1422,24 @@ def create_workflow_graph():
                 return "wait_for_human"
             
             # Loop prevention: Don't route to same agent-output combination twice
+            # BUT: Allow retry if previous output was an error/fallback
             agent_key = f"{latest_agent_name}_{type(latest_output).__name__}"
-            if agent_key in visited_agents:
+            is_error_output = _is_error_output(latest_output)
+            
+            if is_error_output:
+                print(f"🔄 Detected error output from {latest_agent_name}, allowing retry despite visited_agents")
+            
+            if agent_key in visited_agents and not is_error_output:
                 # We've already processed this agent's output - end to prevent loop
                 return "end"
             
             # Track this agent visit (keep last 5 to prevent loops)
-            visited_agents.append(agent_key)
-            if len(visited_agents) > 5:
-                visited_agents = visited_agents[-5:]  # Keep only last 5
-            state["visited_agents"] = visited_agents
+            # But don't track error outputs - allow them to be retried
+            if not is_error_output:
+                visited_agents.append(agent_key)
+                if len(visited_agents) > 5:
+                    visited_agents = visited_agents[-5:]  # Keep only last 5
+                state["visited_agents"] = visited_agents
             
             # If Supervisor says we need another agent, route there (Table 3 alignment)
             if next_agent == "Strategy":

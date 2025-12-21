@@ -1970,10 +1970,36 @@ else:
     # Case detail view - world-class reference design
     selected_case = st.session_state.cases[st.session_state.selected_case_id]
     
-    # Back button
-    if st.button("← Back to Cases", use_container_width=False):
-        st.session_state.selected_case_id = None
-        st.rerun()
+    # Back button and case actions
+    col_back, col_reset = st.columns([3, 1])
+    with col_back:
+        if st.button("← Back to Cases", use_container_width=False):
+            st.session_state.selected_case_id = None
+            st.rerun()
+    with col_reset:
+        if st.button("🔄 Reset Case State", use_container_width=False, help="Clear cached errors and workflow state for this case"):
+            # Clear any cached results for this case
+            from utils.caching import cache
+            # Clear cache entries for this case (approximate - clear all since cache doesn't have case-level clear)
+            cache.clear()
+            
+            # Reset workflow state if present
+            if "workflow_state" in st.session_state and st.session_state.workflow_state.get("case_summary", {}).get("case_id") == selected_case.case_id:
+                st.session_state.workflow_state = None
+            
+            # Reset case latest output if it's an error
+            if selected_case.latest_agent_output:
+                from utils.schemas import SupplierShortlist
+                if isinstance(selected_case.latest_agent_output, SupplierShortlist):
+                    if (len(selected_case.latest_agent_output.shortlisted_suppliers) == 0 and
+                        ("error" in selected_case.latest_agent_output.comparison_summary.lower() or
+                         "fallback" in selected_case.latest_agent_output.comparison_summary.lower())):
+                        # Clear error output
+                        selected_case.latest_agent_output = None
+                        selected_case.latest_agent_name = None
+            
+            st.success("✅ Case state reset! Cache cleared. You can now retry the workflow.")
+            st.rerun()
     
     # Two column layout: Case Details (wider center), Sourcing Copilot (compact right)
     col_center, col_right = st.columns([2.8, 1.2], gap="small")
