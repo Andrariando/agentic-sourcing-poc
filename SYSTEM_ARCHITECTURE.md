@@ -24,6 +24,7 @@ The system is designed around three core principles:
 3. [Intent Classification](#3-intent-classification)
 4. [Collaboration Mode](#4-collaboration-mode)
 5. [Execution Constraints](#5-execution-constraints)
+   - 5.1 [Constraint Compliance Invariant](#51-constraint-compliance-invariant-critical) ⚠️ **CRITICAL**
 6. [Execution Mode & Workflow](#6-execution-mode--workflow)
 7. [Agent Architecture](#7-agent-architecture)
 8. [Supervisor & Orchestration](#8-supervisor--orchestration)
@@ -332,6 +333,123 @@ The ConstraintExtractor uses **pattern matching only** (no LLM):
 | **Content** | Decisions made, agent outputs, user intents | User preferences, requirements, constraints |
 | **Usage** | Injected for context | Injected as hard requirements |
 | **Override** | Cannot override logic | MUST override default logic |
+
+---
+
+## 5.1 Constraint Compliance Invariant (CRITICAL)
+
+**File:** `utils/constraint_compliance.py`
+
+### Architectural Invariant (Non-Negotiable)
+
+> **No execution output is valid unless it explicitly accounts for every active ExecutionConstraint.**
+
+"Accounting for" means:
+- Either **satisfying** the constraint
+- OR **explicitly explaining** why it cannot be satisfied
+
+**SILENCE IS FORBIDDEN.**
+
+### ConstraintComplianceChecker
+
+A deterministic checker that runs **after every agent execution** and **before Supervisor approval**:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     AGENT EXECUTION                              │
+│                           │                                      │
+│                           ▼                                      │
+│              ┌────────────────────────┐                          │
+│              │   Agent Output         │                          │
+│              └────────────────────────┘                          │
+│                           │                                      │
+│                           ▼                                      │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │         CONSTRAINT COMPLIANCE CHECKER                     │   │
+│  │         (Deterministic, Rule-based, No LLM)               │   │
+│  │                                                           │   │
+│  │   For each active constraint:                             │   │
+│  │   ✓ Check if output references the constraint             │   │
+│  │   ✓ OR justifies why it doesn't apply                     │   │
+│  │                                                           │   │
+│  │   Result: COMPLIANT | NON_COMPLIANT | NO_CONSTRAINTS       │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                           │                                      │
+│           ┌───────────────┴───────────────┐                      │
+│           │                               │                      │
+│           ▼                               ▼                      │
+│    ┌────────────┐                  ┌────────────┐                │
+│    │ COMPLIANT  │                  │NON_COMPLIANT│                │
+│    │            │                  │             │                │
+│    │ Proceed    │                  │ Add warning │                │
+│    │ normally   │                  │ to response │                │
+│    └────────────┘                  └────────────┘                │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Mandatory Behavioral Reflection
+
+When constraints exist, the chatbot **MUST** acknowledge them **before** presenting a recommendation:
+
+**Example (constraints exist):**
+```
+**Based on your stated preferences:**
+Since disruption is acceptable and price is the priority, I've factored these into my analysis.
+
+---
+
+I've completed my analysis for this case and have a recommendation ready.
+
+**Recommended Strategy: RFx** (confidence: 85%)
+...
+```
+
+**Example (unchanged recommendation):**
+```
+**Based on your stated preferences:**
+Since disruption is acceptable, I've factored this into my analysis.
+
+_Even with these preferences, the recommendation remains RFx because 
+the competitive process offers the best price leverage regardless of 
+disruption tolerance._
+
+---
+
+**Recommended Strategy: RFx** (confidence: 85%)
+...
+```
+
+### Compliance Status in State
+
+The workflow state tracks compliance:
+
+```python
+PipelineState:
+  constraint_compliance_status: "COMPLIANT" | "NON_COMPLIANT" | "NO_CONSTRAINTS"
+  constraint_violations: List[str]  # What wasn't addressed
+  constraint_reflection: str  # Mandatory acknowledgment text
+```
+
+### What Gets Checked
+
+| Constraint | Keywords Checked in Output |
+|------------|---------------------------|
+| `disruption_tolerance = HIGH` | "disruption", "aggressive", "competitive", "switch" |
+| `disruption_tolerance = LOW` | "stability", "continuity", "conservative", "incumbent" |
+| `risk_appetite = HIGH` | "risk", "aggressive", "bold", "opportunity" |
+| `risk_appetite = LOW` | "conservative", "safe", "caution", "minimize risk" |
+| `time_sensitivity = HIGH` | "urgent", "fast", "immediate", "speed" |
+| `priority_criteria = ["price"]` | "price" must appear in output |
+| `excluded_suppliers = ["X"]` | "X" must NOT appear in shortlist |
+
+### Trust-Building Behavior
+
+This invariant ensures:
+
+1. **User feels heard** — Their stated preferences are visibly acknowledged
+2. **Transparency** — If constraints can't be satisfied, user knows why
+3. **No silent repetition** — Same recommendation requires justification
+4. **Auditable** — Compliance status is logged in state
 
 ---
 
@@ -772,6 +890,7 @@ if contradictions:
 | `utils/collaboration_templates.py` | DTP-specific templates and questions |
 | `utils/execution_constraints.py` | Binding constraint model |
 | `utils/constraint_extractor.py` | Deterministic constraint extraction |
+| `utils/constraint_compliance.py` | Constraint compliance checker (enforcement invariant) |
 
 ### State & Memory
 

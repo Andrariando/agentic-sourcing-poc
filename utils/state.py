@@ -64,4 +64,11 @@ class PipelineState(TypedDict):
     # Binding constraints extracted from user collaboration inputs.
     # These MUST be consumed by all decision agents and override default logic.
     execution_constraints: Optional[Any]  # ExecutionConstraints object
+    
+    # PHASE 3: Constraint Compliance Enforcement
+    # Tracks whether agent outputs properly address all active constraints.
+    # INVARIANT: No output is valid unless it explicitly accounts for every constraint.
+    constraint_compliance_status: Optional[str]  # "COMPLIANT" | "NON_COMPLIANT" | "NO_CONSTRAINTS"
+    constraint_violations: Optional[List[str]]  # List of constraint violations detected
+    constraint_reflection: Optional[str]  # Required acknowledgment text that MUST appear in response
 

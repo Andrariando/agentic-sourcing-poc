@@ -163,6 +163,8 @@ class StrategyRecommendation(BaseModel):
     risk_assessment: str = ""
     timeline_recommendation: str = ""
     decision_impact: DecisionImpact = DecisionImpact.MEDIUM
+    # PHASE 3: Constraint acknowledgments (mandatory when constraints exist)
+    constraint_acknowledgments: List[str] = Field(default_factory=list, description="Explicit acknowledgments of user constraints that shaped this recommendation")
 
 
 class SupplierShortlist(BaseModel):
@@ -176,6 +178,8 @@ class SupplierShortlist(BaseModel):
     top_choice_supplier_id: Optional[str] = None
     comparison_summary: str = ""
     decision_impact: DecisionImpact = DecisionImpact.MEDIUM
+    # PHASE 3: Constraint acknowledgments (mandatory when constraints exist)
+    constraint_acknowledgments: List[str] = Field(default_factory=list, description="Explicit acknowledgments of user constraints that shaped this evaluation")
 
 
 class NegotiationPlan(BaseModel):
@@ -190,6 +194,8 @@ class NegotiationPlan(BaseModel):
     timeline: str = ""
     risk_mitigation: List[str] = Field(default_factory=list)
     decision_impact: DecisionImpact = DecisionImpact.HIGH
+    # PHASE 3: Constraint acknowledgments
+    constraint_acknowledgments: List[str] = Field(default_factory=list, description="Explicit acknowledgments of user constraints that shaped this plan")
 
 
 class RFxDraft(BaseModel):
@@ -200,6 +206,8 @@ class RFxDraft(BaseModel):
     completeness_check: Dict[str, bool] = Field(default_factory=dict)  # Rule-based completeness checks
     template_source: str = ""  # Which template was used
     explanation: str = ""  # LLM explanation of intent and adaptations
+    # PHASE 3: Constraint acknowledgments
+    constraint_acknowledgments: List[str] = Field(default_factory=list, description="Explicit acknowledgments of user constraints that shaped this draft")
 
 
 class ContractExtraction(BaseModel):
@@ -212,6 +220,8 @@ class ContractExtraction(BaseModel):
     mapping_explanations: Dict[str, str] = Field(default_factory=dict)  # LLM explanations of term mappings
     inconsistencies: List[str] = Field(default_factory=list)  # Flagged inconsistencies
     template_guidance: str = ""  # Which template/clause library was used
+    # PHASE 3: Constraint acknowledgments
+    constraint_acknowledgments: List[str] = Field(default_factory=list, description="Explicit acknowledgments of user constraints that shaped this extraction")
 
 
 class ImplementationPlan(BaseModel):
@@ -225,6 +235,8 @@ class ImplementationPlan(BaseModel):
     kpi_summary: Dict[str, Any] = Field(default_factory=dict)  # LLM-structured KPI explanation
     explanation: str = ""  # LLM explanation of impacts and KPIs
     playbook_source: str = ""  # Which rollout playbook was used
+    # PHASE 3: Constraint acknowledgments
+    constraint_acknowledgments: List[str] = Field(default_factory=list, description="Explicit acknowledgments of user constraints that shaped this plan")
 
 
 class CaseTrigger(BaseModel):

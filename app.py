@@ -1592,13 +1592,16 @@ def run_copilot(case_id: str, user_intent: str, use_tier_2: bool = False):
                 assistant_response += "\nOnce you respond, I'll route your answer through the Supervisor so we stay within policy."
             else:
                 # PHASE 2: Use ResponseAdapter for unknown output types
+                # PHASE 3: Include constraint reflection and violations (MANDATORY)
                 assistant_response = response_adapter.generate_response(
                     case.latest_agent_output,
                     case_state_dict,
                     memory=case_memory,
                     user_intent=user_intent,
                     waiting_for_human=final_state.get("waiting_for_human", False),
-                    contradictions=detected_contradictions
+                    contradictions=detected_contradictions,
+                    constraint_reflection=final_state.get("constraint_reflection"),
+                    constraint_violations=final_state.get("constraint_violations")
                 )
         
         # PHASE 2 - OBJECTIVE E: Add contradiction warnings to response

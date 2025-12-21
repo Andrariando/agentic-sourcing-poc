@@ -48,10 +48,14 @@ class ResponseAdapter:
         memory: Optional[CaseMemory] = None,
         user_intent: Optional[str] = None,
         waiting_for_human: bool = False,
-        contradictions: Optional[List[str]] = None
+        contradictions: Optional[List[str]] = None,
+        constraint_reflection: Optional[str] = None,
+        constraint_violations: Optional[List[str]] = None
     ) -> str:
         """
         Generate a natural language response from structured output.
+        
+        PHASE 3: Now includes mandatory constraint reflection when constraints exist.
         
         Args:
             output: The agent output (Pydantic model)
@@ -60,6 +64,8 @@ class ResponseAdapter:
             user_intent: What the user asked
             waiting_for_human: Whether HIL is required
             contradictions: Any detected contradictions to surface
+            constraint_reflection: MANDATORY reflection on user constraints (must appear before recommendation)
+            constraint_violations: List of constraint violations to warn about
         
         Returns:
             Natural language response string
@@ -75,6 +81,15 @@ class ResponseAdapter:
         else:
             response = self._generate_fallback_response(output, output_type)
         
+        # PHASE 3: MANDATORY - Prepend constraint reflection (before the recommendation)
+        # This is non-negotiable: when constraints exist, they must be acknowledged
+        if constraint_reflection:
+            response = constraint_reflection + "\n\n---\n\n" + response
+        
+        # PHASE 3: Add constraint violation warnings if any
+        if constraint_violations:
+            response = self._add_constraint_violation_warning(response, constraint_violations)
+        
         # Add contradiction warning if any
         if contradictions:
             response = self._add_contradiction_warning(response, contradictions)
@@ -84,6 +99,19 @@ class ResponseAdapter:
             response = self._add_hil_prompt(response, output_type)
         
         return response
+    
+    def _add_constraint_violation_warning(self, response: str, violations: List[str]) -> str:
+        """
+        Add constraint violation warning to response.
+        
+        PHASE 3: This is a BLOCKING warning - constraints must be addressed.
+        """
+        warning = "\n\n---\n⚠️ **Constraint Compliance Issue:**\n"
+        warning += "The following user preferences were not explicitly addressed:\n"
+        for v in violations[:5]:
+            warning += f"• {v}\n"
+        warning += "\n_Please note: Your stated preferences should shape this recommendation. If the output doesn't reflect them, please let me know and I'll adjust._"
+        return response + warning
     
     def _handle_strategy(
         self,

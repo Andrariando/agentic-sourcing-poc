@@ -29,6 +29,12 @@ from utils.agent_validator import validate_agent_output, ValidationResult
 from utils.contradiction_detector import detect_contradictions, Contradiction
 from utils.case_memory import CaseMemory, update_memory_from_workflow_result
 from utils.execution_constraints import ExecutionConstraints
+from utils.constraint_compliance import (
+    get_constraint_compliance_checker,
+    generate_constraint_reflection,
+    ComplianceStatus,
+    ComplianceResult,
+)
 from datetime import datetime
 import json
 
@@ -101,6 +107,54 @@ def _is_error_output(output) -> bool:
         )
     
     return False
+
+
+def _check_constraint_compliance(
+    state: PipelineState,
+    agent_output: Any,
+    agent_name: str
+) -> Tuple[ComplianceResult, str]:
+    """
+    PHASE 3: Check if agent output complies with all active ExecutionConstraints.
+    
+    ARCHITECTURAL INVARIANT:
+    No execution output is valid unless it explicitly accounts for every active constraint.
+    Silence is forbidden.
+    
+    Returns:
+        Tuple of (ComplianceResult, required_reflection_text)
+    """
+    execution_constraints = state.get("execution_constraints")
+    
+    if not execution_constraints:
+        return ComplianceResult(
+            status=ComplianceStatus.NO_CONSTRAINTS,
+            violations=[],
+            addressed_constraints=[],
+            required_acknowledgment="",
+            blocking=False
+        ), ""
+    
+    # Run compliance check
+    checker = get_constraint_compliance_checker()
+    result = checker.check_compliance(agent_output, execution_constraints, agent_name)
+    
+    # Generate required reflection text
+    reflection = generate_constraint_reflection(execution_constraints)
+    
+    # Log compliance result
+    if result.status == ComplianceStatus.NON_COMPLIANT:
+        print(f"⚠️ COMPLIANCE VIOLATION [{agent_name}]: {len(result.violations)} constraint(s) not addressed")
+        for v in result.violations:
+            print(f"   - {v.constraint_name}: {v.expected_behavior}")
+    elif result.status == ComplianceStatus.COMPLIANT:
+        print(f"✅ COMPLIANT [{agent_name}]: All {len(result.addressed_constraints)} constraint(s) addressed")
+    
+    return result, reflection
+
+
+# Import Tuple for type hint
+from typing import Tuple
 
 
 def get_supervisor():
@@ -594,6 +648,12 @@ def strategy_node(state: PipelineState) -> PipelineState:
         state["latest_agent_output"] = recommendation
         state["latest_agent_name"] = "Strategy"
         
+        # PHASE 3: Run constraint compliance check (MANDATORY)
+        compliance_result, reflection = _check_constraint_compliance(state, recommendation, "Strategy")
+        state["constraint_compliance_status"] = compliance_result.status.value
+        state["constraint_violations"] = [f"{v.constraint_name}: {v.expected_behavior}" for v in compliance_result.violations]
+        state["constraint_reflection"] = reflection
+
     except Exception as e:
         # Fallback
         fallback = strategy_agent.create_fallback_output(
@@ -604,7 +664,7 @@ def strategy_node(state: PipelineState) -> PipelineState:
         state["latest_agent_output"] = fallback
         state["latest_agent_name"] = "Strategy"
         state["error_state"] = {"error": str(e), "used_fallback": True}
-    
+
     return state
 
 
@@ -680,6 +740,12 @@ def supplier_evaluation_node(state: PipelineState) -> PipelineState:
         state["latest_agent_output"] = shortlist
         state["latest_agent_name"] = "SupplierEvaluation"
         
+        # PHASE 3: Run constraint compliance check (MANDATORY)
+        compliance_result, reflection = _check_constraint_compliance(state, shortlist, "SupplierEvaluation")
+        state["constraint_compliance_status"] = compliance_result.status.value
+        state["constraint_violations"] = [f"{v.constraint_name}: {v.expected_behavior}" for v in compliance_result.violations]
+        state["constraint_reflection"] = reflection
+
     except Exception as e:
         print(f"⚠️ SupplierEvaluation workflow node exception: {type(e).__name__}: {str(e)}")
         fallback = supplier_agent.create_fallback_output(
@@ -691,7 +757,7 @@ def supplier_evaluation_node(state: PipelineState) -> PipelineState:
         state["latest_agent_output"] = fallback
         state["latest_agent_name"] = "SupplierEvaluation"
         state["error_state"] = {"error": str(e), "used_fallback": True}
-    
+
     return state
 
 
@@ -774,6 +840,12 @@ def negotiation_node(state: PipelineState) -> PipelineState:
         state["latest_agent_output"] = plan
         state["latest_agent_name"] = "NegotiationSupport"
         
+        # PHASE 3: Run constraint compliance check (MANDATORY)
+        compliance_result, reflection = _check_constraint_compliance(state, plan, "NegotiationSupport")
+        state["constraint_compliance_status"] = compliance_result.status.value
+        state["constraint_violations"] = [f"{v.constraint_name}: {v.expected_behavior}" for v in compliance_result.violations]
+        state["constraint_reflection"] = reflection
+
     except Exception as e:
         fallback = negotiation_agent.create_fallback_output(
             NegotiationPlan,
@@ -784,7 +856,7 @@ def negotiation_node(state: PipelineState) -> PipelineState:
         state["latest_agent_output"] = fallback
         state["latest_agent_name"] = "NegotiationSupport"
         state["error_state"] = {"error": str(e), "used_fallback": True}
-    
+
     return state
 
 
@@ -953,6 +1025,12 @@ def rfx_draft_node(state: PipelineState) -> PipelineState:
         state["latest_agent_output"] = rfx_draft
         state["latest_agent_name"] = "RFxDraft"
         
+        # PHASE 3: Run constraint compliance check (MANDATORY)
+        compliance_result, reflection = _check_constraint_compliance(state, rfx_draft, "RFxDraft")
+        state["constraint_compliance_status"] = compliance_result.status.value
+        state["constraint_violations"] = [f"{v.constraint_name}: {v.expected_behavior}" for v in compliance_result.violations]
+        state["constraint_reflection"] = reflection
+
     except Exception as e:
         fallback = rfx_agent.create_fallback_output(
             RFxDraft,
@@ -962,7 +1040,7 @@ def rfx_draft_node(state: PipelineState) -> PipelineState:
         state["latest_agent_output"] = fallback
         state["latest_agent_name"] = "RFxDraft"
         state["error_state"] = {"error": str(e), "used_fallback": True}
-    
+
     return state
 
 
@@ -1047,6 +1125,12 @@ def contract_support_node(state: PipelineState) -> PipelineState:
         state["latest_agent_output"] = extraction
         state["latest_agent_name"] = "ContractSupport"
         
+        # PHASE 3: Run constraint compliance check (MANDATORY)
+        compliance_result, reflection = _check_constraint_compliance(state, extraction, "ContractSupport")
+        state["constraint_compliance_status"] = compliance_result.status.value
+        state["constraint_violations"] = [f"{v.constraint_name}: {v.expected_behavior}" for v in compliance_result.violations]
+        state["constraint_reflection"] = reflection
+
     except Exception as e:
         fallback = contract_agent.create_fallback_output(
             ContractExtraction,
@@ -1057,7 +1141,7 @@ def contract_support_node(state: PipelineState) -> PipelineState:
         state["latest_agent_output"] = fallback
         state["latest_agent_name"] = "ContractSupport"
         state["error_state"] = {"error": str(e), "used_fallback": True}
-    
+
     return state
 
 
@@ -1142,6 +1226,12 @@ def implementation_node(state: PipelineState) -> PipelineState:
         state["latest_agent_output"] = implementation_plan
         state["latest_agent_name"] = "Implementation"
         
+        # PHASE 3: Run constraint compliance check (MANDATORY)
+        compliance_result, reflection = _check_constraint_compliance(state, implementation_plan, "Implementation")
+        state["constraint_compliance_status"] = compliance_result.status.value
+        state["constraint_violations"] = [f"{v.constraint_name}: {v.expected_behavior}" for v in compliance_result.violations]
+        state["constraint_reflection"] = reflection
+
     except Exception as e:
         fallback = implementation_agent.create_fallback_output(
             ImplementationPlan,
@@ -1152,7 +1242,7 @@ def implementation_node(state: PipelineState) -> PipelineState:
         state["latest_agent_output"] = fallback
         state["latest_agent_name"] = "Implementation"
         state["error_state"] = {"error": str(e), "used_fallback": True}
-    
+
     return state
 
 
