@@ -1488,24 +1488,24 @@ def create_workflow_graph():
                 return "wait_for_human"
             
             # Loop prevention: Don't route to same agent-output combination twice
-            # BUT: Allow retry if previous output was an error/fallback
             agent_key = f"{latest_agent_name}_{type(latest_output).__name__}"
             is_error_output = _is_error_output(latest_output)
             
+            # If error output detected, END the workflow immediately
+            # The error will be shown in UI - user can fix issue and use "Reset Case State" to retry
             if is_error_output:
-                print(f"🔄 Detected error output from {latest_agent_name}, allowing retry despite visited_agents")
+                print(f"⚠️ Error output detected from {latest_agent_name} - ending workflow to show error to user")
+                return "end"
             
-            if agent_key in visited_agents and not is_error_output:
+            if agent_key in visited_agents:
                 # We've already processed this agent's output - end to prevent loop
                 return "end"
             
             # Track this agent visit (keep last 5 to prevent loops)
-            # But don't track error outputs - allow them to be retried
-            if not is_error_output:
-                visited_agents.append(agent_key)
-                if len(visited_agents) > 5:
-                    visited_agents = visited_agents[-5:]  # Keep only last 5
-                state["visited_agents"] = visited_agents
+            visited_agents.append(agent_key)
+            if len(visited_agents) > 5:
+                visited_agents = visited_agents[-5:]  # Keep only last 5
+            state["visited_agents"] = visited_agents
             
             # If Supervisor says we need another agent, route there (Table 3 alignment)
             if next_agent == "Strategy":
