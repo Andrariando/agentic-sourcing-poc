@@ -145,6 +145,57 @@ TEXT_COLOR = "#4A4A4A"
 SEPARATOR_COLOR = "#D9D9D9"
 BG_COLOR = "#FFFFFF"
 
+
+def is_agent_output_error(output) -> tuple[bool, str]:
+    """
+    Detect if an agent output is an error/fallback that needs special handling.
+    Returns (is_error, error_message).
+    """
+    if output is None:
+        return False, ""
+    
+    # Check for SupplierShortlist errors
+    if isinstance(output, SupplierShortlist):
+        if len(output.shortlisted_suppliers) == 0:
+            if ("error" in output.comparison_summary.lower() or
+                "fallback" in output.comparison_summary.lower() or
+                "unable" in output.recommendation.lower() or
+                "LLM" in output.comparison_summary):
+                return True, output.recommendation
+        return False, ""
+    
+    # Check for StrategyRecommendation errors
+    if isinstance(output, StrategyRecommendation):
+        if output.rationale and any("fallback" in r.lower() or "error" in r.lower() for r in output.rationale):
+            return True, "; ".join(output.rationale)
+        return False, ""
+    
+    # Check for NegotiationPlan errors
+    if isinstance(output, NegotiationPlan):
+        if output.negotiation_objectives and any("fallback" in obj.lower() for obj in output.negotiation_objectives):
+            return True, "Negotiation plan generation failed - fallback used"
+        return False, ""
+    
+    # Check for RFxDraft errors
+    if isinstance(output, RFxDraft):
+        if len(output.rfx_sections) == 0 or "fallback" in output.explanation.lower() or "error" in output.explanation.lower():
+            return True, output.explanation
+        return False, ""
+    
+    # Check for ContractExtraction errors
+    if isinstance(output, ContractExtraction):
+        if len(output.extracted_terms) == 0 or any("fallback" in inc.lower() for inc in output.inconsistencies):
+            return True, "Contract extraction failed - fallback used"
+        return False, ""
+    
+    # Check for ImplementationPlan errors
+    if isinstance(output, ImplementationPlan):
+        if len(output.rollout_steps) == 0 or "fallback" in output.explanation.lower() or "error" in output.explanation.lower():
+            return True, output.explanation
+        return False, ""
+    
+    return False, ""
+
 # Page config
 st.set_page_config(
     page_title="Agentic Sourcing Assistant",
@@ -1291,16 +1342,20 @@ def run_copilot(case_id: str, user_intent: str, use_tier_2: bool = False):
         assistant_response = ""
         if case.latest_agent_output:
             if isinstance(case.latest_agent_output, StrategyRecommendation):
-                # Use richer, stage‑aware, collaborative phrasing
-                assistant_response = build_strategy_chat_response(case, user_intent)
+                # Check for error first
+                is_error, error_msg = is_agent_output_error(case.latest_agent_output)
+                if is_error:
+                    assistant_response = "⚠️ I encountered an issue while generating the strategy recommendation. "
+                    assistant_response += f"**Error:** {error_msg}\n\n"
+                    assistant_response += "Please check your API configuration and try again."
+                else:
+                    # Use richer, stage‑aware, collaborative phrasing
+                    assistant_response = build_strategy_chat_response(case, user_intent)
             elif isinstance(case.latest_agent_output, SupplierShortlist):
                 supplier_count = len(case.latest_agent_output.shortlisted_suppliers)
                 
                 # Check if this is a fallback error response
-                is_error = (supplier_count == 0 and 
-                           ("LLM" in case.latest_agent_output.comparison_summary or 
-                            "error" in case.latest_agent_output.comparison_summary.lower() or
-                            "Fallback" in case.latest_agent_output.comparison_summary))
+                is_error, error_msg = is_agent_output_error(case.latest_agent_output)
                 
                 if is_error:
                     # Error case - provide helpful troubleshooting message
@@ -1328,36 +1383,64 @@ def run_copilot(case_id: str, user_intent: str, use_tier_2: bool = False):
                         assistant_response += f" {case.latest_agent_output.comparison_summary[:100]}..."
                     assistant_response += " Would you like me to prepare a detailed comparison or start the negotiation process?"
             elif isinstance(case.latest_agent_output, RFxDraft):
-                sections_count = len(case.latest_agent_output.rfx_sections)
-                completeness = case.latest_agent_output.completeness_check
-                assistant_response = f"I've created an RFx draft with **{sections_count} sections** based on the template and category requirements."
-                if completeness.get("all_sections_filled"):
-                    assistant_response += " All required sections have been filled."
+                is_error, error_msg = is_agent_output_error(case.latest_agent_output)
+                if is_error:
+                    assistant_response = "⚠️ I encountered an issue while creating the RFx draft. "
+                    assistant_response += f"**Error:** {error_msg}\n\n"
+                    assistant_response += "**Possible causes:**\n"
+                    assistant_response += "• OpenAI API key not configured or invalid\n"
+                    assistant_response += "• Network connectivity issue\n"
+                    assistant_response += "• API rate limit reached\n\n"
+                    assistant_response += "Please check your API configuration and try again."
                 else:
-                    assistant_response += " Some sections may need additional review."
-                assistant_response += " The draft is ready for your review. Would you like me to proceed with supplier evaluation next?"
+                    sections_count = len(case.latest_agent_output.rfx_sections)
+                    completeness = case.latest_agent_output.completeness_check
+                    assistant_response = f"I've created an RFx draft with **{sections_count} sections** based on the template and category requirements."
+                    if completeness.get("all_sections_filled"):
+                        assistant_response += " All required sections have been filled."
+                    else:
+                        assistant_response += " Some sections may need additional review."
+                    assistant_response += " The draft is ready for your review. Would you like me to proceed with supplier evaluation next?"
             elif isinstance(case.latest_agent_output, NegotiationPlan):
-                objectives_count = len(case.latest_agent_output.negotiation_objectives)
-                assistant_response = f"Excellent! I've prepared a comprehensive negotiation plan with **{objectives_count} key objectives**."
-                if case.latest_agent_output.leverage_points:
-                    assistant_response += f" I've identified several leverage points we can use: {', '.join(case.latest_agent_output.leverage_points[:2])}."
-                assistant_response += " The plan is ready for your review. Policy still requires your approval before any negotiation is initiated."
+                is_error, error_msg = is_agent_output_error(case.latest_agent_output)
+                if is_error:
+                    assistant_response = "⚠️ I encountered an issue while creating the negotiation plan. "
+                    assistant_response += f"**Error:** {error_msg}\n\n"
+                    assistant_response += "Please check your API configuration and try again."
+                else:
+                    objectives_count = len(case.latest_agent_output.negotiation_objectives)
+                    assistant_response = f"Excellent! I've prepared a comprehensive negotiation plan with **{objectives_count} key objectives**."
+                    if case.latest_agent_output.leverage_points:
+                        assistant_response += f" I've identified several leverage points we can use: {', '.join(case.latest_agent_output.leverage_points[:2])}."
+                    assistant_response += " The plan is ready for your review. Policy still requires your approval before any negotiation is initiated."
             elif isinstance(case.latest_agent_output, ContractExtraction):
-                terms_count = len(case.latest_agent_output.extracted_terms)
-                validation = case.latest_agent_output.validation_results
-                assistant_response = f"I've extracted **{terms_count} contract terms** using template-guided extraction."
-                if validation.get("required_fields_present"):
-                    assistant_response += " All required fields are present."
-                if case.latest_agent_output.inconsistencies:
-                    assistant_response += f" I've flagged {len(case.latest_agent_output.inconsistencies)} inconsistencies that need your review."
-                assistant_response += " The extracted terms are ready for contracting. Would you like me to proceed with the implementation plan?"
+                is_error, error_msg = is_agent_output_error(case.latest_agent_output)
+                if is_error:
+                    assistant_response = "⚠️ I encountered an issue while extracting contract terms. "
+                    assistant_response += f"**Error:** {error_msg}\n\n"
+                    assistant_response += "Please check your API configuration and try again."
+                else:
+                    terms_count = len(case.latest_agent_output.extracted_terms)
+                    validation = case.latest_agent_output.validation_results
+                    assistant_response = f"I've extracted **{terms_count} contract terms** using template-guided extraction."
+                    if validation.get("required_fields_present"):
+                        assistant_response += " All required fields are present."
+                    if case.latest_agent_output.inconsistencies:
+                        assistant_response += f" I've flagged {len(case.latest_agent_output.inconsistencies)} inconsistencies that need your review."
+                    assistant_response += " The extracted terms are ready for contracting. Would you like me to proceed with the implementation plan?"
             elif isinstance(case.latest_agent_output, ImplementationPlan):
-                steps_count = len(case.latest_agent_output.rollout_steps)
-                savings = case.latest_agent_output.projected_savings
-                assistant_response = f"I've created an implementation plan with **{steps_count} rollout steps**."
-                if savings:
-                    assistant_response += f" Projected savings: **${savings:,.2f}** (deterministic calculation)."
-                assistant_response += " The plan includes structured KPIs and impact explanations. Ready for your review and approval."
+                is_error, error_msg = is_agent_output_error(case.latest_agent_output)
+                if is_error:
+                    assistant_response = "⚠️ I encountered an issue while creating the implementation plan. "
+                    assistant_response += f"**Error:** {error_msg}\n\n"
+                    assistant_response += "Please check your API configuration and try again."
+                else:
+                    steps_count = len(case.latest_agent_output.rollout_steps)
+                    savings = case.latest_agent_output.projected_savings
+                    assistant_response = f"I've created an implementation plan with **{steps_count} rollout steps**."
+                    if savings:
+                        assistant_response += f" Projected savings: **${savings:,.2f}** (deterministic calculation)."
+                    assistant_response += " The plan includes structured KPIs and impact explanations. Ready for your review and approval."
             elif isinstance(case.latest_agent_output, ClarificationRequest):
                 # Case Clarifier Agent output: render as natural follow-up questions,
                 # not as an error. This is a collaboration request, not a failure.
@@ -1984,19 +2067,18 @@ else:
             cache.clear()
             
             # Reset workflow state if present
-            if "workflow_state" in st.session_state and st.session_state.workflow_state.get("case_summary", {}).get("case_id") == selected_case.case_id:
-                st.session_state.workflow_state = None
+            if "workflow_state" in st.session_state and st.session_state.workflow_state is not None:
+                workflow_case_summary = st.session_state.workflow_state.get("case_summary", {})
+                if workflow_case_summary and workflow_case_summary.get("case_id") == selected_case.case_id:
+                    st.session_state.workflow_state = None
             
             # Reset case latest output if it's an error
             if selected_case.latest_agent_output:
-                from utils.schemas import SupplierShortlist
-                if isinstance(selected_case.latest_agent_output, SupplierShortlist):
-                    if (len(selected_case.latest_agent_output.shortlisted_suppliers) == 0 and
-                        ("error" in selected_case.latest_agent_output.comparison_summary.lower() or
-                         "fallback" in selected_case.latest_agent_output.comparison_summary.lower())):
-                        # Clear error output
-                        selected_case.latest_agent_output = None
-                        selected_case.latest_agent_name = None
+                is_error, _ = is_agent_output_error(selected_case.latest_agent_output)
+                if is_error:
+                    # Clear error output
+                    selected_case.latest_agent_output = None
+                    selected_case.latest_agent_name = None
             
             st.success("✅ Case state reset! Cache cleared. You can now retry the workflow.")
             st.rerun()

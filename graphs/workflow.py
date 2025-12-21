@@ -36,6 +36,72 @@ import json
 _agent_cache = {}
 
 
+def _is_error_output(output) -> bool:
+    """
+    Detect if an agent output is an error/fallback that should allow retry.
+    This prevents loop prevention from blocking retries of failed operations.
+    
+    Returns True if the output appears to be a fallback/error output.
+    """
+    if output is None:
+        return False
+    
+    # Check for SupplierShortlist errors
+    if isinstance(output, SupplierShortlist):
+        return (
+            len(output.shortlisted_suppliers) == 0 and
+            ("error" in output.comparison_summary.lower() or
+             "fallback" in output.comparison_summary.lower() or
+             "unable" in output.recommendation.lower())
+        )
+    
+    # Check for StrategyRecommendation errors
+    if isinstance(output, StrategyRecommendation):
+        return (
+            output.confidence < 0.5 and
+            any("fallback" in r.lower() or "error" in r.lower() for r in (output.rationale or []))
+        )
+    
+    # Check for NegotiationPlan errors
+    if isinstance(output, NegotiationPlan):
+        return (
+            len(output.negotiation_objectives) == 0 or
+            any("fallback" in obj.lower() for obj in output.negotiation_objectives)
+        )
+    
+    # Check for RFxDraft errors
+    if isinstance(output, RFxDraft):
+        return (
+            len(output.rfx_sections) == 0 or
+            "fallback" in output.explanation.lower() or
+            "error" in output.explanation.lower()
+        )
+    
+    # Check for ContractExtraction errors
+    if isinstance(output, ContractExtraction):
+        return (
+            len(output.extracted_terms) == 0 or
+            any("fallback" in inc.lower() for inc in output.inconsistencies)
+        )
+    
+    # Check for ImplementationPlan errors
+    if isinstance(output, ImplementationPlan):
+        return (
+            len(output.rollout_steps) == 0 or
+            "fallback" in output.explanation.lower() or
+            "error" in output.explanation.lower()
+        )
+    
+    # Check for SignalAssessment errors
+    if isinstance(output, SignalAssessment):
+        return (
+            "fallback" in output.assessment.lower() or
+            "unable" in output.assessment.lower()
+        )
+    
+    return False
+
+
 def get_supervisor():
     """Get or create supervisor agent"""
     if "supervisor" not in _agent_cache:
