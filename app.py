@@ -47,6 +47,8 @@ from graphs.workflow import get_workflow_graph
 from agents.signal_agent import SignalInterpretationAgent
 from utils.response_adapter import get_response_adapter
 from utils.case_memory import CaseMemory, create_case_memory, update_memory_from_workflow_result
+from utils.intent_classifier import classify_intent, is_mid_stage_interruption, IntentClassification
+from utils.collaboration_engine import get_collaboration_engine
 
 # Simple parser for HIL decisions issued via chat
 def parse_hil_decision(user_intent: str) -> Optional[str]:
@@ -1186,6 +1188,108 @@ def run_copilot(case_id: str, user_intent: str, use_tier_2: bool = False):
                 }
             st.rerun()
             return
+    
+    # =========================================================================
+    # PHASE 3: COLLABORATION MODE - Intent Classification
+    # =========================================================================
+    # Classify user intent BEFORE workflow execution
+    # - COLLABORATIVE: Discussion, exploration, clarification (default when ambiguous)
+    # - EXECUTION: Run agents, produce recommendations, advance DTP
+    # =========================================================================
+    
+    intent_classification = classify_intent(user_intent)
+    
+    # Get or create case memory for collaboration context
+    if "case_memories" not in st.session_state:
+        st.session_state.case_memories = {}
+    if case_id not in st.session_state.case_memories:
+        st.session_state.case_memories[case_id] = create_case_memory(case_id)
+    case_memory = st.session_state.case_memories[case_id]
+    
+    # Check for mid-stage interruption (user pausing execution)
+    if is_mid_stage_interruption(user_intent):
+        # User is interrupting - enter Collaboration Mode
+        collab_engine = get_collaboration_engine()
+        response = collab_engine.generate_interruption_response(
+            user_intent=user_intent,
+            dtp_stage=case.dtp_stage,
+            case_memory=case_memory
+        )
+        
+        # Record in memory
+        case_memory.record_collaboration_turn(
+            user_input=user_intent,
+            topic="interruption",
+            insight="User paused for reconsideration"
+        )
+        
+        # Update chat response
+        if st.session_state.chat_responses[case_id] and st.session_state.chat_responses[case_id][-1].get("pending"):
+            st.session_state.chat_responses[case_id][-1] = {
+                "user": user_intent,
+                "assistant": response,
+                "timestamp": datetime.now().isoformat(),
+                "intent_mode": "COLLABORATIVE",
+                "interrupted": True
+            }
+        
+        st.session_state.cases[case_id] = case
+        st.rerun()
+        return
+    
+    # COLLABORATION MODE: Sense-making, discussion, clarification
+    # Does NOT advance DTP stage, invoke LangGraph, or call decision agents
+    if intent_classification.intent == "COLLABORATIVE":
+        collab_engine = get_collaboration_engine()
+        
+        # Generate collaborative response (bypasses Supervisor and LangGraph entirely)
+        response = collab_engine.generate_response(
+            user_input=user_intent,
+            case_id=case_id,
+            dtp_stage=case.dtp_stage,
+            case_memory=case_memory,
+            case_context={
+                "category_id": case.category_id,
+                "status": case.status,
+                "trigger_source": case.trigger_source
+            },
+            latest_agent_output=case.latest_agent_output
+        )
+        
+        # Record collaboration turn in memory
+        case_memory.record_collaboration_turn(
+            user_input=user_intent,
+            topic=case.dtp_stage,
+            insight=f"Collaborative discussion at {case.dtp_stage}"
+        )
+        
+        # Update chat response (no workflow executed)
+        if st.session_state.chat_responses[case_id] and st.session_state.chat_responses[case_id][-1].get("pending"):
+            st.session_state.chat_responses[case_id][-1] = {
+                "user": user_intent,
+                "assistant": response,
+                "timestamp": datetime.now().isoformat(),
+                "intent_mode": "COLLABORATIVE",
+                "classification_confidence": intent_classification.confidence,
+                "matched_patterns": intent_classification.matched_patterns[:3]
+            }
+        
+        case.user_intent = user_intent
+        st.session_state.cases[case_id] = case
+        st.rerun()
+        return
+    
+    # =========================================================================
+    # EXECUTION MODE: Run workflow, produce recommendations
+    # =========================================================================
+    # If we get here, intent is EXECUTION - proceed with existing workflow logic
+    # Record intent shift for audit trail
+    if case_memory.total_collaboration_turns > 0:
+        case_memory.record_intent_shift(
+            from_intent="COLLABORATIVE",
+            to_intent="EXECUTION",
+            trigger=user_intent
+        )
     
     # Check if this is a status/progress query (not action/recommendation)
     intent_lower = user_intent.lower()

@@ -51,14 +51,26 @@ class CaseMemory(BaseModel):
     key_user_intents: List[str] = Field(default_factory=list)  # Important user requests
     active_contradictions: List[str] = Field(default_factory=list)  # Unresolved conflicts
     
+    # Collaboration Mode tracking (PHASE 3)
+    collaboration_insights: List[str] = Field(default_factory=list)  # Key insights from discussions
+    user_preferences: Dict[str, Any] = Field(default_factory=dict)  # Captured user preferences
+    flagged_risks: List[str] = Field(default_factory=list)  # Risks identified during collaboration
+    key_decisions: List[str] = Field(default_factory=list)  # Decisions made during collaboration
+    last_collaboration_topic: Optional[str] = None  # Last topic discussed
+    intent_shifts: List[str] = Field(default_factory=list)  # Track COLLABORATIVE -> EXECUTION shifts
+    recommended_strategy: Optional[str] = None  # Alias for current_strategy (for collaboration engine)
+    
     # Counters
     total_agent_calls: int = 0
     total_human_decisions: int = 0
+    total_collaboration_turns: int = 0  # Count of collaborative exchanges
     
     # Bounds
     MAX_ENTRIES: int = 20  # Keep last 20 entries
     MAX_USER_INTENTS: int = 5  # Keep last 5 user intents
     MAX_HUMAN_DECISIONS: int = 10  # Keep last 10 decisions
+    MAX_COLLABORATION_INSIGHTS: int = 10  # Keep last 10 insights
+    MAX_KEY_DECISIONS: int = 10  # Keep last 10 decisions
     
     def add_entry(self, entry: MemoryEntry) -> None:
         """Add a memory entry, enforcing bounds."""
@@ -158,6 +170,101 @@ class CaseMemory(BaseModel):
         """Mark a contradiction as resolved (by human decision)."""
         if description in self.active_contradictions:
             self.active_contradictions.remove(description)
+    
+    def record_collaboration_turn(
+        self,
+        user_input: str,
+        topic: Optional[str] = None,
+        insight: Optional[str] = None,
+        preference: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """
+        Record a collaborative discussion turn (PHASE 3).
+        
+        This tracks collaborative interactions separately from execution.
+        """
+        self.total_collaboration_turns += 1
+        
+        # Record the collaborative turn
+        entry = MemoryEntry(
+            timestamp=datetime.now().isoformat(),
+            entry_type="collaboration",
+            agent_name="Collaboration",
+            summary=f"Discussion: {user_input[:60]}",
+            details={
+                "topic": topic,
+                "insight": insight,
+                "preference": preference
+            }
+        )
+        self.add_entry(entry)
+        
+        # Update topic
+        if topic:
+            self.last_collaboration_topic = topic
+        
+        # Record insight if captured
+        if insight:
+            self.collaboration_insights.append(insight)
+            if len(self.collaboration_insights) > self.MAX_COLLABORATION_INSIGHTS:
+                self.collaboration_insights = self.collaboration_insights[-self.MAX_COLLABORATION_INSIGHTS:]
+        
+        # Record preference if captured
+        if preference:
+            self.user_preferences.update(preference)
+    
+    def record_intent_shift(self, from_intent: str, to_intent: str, trigger: str) -> None:
+        """
+        Record when user shifts from COLLABORATIVE to EXECUTION mode.
+        
+        This provides audit trail of when execution was explicitly requested.
+        """
+        shift = f"{from_intent} → {to_intent}: {trigger[:50]}"
+        self.intent_shifts.append(shift)
+        
+        entry = MemoryEntry(
+            timestamp=datetime.now().isoformat(),
+            entry_type="intent_shift",
+            agent_name=None,
+            summary=f"Intent shift: {shift}",
+            details={"from": from_intent, "to": to_intent, "trigger": trigger}
+        )
+        self.add_entry(entry)
+    
+    def record_key_decision(self, decision: str, context: Optional[str] = None) -> None:
+        """Record a key decision made during collaboration."""
+        decision_text = decision if not context else f"{decision} ({context})"
+        self.key_decisions.append(decision_text)
+        if len(self.key_decisions) > self.MAX_KEY_DECISIONS:
+            self.key_decisions = self.key_decisions[-self.MAX_KEY_DECISIONS:]
+    
+    def record_flagged_risk(self, risk: str) -> None:
+        """Record a risk flagged during collaboration."""
+        if risk not in self.flagged_risks:
+            self.flagged_risks.append(risk)
+    
+    def get_collaboration_context(self) -> str:
+        """
+        Get collaboration-specific context for the Collaboration Engine.
+        
+        This is used by the Collaboration Engine to generate contextual responses.
+        """
+        lines = []
+        
+        if self.key_decisions:
+            lines.append(f"**Decisions made:** {'; '.join(self.key_decisions[-3:])}")
+        
+        if self.user_preferences:
+            prefs = [f"{k}: {v}" for k, v in list(self.user_preferences.items())[:3]]
+            lines.append(f"**User preferences:** {'; '.join(prefs)}")
+        
+        if self.flagged_risks:
+            lines.append(f"**Flagged risks:** {'; '.join(self.flagged_risks[-3:])}")
+        
+        if self.collaboration_insights:
+            lines.append(f"**Insights:** {'; '.join(self.collaboration_insights[-2:])}")
+        
+        return "\n".join(lines) if lines else ""
     
     def get_prompt_context(self) -> str:
         """
