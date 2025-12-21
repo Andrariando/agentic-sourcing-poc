@@ -1295,12 +1295,38 @@ def run_copilot(case_id: str, user_intent: str, use_tier_2: bool = False):
                 assistant_response = build_strategy_chat_response(case, user_intent)
             elif isinstance(case.latest_agent_output, SupplierShortlist):
                 supplier_count = len(case.latest_agent_output.shortlisted_suppliers)
-                assistant_response = f"Perfect! I've completed the supplier evaluation. I've identified and analyzed **{supplier_count} qualified suppliers** for this category."
-                if case.latest_agent_output.top_choice_supplier_id:
-                    assistant_response += f" Based on my analysis, **{case.latest_agent_output.top_choice_supplier_id}** stands out as the top recommendation."
-                if case.latest_agent_output.comparison_summary:
-                    assistant_response += f" {case.latest_agent_output.comparison_summary[:100]}..."
-                assistant_response += " Would you like me to prepare a detailed comparison or start the negotiation process?"
+                
+                # Check if this is a fallback error response
+                is_error = (supplier_count == 0 and 
+                           ("LLM" in case.latest_agent_output.comparison_summary or 
+                            "error" in case.latest_agent_output.comparison_summary.lower() or
+                            "Fallback" in case.latest_agent_output.comparison_summary))
+                
+                if is_error:
+                    # Error case - provide helpful troubleshooting message
+                    assistant_response = "⚠️ I encountered an issue while evaluating suppliers. "
+                    assistant_response += f"**Error:** {case.latest_agent_output.recommendation}\n\n"
+                    if "LLM" in case.latest_agent_output.comparison_summary:
+                        assistant_response += "**Details:** " + case.latest_agent_output.comparison_summary + "\n\n"
+                    assistant_response += "**Possible causes:**\n"
+                    assistant_response += "• OpenAI API key not configured or invalid\n"
+                    assistant_response += "• Network connectivity issue\n"
+                    assistant_response += "• API rate limit reached\n\n"
+                    assistant_response += "Please check your API configuration and try again."
+                elif supplier_count == 0:
+                    # No suppliers found but no error
+                    assistant_response = f"I've completed the supplier evaluation for **{case.category_id}**. "
+                    assistant_response += f"**{case.latest_agent_output.recommendation}**\n\n"
+                    assistant_response += "This may be due to strict eligibility requirements or performance thresholds. "
+                    assistant_response += "Would you like me to review the requirements or adjust the criteria?"
+                else:
+                    # Success case
+                    assistant_response = f"Perfect! I've completed the supplier evaluation. I've identified and analyzed **{supplier_count} qualified suppliers** for this category."
+                    if case.latest_agent_output.top_choice_supplier_id:
+                        assistant_response += f" Based on my analysis, **{case.latest_agent_output.top_choice_supplier_id}** stands out as the top recommendation."
+                    if case.latest_agent_output.comparison_summary:
+                        assistant_response += f" {case.latest_agent_output.comparison_summary[:100]}..."
+                    assistant_response += " Would you like me to prepare a detailed comparison or start the negotiation process?"
             elif isinstance(case.latest_agent_output, RFxDraft):
                 sections_count = len(case.latest_agent_output.rfx_sections)
                 completeness = case.latest_agent_output.completeness_check

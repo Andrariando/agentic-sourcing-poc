@@ -254,8 +254,18 @@ Provide ONLY valid JSON, no markdown formatting."""
             
             return shortlist, llm_input_payload, output_dict, input_tokens, output_tokens
         except Exception as e:
-            # Fallback
-            fallback = self.create_fallback_output(SupplierShortlist, case_summary.case_id, case_summary.category_id)
+            # Log the actual error for debugging
+            print(f"⚠️ SupplierEvaluationAgent LLM call failed: {type(e).__name__}: {str(e)}")
+            
+            # Fallback with more descriptive error message
+            fallback = SupplierShortlist(
+                case_id=case_summary.case_id,
+                category_id=case_summary.category_id,
+                shortlisted_suppliers=[],
+                evaluation_criteria=["Fallback evaluation"],
+                recommendation=f"Unable to evaluate suppliers due to LLM error: {type(e).__name__}",
+                comparison_summary=f"LLM processing error: {str(e)[:200]}"
+            )
 
             # #region debug_log_h2_fallback
             try:
@@ -272,6 +282,7 @@ Provide ONLY valid JSON, no markdown formatting."""
                             "case_id": case_summary.case_id,
                             "category_id": case_summary.category_id,
                             "exception_type": type(e).__name__,
+                            "exception_message": str(e),
                             "shortlisted_count": len(fallback.shortlisted_suppliers),
                             "recommendation": fallback.recommendation
                         },

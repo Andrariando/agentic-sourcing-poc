@@ -96,9 +96,18 @@ class BaseAgent:
                     return parsed, data, int(input_tokens), int(output_tokens)
                 else:
                     # Fallback to template
-                    raise ValueError(f"Failed to parse LLM response: {e}")
+                    raise ValueError(f"Failed to parse LLM response as JSON: {e}")
         except Exception as e:
-            raise ValueError(f"LLM call failed: {e}")
+            # Provide more specific error messages
+            error_str = str(e)
+            if "api_key" in error_str.lower() or "authentication" in error_str.lower():
+                raise ValueError(f"OpenAI API authentication failed. Please check your OPENAI_API_KEY environment variable. Error: {e}")
+            elif "rate" in error_str.lower() and "limit" in error_str.lower():
+                raise ValueError(f"OpenAI API rate limit reached. Please wait and try again. Error: {e}")
+            elif "connection" in error_str.lower() or "network" in error_str.lower():
+                raise ValueError(f"Network connection error. Please check your internet connection. Error: {e}")
+            else:
+                raise ValueError(f"LLM call failed: {e}")
     
     def create_fallback_output(self, schema: type[BaseModel], case_id: str, category_id: str) -> BaseModel:
         """Create fallback output when LLM fails"""
