@@ -1800,6 +1800,19 @@ if st.session_state.selected_case_id is None:
                 st.session_state.search_input = ""
                 st.rerun()
     
+    # Debug/Admin tools
+    with st.expander("🛠️ Debug Tools", expanded=False):
+        st.caption("Admin and debugging utilities")
+        col_debug1, col_debug2 = st.columns([1, 3])
+        with col_debug1:
+            if st.button("Clear Agent Cache", help="Clear all cached agent outputs. Use this if you're seeing stale or error results."):
+                from utils.caching import cache
+                cache.clear()
+                st.success("✅ Cache cleared! All agent outputs will be regenerated on next run.")
+                st.info("Note: You may need to restart your case workflow for changes to take effect.")
+        with col_debug2:
+            st.text(f"Session: {len(st.session_state.cases)} cases loaded")
+    
     st.markdown("<br>", unsafe_allow_html=True)
     
     # 7. Improve Case Exploration Affordance

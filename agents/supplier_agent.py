@@ -52,28 +52,44 @@ class SupplierEvaluationAgent(BaseAgent):
                 case_summary
             )
             if cache_meta.cache_hit and cached_value:
-                # #region debug_log_h1_cache_hit
-                try:
-                    from pathlib import Path
-                    debug_path = Path(r"c:\Users\Diandra Riando\OneDrive\Documents\Capstone\Cursor Code\.cursor\debug.log")
-                    with open(debug_path, "a", encoding="utf-8") as f:
-                        f.write(json.dumps({
-                            "sessionId": "debug-session",
-                            "runId": "pre-fix",
-                            "hypothesisId": "H2",
-                            "location": "agents/supplier_agent.py:evaluate_suppliers",
-                            "message": "SupplierEvaluationAgent cache hit",
-                            "data": {
-                                "case_id": case_summary.case_id,
-                                "category_id": case_summary.category_id,
-                                "cache_key": cache_meta.cache_key
-                            },
-                            "timestamp": __import__("time").time()
-                        }) + "\n")
-                except Exception:
-                    pass
-                # #endregion debug_log_h1_cache_hit
-                return cached_value, {}, {}
+                # Detect and skip cached error/fallback results
+                # Fallback results have 0 suppliers and error messages in comparison_summary
+                cached_shortlist = cached_value[0] if isinstance(cached_value, tuple) else cached_value
+                is_cached_error = (
+                    isinstance(cached_shortlist, SupplierShortlist) and
+                    len(cached_shortlist.shortlisted_suppliers) == 0 and
+                    ("error" in cached_shortlist.comparison_summary.lower() or
+                     "fallback" in cached_shortlist.comparison_summary.lower() or
+                     "LLM" in cached_shortlist.comparison_summary)
+                )
+                
+                if is_cached_error:
+                    # Skip cached error - retry the operation
+                    print(f"⚠️ Skipping cached error result for case {case_summary.case_id} - retrying operation")
+                else:
+                    # Valid cached result - return it
+                    # #region debug_log_h1_cache_hit
+                    try:
+                        from pathlib import Path
+                        debug_path = Path(r"c:\Users\Diandra Riando\OneDrive\Documents\Capstone\Cursor Code\.cursor\debug.log")
+                        with open(debug_path, "a", encoding="utf-8") as f:
+                            f.write(json.dumps({
+                                "sessionId": "debug-session",
+                                "runId": "pre-fix",
+                                "hypothesisId": "H2",
+                                "location": "agents/supplier_agent.py:evaluate_suppliers",
+                                "message": "SupplierEvaluationAgent cache hit",
+                                "data": {
+                                    "case_id": case_summary.case_id,
+                                    "category_id": case_summary.category_id,
+                                    "cache_key": cache_meta.cache_key
+                                },
+                                "timestamp": __import__("time").time()
+                            }) + "\n")
+                    except Exception:
+                        pass
+                    # #endregion debug_log_h1_cache_hit
+                    return cached_value, {}, {}
         
         # Gather context
         suppliers = get_suppliers_by_category(case_summary.category_id)
@@ -292,6 +308,7 @@ Provide ONLY valid JSON, no markdown formatting."""
                 pass
             # #endregion debug_log_h2_fallback
 
+            # DO NOT cache fallback/error results - they should be retried
             return fallback, llm_input_payload, {}, 0, 0
     
     def create_fallback_output(self, schema: type, case_id: str, category_id: str) -> SupplierShortlist:
