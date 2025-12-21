@@ -29,7 +29,8 @@ from utils.schemas import (
     DTPPolicyContext,
     CaseTrigger,
     ClarificationRequest,
-    OutOfScopeNotice
+    OutOfScopeNotice,
+    RFxDraft
 )
 from utils.state import PipelineState
 from utils.rules import RuleEngine

@@ -1679,7 +1679,7 @@ if st.session_state.selected_case_id is None:
         f"""
         <div style="margin-bottom: 20px; padding: 10px 16px; background-color: #FFFFFF; border-bottom: 1px solid #E0E0E0;">
             <div style="font-size: 0.9rem; color: #4A4A4A;">
-                <strong>{len(all_cases)} cases evaluated</strong> · <strong>{len(active_cases)} active</strong> · spanning {dtp_range}
+                <strong>{len(all_cases)} total cases</strong> · <strong>{len(active_cases)} in progress</strong> · covering stages {dtp_range}
             </div>
         </div>
         """,
