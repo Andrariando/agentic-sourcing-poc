@@ -1,32 +1,115 @@
 """
 API Client for frontend-backend communication.
 
-The frontend ONLY communicates with the backend through this client.
-It NEVER accesses agents, vector stores, or databases directly.
+Supports two modes:
+1. SEPARATED MODE: API calls to backend (local dev with separate processes)
+2. INTEGRATED MODE: Direct imports (Streamlit Cloud single-process deployment)
+
+The mode is auto-detected based on backend availability.
 """
 import requests
 from typing import Optional, List, Dict, Any
 from io import BytesIO
+import os
 
 from shared.constants import API_BASE_URL
 from shared.schemas import (
     CaseListResponse, CaseDetail, CreateCaseRequest, CreateCaseResponse,
     ChatRequest, ChatResponse,
     DecisionRequest, DecisionResponse,
-    DocumentIngestResponse, DocumentListResponse,
-    DataIngestResponse, DataPreviewResponse
+    DocumentIngestResponse, DocumentListResponse, DocumentMetadata,
+    DataIngestResponse, DataPreviewResponse, DataIngestMetadata
 )
+
+
+# Check if we should use integrated mode (direct imports instead of HTTP)
+def _should_use_integrated_mode() -> bool:
+    """Determine if we should use integrated mode (direct imports)."""
+    # Check for explicit override to use API mode (local development)
+    if os.environ.get("USE_API_MODE", "").lower() == "true":
+        return False
+    
+    # Check for explicit override to use integrated mode
+    if os.environ.get("USE_INTEGRATED_MODE", "").lower() == "true":
+        return True
+    
+    # Check if running on Streamlit Cloud (multiple detection methods)
+    cwd = os.getcwd()
+    streamlit_cloud_indicators = [
+        os.environ.get("STREAMLIT_SHARING_MODE"),
+        os.environ.get("IS_STREAMLIT_CLOUD"),
+        os.environ.get("HOSTNAME", "").endswith(".streamlit.app") if os.environ.get("HOSTNAME") else False,
+        "/mount/src/" in cwd,  # Streamlit Cloud working directory pattern
+        cwd.startswith("/mount/"),  # Another Streamlit Cloud pattern
+    ]
+    
+    if any(streamlit_cloud_indicators):
+        print(f"[APIClient] Detected Streamlit Cloud environment, using integrated mode")
+        return True
+    
+    # Try to connect to backend - if fails, use integrated mode
+    try:
+        response = requests.get(f"{API_BASE_URL}/health", timeout=2)
+        if response.status_code == 200:
+            print(f"[APIClient] Backend available at {API_BASE_URL}, using API mode")
+            return False
+        else:
+            print(f"[APIClient] Backend returned {response.status_code}, using integrated mode")
+            return True
+    except Exception as e:
+        print(f"[APIClient] Cannot reach backend ({e}), using integrated mode")
+        return True
 
 
 class APIClient:
     """
-    Client for communicating with the backend API.
+    Client for communicating with the backend.
     
-    CRITICAL: This is the ONLY way the frontend accesses backend functionality.
+    Supports two modes:
+    - HTTP mode: Calls FastAPI backend via REST API
+    - Integrated mode: Direct imports for Streamlit Cloud deployment
     """
     
     def __init__(self, base_url: str = None):
         self.base_url = base_url or API_BASE_URL
+        self._integrated_mode = _should_use_integrated_mode()
+        self._services_initialized = False
+        
+        # Lazy-loaded services for integrated mode
+        self._case_service = None
+        self._chat_service = None
+        self._ingestion_service = None
+    
+    def _init_services(self):
+        """Initialize backend services for integrated mode."""
+        if self._services_initialized:
+            return
+        
+        if self._integrated_mode:
+            try:
+                # Initialize database first
+                from backend.persistence.database import init_db
+                init_db()
+                
+                # Import and initialize services
+                from backend.services.case_service import get_case_service
+                from backend.services.chat_service import get_chat_service
+                from backend.services.ingestion_service import get_ingestion_service
+                
+                self._case_service = get_case_service()
+                self._chat_service = get_chat_service()
+                self._ingestion_service = get_ingestion_service()
+                self._services_initialized = True
+            except ImportError as e:
+                import traceback
+                print(f"Import error initializing services: {e}")
+                print(traceback.format_exc())
+                raise Exception(f"Import error: {e}")
+            except Exception as e:
+                import traceback
+                print(f"Failed to initialize services: {e}")
+                print(traceback.format_exc())
+                raise
     
     def _url(self, path: str) -> str:
         """Build full URL."""
@@ -47,11 +130,28 @@ class APIClient:
     
     def health_check(self) -> Dict[str, Any]:
         """Check backend health."""
+        if self._integrated_mode:
+            try:
+                self._init_services()
+                if self._services_initialized:
+                    return {"status": "healthy", "mode": "integrated", "components": {"database": "ok"}}
+                return {"status": "unhealthy", "error": "Failed to initialize services", "mode": "integrated"}
+            except Exception as e:
+                return {"status": "unhealthy", "error": f"Integrated mode error: {str(e)}", "mode": "integrated"}
+        
         try:
             response = requests.get(self._url("/health"), timeout=5)
-            return self._handle_response(response)
+            result = self._handle_response(response)
+            result["mode"] = "api"
+            return result
         except requests.exceptions.ConnectionError:
-            return {"status": "unhealthy", "error": "Cannot connect to backend"}
+            # Fallback to integrated mode
+            self._integrated_mode = True
+            return self.health_check()
+        except Exception as e:
+            # Fallback to integrated mode on any error
+            self._integrated_mode = True
+            return self.health_check()
     
     # ==================== CASES ====================
     
@@ -63,6 +163,20 @@ class APIClient:
         limit: int = 50
     ) -> CaseListResponse:
         """Get list of cases."""
+        if self._integrated_mode:
+            self._init_services()
+            cases = self._case_service.list_cases(
+                status=status,
+                dtp_stage=dtp_stage,
+                category_id=category_id,
+                limit=limit
+            )
+            return CaseListResponse(
+                cases=cases,
+                total_count=len(cases),
+                filters_applied={"status": status, "dtp_stage": dtp_stage}
+            )
+        
         params = {"limit": limit}
         if status:
             params["status"] = status
@@ -77,6 +191,13 @@ class APIClient:
     
     def get_case(self, case_id: str) -> CaseDetail:
         """Get case details."""
+        if self._integrated_mode:
+            self._init_services()
+            case = self._case_service.get_case(case_id)
+            if not case:
+                raise APIError("Case not found", 404)
+            return case
+        
         response = requests.get(self._url(f"/api/cases/{case_id}"))
         data = self._handle_response(response)
         return CaseDetail(**data)
@@ -90,6 +211,21 @@ class APIClient:
         name: Optional[str] = None
     ) -> CreateCaseResponse:
         """Create a new case."""
+        if self._integrated_mode:
+            self._init_services()
+            case_id = self._case_service.create_case(
+                category_id=category_id,
+                trigger_source=trigger_source,
+                contract_id=contract_id,
+                supplier_id=supplier_id,
+                name=name
+            )
+            return CreateCaseResponse(
+                case_id=case_id,
+                success=True,
+                message=f"Case {case_id} created"
+            )
+        
         request = CreateCaseRequest(
             category_id=category_id,
             trigger_source=trigger_source,
@@ -118,6 +254,14 @@ class APIClient:
         
         This goes through the Supervisor for governance.
         """
+        if self._integrated_mode:
+            self._init_services()
+            return self._chat_service.process_message(
+                case_id=case_id,
+                user_message=message,
+                use_tier_2=use_tier_2
+            )
+        
         request = ChatRequest(
             case_id=case_id,
             user_message=message,
@@ -140,6 +284,22 @@ class APIClient:
         edited_fields: Optional[Dict[str, Any]] = None
     ) -> DecisionResponse:
         """Approve a pending decision."""
+        if self._integrated_mode:
+            self._init_services()
+            result = self._chat_service.process_decision(
+                case_id=case_id,
+                decision="Approve",
+                reason=reason,
+                edited_fields=edited_fields
+            )
+            return DecisionResponse(
+                case_id=case_id,
+                decision="Approve",
+                success=result["success"],
+                new_dtp_stage=result.get("new_dtp_stage"),
+                message=result["message"]
+            )
+        
         request = DecisionRequest(
             case_id=case_id,
             decision="Approve",
@@ -160,6 +320,21 @@ class APIClient:
         reason: Optional[str] = None
     ) -> DecisionResponse:
         """Reject a pending decision."""
+        if self._integrated_mode:
+            self._init_services()
+            result = self._chat_service.process_decision(
+                case_id=case_id,
+                decision="Reject",
+                reason=reason
+            )
+            return DecisionResponse(
+                case_id=case_id,
+                decision="Reject",
+                success=result["success"],
+                new_dtp_stage=result.get("new_dtp_stage"),
+                message=result["message"]
+            )
+        
         request = DecisionRequest(
             case_id=case_id,
             decision="Reject",
@@ -189,6 +364,20 @@ class APIClient:
     ) -> DocumentIngestResponse:
         """Ingest a document for RAG."""
         import json
+        
+        if self._integrated_mode:
+            self._init_services()
+            return self._ingestion_service.ingest_document(
+                file_content=file_content,
+                filename=filename,
+                document_type=document_type,
+                supplier_id=supplier_id,
+                category_id=category_id,
+                region=region,
+                dtp_relevance=dtp_relevance,
+                case_id=case_id,
+                description=description
+            )
         
         files = {
             "file": (filename, BytesIO(file_content), "application/octet-stream")
@@ -226,6 +415,14 @@ class APIClient:
         document_type: Optional[str] = None
     ) -> DocumentListResponse:
         """List ingested documents."""
+        if self._integrated_mode:
+            self._init_services()
+            return self._ingestion_service.list_documents(
+                supplier_id=supplier_id,
+                category_id=category_id,
+                document_type=document_type
+            )
+        
         params = {}
         if supplier_id:
             params["supplier_id"] = supplier_id
@@ -240,6 +437,10 @@ class APIClient:
     
     def delete_document(self, document_id: str) -> bool:
         """Delete a document."""
+        if self._integrated_mode:
+            self._init_services()
+            return self._ingestion_service.delete_document(document_id)
+        
         response = requests.delete(self._url(f"/api/documents/{document_id}"))
         self._handle_response(response)
         return True
@@ -253,6 +454,14 @@ class APIClient:
         data_type: str
     ) -> DataPreviewResponse:
         """Preview data before ingestion."""
+        if self._integrated_mode:
+            self._init_services()
+            return self._ingestion_service.preview_data(
+                file_content=file_content,
+                filename=filename,
+                data_type=data_type
+            )
+        
         files = {
             "file": (filename, BytesIO(file_content), "application/octet-stream")
         }
@@ -280,6 +489,18 @@ class APIClient:
         description: Optional[str] = None
     ) -> DataIngestResponse:
         """Ingest structured data."""
+        if self._integrated_mode:
+            self._init_services()
+            return self._ingestion_service.ingest_data(
+                file_content=file_content,
+                filename=filename,
+                data_type=data_type,
+                supplier_id=supplier_id,
+                category_id=category_id,
+                time_period=time_period,
+                description=description
+            )
+        
         files = {
             "file": (filename, BytesIO(file_content), "application/octet-stream")
         }
@@ -311,6 +532,13 @@ class APIClient:
         limit: int = 50
     ) -> List[Dict[str, Any]]:
         """Get ingestion history."""
+        if self._integrated_mode:
+            self._init_services()
+            return self._ingestion_service.get_ingestion_history(
+                data_type=data_type,
+                limit=limit
+            )
+        
         params = {"limit": limit}
         if data_type:
             params["data_type"] = data_type

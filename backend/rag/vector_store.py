@@ -3,6 +3,7 @@ ChromaDB vector store for document embeddings.
 """
 import os
 import json
+import tempfile
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from uuid import uuid4
@@ -17,8 +18,20 @@ except ImportError:
     HAS_OPENAI = False
 
 
-# Vector store path
-CHROMA_PATH = Path(__file__).parent.parent.parent / "data" / "chromadb"
+# Vector store path - use temp directory for Streamlit Cloud
+def _get_chroma_path() -> Path:
+    """Get writable ChromaDB path."""
+    cwd = os.getcwd()
+    is_streamlit_cloud = "/mount/src/" in cwd or cwd.startswith("/mount/")
+    
+    if is_streamlit_cloud:
+        temp_dir = Path(tempfile.gettempdir()) / "agentic_sourcing" / "chromadb"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        return temp_dir
+    else:
+        return Path(__file__).parent.parent.parent / "data" / "chromadb"
+
+CHROMA_PATH = _get_chroma_path()
 COLLECTION_NAME = "sourcing_documents"
 
 

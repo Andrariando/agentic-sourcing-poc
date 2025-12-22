@@ -19,8 +19,17 @@ def render_case_dashboard():
     # Check backend health
     health = client.health_check()
     if health.get("status") != "healthy":
-        st.error(f"⚠️ Backend is not available: {health.get('error', 'Unknown error')}")
-        st.info("Please start the backend server: `python -m uvicorn backend.main:app --reload`")
+        mode = health.get("mode", "unknown")
+        error = health.get("error", "Unknown error")
+        st.error(f"⚠️ System not ready: {error}")
+        st.info(f"Mode: {mode}")
+        
+        if "Import error" in error or "ModuleNotFound" in error:
+            st.warning("Missing dependencies. Check that all backend modules are available.")
+        elif mode == "integrated":
+            st.warning("Integrated mode failed to initialize. Check the logs for details.")
+        else:
+            st.info("For local development: `python -m uvicorn backend.main:app --reload`")
         return
     
     # Filters

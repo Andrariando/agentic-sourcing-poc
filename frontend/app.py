@@ -89,7 +89,11 @@ def main():
         health = client.health_check()
         
         if health.get("status") == "healthy":
-            st.success("✅ Backend connected")
+            mode = health.get("mode", "api")
+            if mode == "integrated":
+                st.success("✅ Running (Integrated)")
+            else:
+                st.success("✅ Backend connected")
         else:
             st.error("❌ Backend offline")
             st.markdown("Start with:")
