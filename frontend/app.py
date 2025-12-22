@@ -1,8 +1,9 @@
 """
-Streamlit Frontend Application.
+Agentic Sourcing Copilot - Enterprise Frontend
 
-This is the main entry point for the frontend.
-All backend communication goes through the API client.
+MIT Color System:
+- MIT Navy (#003A8F): Structure and hierarchy
+- MIT Cardinal Red (#A31F34): Actions and urgency only
 """
 import streamlit as st
 import sys
@@ -18,34 +19,86 @@ from frontend.pages.case_copilot import render_case_copilot
 from frontend.pages.knowledge_management import render_knowledge_management
 
 
+# MIT Colors
+MIT_NAVY = "#003A8F"
+MIT_CARDINAL = "#A31F34"
+CHARCOAL = "#4A4A4A"
+LIGHT_GRAY = "#D9D9D9"
+
+
 # Page config
 st.set_page_config(
     page_title="Agentic Sourcing Copilot",
-    page_icon="🤖",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS
-st.markdown("""
+# Global Styles
+st.markdown(f"""
 <style>
-    .main-header {
-        font-size: 2.5rem;
-        font-weight: 700;
-        color: #1E3A8A;
-        margin-bottom: 0;
-    }
-    .sub-header {
-        font-size: 1rem;
-        color: #6B7280;
-        margin-top: 0;
-    }
-    .stButton button {
-        border-radius: 8px;
-    }
-    div[data-testid="stSidebarNav"] {
-        padding-top: 1rem;
-    }
+    /* Sidebar styling */
+    [data-testid="stSidebar"] {{
+        background-color: #FAFAFA;
+        border-right: 1px solid {LIGHT_GRAY};
+    }}
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {{
+        font-size: 0.9rem;
+    }}
+    
+    /* Navigation buttons */
+    [data-testid="stSidebar"] .stButton > button {{
+        width: 100%;
+        text-align: left;
+        padding: 12px 16px;
+        border: 1px solid {LIGHT_GRAY};
+        background-color: white;
+        color: {CHARCOAL};
+        font-weight: 500;
+        border-radius: 4px;
+        margin-bottom: 4px;
+    }}
+    [data-testid="stSidebar"] .stButton > button:hover {{
+        border-color: {MIT_NAVY};
+        color: {MIT_NAVY};
+    }}
+    [data-testid="stSidebar"] .stButton > button[kind="primary"] {{
+        background-color: {MIT_NAVY};
+        border-color: {MIT_NAVY};
+        color: white;
+    }}
+    
+    /* Main content area */
+    .main .block-container {{
+        padding-top: 2rem;
+        max-width: 1400px;
+    }}
+    
+    /* Headers */
+    h1, h2, h3 {{
+        color: {MIT_NAVY};
+    }}
+    
+    /* Primary buttons */
+    .stButton > button[kind="primary"] {{
+        background-color: {MIT_CARDINAL};
+        border-color: {MIT_CARDINAL};
+    }}
+    
+    /* Remove emoji from page title */
+    .stApp header {{
+        background-color: transparent;
+    }}
+    
+    /* Status indicators */
+    .status-healthy {{
+        color: #2E7D32;
+        font-weight: 500;
+    }}
+    .status-error {{
+        color: {MIT_CARDINAL};
+        font-weight: 500;
+    }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -60,69 +113,82 @@ def main():
     if "selected_case_id" not in st.session_state:
         st.session_state.selected_case_id = None
     
-    # Sidebar navigation
+    # Sidebar
     with st.sidebar:
-        st.markdown("## 🤖 Agentic Sourcing")
-        st.markdown("---")
+        # Logo/Title
+        st.markdown(f"""
+        <div style="padding: 16px 0 24px 0; border-bottom: 2px solid {MIT_NAVY}; margin-bottom: 24px;">
+            <div style="font-size: 1.25rem; font-weight: 700; color: {MIT_NAVY};">
+                Agentic Sourcing
+            </div>
+            <div style="font-size: 0.75rem; color: {CHARCOAL}; margin-top: 4px;">
+                Decision Support System
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
         
         # Navigation
+        st.markdown(f'<div style="font-size: 0.7rem; color: {CHARCOAL}; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">Navigation</div>', unsafe_allow_html=True)
+        
         pages = {
-            "dashboard": "📋 Case Dashboard",
-            "copilot": "💬 Case Copilot",
-            "knowledge": "📚 Knowledge & Data"
+            "dashboard": "Case Dashboard",
+            "copilot": "Case Copilot",
+            "knowledge": "Knowledge Management"
         }
         
         for page_id, page_name in pages.items():
+            is_current = st.session_state.current_page == page_id
             if st.button(
                 page_name,
                 key=f"nav_{page_id}",
                 use_container_width=True,
-                type="primary" if st.session_state.current_page == page_id else "secondary"
+                type="primary" if is_current else "secondary"
             ):
                 st.session_state.current_page = page_id
                 st.rerun()
         
-        st.markdown("---")
+        st.markdown("<br><br>", unsafe_allow_html=True)
         
-        # Backend status
+        # System Status
+        st.markdown(f'<div style="font-size: 0.7rem; color: {CHARCOAL}; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">System Status</div>', unsafe_allow_html=True)
+        
         client = get_api_client()
         health = client.health_check()
         
         if health.get("status") == "healthy":
             mode = health.get("mode", "api")
-            if mode == "integrated":
-                st.success("✅ Running (Integrated)")
-            else:
-                st.success("✅ Backend connected")
+            mode_label = "Integrated" if mode == "integrated" else "API"
+            st.markdown(f'<div class="status-healthy">Connected ({mode_label})</div>', unsafe_allow_html=True)
         else:
-            st.error("❌ Backend offline")
-            st.markdown("Start with:")
-            st.code("python -m uvicorn backend.main:app --reload", language="bash")
+            st.markdown('<div class="status-error">Offline</div>', unsafe_allow_html=True)
         
-        st.markdown("---")
+        st.markdown("<br><br>", unsafe_allow_html=True)
         
-        # Quick help
-        with st.expander("ℹ️ About"):
-            st.markdown("""
-            **Agentic Sourcing Copilot**
-            
-            A human-in-the-loop, multi-agent 
-            decision-support system for 
-            procurement sourcing.
-            
-            **DTP Stages:**
-            - DTP-01: Strategy
-            - DTP-02: Planning
-            - DTP-03: Sourcing
-            - DTP-04: Negotiation
-            - DTP-05: Contracting
-            - DTP-06: Execution
-            
-            **Governance:**
-            - All decisions require approval
-            - Agents can explore, not decide
-            - Full traceability
-            """)
+        # Info section
+        with st.expander("About", expanded=False):
+            st.markdown(f"""
+            <div style="font-size: 0.8rem; color: {CHARCOAL};">
+                <p><strong>Agentic Sourcing Copilot</strong></p>
+                <p>A human-in-the-loop decision support system for procurement sourcing.</p>
+                <br>
+                <p><strong>DTP Stages:</strong></p>
+                <ul style="padding-left: 16px; margin: 4px 0;">
+                    <li>DTP-01: Strategy</li>
+                    <li>DTP-02: Planning</li>
+                    <li>DTP-03: Sourcing</li>
+                    <li>DTP-04: Negotiation</li>
+                    <li>DTP-05: Contracting</li>
+                    <li>DTP-06: Execution</li>
+                </ul>
+                <br>
+                <p><strong>Governance:</strong></p>
+                <ul style="padding-left: 16px; margin: 4px 0;">
+                    <li>All decisions require approval</li>
+                    <li>Full audit trail</li>
+                    <li>Evidence-based recommendations</li>
+                </ul>
+            </div>
+            """, unsafe_allow_html=True)
     
     # Main content
     if st.session_state.current_page == "dashboard":
@@ -132,9 +198,15 @@ def main():
         case_id = st.session_state.get("selected_case_id")
         
         if not case_id:
-            st.info("👈 Select a case from the Dashboard to start the copilot")
-            st.markdown("Or enter a case ID directly:")
-            case_input = st.text_input("Case ID", key="direct_case_id")
+            st.markdown(f"""
+            <div style="text-align: center; padding: 48px; color: {CHARCOAL};">
+                <h3 style="color: {MIT_NAVY};">No Case Selected</h3>
+                <p>Select a case from the Dashboard to open the Copilot.</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            case_input = st.text_input("Or enter Case ID directly:", key="direct_case_id")
             if st.button("Open Case"):
                 if case_input:
                     st.session_state.selected_case_id = case_input
@@ -148,4 +220,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
