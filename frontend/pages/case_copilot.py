@@ -105,84 +105,16 @@ def inject_styles():
             font-weight: 500;
         }}
         
-        /* Decision Card */
-        .decision-card {{
-            background-color: {WHITE};
-            border: 2px solid {MIT_NAVY};
-            border-radius: 4px;
-            padding: 24px;
-            margin-bottom: 24px;
-        }}
-        .decision-card h2 {{
-            color: {MIT_NAVY};
-            font-size: 0.875rem;
-            font-weight: 600;
-            margin: 0 0 16px 0;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }}
-        .decision-recommendation {{
-            font-size: 1.75rem;
-            font-weight: 700;
-            color: {NEAR_BLACK};
-            margin-bottom: 16px;
-        }}
-        .decision-meta {{
-            display: flex;
-            gap: 24px;
-            margin-bottom: 20px;
-            font-size: 0.875rem;
-            color: {CHARCOAL};
-        }}
-        
-        /* Evidence Section */
-        .evidence-section {{
-            background-color: {WHITE};
-            border: 1px solid {LIGHT_GRAY};
-            border-radius: 4px;
-            margin-bottom: 16px;
-        }}
-        .evidence-header {{
-            background-color: #F8F9FA;
-            padding: 12px 16px;
-            border-bottom: 1px solid {LIGHT_GRAY};
-            font-weight: 600;
-            font-size: 0.875rem;
-            color: {MIT_NAVY};
-        }}
-        .evidence-item {{
-            padding: 12px 16px;
-            border-bottom: 1px solid {LIGHT_GRAY};
-            font-size: 0.875rem;
-        }}
-        .evidence-item:last-child {{
-            border-bottom: none;
-        }}
-        .evidence-label {{
-            color: {CHARCOAL};
-            margin-bottom: 4px;
-        }}
+        /* Evidence Items in Expanders */
         .evidence-value {{
             color: {NEAR_BLACK};
             font-weight: 500;
+            font-size: 0.875rem;
         }}
         .evidence-source {{
             color: {CHARCOAL};
             font-size: 0.75rem;
-            margin-top: 4px;
-        }}
-        
-        /* Governance Gate */
-        .governance-gate {{
-            background-color: {WHITE};
-            border: 1px solid {MIT_CARDINAL};
-            border-left: 4px solid {MIT_CARDINAL};
-            padding: 16px;
-            margin-bottom: 24px;
-            font-size: 0.875rem;
-        }}
-        .governance-gate strong {{
-            color: {MIT_CARDINAL};
+            margin-top: 8px;
         }}
         
         /* Copilot Section */
@@ -420,49 +352,76 @@ def render_context_column(case) -> None:
 def render_decision_column(case, client) -> None:
     """Render center column - Decision & Evidence."""
     
-    # Decision Card
-    st.markdown('<div class="decision-card">', unsafe_allow_html=True)
-    st.markdown('<h2>Strategy Recommendation</h2>', unsafe_allow_html=True)
-    
     # Get recommendation from latest agent output
-    recommendation = "Pending Analysis"
+    recommendation = "PENDING ANALYSIS"
     confidence = 0.0
     agent_name = "Awaiting"
     rationale = []
+    has_recommendation = False
     
     if case.latest_agent_output:
         output = case.latest_agent_output
-        recommendation = output.get("recommended_strategy", recommendation)
+        rec = output.get("recommended_strategy")
+        if rec:
+            recommendation = rec.upper()
+            has_recommendation = True
         confidence = output.get("confidence", 0.0)
         rationale = output.get("rationale", [])
     
     if case.latest_agent_name:
         agent_name = case.latest_agent_name
     
-    st.markdown(f'<div class="decision-recommendation">{recommendation.upper()}</div>', unsafe_allow_html=True)
-    
+    # Decision Card - Complete HTML block
     st.markdown(f"""
-    <div class="decision-meta">
-        <span><strong>Confidence:</strong> {confidence:.0%}</span>
-        <span><strong>Producing Agent:</strong> {agent_name}</span>
-        <span><strong>DTP Stage:</strong> {case.dtp_stage}</span>
+    <div style="background-color: #FFFFFF; border: 2px solid #003A8F; border-radius: 4px; padding: 24px; margin-bottom: 20px;">
+        <div style="color: #003A8F; font-size: 0.875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 16px;">
+            Strategy Recommendation
+        </div>
+        <div style="font-size: 1.75rem; font-weight: 700; color: #1F1F1F; margin-bottom: 16px;">
+            {recommendation}
+        </div>
+        <div style="display: flex; gap: 24px; font-size: 0.875rem; color: #4A4A4A;">
+            <span><strong>Confidence:</strong> {confidence:.0%}</span>
+            <span><strong>Producing Agent:</strong> {agent_name}</span>
+            <span><strong>DTP Stage:</strong> {case.dtp_stage}</span>
+        </div>
     </div>
     """, unsafe_allow_html=True)
     
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Action Buttons
+    # Action Buttons with improved styling
     is_waiting = case.status == "Waiting for Human Decision"
     
-    col_approve, col_reject, col_spacer = st.columns([1, 1, 2])
+    # Custom button styling
+    st.markdown("""
+    <style>
+        div[data-testid="column"]:first-child .stButton > button {
+            background-color: #A31F34 !important;
+            color: white !important;
+            font-weight: 700 !important;
+            border: none !important;
+            padding: 12px 32px !important;
+        }
+        div[data-testid="column"]:nth-child(2) .stButton > button {
+            background-color: #FFFFFF !important;
+            color: #1F1F1F !important;
+            font-weight: 700 !important;
+            border: 2px solid #4A4A4A !important;
+            padding: 12px 32px !important;
+        }
+        div[data-testid="column"]:nth-child(2) .stButton > button:hover {
+            border-color: #003A8F !important;
+            color: #003A8F !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    col_approve, col_reject, col_spacer = st.columns([1.2, 1.5, 2])
     
     with col_approve:
-        approve_disabled = not is_waiting
         if st.button(
-            "Approve",
+            "APPROVE",
             key="approve_decision",
-            disabled=approve_disabled,
-            type="primary"
+            disabled=not is_waiting
         ):
             try:
                 result = client.approve_decision(case.case_id)
@@ -473,7 +432,7 @@ def render_decision_column(case, client) -> None:
     
     with col_reject:
         if st.button(
-            "Request Revision",
+            "REQUEST REVISION",
             key="reject_decision",
             disabled=not is_waiting
         ):
@@ -484,20 +443,18 @@ def render_decision_column(case, client) -> None:
             except APIError as e:
                 st.error(f"Error: {e.message}")
     
-    st.markdown("<br>", unsafe_allow_html=True)
-    
     # Governance Gate
     next_stage = get_next_stage(case.dtp_stage)
     st.markdown(f"""
-    <div class="governance-gate">
-        <strong>Governance Notice:</strong> This recommendation will not advance to {next_stage} without explicit human approval. All decisions are logged for audit.
+    <div style="background-color: #FFFFFF; border: 1px solid #A31F34; border-left: 4px solid #A31F34; padding: 16px; margin: 20px 0; font-size: 0.875rem;">
+        <strong style="color: #A31F34;">Governance Notice:</strong> This recommendation will not advance to {next_stage} without explicit human approval. All decisions are logged for audit.
     </div>
     """, unsafe_allow_html=True)
     
-    # Evidence Breakdown
+    # Evidence Breakdown Header
     st.markdown("""
-    <div class="evidence-section">
-        <div class="evidence-header">Evidence Breakdown</div>
+    <div style="background-color: #F8F9FA; border: 1px solid #D9D9D9; border-radius: 4px 4px 0 0; padding: 12px 16px; font-weight: 600; font-size: 0.875rem; color: #003A8F; margin-top: 8px;">
+        Evidence Breakdown
     </div>
     """, unsafe_allow_html=True)
     
