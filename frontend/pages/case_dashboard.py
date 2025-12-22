@@ -32,6 +32,36 @@ def render_case_dashboard():
             st.info("For local development: `python -m uvicorn backend.main:app --reload`")
         return
     
+    # Seed demo data button (for testing)
+    with st.expander("🧪 Demo Data", expanded=False):
+        st.markdown("Load synthetic test data to explore the system.")
+        col_seed1, col_seed2 = st.columns(2)
+        with col_seed1:
+            if st.button("🌱 Seed Demo Cases", help="Load sample cases at various DTP stages"):
+                try:
+                    from backend.seed_data import seed_all
+                    seed_all()
+                    st.success("✅ Demo data loaded! Refresh to see cases.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed to seed data: {e}")
+        with col_seed2:
+            if st.button("🗑️ Clear All Data", help="Remove all cases and data"):
+                try:
+                    from backend.persistence.database import get_db_session
+                    from backend.persistence.models import CaseState, SupplierPerformance, SpendMetric, SLAEvent
+                    session = get_db_session()
+                    session.query(CaseState).delete()
+                    session.query(SupplierPerformance).delete()
+                    session.query(SpendMetric).delete()
+                    session.query(SLAEvent).delete()
+                    session.commit()
+                    session.close()
+                    st.success("✅ All data cleared!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed to clear data: {e}")
+    
     # Filters
     col1, col2, col3 = st.columns(3)
     
