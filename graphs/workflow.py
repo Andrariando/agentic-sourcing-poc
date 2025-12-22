@@ -2,7 +2,7 @@
 LangGraph workflow for agentic sourcing pipeline.
 Implements Supervisor coordination, specialist agents, and WAIT_FOR_HUMAN node.
 """
-from typing import Literal
+from typing import Literal, Any, Tuple, Optional, Dict, List
 from langgraph.graph import StateGraph, END
 from utils.state import PipelineState
 from utils.schemas import (
