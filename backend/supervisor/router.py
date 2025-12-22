@@ -1,6 +1,14 @@
 """
 Intent classification and routing for the Supervisor.
+
+CONVERSATIONAL DESIGN:
+- Detect greetings and simple responses
+- STATUS for case updates
+- EXPLAIN for understanding recommendations
+- EXPLORE for alternatives
+- DECIDE only for explicit action requests
 """
+import re
 from typing import Optional, Dict, Any, List
 from shared.constants import UserIntent
 
@@ -10,39 +18,71 @@ class IntentRouter:
     Classifies user intent and determines routing.
     
     Intent types:
-    - EXPLAIN: User wants explanation/information (read-only)
-    - EXPLORE: User wants to explore alternatives (no state change)
-    - DECIDE: User wants to make a decision (requires approval)
-    - STATUS: User wants status update (read-only)
+    - STATUS: User wants status update (read-only, no agent)
+    - EXPLAIN: User wants explanation of existing data (read-only, no agent)
+    - EXPLORE: User wants to explore alternatives (may call agent, no state change)
+    - DECIDE: User explicitly requests analysis or decision (calls agent)
     """
     
-    # Keywords for intent classification
-    EXPLAIN_KEYWORDS = [
-        "what is", "explain", "describe", "tell me about", "how does",
-        "why", "what does", "meaning", "definition", "clarify",
-        "help me understand", "can you explain", "what's the"
+    # Greetings and acknowledgments (no agent call needed)
+    GREETING_PATTERNS = [
+        r'^hi\b', r'^hello\b', r'^hey\b', r'^good (morning|afternoon|evening)',
+        r'^thanks\b', r'^thank you', r'^ok\b', r'^okay\b', r'^got it',
+        r'^understood', r'^i see', r'^makes sense', r'^cool\b', r'^great\b',
+        r'^perfect\b', r'^nice\b', r'^alright\b'
     ]
     
-    EXPLORE_KEYWORDS = [
-        "what if", "alternative", "options", "could we", "would it be possible",
-        "explore", "consider", "compare", "other", "different",
-        "scenario", "hypothetical", "suppose", "imagine"
+    # Status inquiry patterns
+    STATUS_PATTERNS = [
+        r'status', r'progress', r'update\b', r'where are we', r'current state',
+        r"what's happening", r'how far', r'timeline', r'next step',
+        r'what stage', r'which stage', r'current status', r'case status',
+        r'tell me about (this|the) case', r'update me', r'brief me',
+        r'summary', r'overview', r'catch me up'
     ]
     
-    DECIDE_KEYWORDS = [
-        "approve", "reject", "proceed", "execute", "start", "begin",
-        "launch", "initiate", "confirm", "finalize", "award",
-        "select", "choose", "decide", "go ahead", "let's do"
+    # Explain patterns (understanding existing data)
+    EXPLAIN_PATTERNS = [
+        r'what is', r'explain\b', r'describe', r'tell me about',
+        r'how does', r'\bwhy\b', r'what does', r'meaning', r'definition',
+        r'clarify', r'help me understand', r'can you explain', r"what's the",
+        r'reason\b', r'rationale', r'basis', r'justify', r'grounds',
+        r'confidence', r'evidence', r'how did you', r'what led to'
     ]
     
-    STATUS_KEYWORDS = [
-        "status", "progress", "update", "where are we", "current state",
-        "what's happening", "how far", "timeline", "next step"
+    # Explore patterns (hypotheticals, alternatives)
+    EXPLORE_PATTERNS = [
+        r'what if', r'alternative', r'options', r'could we', r'would it be possible',
+        r'\bexplore\b', r'consider', r'compare', r'\bother\b', r'different\b',
+        r'scenario', r'hypothetical', r'suppose', r'imagine',
+        r'what would happen', r'pros and cons', r'trade-?off'
     ]
     
-    ACTION_KEYWORDS = [
-        "run", "analyze", "evaluate", "recommend", "strategy",
-        "supplier", "negotiation", "market scan", "rfx"
+    # Decide patterns (explicit action requests)
+    DECIDE_PATTERNS = [
+        # Action verbs
+        r'\brun\b', r'\banalyze\b', r'\bevaluate\b', r'\brecommend\b',
+        r'\bexecute\b', r'\bstart\b', r'\bbegin\b', r'\blaunch\b',
+        r'\binitiate\b', r'\bfinalize\b', r'\bselect\b', r'\bchoose\b',
+        # Explicit requests
+        r'give me a (strategy|recommendation|plan)',
+        r'create a (strategy|recommendation|plan)',
+        r'what (should|do) (we|i) do',
+        r'suggest a (strategy|approach|plan)',
+        r'(need|want) (a )?(strategy|recommendation|analysis)'
+    ]
+    
+    # Approval patterns (handled separately in ChatService)
+    APPROVAL_PATTERNS = [
+        r'\bapprove\b', r'\bconfirm\b', r'\bproceed\b', r'\bgo ahead\b',
+        r'\byes\b', r'\bok\b', r'\bokay\b', r'\baccept\b', r'\bagree\b',
+        r"let's do it", r'sounds good', r'looks good', r'move forward'
+    ]
+    
+    REJECTION_PATTERNS = [
+        r'\breject\b', r'\bcancel\b', r'\bstop\b', r"\bdon't\b",
+        r'\bdecline\b', r'\brefuse\b', r'\bwait\b', r'\bhold\b',
+        r'not yet', r'not ready', r'no\b', r'revise', r'change'
     ]
     
     @classmethod
@@ -51,48 +91,54 @@ class IntentRouter:
         Classify user intent from message.
         
         Priority:
-        1. DECIDE (highest - has action implications)
-        2. STATUS 
-        3. EXPLORE
-        4. EXPLAIN (default if unclear)
+        1. STATUS - Quick status checks
+        2. DECIDE - Explicit action requests
+        3. EXPLORE - Hypotheticals and alternatives
+        4. EXPLAIN - Understanding existing info (default)
         """
-        message_lower = user_message.lower()
+        message_lower = user_message.lower().strip()
         
-        # Check for DECIDE intent first (highest priority)
-        for keyword in cls.DECIDE_KEYWORDS:
-            if keyword in message_lower:
-                return UserIntent.DECIDE
-        
-        # Check for STATUS intent
-        for keyword in cls.STATUS_KEYWORDS:
-            if keyword in message_lower:
+        # Check for greetings (map to STATUS for friendly response)
+        if any(re.search(p, message_lower) for p in cls.GREETING_PATTERNS):
+            # Short greetings default to status
+            if len(message_lower.split()) <= 5:
                 return UserIntent.STATUS
         
-        # Check for EXPLORE intent
-        for keyword in cls.EXPLORE_KEYWORDS:
-            if keyword in message_lower:
-                return UserIntent.EXPLORE
+        # Check for STATUS intent
+        if any(re.search(p, message_lower) for p in cls.STATUS_PATTERNS):
+            return UserIntent.STATUS
         
-        # Check for action-oriented but non-decision messages
-        has_action = any(kw in message_lower for kw in cls.ACTION_KEYWORDS)
-        has_question = "?" in user_message or any(
-            message_lower.startswith(q) for q in ["what", "how", "why", "can", "should"]
-        )
-        
-        if has_action and has_question:
-            # Asking about an action = EXPLORE
-            return UserIntent.EXPLORE
-        elif has_action:
-            # Requesting an action = DECIDE
+        # Check for explicit DECIDE patterns
+        if any(re.search(p, message_lower) for p in cls.DECIDE_PATTERNS):
             return UserIntent.DECIDE
         
-        # Check for EXPLAIN intent
-        for keyword in cls.EXPLAIN_KEYWORDS:
-            if keyword in message_lower:
-                return UserIntent.EXPLAIN
+        # Check for EXPLORE patterns
+        if any(re.search(p, message_lower) for p in cls.EXPLORE_PATTERNS):
+            return UserIntent.EXPLORE
         
-        # Default to EXPLAIN for safety (read-only)
+        # Check for EXPLAIN patterns
+        if any(re.search(p, message_lower) for p in cls.EXPLAIN_PATTERNS):
+            return UserIntent.EXPLAIN
+        
+        # Check if it's a question about existing recommendation
+        if '?' in user_message:
+            # Questions default to EXPLAIN
+            return UserIntent.EXPLAIN
+        
+        # Short messages without clear intent -> STATUS
+        if len(message_lower.split()) <= 3:
+            return UserIntent.STATUS
+        
+        # Default to EXPLAIN (safest - no agent call needed)
         return UserIntent.EXPLAIN
+    
+    @classmethod
+    def is_approval_attempt(cls, message: str) -> bool:
+        """Check if message looks like an approval attempt."""
+        message_lower = message.lower().strip()
+        is_approval = any(re.search(p, message_lower) for p in cls.APPROVAL_PATTERNS)
+        is_rejection = any(re.search(p, message_lower) for p in cls.REJECTION_PATTERNS)
+        return is_approval or is_rejection
     
     @classmethod
     def get_allowed_agents(
@@ -103,10 +149,10 @@ class IntentRouter:
         """
         Get list of agents that can be called for this intent/stage combination.
         
-        GOVERNANCE RULE:
-        - EXPLAIN/STATUS: Information agents only
-        - EXPLORE: Analysis agents, but no state changes
-        - DECIDE: Full agent access with human approval required
+        GOVERNANCE:
+        - STATUS/EXPLAIN: No agent call (use cached data)
+        - EXPLORE: May call agents for exploration
+        - DECIDE: Full agent access with human approval
         """
         # Base agent access by stage
         stage_agents = {
@@ -120,16 +166,16 @@ class IntentRouter:
         
         available = stage_agents.get(dtp_stage, [])
         
-        if intent in [UserIntent.EXPLAIN, UserIntent.STATUS]:
-            # Read-only - can call any available agent for information
-            return available
+        # STATUS and EXPLAIN don't run agents (use existing data)
+        if intent in [UserIntent.STATUS, UserIntent.EXPLAIN]:
+            return []  # No agents called
         
         elif intent == UserIntent.EXPLORE:
-            # Can call agents but results are exploratory
+            # Can call agents for exploration (no state change)
             return available
         
         elif intent == UserIntent.DECIDE:
-            # Full access but will require human approval
+            # Full access (requires human approval)
             return available
         
         return []
@@ -142,24 +188,45 @@ class IntentRouter:
     ) -> bool:
         """
         Determine if human approval is required.
-        
-        Rules:
-        - DECIDE intent always requires approval
-        - Any output that would change DTP stage requires approval
-        - High-impact decisions require approval
         """
+        # Only DECIDE intent triggers approval requirement
         if intent == UserIntent.DECIDE:
             return True
         
-        # Strategy recommendations always require approval
-        if agent_name == "Strategy":
-            return True
-        
-        # Negotiation plans require approval
-        if agent_name == "NegotiationSupport":
+        # Strategy and Negotiation always need approval
+        if agent_name in ["Strategy", "NegotiationSupport"]:
             return True
         
         return False
+    
+    @classmethod
+    def validate_intent_for_stage(
+        cls,
+        dtp_stage: str,
+        intent: UserIntent
+    ) -> tuple[bool, Optional[str]]:
+        """
+        Validate if intent is allowed for current stage.
+        
+        Returns:
+            (is_valid, blocked_reason)
+        """
+        # STATUS and EXPLAIN always allowed
+        if intent in [UserIntent.STATUS, UserIntent.EXPLAIN]:
+            return True, None
+        
+        # EXPLORE always allowed (doesn't change state)
+        if intent == UserIntent.EXPLORE:
+            return True, None
+        
+        # DECIDE validation by stage
+        if intent == UserIntent.DECIDE:
+            # DTP-06 is execution only
+            if dtp_stage == "DTP-06":
+                return False, "Case is in execution phase. No further decisions available."
+            return True, None
+        
+        return True, None
     
     @classmethod
     def should_allow_retrieval(
@@ -168,15 +235,7 @@ class IntentRouter:
         dtp_stage: str,
         requested_doc_types: Optional[List[str]] = None
     ) -> tuple[bool, Optional[str]]:
-        """
-        Check if retrieval is allowed for this intent/stage.
-        
-        Returns:
-            (is_allowed, reason_if_blocked)
-        """
-        # All intents can retrieve for their stage
-        # But certain document types may be stage-gated
-        
+        """Check if retrieval is allowed for this intent/stage."""
         stage_relevant_docs = {
             "DTP-01": ["Policy", "Market Report", "Contract"],
             "DTP-02": ["Policy", "Market Report", "Contract", "RFx"],
@@ -202,13 +261,12 @@ class IntentRouter:
         dtp_stage: str,
         blocked_reason: str
     ) -> str:
-        """Generate user-friendly explanation for why an action is gated."""
+        """Generate user-friendly explanation for gated actions."""
         explanations = {
             UserIntent.DECIDE: (
                 f"Your request involves a decision that's not available at the current "
                 f"{dtp_stage} stage. {blocked_reason}\n\n"
-                f"To proceed, you may need to complete earlier stages first, or "
-                f"this type of action may not be applicable to your current case."
+                f"To proceed, you may need to complete earlier stages first."
             ),
             UserIntent.EXPLORE: (
                 f"While you can explore this scenario, please note: {blocked_reason}\n\n"
@@ -217,4 +275,3 @@ class IntentRouter:
         }
         
         return explanations.get(intent, blocked_reason)
-

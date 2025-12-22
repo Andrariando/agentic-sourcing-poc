@@ -1,40 +1,43 @@
 """
 Chat/Copilot service with Supervisor governance.
+
+CONVERSATIONAL DESIGN:
+- STATUS intent: Summarize current state (no agent call)
+- EXPLAIN intent: Explain existing recommendation (no new analysis)
+- EXPLORE intent: Explore alternatives (may call agent)
+- DECIDE intent: Process approval/rejection OR request new analysis
 """
 import json
-from typing import Dict, Any, Optional
+import re
+from typing import Dict, Any, Optional, List
 from datetime import datetime
 
 from backend.services.case_service import get_case_service
 from backend.supervisor.state import SupervisorState, StateManager
 from backend.supervisor.router import IntentRouter
-from backend.supervisor.graph import get_supervisor_graph
 from backend.agents.strategy import StrategyAgent
 from backend.agents.supplier_eval import SupplierEvaluationAgent
 from backend.agents.negotiation import NegotiationAgent
 from backend.agents.signal import SignalAgent
-from shared.constants import UserIntent, CaseStatus
+from shared.constants import UserIntent, CaseStatus, DTP_STAGE_NAMES
 from shared.schemas import ChatResponse
 
 
 class ChatService:
     """
-    Chat/Copilot service.
+    Chat/Copilot service with conversational intelligence.
     
-    CRITICAL: All chat interactions go through the Supervisor.
-    The Supervisor:
-    1. Loads case state
-    2. Classifies intent
-    3. Validates action
-    4. Routes to appropriate agent
-    5. Enforces human approval where required
+    Key behaviors:
+    1. Don't run agents for every message
+    2. Handle STATUS/EXPLAIN without new analysis
+    3. Detect approval/rejection in natural language
+    4. Provide varied, contextual responses
     """
     
     def __init__(self):
         self.case_service = get_case_service()
-        self.supervisor = get_supervisor_graph()
         
-        # Agent instances
+        # Agent instances (only used when needed)
         self._agents = {
             "Strategy": StrategyAgent(tier=1),
             "SupplierEvaluation": SupplierEvaluationAgent(tier=1),
@@ -49,120 +52,482 @@ class ChatService:
         use_tier_2: bool = False
     ) -> ChatResponse:
         """
-        Process user message with Supervisor governance.
-        
-        Flow:
-        1. Load case state
-        2. Classify intent
-        3. Validate action for stage
-        4. If valid, execute appropriate agent
-        5. Check if human approval needed
-        6. Return response with context
+        Process user message conversationally.
         """
-        # STEP 1: Load case state
+        # Load case state
         state = self.case_service.get_case_state(case_id)
         if not state:
-            return ChatResponse(
-                case_id=case_id,
-                user_message=user_message,
-                assistant_message="Case not found.",
-                intent_classified="UNKNOWN",
-                dtp_stage="",
-                waiting_for_human=False,
-                timestamp=datetime.now().isoformat()
+            return self._create_response(
+                case_id, user_message, "Case not found.", "UNKNOWN", ""
             )
         
-        # STEP 2: Update state with user message
-        state["user_intent"] = user_message
+        # Check for approval/rejection in natural language
+        if state.get("waiting_for_human"):
+            approval_response = self._check_for_approval(user_message, case_id, state)
+            if approval_response:
+                return approval_response
         
-        # STEP 3: Classify intent
+        # Classify intent
         intent = IntentRouter.classify_intent(user_message)
-        state["intent_classification"] = intent.value
         
-        # STEP 4: Validate action for stage
-        is_valid, blocked_reason = StateManager.validate_intent_for_stage(
-            state["dtp_stage"],
-            intent
+        # Handle different intents appropriately
+        if intent == UserIntent.STATUS:
+            return self._handle_status_intent(case_id, user_message, state)
+        
+        elif intent == UserIntent.EXPLAIN:
+            return self._handle_explain_intent(case_id, user_message, state)
+        
+        elif intent == UserIntent.EXPLORE:
+            return self._handle_explore_intent(case_id, user_message, state)
+        
+        elif intent == UserIntent.DECIDE:
+            return self._handle_decide_intent(case_id, user_message, state)
+        
+        else:
+            # Default: provide helpful context
+            return self._handle_general_intent(case_id, user_message, state)
+    
+    def _check_for_approval(
+        self,
+        message: str,
+        case_id: str,
+        state: SupervisorState
+    ) -> Optional[ChatResponse]:
+        """Check if the message contains approval or rejection."""
+        message_lower = message.lower().strip()
+        
+        # Approval patterns
+        approval_patterns = [
+            r'\byes\b', r'\bapprove\b', r'\bproceed\b', r'\bgo ahead\b',
+            r'\bok\b', r'\bokay\b', r'\bconfirm\b', r'\baccept\b',
+            r'\bagree\b', r'\blet\'?s do it\b', r'\bsounds good\b'
+        ]
+        
+        # Rejection patterns
+        rejection_patterns = [
+            r'\bno\b', r'\breject\b', r'\bcancel\b', r'\bstop\b',
+            r'\bdon\'?t\b', r'\bdecline\b', r'\brefuse\b',
+            r'\bwait\b', r'\bhold\b', r'\bnot yet\b'
+        ]
+        
+        is_approval = any(re.search(p, message_lower) for p in approval_patterns)
+        is_rejection = any(re.search(p, message_lower) for p in rejection_patterns)
+        
+        if is_approval and not is_rejection:
+            # Process approval
+            result = self.process_decision(case_id, "Approve")
+            if result["success"]:
+                new_stage = result.get("new_dtp_stage", state["dtp_stage"])
+                stage_name = DTP_STAGE_NAMES.get(new_stage, new_stage)
+                
+                response = f"Decision approved. The case has advanced to **{new_stage} - {stage_name}**.\n\n"
+                response += "You can now proceed with the next phase of the sourcing process. "
+                response += "Ask me about the next steps or what actions are available."
+                
+                return self._create_response(
+                    case_id, message, response, "DECIDE", new_stage,
+                    waiting=False
+                )
+        
+        elif is_rejection:
+            # Process rejection
+            result = self.process_decision(case_id, "Reject")
+            if result["success"]:
+                response = "Decision noted. The recommendation has been rejected.\n\n"
+                response += "The case remains at the current stage. You can:\n"
+                response += "- Ask me to explore alternative strategies\n"
+                response += "- Request a revised analysis\n"
+                response += "- Provide specific feedback on what to change"
+                
+                return self._create_response(
+                    case_id, message, response, "DECIDE", state["dtp_stage"],
+                    waiting=False
+                )
+        
+        return None  # Not an approval/rejection
+    
+    def _handle_status_intent(
+        self,
+        case_id: str,
+        message: str,
+        state: SupervisorState
+    ) -> ChatResponse:
+        """Handle STATUS intent - summarize current state without running agents."""
+        dtp_stage = state["dtp_stage"]
+        stage_name = DTP_STAGE_NAMES.get(dtp_stage, dtp_stage)
+        status = state.get("status", "Unknown")
+        
+        # Build status summary
+        response = f"**Current Status: {status}**\n\n"
+        response += f"**Stage:** {dtp_stage} - {stage_name}\n"
+        response += f"**Category:** {state.get('category_id', 'N/A')}\n"
+        
+        if state.get("supplier_id"):
+            response += f"**Supplier:** {state['supplier_id']}\n"
+        
+        # Include latest recommendation if available
+        if state.get("latest_agent_output"):
+            output = state["latest_agent_output"]
+            if output.get("recommended_strategy"):
+                response += f"\n**Current Recommendation:** {output['recommended_strategy']}\n"
+        
+        # Add waiting for approval notice
+        if state.get("waiting_for_human"):
+            response += "\n**Action Required:** This case is awaiting your approval to proceed. "
+            response += "You can approve the recommendation or request changes."
+        else:
+            response += "\n\nIs there anything specific you'd like to know about this case?"
+        
+        return self._create_response(
+            case_id, message, response, "STATUS", dtp_stage,
+            waiting=state.get("waiting_for_human", False)
         )
+    
+    def _handle_explain_intent(
+        self,
+        case_id: str,
+        message: str,
+        state: SupervisorState
+    ) -> ChatResponse:
+        """Handle EXPLAIN intent - explain existing recommendation."""
+        dtp_stage = state["dtp_stage"]
         
-        if not is_valid:
-            explanation = IntentRouter.format_gating_explanation(
-                intent, state["dtp_stage"], blocked_reason
-            )
-            return ChatResponse(
-                case_id=case_id,
-                user_message=user_message,
-                assistant_message=explanation,
-                intent_classified=intent.value,
-                dtp_stage=state["dtp_stage"],
-                waiting_for_human=False,
-                timestamp=datetime.now().isoformat()
+        if not state.get("latest_agent_output"):
+            response = "No recommendation has been generated yet for this case.\n\n"
+            response += "Would you like me to analyze this case and provide a strategy recommendation?"
+            return self._create_response(case_id, message, response, "EXPLAIN", dtp_stage)
+        
+        output = state["latest_agent_output"]
+        agent_name = state.get("latest_agent_name", "Unknown")
+        
+        # Build explanation based on what was asked
+        message_lower = message.lower()
+        
+        if "why" in message_lower or "reason" in message_lower:
+            # Explain the rationale
+            strategy = output.get("recommended_strategy", "N/A")
+            rationale = output.get("rationale", [])
+            
+            response = f"The **{strategy}** strategy was recommended because:\n\n"
+            if rationale:
+                for i, r in enumerate(rationale, 1):
+                    response += f"{i}. {r}\n"
+            else:
+                response += "No detailed rationale was recorded for this recommendation."
+            
+            if output.get("risk_assessment"):
+                response += f"\n**Risk Assessment:** {output['risk_assessment']}"
+        
+        elif "risk" in message_lower:
+            # Focus on risks
+            risk = output.get("risk_assessment", "No specific risks identified.")
+            response = f"**Risk Assessment:**\n\n{risk}"
+        
+        elif "confidence" in message_lower:
+            confidence = output.get("confidence", 0)
+            response = f"The recommendation has a **{confidence:.0%} confidence level**.\n\n"
+            if confidence >= 0.8:
+                response += "This indicates high certainty based on the available data."
+            elif confidence >= 0.6:
+                response += "This indicates moderate certainty. Additional data could improve the recommendation."
+            else:
+                response += "This indicates lower certainty. Consider gathering more information."
+        
+        else:
+            # General explanation
+            strategy = output.get("recommended_strategy", "N/A")
+            confidence = output.get("confidence", 0)
+            rationale = output.get("rationale", [])
+            
+            response = f"**Recommendation Explanation**\n\n"
+            response += f"The {agent_name} agent recommends **{strategy}** with {confidence:.0%} confidence.\n\n"
+            
+            if rationale:
+                response += "**Key Factors:**\n"
+                for r in rationale[:3]:
+                    response += f"- {r}\n"
+            
+            response += "\nWould you like me to explain any specific aspect in more detail?"
+        
+        return self._create_response(
+            case_id, message, response, "EXPLAIN", dtp_stage,
+            agents_called=[agent_name] if agent_name else []
+        )
+    
+    def _handle_explore_intent(
+        self,
+        case_id: str,
+        message: str,
+        state: SupervisorState
+    ) -> ChatResponse:
+        """Handle EXPLORE intent - explore alternatives without state change."""
+        dtp_stage = state["dtp_stage"]
+        message_lower = message.lower()
+        
+        # Check what alternative they're asking about
+        if "alternative" in message_lower or "other option" in message_lower:
+            current_strategy = None
+            if state.get("latest_agent_output"):
+                current_strategy = state["latest_agent_output"].get("recommended_strategy")
+            
+            all_strategies = ["Renew", "Renegotiate", "RFx", "Monitor", "Terminate"]
+            other_strategies = [s for s in all_strategies if s != current_strategy]
+            
+            response = f"**Alternative Strategies to Consider:**\n\n"
+            for strat in other_strategies:
+                if strat == "Renew":
+                    response += "- **Renew:** Extend the current contract with existing terms\n"
+                elif strat == "Renegotiate":
+                    response += "- **Renegotiate:** Modify terms with the current supplier\n"
+                elif strat == "RFx":
+                    response += "- **RFx:** Open competitive bidding to the market\n"
+                elif strat == "Monitor":
+                    response += "- **Monitor:** Delay decision and continue monitoring\n"
+                elif strat == "Terminate":
+                    response += "- **Terminate:** End the relationship with current supplier\n"
+            
+            response += "\nWould you like me to analyze any of these alternatives in detail?"
+        
+        elif "what if" in message_lower:
+            # Hypothetical scenario
+            response = "I can help you explore that scenario.\n\n"
+            response += "Based on the current case data, here are some considerations:\n\n"
+            
+            if state.get("latest_agent_output"):
+                output = state["latest_agent_output"]
+                response += f"- Current recommendation: {output.get('recommended_strategy', 'N/A')}\n"
+                response += f"- Risk level: {output.get('risk_assessment', 'Not assessed')}\n"
+            
+            response += "\nNote: Exploring alternatives does not change the current recommendation. "
+            response += "You would need to request a new analysis to change the recommendation."
+        
+        else:
+            # General exploration
+            response = "I can help you explore options for this case.\n\n"
+            response += "You can ask me:\n"
+            response += "- What are the alternatives to the current recommendation?\n"
+            response += "- What if we chose a different strategy?\n"
+            response += "- What are the risks of each option?\n"
+            response += "\nThis exploration won't change the case state."
+        
+        return self._create_response(
+            case_id, message, response, "EXPLORE", dtp_stage
+        )
+    
+    def _handle_decide_intent(
+        self,
+        case_id: str,
+        message: str,
+        state: SupervisorState
+    ) -> ChatResponse:
+        """Handle DECIDE intent - either process decision or run agent."""
+        dtp_stage = state["dtp_stage"]
+        message_lower = message.lower()
+        
+        # Check if they're asking for new analysis
+        needs_analysis = any(kw in message_lower for kw in [
+            "recommend", "analyze", "suggest", "strategy", "evaluate"
+        ])
+        
+        if needs_analysis:
+            # Run appropriate agent
+            return self._run_agent_analysis(case_id, message, state)
+        
+        # If already waiting and they say something like "proceed"
+        if state.get("waiting_for_human"):
+            return self._create_response(
+                case_id, message,
+                "The case is awaiting your decision. Please click **Approve** or **Request Revision** in the Decision panel, "
+                "or you can say 'yes, approve' or 'reject the recommendation'.",
+                "DECIDE", dtp_stage, waiting=True
             )
         
-        # STEP 5: Get allowed agents and execute
-        allowed_agents = IntentRouter.get_allowed_agents(intent, state["dtp_stage"])
+        # Otherwise provide guidance
+        response = "What decision would you like to make?\n\n"
+        response += "You can:\n"
+        response += "- Ask me to **recommend a strategy** for this case\n"
+        response += "- Ask me to **evaluate suppliers** (at DTP-03)\n"
+        response += "- Ask me to **create a negotiation plan** (at DTP-04)\n"
+        
+        return self._create_response(case_id, message, response, "DECIDE", dtp_stage)
+    
+    def _handle_general_intent(
+        self,
+        case_id: str,
+        message: str,
+        state: SupervisorState
+    ) -> ChatResponse:
+        """Handle general/unknown intent with helpful response."""
+        dtp_stage = state["dtp_stage"]
+        stage_name = DTP_STAGE_NAMES.get(dtp_stage, dtp_stage)
+        
+        response = f"I'm here to help with case {case_id}.\n\n"
+        response += f"Currently at **{dtp_stage} - {stage_name}**.\n\n"
+        response += "I can help you:\n"
+        response += "- **Get status:** 'What is the current status?'\n"
+        response += "- **Understand:** 'Why is this strategy recommended?'\n"
+        response += "- **Explore:** 'What are the alternatives?'\n"
+        response += "- **Decide:** 'Recommend a strategy for this case'\n"
+        
+        if state.get("waiting_for_human"):
+            response += "\n**Note:** This case is awaiting your approval decision."
+        
+        return self._create_response(case_id, message, response, "UNKNOWN", dtp_stage)
+    
+    def _run_agent_analysis(
+        self,
+        case_id: str,
+        message: str,
+        state: SupervisorState
+    ) -> ChatResponse:
+        """Run agent analysis when explicitly requested."""
+        dtp_stage = state["dtp_stage"]
+        
+        # Get allowed agents for this stage
+        allowed_agents = IntentRouter.get_allowed_agents(UserIntent.DECIDE, dtp_stage)
         
         if not allowed_agents:
-            return ChatResponse(
-                case_id=case_id,
-                user_message=user_message,
-                assistant_message=f"No actions available at the current stage ({state['dtp_stage']}).",
-                intent_classified=intent.value,
-                dtp_stage=state["dtp_stage"],
-                waiting_for_human=False,
-                timestamp=datetime.now().isoformat()
+            return self._create_response(
+                case_id, message,
+                f"No analysis available at stage {dtp_stage}.",
+                "DECIDE", dtp_stage
             )
         
-        # STEP 6: Execute primary agent
-        agent_name = self._select_agent(user_message, allowed_agents, state["dtp_stage"])
+        # Select and run agent
+        agent_name = self._select_agent(message, allowed_agents, dtp_stage)
         agent = self._agents.get(agent_name)
         
-        agent_result = None
-        if agent:
-            case_context = {
-                "case_id": case_id,
-                "category_id": state["category_id"],
-                "supplier_id": state.get("supplier_id"),
-                "contract_id": state.get("contract_id"),
-                "dtp_stage": state["dtp_stage"]
-            }
-            agent_result = agent.execute(case_context, user_message)
+        if not agent:
+            return self._create_response(
+                case_id, message,
+                "Unable to run analysis at this time.",
+                "DECIDE", dtp_stage
+            )
         
-        # STEP 7: Update state with agent output
+        case_context = {
+            "case_id": case_id,
+            "category_id": state.get("category_id"),
+            "supplier_id": state.get("supplier_id"),
+            "contract_id": state.get("contract_id"),
+            "dtp_stage": dtp_stage
+        }
+        
+        agent_result = agent.execute(case_context, message)
+        
+        # Update state
         if agent_result:
             state["latest_agent_output"] = agent_result.get("output")
             state["latest_agent_name"] = agent_result.get("agent_name")
-            state["retrieval_context"] = agent_result.get("retrieval_context")
-        
-        # STEP 8: Check if human approval needed
-        needs_approval = IntentRouter.requires_human_approval(intent, agent_name)
-        
-        if needs_approval:
             state["waiting_for_human"] = True
             state["status"] = CaseStatus.WAITING_HUMAN.value
+            self.case_service.save_case_state(state)
         
-        # STEP 9: Save state
-        self.case_service.save_case_state(state)
+        # Format response
+        response = self._format_agent_response(agent_result)
         
-        # STEP 10: Format response
-        assistant_message = self._format_response(
-            intent, agent_result, state, needs_approval
+        return self._create_response(
+            case_id, message, response, "DECIDE", dtp_stage,
+            agents_called=[agent_name],
+            tokens=agent_result.get("tokens_used", 0) if agent_result else 0,
+            waiting=True,
+            retrieval=agent_result.get("retrieval_context") if agent_result else None
         )
+    
+    def _format_agent_response(self, agent_result: Optional[Dict]) -> str:
+        """Format agent output as conversational response."""
+        if not agent_result:
+            return "Analysis could not be completed. Please try again."
         
+        output = agent_result.get("output", {})
+        agent_name = agent_result.get("agent_name", "")
+        
+        if agent_name == "Strategy":
+            strategy = output.get("recommended_strategy", "Monitor")
+            confidence = output.get("confidence", 0)
+            rationale = output.get("rationale", [])
+            
+            response = f"**Strategy Recommendation: {strategy}**\n\n"
+            response += f"Confidence: {confidence:.0%}\n\n"
+            
+            if rationale:
+                response += "**Rationale:**\n"
+                for r in rationale:
+                    response += f"- {r}\n"
+            
+            response += "\n---\nAwaiting your approval to proceed. Please review and approve or reject."
+        
+        elif agent_name == "SupplierEvaluation":
+            suppliers = output.get("shortlisted_suppliers", [])
+            response = f"**Supplier Evaluation Complete**\n\n"
+            if suppliers:
+                response += f"Shortlisted {len(suppliers)} suppliers:\n"
+                for s in suppliers[:5]:
+                    name = s.get('name', s.get('supplier_id', 'Unknown'))
+                    score = s.get('score', 'N/A')
+                    response += f"- {name}: {score}/10\n"
+            response += "\n---\nAwaiting your approval."
+        
+        elif agent_name == "NegotiationSupport":
+            objectives = output.get("negotiation_objectives", [])
+            response = f"**Negotiation Plan Created**\n\n"
+            if objectives:
+                response += "**Objectives:**\n"
+                for obj in objectives:
+                    response += f"- {obj}\n"
+            response += "\n---\nAwaiting your approval."
+        
+        else:
+            response = json.dumps(output, indent=2)
+        
+        return response
+    
+    def _select_agent(
+        self,
+        message: str,
+        allowed_agents: List[str],
+        dtp_stage: str
+    ) -> Optional[str]:
+        """Select appropriate agent based on message."""
+        message_lower = message.lower()
+        
+        if "strategy" in message_lower or "recommend" in message_lower:
+            if "Strategy" in allowed_agents:
+                return "Strategy"
+        
+        if "supplier" in message_lower or "evaluate" in message_lower:
+            if "SupplierEvaluation" in allowed_agents:
+                return "SupplierEvaluation"
+        
+        if "negotiat" in message_lower:
+            if "NegotiationSupport" in allowed_agents:
+                return "NegotiationSupport"
+        
+        return allowed_agents[0] if allowed_agents else None
+    
+    def _create_response(
+        self,
+        case_id: str,
+        user_message: str,
+        assistant_message: str,
+        intent: str,
+        dtp_stage: str,
+        agents_called: List[str] = None,
+        tokens: int = 0,
+        waiting: bool = False,
+        retrieval: Dict = None
+    ) -> ChatResponse:
+        """Create standardized response."""
         return ChatResponse(
             case_id=case_id,
             user_message=user_message,
             assistant_message=assistant_message,
-            intent_classified=intent.value,
-            agents_called=[agent_name] if agent_name else [],
-            tokens_used=agent_result.get("tokens_used", 0) if agent_result else 0,
-            dtp_stage=state["dtp_stage"],
-            waiting_for_human=needs_approval,
-            workflow_summary={
-                "agent": agent_name,
-                "retrieval_context": agent_result.get("retrieval_context") if agent_result else None
-            },
-            retrieval_context=agent_result.get("retrieval_context") if agent_result else None,
+            intent_classified=intent,
+            agents_called=agents_called or [],
+            tokens_used=tokens,
+            dtp_stage=dtp_stage,
+            waiting_for_human=waiting,
+            workflow_summary={"retrieval": retrieval} if retrieval else None,
+            retrieval_context=retrieval,
             timestamp=datetime.now().isoformat()
         )
     
@@ -190,7 +555,6 @@ class ChatService:
         }
         
         if decision.lower() == "approve":
-            # Advance stage if applicable
             can_advance, _ = StateManager.can_advance_stage(state, True)
             if can_advance:
                 state, _ = StateManager.advance_stage(state)
@@ -199,8 +563,6 @@ class ChatService:
             state["status"] = CaseStatus.IN_PROGRESS.value
         
         state["waiting_for_human"] = False
-        
-        # Save state
         self.case_service.save_case_state(state)
         
         return {
@@ -209,99 +571,6 @@ class ChatService:
             "new_dtp_stage": state["dtp_stage"],
             "message": f"Decision '{decision}' processed successfully"
         }
-    
-    def _select_agent(
-        self,
-        user_message: str,
-        allowed_agents: list,
-        dtp_stage: str
-    ) -> Optional[str]:
-        """Select best agent for the request."""
-        message_lower = user_message.lower()
-        
-        # Keyword-based selection
-        if "strategy" in message_lower or "recommend" in message_lower:
-            if "Strategy" in allowed_agents:
-                return "Strategy"
-        
-        if "supplier" in message_lower or "evaluate" in message_lower:
-            if "SupplierEvaluation" in allowed_agents:
-                return "SupplierEvaluation"
-        
-        if "negotiat" in message_lower:
-            if "NegotiationSupport" in allowed_agents:
-                return "NegotiationSupport"
-        
-        if "signal" in message_lower or "alert" in message_lower:
-            if "SignalInterpretation" in allowed_agents:
-                return "SignalInterpretation"
-        
-        # Default to first available
-        return allowed_agents[0] if allowed_agents else None
-    
-    def _format_response(
-        self,
-        intent: UserIntent,
-        agent_result: Optional[Dict],
-        state: SupervisorState,
-        needs_approval: bool
-    ) -> str:
-        """Format response for user."""
-        if not agent_result:
-            return "I couldn't complete that request. Please try again."
-        
-        output = agent_result.get("output", {})
-        
-        # Build response based on agent type
-        agent_name = agent_result.get("agent_name", "")
-        
-        if agent_name == "Strategy":
-            strategy = output.get("recommended_strategy", "Monitor")
-            rationale = output.get("rationale", [])
-            
-            response = f"**Strategy Recommendation: {strategy}**\n\n"
-            if rationale:
-                response += "**Rationale:**\n"
-                for r in rationale[:3]:
-                    response += f"• {r}\n"
-            
-            if output.get("grounded_in"):
-                response += f"\n*Grounded in {len(output['grounded_in'])} documents*"
-        
-        elif agent_name == "SupplierEvaluation":
-            suppliers = output.get("shortlisted_suppliers", [])
-            response = f"**Supplier Evaluation**\n\n"
-            if suppliers:
-                response += f"Shortlisted {len(suppliers)} suppliers:\n"
-                for s in suppliers[:3]:
-                    response += f"• {s.get('name', s.get('supplier_id', 'Unknown'))}: {s.get('score', 'N/A')}/10\n"
-            else:
-                response += "No suppliers found matching criteria.\n"
-            response += f"\n{output.get('recommendation', '')}"
-        
-        elif agent_name == "NegotiationSupport":
-            objectives = output.get("negotiation_objectives", [])
-            response = f"**Negotiation Plan**\n\n"
-            if objectives:
-                response += "**Objectives:**\n"
-                for obj in objectives[:3]:
-                    response += f"• {obj}\n"
-            
-            leverage = output.get("leverage_points", [])
-            if leverage:
-                response += "\n**Leverage Points:**\n"
-                for lp in leverage[:2]:
-                    response += f"• {lp}\n"
-        
-        else:
-            # Generic response
-            response = json.dumps(output, indent=2)
-        
-        # Add approval notice if needed
-        if needs_approval:
-            response += "\n\n---\n⚠️ **Awaiting your approval** to proceed. Please review and approve or reject."
-        
-        return response
 
 
 # Singleton
@@ -313,4 +582,3 @@ def get_chat_service() -> ChatService:
     if _chat_service is None:
         _chat_service = ChatService()
     return _chat_service
-
