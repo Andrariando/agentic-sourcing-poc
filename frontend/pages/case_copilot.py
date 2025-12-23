@@ -490,29 +490,128 @@ def render_decision_column(case, client) -> None:
 
 
 def render_copilot_column(case, client) -> None:
-    """Render right column - Case Copilot."""
+    """Render right column - Case Copilot with fixed-height scrollable chat."""
     
-    # Copilot Header
+    # Inject chat-specific CSS for fixed container
     st.markdown(f"""
-    <div class="copilot-header">Case Copilot</div>
-    <div class="copilot-subtitle">Ask questions about {case.case_id}</div>
+    <style>
+        /* Chat Panel Container */
+        .chat-panel {{
+            display: flex;
+            flex-direction: column;
+            height: calc(70vh - 100px);
+            min-height: 400px;
+            max-height: 600px;
+            border: 1px solid {LIGHT_GRAY};
+            border-radius: 4px;
+            background-color: {WHITE};
+            overflow: hidden;
+        }}
+        
+        /* Chat Header */
+        .chat-panel-header {{
+            padding: 12px 16px;
+            border-bottom: 1px solid {LIGHT_GRAY};
+            flex-shrink: 0;
+        }}
+        
+        /* Suggested Prompts Area */
+        .chat-prompts {{
+            padding: 8px 12px;
+            border-bottom: 1px solid {LIGHT_GRAY};
+            background-color: #FAFBFC;
+            flex-shrink: 0;
+        }}
+        .prompt-btn {{
+            display: inline-block;
+            background-color: #F0F4F8;
+            border: 1px solid {LIGHT_GRAY};
+            border-radius: 16px;
+            padding: 4px 12px;
+            margin: 2px 4px 2px 0;
+            font-size: 0.75rem;
+            color: {NEAR_BLACK};
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }}
+        .prompt-btn:hover {{
+            background-color: {MIT_NAVY};
+            color: {WHITE};
+            border-color: {MIT_NAVY};
+        }}
+        
+        /* Scrollable Messages Area */
+        .chat-messages {{
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+            scroll-behavior: smooth;
+        }}
+        .chat-messages::-webkit-scrollbar {{
+            width: 6px;
+        }}
+        .chat-messages::-webkit-scrollbar-track {{
+            background: #F1F1F1;
+        }}
+        .chat-messages::-webkit-scrollbar-thumb {{
+            background: {LIGHT_GRAY};
+            border-radius: 3px;
+        }}
+        .chat-messages::-webkit-scrollbar-thumb:hover {{
+            background: {CHARCOAL};
+        }}
+        
+        /* Message Bubbles */
+        .chat-msg {{
+            margin-bottom: 12px;
+            animation: fadeIn 0.2s ease-in;
+        }}
+        @keyframes fadeIn {{
+            from {{ opacity: 0; transform: translateY(4px); }}
+            to {{ opacity: 1; transform: translateY(0); }}
+        }}
+        .chat-msg-user {{
+            background-color: #F0F4F8;
+            padding: 10px 14px;
+            border-radius: 12px 12px 4px 12px;
+            margin-left: 20px;
+        }}
+        .chat-msg-assistant {{
+            background-color: {WHITE};
+            border: 1px solid {LIGHT_GRAY};
+            padding: 10px 14px;
+            border-radius: 12px 12px 12px 4px;
+            margin-right: 20px;
+        }}
+        .chat-msg-label {{
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: {MIT_NAVY};
+            margin-bottom: 4px;
+            text-transform: uppercase;
+        }}
+        .chat-msg-content {{
+            font-size: 0.875rem;
+            color: {NEAR_BLACK};
+            line-height: 1.5;
+        }}
+        
+        /* Transparency Footer */
+        .chat-footer {{
+            padding: 8px 12px;
+            border-top: 1px solid {LIGHT_GRAY};
+            background-color: #FAFBFC;
+            font-size: 0.7rem;
+            color: {CHARCOAL};
+            flex-shrink: 0;
+        }}
+        .chat-footer-row {{
+            display: flex;
+            justify-content: space-between;
+            padding: 2px 0;
+        }}
+    </style>
     """, unsafe_allow_html=True)
-    
-    # Suggested Prompts
-    st.markdown("**Suggested Questions**")
-    
-    suggested_prompts = [
-        "Explain why this strategy is recommended",
-        "What are the key risks?",
-        "What alternatives were considered?",
-        "What information is missing?"
-    ]
-    
-    for prompt in suggested_prompts:
-        if st.button(prompt, key=f"prompt_{prompt[:20]}", use_container_width=True):
-            st.session_state.pending_prompt = prompt
-    
-    st.markdown("<br>", unsafe_allow_html=True)
     
     # Initialize chat history
     if "chat_history" not in st.session_state:
@@ -523,24 +622,108 @@ def render_copilot_column(case, client) -> None:
     
     chat_history = st.session_state.chat_history[case.case_id]
     
-    # Chat container with fixed height
-    chat_container = st.container()
+    # Build messages HTML
+    messages_html = ""
+    for msg in chat_history:
+        if msg["role"] == "user":
+            messages_html += f"""
+            <div class="chat-msg">
+                <div class="chat-msg-user">
+                    <div class="chat-msg-label">You</div>
+                    <div class="chat-msg-content">{msg['content']}</div>
+                </div>
+            </div>
+            """
+        else:
+            # Convert markdown-style formatting to HTML
+            content = msg['content']
+            content = content.replace("**", "<strong>").replace("**", "</strong>")
+            content = content.replace("\n", "<br>")
+            messages_html += f"""
+            <div class="chat-msg">
+                <div class="chat-msg-assistant">
+                    <div class="chat-msg-label">Copilot</div>
+                    <div class="chat-msg-content">{content}</div>
+                </div>
+            </div>
+            """
     
-    with chat_container:
-        # Display chat history
-        for msg in chat_history[-10:]:  # Show last 10 messages
-            if msg["role"] == "user":
-                st.markdown(f"""
-                <div style="background-color: #F0F4F8; padding: 10px; border-radius: 4px; margin-bottom: 8px;">
-                    <strong style="color: {MIT_NAVY};">You:</strong> {msg['content']}
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown(f"""
-                <div style="background-color: white; border: 1px solid {LIGHT_GRAY}; padding: 10px; border-radius: 4px; margin-bottom: 8px;">
-                    <strong style="color: {MIT_NAVY};">Copilot:</strong><br>{msg['content']}
-                </div>
-                """, unsafe_allow_html=True)
+    # Empty state message
+    if not chat_history:
+        messages_html = f"""
+        <div style="text-align: center; padding: 40px 20px; color: {CHARCOAL};">
+            <div style="font-size: 2rem; margin-bottom: 12px;">💬</div>
+            <div style="font-size: 0.875rem;">No messages yet</div>
+            <div style="font-size: 0.75rem; margin-top: 4px;">Ask a question or click a suggested prompt</div>
+        </div>
+        """
+    
+    # Get transparency metadata
+    last_meta = None
+    for msg in reversed(chat_history):
+        if msg.get("metadata"):
+            last_meta = msg["metadata"]
+            break
+    
+    agent_display = last_meta.get('agent', 'None') if last_meta else 'None'
+    intent_display = last_meta.get('intent', 'N/A') if last_meta else 'N/A'
+    docs_display = last_meta.get('docs_retrieved', 0) if last_meta else 0
+    
+    # Render complete chat panel as single HTML block
+    st.markdown(f"""
+    <div class="chat-panel">
+        <!-- Header -->
+        <div class="chat-panel-header">
+            <div class="copilot-header">Case Copilot</div>
+            <div class="copilot-subtitle">Ask questions about {case.case_id}</div>
+        </div>
+        
+        <!-- Scrollable Messages -->
+        <div class="chat-messages" id="chat-scroll-container">
+            {messages_html}
+        </div>
+        
+        <!-- Footer with transparency -->
+        <div class="chat-footer">
+            <div class="chat-footer-row">
+                <span>Agent</span>
+                <span><strong>{agent_display}</strong></span>
+            </div>
+            <div class="chat-footer-row">
+                <span>Intent</span>
+                <span><strong>{intent_display}</strong></span>
+            </div>
+            <div class="chat-footer-row">
+                <span>Docs Retrieved</span>
+                <span><strong>{docs_display}</strong></span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Auto-scroll to bottom -->
+    <script>
+        const container = document.getElementById('chat-scroll-container');
+        if (container) {{
+            container.scrollTop = container.scrollHeight;
+        }}
+    </script>
+    """, unsafe_allow_html=True)
+    
+    # Suggested prompts as Streamlit buttons (below chat panel)
+    st.markdown("##### Quick Questions", unsafe_allow_html=True)
+    
+    prompt_cols = st.columns(2)
+    suggested_prompts = [
+        ("Why this strategy?", "prompt_why"),
+        ("What are the risks?", "prompt_risks"),
+        ("Alternatives?", "prompt_alt"),
+        ("What's missing?", "prompt_missing")
+    ]
+    
+    for i, (prompt, key) in enumerate(suggested_prompts):
+        with prompt_cols[i % 2]:
+            if st.button(prompt, key=key, use_container_width=True):
+                st.session_state.pending_prompt = prompt
     
     # Check for pending prompt from button
     if st.session_state.get("pending_prompt"):
@@ -549,7 +732,7 @@ def render_copilot_column(case, client) -> None:
         process_chat_message(case.case_id, user_input, client, chat_history)
         st.rerun()
     
-    # Chat input
+    # Chat input - sticky at bottom
     user_input = st.chat_input(
         "Ask about this case...",
         key="copilot_input"
@@ -558,30 +741,6 @@ def render_copilot_column(case, client) -> None:
     if user_input:
         process_chat_message(case.case_id, user_input, client, chat_history)
         st.rerun()
-    
-    # Transparency Footer
-    last_meta = None
-    for msg in reversed(chat_history):
-        if msg.get("metadata"):
-            last_meta = msg["metadata"]
-            break
-    
-    st.markdown(f"""
-    <div class="transparency-footer">
-        <div class="transparency-item">
-            <span>Active Agent</span>
-            <span>{last_meta.get('agent', 'None') if last_meta else 'None'}</span>
-        </div>
-        <div class="transparency-item">
-            <span>Intent Classification</span>
-            <span>{last_meta.get('intent', 'N/A') if last_meta else 'N/A'}</span>
-        </div>
-        <div class="transparency-item">
-            <span>Documents Retrieved</span>
-            <span>{last_meta.get('docs_retrieved', 0) if last_meta else 0}</span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
 
 
 def process_chat_message(case_id: str, message: str, client, chat_history: list) -> None:
