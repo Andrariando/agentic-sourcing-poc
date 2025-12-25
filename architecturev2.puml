@@ -1,0 +1,254 @@
+' =============================================================================
+' AGENTIC SOURCING COPILOT — SYSTEM ARCHITECTURE DIAGRAM (V2)
+' =============================================================================
+' 
+' Purpose: Visual representation of the human-in-the-loop, multi-agent 
+'          decision-support system for procurement sourcing.
+'
+' Methodology: C4-style component diagram showing containers, components,
+'              control flow, and human-in-the-loop checkpoints.
+'
+' Key Principles Illustrated:
+'   • Decision is focal point — AI advises, human decides
+'   • Rules > Analytics > Retrieval > LLM narration
+'   • No autonomous decisions — all require human approval
+'   • Full traceability — every output attributable to source
+'
+' To render: Use PlantUML (https://plantuml.com) or VS Code PlantUML extension
+'            Press Alt+D in VS Code/Cursor to preview
+' =============================================================================
+
+@startuml Agentic_Sourcing_Architecture_V2
+
+' ============== THEME & STYLING ==============
+skinparam backgroundColor #FEFEFE
+skinparam defaultFontName "Arial"
+skinparam defaultFontSize 12
+skinparam roundcorner 15
+skinparam shadowing true
+
+skinparam rectangle {
+    BackgroundColor<<human>> #FFEBEE
+    BorderColor<<human>> #C62828
+    BorderThickness 2
+    BackgroundColor<<frontend>> #E3F2FD
+    BorderColor<<frontend>> #1976D2
+    BorderThickness 2
+    BackgroundColor<<backend>> #E8F5E9
+    BorderColor<<backend>> #388E3C
+    BorderThickness 2
+    BackgroundColor<<supervisor>> #FFF3E0
+    BorderColor<<supervisor>> #F57C00
+    BorderThickness 3
+    BackgroundColor<<agent>> #F3E5F5
+    BorderColor<<agent>> #7B1FA2
+    BorderThickness 2
+    BackgroundColor<<data>> #ECEFF1
+    BorderColor<<data>> #546E7A
+    BorderThickness 2
+    BackgroundColor<<external>> #E8E8E8
+    BorderColor<<external>> #999999
+    BorderThickness 2
+    FontColor #1F1F1F
+    FontStyle bold
+}
+
+skinparam arrow {
+    Color #4A4A4A
+    FontColor #4A4A4A
+    FontSize 10
+    Thickness 2
+}
+
+skinparam note {
+    BackgroundColor #FFFDE7
+    BorderColor #FBC02D
+    FontColor #1F1F1F
+}
+
+' ============== TITLE ==============
+title **Agentic Sourcing Copilot** — Enterprise Architecture\n//Human-in-the-Loop Multi-Agent Decision Support System//\n\n**Phase 3 Implementation** — Enterprise Memory & Evidence
+
+' ============== EXTERNAL ACTORS ==============
+rectangle "👤 **Procurement Officer**\n(Human Decision-Maker)" as human <<human>> {
+}
+
+rectangle "🤖 **OpenAI GPT-4**\n(LLM Provider)" as llm <<external>> {
+}
+
+' ============== FRONTEND CONTAINER ==============
+rectangle "**FRONTEND**\nStreamlit UI" as frontend <<frontend>> {
+    
+    rectangle "📊 **Case Dashboard**\nCase list, metrics,\nfiltering, status view" as dashboard
+    
+    rectangle "💬 **Case Copilot**\nDecision console,\nchat interface,\napproval buttons" as copilot
+    
+    rectangle "📁 **Knowledge Management**\nDocument upload,\ndata ingestion" as knowledge
+    
+    rectangle "🔌 **API Client**\nHTTP/Direct mode\ncommunication layer" as api_client
+}
+
+' ============== BACKEND CONTAINER ==============
+rectangle "**BACKEND**\nFastAPI Server" as backend <<backend>> {
+    
+    ' --- API Layer ---
+    rectangle "🌐 **REST API**\n/cases, /chat, /decisions,\n/ingest, /health" as api
+    
+    ' --- Services Layer ---
+    rectangle "**Services Layer**" as services {
+        rectangle "📋 Case Service\nCase CRUD" as case_svc
+        rectangle "💬 Chat Service\nCopilot logic" as chat_svc
+        rectangle "📥 Ingestion Service\nUpload orchestration" as ingest_svc
+    }
+    
+    ' --- Supervisor (Core Orchestration) ---
+    rectangle "**SUPERVISOR**\n(Central Orchestrator)" as supervisor_box <<supervisor>> {
+        rectangle "🧠 **Intent Router**\nClassify: EXPLAIN |\nEXPLORE | DECIDE | STATUS" as router
+        rectangle "📊 **State Manager**\nDTP stage tracking,\nvalidation, transitions" as state_mgr
+        rectangle "🔀 **LangGraph Workflow**\nAgent routing,\nconditional edges" as graph
+    }
+    
+    ' --- Specialist Agents ---
+    rectangle "**SPECIALIST AGENTS**" as agents_box <<agent>> {
+        rectangle "📐 **Strategy Agent**\n(DTP-01)\nRules → Analytics → LLM" as strategy
+        rectangle "🏢 **Supplier Agent**\n(DTP-03/04)\nScoring, evaluation" as supplier
+        rectangle "🤝 **Negotiation Agent**\n(DTP-04)\nLeverage analysis" as negotiation
+        rectangle "📡 **Signal Agent**\nMarket intelligence,\nrisk detection" as signal
+    }
+    
+    ' --- Ingestion Layer ---
+    rectangle "**INGESTION LAYER**" as ingestion_box {
+        rectangle "📄 Doc Ingest\nPDF, DOCX, TXT\n→ chunks → embed" as doc_ingest
+        rectangle "📊 Data Ingest\nCSV, Excel\n→ validate → store" as data_ingest
+    }
+    
+    ' --- RAG Layer ---
+    rectangle "**RAG LAYER**" as rag_box {
+        rectangle "🔍 Retriever\nSemantic search,\nmetadata filter" as retriever
+        rectangle "📦 Vector Store\nChromaDB wrapper" as vector_store
+    }
+}
+
+' ============== DATA LAYER ==============
+rectangle "**DATA LAYER**\n(Persistence)" as data_layer <<data>> {
+    rectangle "🗄️ **SQLite**\nData Lake\n(Suppliers, Spend,\nSLAs, Cases)" as sqlite
+    rectangle "🧲 **ChromaDB**\nVector Store\n(Document embeddings)" as chromadb
+    rectangle "📁 **JSON Files**\nSynthetic seed data" as json_data
+}
+
+' ============== FLOW ARROWS ==============
+
+' --- Human Interaction ---
+human -down-> copilot : "Asks questions,\nApproves/Rejects"
+copilot -up-> human : "Recommendations,\nEvidence, Pending\nApproval"
+
+human -down-> dashboard : "Views cases,\nselects case"
+human -down-> knowledge : "Uploads documents\n& data files"
+
+' --- Frontend to Backend ---
+dashboard --> api_client
+copilot --> api_client
+knowledge --> api_client
+api_client -down-> api : "REST API calls\n(Separated Mode)\n—or— Direct imports\n(Integrated Mode)"
+
+' --- API to Services ---
+api --> case_svc : "Case CRUD"
+api --> chat_svc : "Chat messages"
+api --> ingest_svc : "File uploads"
+
+' --- Services to Supervisor ---
+chat_svc -down-> router : "Classifies\nuser intent"
+router -right-> state_mgr : "Validates\nDTP stage"
+state_mgr -right-> graph : "Routes to\nallowed agents"
+
+' --- Supervisor to Agents ---
+graph -down-> strategy : "DTP-01:\nStrategy task"
+graph -down-> supplier : "DTP-03/04:\nEvaluate suppliers"
+graph -down-> negotiation : "DTP-04:\nNegotiation support"
+graph -down-> signal : "Any stage:\nInterpret signals"
+
+' --- Agents return to Supervisor ---
+strategy -up-> graph : "Returns structured\nrecommendation"
+supplier -up-> graph : "Returns scored\nshortlist"
+negotiation -up-> graph : "Returns leverage\nanalysis"
+signal -up-> graph : "Returns risk\nassessment"
+
+' --- Human-in-the-Loop Checkpoint ---
+graph -up-> state_mgr : "Pauses for\nhuman approval\n⏸️"
+state_mgr -up-> chat_svc : "Pending\napproval state"
+
+' --- Ingestion Flow ---
+ingest_svc --> doc_ingest : "Documents"
+ingest_svc --> data_ingest : "Structured data"
+doc_ingest --> vector_store : "Embed & store\nchunks"
+data_ingest --> sqlite : "Validate & insert\nrecords"
+
+' --- RAG Retrieval ---
+strategy --> retriever : "Retrieves\nrelevant context"
+supplier --> retriever : "Retrieves\nsupplier docs"
+negotiation --> retriever : "Retrieves\ncontract terms"
+signal --> retriever : "Retrieves\nmarket intel"
+retriever --> vector_store : "Semantic\nsearch"
+vector_store --> chromadb : "Query\nvectors"
+
+' --- Data Queries ---
+supplier --> sqlite : "Query\nperformance data"
+signal --> sqlite : "Query\nspend & SLA"
+state_mgr --> sqlite : "Load/save\ncase state"
+
+' --- LLM Calls ---
+strategy -right-> llm : "Narration only\n(after rules)"
+supplier -right-> llm : "Summarization"
+negotiation -right-> llm : "Insight generation"
+signal -right-> llm : "Risk interpretation"
+
+' --- Seed Data ---
+json_data .up.> sqlite : "Seed\nDemo Data"
+
+' ============== LEGEND ==============
+legend right
+    |= Color |= Component Type |
+    | <#FFEBEE> | Human Actor |
+    | <#E3F2FD> | Frontend (Streamlit) |
+    | <#E8F5E9> | Backend (FastAPI) |
+    | <#FFF3E0> | Supervisor (Orchestrator) |
+    | <#F3E5F5> | Specialist Agents |
+    | <#ECEFF1> | Data / Persistence |
+    | <#E8E8E8> | External System |
+    
+    **Key Governance Rules:**
+    1. Frontend never calls agents directly
+    2. Supervisor is single source of truth
+    3. Intent classification is deterministic
+    4. Stage advancement requires approval ⏸️
+    5. Retrieval is stage-gated by DTP
+endlegend
+
+' ============== NOTES ==============
+note top of supervisor_box
+    **Central Control Point**
+    • Validates all state transitions
+    • Blocks invalid DTP jumps
+    • Enforces human approval
+    • Logs all override events
+end note
+
+note bottom of agents_box
+    **Decision Logic Hierarchy**
+    1. Heuristic / policy rules
+    2. Deterministic validation
+    3. Analytics (normalization)
+    4. Retrieval-augmented context
+    5. LLM narration (last resort)
+end note
+
+note right of human
+    **Human-in-the-Loop**
+    ━━━━━━━━━━━━━━━━━
+    ✅ Approve → Advance stage
+    ✏️ Edit → Modify & resubmit
+    ❌ Reject → Stay at stage
+end note
+
+@enduml
+
