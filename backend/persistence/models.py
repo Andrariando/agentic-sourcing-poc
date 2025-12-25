@@ -231,3 +231,5 @@ class CaseState(SQLModel, table=True):
     # Trigger
     trigger_source: str = Field(default="User")
 
+
+

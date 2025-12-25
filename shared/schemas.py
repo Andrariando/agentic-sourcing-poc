@@ -362,3 +362,5 @@ class HealthCheckResponse(BaseModel):
     version: str
     components: Dict[str, str]  # component_name -> status
 
+
+

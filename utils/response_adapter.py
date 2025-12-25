@@ -478,3 +478,5 @@ def get_response_adapter() -> ResponseAdapter:
     if _response_adapter is None:
         _response_adapter = ResponseAdapter()
     return _response_adapter
+
+

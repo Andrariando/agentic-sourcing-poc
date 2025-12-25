@@ -295,3 +295,5 @@ def detect_contradictions(
     return get_contradiction_detector().check_for_contradictions(
         new_output, new_agent_name, previous_outputs, case_memory_state
     )
+
+

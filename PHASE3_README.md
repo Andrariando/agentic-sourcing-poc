@@ -206,3 +206,5 @@ The UI will be available at `http://localhost:8501`
 5. **Fallback Outputs** used when LLM fails - never blocks user
 6. **Activity Logging** tracks all agent actions for traceability
 
+
+

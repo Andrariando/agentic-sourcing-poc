@@ -314,3 +314,5 @@ def get_document_ingester() -> DocumentIngester:
         _ingester = DocumentIngester()
     return _ingester
 
+
+

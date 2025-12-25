@@ -1,0 +1,13 @@
+@startuml Test
+title Simple Test Diagram
+
+actor User
+rectangle Frontend
+rectangle Backend
+
+User --> Frontend : "Request"
+Frontend --> Backend : "API Call"
+Backend --> Frontend : "Response"
+
+@enduml
+

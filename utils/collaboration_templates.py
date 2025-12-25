@@ -276,3 +276,5 @@ def get_transition_prompt(dtp_stage: str) -> str:
     """Get the transition-to-execution prompt for a DTP stage."""
     template = get_collaboration_template(dtp_stage)
     return template.transition_prompt
+
+

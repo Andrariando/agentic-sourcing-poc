@@ -557,3 +557,5 @@ def generate_constraint_acknowledgment(result: ExtractionResult) -> str:
     combined += "\n\n_These will shape my analysis going forward._"
     
     return combined
+
+
