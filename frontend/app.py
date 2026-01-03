@@ -37,6 +37,11 @@ st.set_page_config(
 # Global Styles
 st.markdown(f"""
 <style>
+    /* Hide Streamlit's default page picker if it exists */
+    [data-testid="stSidebar"] [data-testid="stSidebarNav"] {{
+        display: none !important;
+    }}
+    
     /* Sidebar styling */
     [data-testid="stSidebar"] {{
         background-color: #FAFAFA;
@@ -44,6 +49,16 @@ st.markdown(f"""
     }}
     [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {{
         font-size: 0.9rem;
+    }}
+    
+    /* Search input styling */
+    [data-testid="stSidebar"] [data-baseweb="input"] {{
+        background-color: white;
+        border: 1px solid {LIGHT_GRAY};
+        border-radius: 4px;
+    }}
+    [data-testid="stSidebar"] [data-baseweb="input"]:focus {{
+        border-color: {MIT_NAVY};
     }}
     
     /* Navigation buttons */
@@ -127,14 +142,59 @@ def main():
         </div>
         """, unsafe_allow_html=True)
         
-        # Navigation
-        st.markdown(f'<div style="font-size: 0.7rem; color: {CHARCOAL}; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">Navigation</div>', unsafe_allow_html=True)
-        
+        # Page search/filter
         pages = {
             "dashboard": "Case Dashboard",
-            "copilot": "Case Copilot",
+            "copilot": "Case Copilot", 
             "knowledge": "Knowledge Management"
         }
+        
+        # Search input with functional suggestions
+        search_query = st.text_input(
+            "",
+            value=st.session_state.get("page_search", ""),
+            placeholder="app",
+            key="page_search_input",
+            label_visibility="collapsed"
+        )
+        
+        # Update session state
+        if search_query != st.session_state.get("page_search", ""):
+            st.session_state.page_search = search_query
+        
+        # Filter pages based on search
+        filtered_pages = {}
+        if search_query:
+            query_lower = search_query.lower()
+            for page_id, page_name in pages.items():
+                # Match against page name or keywords
+                if (query_lower in page_name.lower() or 
+                    query_lower in page_id.lower() or
+                    (query_lower == "app" and page_id == "dashboard") or
+                    (query_lower in ["case", "copilot"] and page_id == "copilot") or
+                    (query_lower in ["case", "dashboard"] and page_id == "dashboard") or
+                    (query_lower in ["knowledge", "management"] and page_id == "knowledge")):
+                    filtered_pages[page_id] = page_name
+        
+        # Show clickable suggestions
+        if search_query and filtered_pages:
+            st.markdown(f'<div style="font-size: 0.7rem; color: {CHARCOAL}; margin-top: 8px; margin-bottom: 4px;">Suggestions:</div>', unsafe_allow_html=True)
+            for page_id, page_name in filtered_pages.items():
+                if st.button(
+                    f"→ {page_name}",
+                    key=f"search_suggestion_{page_id}",
+                    use_container_width=True
+                ):
+                    st.session_state.current_page = page_id
+                    st.session_state.page_search = ""  # Clear search
+                    st.rerun()
+            st.markdown("<br>", unsafe_allow_html=True)
+        elif search_query and not filtered_pages:
+            st.markdown(f'<div style="font-size: 0.75rem; color: {CHARCOAL}; font-style: italic; margin-top: 8px;">No matches found</div>', unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
+        
+        # Navigation
+        st.markdown(f'<div style="font-size: 0.7rem; color: {CHARCOAL}; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">Navigation</div>', unsafe_allow_html=True)
         
         for page_id, page_name in pages.items():
             is_current = st.session_state.current_page == page_id
