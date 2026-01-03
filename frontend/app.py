@@ -37,8 +37,27 @@ st.set_page_config(
 # Global Styles
 st.markdown(f"""
 <style>
-    /* Hide Streamlit's default page picker if it exists */
+    /* Hide Streamlit's default page picker/navigation completely */
+    [data-testid="stSidebarNav"] {{
+        display: none !important;
+    }}
+    [data-testid="stSidebarNavItems"] {{
+        display: none !important;
+    }}
+    [data-testid="stSidebarNavLinkContainer"] {{
+        display: none !important;
+    }}
+    [data-testid="stSidebarNavLink"] {{
+        display: none !important;
+    }}
+    [data-testid="stSidebarNavSeparator"] {{
+        display: none !important;
+    }}
+    /* Also hide if nested in sidebar */
     [data-testid="stSidebar"] [data-testid="stSidebarNav"] {{
+        display: none !important;
+    }}
+    [data-testid="stSidebar"] [data-testid="stSidebarNavItems"] {{
         display: none !important;
     }}
     
