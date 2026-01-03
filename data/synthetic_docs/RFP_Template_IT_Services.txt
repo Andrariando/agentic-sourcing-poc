@@ -1,0 +1,44 @@
+REQUEST FOR PROPOSAL (RFP) TEMPLATE - IT SERVICES
+
+1. EXECUTIVE SUMMARY
+This section provides an overview of the procurement need, including objectives, scope, and expected outcomes.
+
+2. SCOPE OF WORK
+Define the services required, including:
+- Technical requirements
+- Service levels
+- Delivery expectations
+
+3. TECHNICAL REQUIREMENTS
+- System compatibility
+- Integration needs
+- Security requirements
+- Performance standards
+
+4. PRICING STRUCTURE
+Suppliers should provide:
+- Unit pricing
+- Volume discounts
+- Payment terms
+- Price validity period
+
+5. EVALUATION CRITERIA
+Proposals will be evaluated based on:
+- Technical capability (30%)
+- Price (25%)
+- Experience (20%)
+- Service levels (15%)
+- Risk factors (10%)
+
+6. TERMS AND CONDITIONS
+Standard terms including:
+- Liability limitations
+- Indemnification
+- Termination clauses
+- Confidentiality
+
+7. SUBMISSION INSTRUCTIONS
+- Deadline: [Date]
+- Format: Electronic submission
+- Contact: procurement@company.com
+

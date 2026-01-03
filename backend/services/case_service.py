@@ -8,9 +8,16 @@ from uuid import uuid4
 from sqlmodel import select
 
 from backend.persistence.database import get_db_session
-from backend.persistence.models import CaseState
+from backend.persistence.models import (
+    CaseState, 
+    Artifact as ArtifactModel,
+    ArtifactPack as ArtifactPackModel
+)
 from backend.supervisor.state import StateManager, SupervisorState
-from shared.schemas import CaseSummary, CaseDetail
+from shared.schemas import (
+    CaseSummary, CaseDetail, Artifact, ArtifactPack, 
+    NextAction, RiskItem, GroundingReference
+)
 
 
 class CaseService:
@@ -224,6 +231,268 @@ class CaseService:
                 "human_decision": state.get("human_decision")
             }
         )
+    
+    # =========================================================================
+    # ARTIFACT OPERATIONS
+    # =========================================================================
+    
+    def save_artifact_pack(self, case_id: str, pack: ArtifactPack) -> bool:
+        """
+        Save an artifact pack and its artifacts to the database.
+        
+        Args:
+            case_id: The case ID
+            pack: The ArtifactPack to save
+            
+        Returns:
+            True if successful
+        """
+        session = get_db_session()
+        
+        try:
+            artifact_ids = []
+            
+            # Save individual artifacts
+            for artifact in pack.artifacts:
+                artifact_model = ArtifactModel(
+                    artifact_id=artifact.artifact_id,
+                    case_id=case_id,
+                    type=artifact.type,
+                    title=artifact.title,
+                    content_json=json.dumps(artifact.content) if artifact.content else None,
+                    content_text=artifact.content_text,
+                    grounded_in_json=json.dumps([
+                        {"ref_id": g.ref_id, "ref_type": g.ref_type, 
+                         "source_name": g.source_name, "excerpt": g.excerpt}
+                        for g in artifact.grounded_in
+                    ]),
+                    created_by_agent=artifact.created_by_agent,
+                    created_by_task=artifact.created_by_task,
+                    verification_status=artifact.verification_status,
+                    created_at=artifact.created_at
+                )
+                session.add(artifact_model)
+                artifact_ids.append(artifact.artifact_id)
+            
+            # Save the pack
+            pack_model = ArtifactPackModel(
+                pack_id=pack.pack_id,
+                case_id=case_id,
+                agent_name=pack.agent_name,
+                tasks_executed=json.dumps(pack.tasks_executed),
+                artifact_ids=json.dumps(artifact_ids),
+                next_actions_json=json.dumps([
+                    {"action_id": a.action_id, "label": a.label, "why": a.why,
+                     "owner": a.owner, "depends_on": a.depends_on,
+                     "recommended_by_agent": a.recommended_by_agent,
+                     "recommended_by_task": a.recommended_by_task}
+                    for a in pack.next_actions
+                ]),
+                risks_json=json.dumps([
+                    {"severity": r.severity, "description": r.description, "mitigation": r.mitigation}
+                    for r in pack.risks
+                ]),
+                notes_json=json.dumps(pack.notes),
+                created_at=pack.created_at
+            )
+            session.add(pack_model)
+            
+            # Update case state with latest pack info
+            case = session.exec(
+                select(CaseState).where(CaseState.case_id == case_id)
+            ).first()
+            
+            if case:
+                case.latest_artifact_pack_id = pack.pack_id
+                
+                # Update artifact index
+                artifact_index = json.loads(case.artifact_index) if case.artifact_index else {}
+                for artifact in pack.artifacts:
+                    if artifact.type not in artifact_index:
+                        artifact_index[artifact.type] = []
+                    artifact_index[artifact.type].append(artifact.artifact_id)
+                case.artifact_index = json.dumps(artifact_index)
+                
+                # Cache next actions
+                case.next_actions_cache = json.dumps([
+                    {"action_id": a.action_id, "label": a.label, "why": a.why}
+                    for a in pack.next_actions
+                ])
+                
+                case.updated_at = datetime.now().isoformat()
+                session.add(case)
+            
+            session.commit()
+            return True
+            
+        except Exception as e:
+            session.rollback()
+            print(f"Error saving artifact pack: {e}")
+            return False
+        finally:
+            session.close()
+    
+    def list_artifacts(
+        self, 
+        case_id: str, 
+        artifact_type: Optional[str] = None
+    ) -> List[Artifact]:
+        """
+        List artifacts for a case, optionally filtered by type.
+        """
+        session = get_db_session()
+        
+        query = select(ArtifactModel).where(ArtifactModel.case_id == case_id)
+        if artifact_type:
+            query = query.where(ArtifactModel.type == artifact_type)
+        
+        query = query.order_by(ArtifactModel.created_at.desc())
+        
+        results = session.exec(query).all()
+        session.close()
+        
+        return [self._model_to_artifact(r) for r in results]
+    
+    def get_artifact(self, case_id: str, artifact_id: str) -> Optional[Artifact]:
+        """Get a specific artifact."""
+        session = get_db_session()
+        
+        result = session.exec(
+            select(ArtifactModel).where(
+                ArtifactModel.case_id == case_id,
+                ArtifactModel.artifact_id == artifact_id
+            )
+        ).first()
+        
+        session.close()
+        
+        return self._model_to_artifact(result) if result else None
+    
+    def get_latest_artifact_pack(self, case_id: str) -> Optional[ArtifactPack]:
+        """Get the latest artifact pack for a case."""
+        session = get_db_session()
+        
+        # Get case to find latest pack ID
+        case = session.exec(
+            select(CaseState).where(CaseState.case_id == case_id)
+        ).first()
+        
+        if not case or not case.latest_artifact_pack_id:
+            session.close()
+            return None
+        
+        pack = session.exec(
+            select(ArtifactPackModel).where(
+                ArtifactPackModel.pack_id == case.latest_artifact_pack_id
+            )
+        ).first()
+        
+        session.close()
+        
+        return self._model_to_pack(pack, case_id) if pack else None
+    
+    def get_next_actions(self, case_id: str) -> List[NextAction]:
+        """Get cached next actions for a case."""
+        session = get_db_session()
+        
+        case = session.exec(
+            select(CaseState).where(CaseState.case_id == case_id)
+        ).first()
+        
+        session.close()
+        
+        if not case or not case.next_actions_cache:
+            return []
+        
+        try:
+            actions_data = json.loads(case.next_actions_cache)
+            return [
+                NextAction(
+                    action_id=a.get("action_id", ""),
+                    label=a.get("label", ""),
+                    why=a.get("why", ""),
+                    owner=a.get("owner", "user"),
+                    depends_on=a.get("depends_on", []),
+                    recommended_by_agent=a.get("recommended_by_agent", ""),
+                    recommended_by_task=a.get("recommended_by_task", "")
+                )
+                for a in actions_data
+            ]
+        except json.JSONDecodeError:
+            return []
+    
+    def _model_to_artifact(self, model: ArtifactModel) -> Artifact:
+        """Convert database model to Artifact schema."""
+        grounded_in = []
+        if model.grounded_in_json:
+            try:
+                grounding_data = json.loads(model.grounded_in_json)
+                grounded_in = [
+                    GroundingReference(
+                        ref_id=g.get("ref_id", ""),
+                        ref_type=g.get("ref_type", ""),
+                        source_name=g.get("source_name", ""),
+                        excerpt=g.get("excerpt")
+                    )
+                    for g in grounding_data
+                ]
+            except json.JSONDecodeError:
+                pass
+        
+        return Artifact(
+            artifact_id=model.artifact_id,
+            type=model.type,
+            title=model.title,
+            content=json.loads(model.content_json) if model.content_json else {},
+            content_text=model.content_text,
+            grounded_in=grounded_in,
+            created_at=model.created_at,
+            created_by_agent=model.created_by_agent,
+            created_by_task=model.created_by_task,
+            verification_status=model.verification_status
+        )
+    
+    def _model_to_pack(self, model: ArtifactPackModel, case_id: str) -> ArtifactPack:
+        """Convert database model to ArtifactPack schema."""
+        # Load artifacts
+        artifact_ids = json.loads(model.artifact_ids) if model.artifact_ids else []
+        artifacts = []
+        for aid in artifact_ids:
+            artifact = self.get_artifact(case_id, aid)
+            if artifact:
+                artifacts.append(artifact)
+        
+        # Load next actions
+        next_actions = []
+        if model.next_actions_json:
+            try:
+                actions_data = json.loads(model.next_actions_json)
+                next_actions = [
+                    NextAction(**a) for a in actions_data
+                ]
+            except (json.JSONDecodeError, TypeError):
+                pass
+        
+        # Load risks
+        risks = []
+        if model.risks_json:
+            try:
+                risks_data = json.loads(model.risks_json)
+                risks = [RiskItem(**r) for r in risks_data]
+            except (json.JSONDecodeError, TypeError):
+                pass
+        
+        return ArtifactPack(
+            pack_id=model.pack_id,
+            artifacts=artifacts,
+            next_actions=next_actions,
+            risks=risks,
+            notes=json.loads(model.notes_json) if model.notes_json else [],
+            grounded_in=[],  # Aggregated from artifacts
+            agent_name=model.agent_name,
+            tasks_executed=json.loads(model.tasks_executed) if model.tasks_executed else [],
+            created_at=model.created_at
+        )
 
 
 # Singleton
@@ -235,6 +504,7 @@ def get_case_service() -> CaseService:
     if _case_service is None:
         _case_service = CaseService()
     return _case_service
+
 
 
 

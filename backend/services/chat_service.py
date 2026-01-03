@@ -6,6 +6,11 @@ CONVERSATIONAL DESIGN:
 - EXPLAIN intent: Explain existing recommendation (no new analysis)
 - EXPLORE intent: Explore alternatives (may call agent)
 - DECIDE intent: Process approval/rejection OR request new analysis
+
+ARTIFACT PACK FLOW:
+- Agents now return ArtifactPacks instead of simple JSON
+- ArtifactPacks are persisted via CaseService
+- UI receives artifacts, next_actions, and risks
 """
 import json
 import re
@@ -15,12 +20,24 @@ from datetime import datetime
 from backend.services.case_service import get_case_service
 from backend.supervisor.state import SupervisorState, StateManager
 from backend.supervisor.router import IntentRouter
+from shared.constants import UserIntent, CaseStatus, DTP_STAGE_NAMES, AgentName
+from shared.schemas import ChatResponse, ArtifactPack
+
+# Import new official agents
+from backend.agents import (
+    SupervisorAgent,
+    SourcingSignalAgent,
+    SupplierScoringAgent,
+    RfxDraftAgent,
+    NegotiationSupportAgent,
+    ContractSupportAgent,
+    ImplementationAgent,
+)
+# Legacy agents for backward compatibility
 from backend.agents.strategy import StrategyAgent
 from backend.agents.supplier_eval import SupplierEvaluationAgent
 from backend.agents.negotiation import NegotiationAgent
 from backend.agents.signal import SignalAgent
-from shared.constants import UserIntent, CaseStatus, DTP_STAGE_NAMES
-from shared.schemas import ChatResponse
 
 
 class ChatService:
@@ -32,12 +49,24 @@ class ChatService:
     2. Handle STATUS/EXPLAIN without new analysis
     3. Detect approval/rejection in natural language
     4. Provide varied, contextual responses
+    5. Return ArtifactPacks from agent executions
     """
     
     def __init__(self):
         self.case_service = get_case_service()
+        self.supervisor = SupervisorAgent(tier=1)
         
-        # Agent instances (only used when needed)
+        # New official agent instances
+        self._official_agents = {
+            AgentName.SOURCING_SIGNAL.value: SourcingSignalAgent(tier=1),
+            AgentName.SUPPLIER_SCORING.value: SupplierScoringAgent(tier=1),
+            AgentName.RFX_DRAFT.value: RfxDraftAgent(tier=1),
+            AgentName.NEGOTIATION_SUPPORT.value: NegotiationSupportAgent(tier=1),
+            AgentName.CONTRACT_SUPPORT.value: ContractSupportAgent(tier=1),
+            AgentName.IMPLEMENTATION.value: ImplementationAgent(tier=1),
+        }
+        
+        # Legacy agent instances (for backward compatibility)
         self._agents = {
             "Strategy": StrategyAgent(tier=1),
             "SupplierEvaluation": SupplierEvaluationAgent(tier=1),
@@ -383,7 +412,24 @@ class ChatService:
         """Run agent analysis when explicitly requested."""
         dtp_stage = state["dtp_stage"]
         
-        # Get allowed agents for this stage
+        # Use two-level intent classification
+        intent_result = IntentRouter.classify_intent_two_level(message, {
+            "dtp_stage": dtp_stage,
+            "category_id": state.get("category_id"),
+        })
+        
+        # Get action plan from intent
+        action_plan = IntentRouter.get_action_plan(intent_result, dtp_stage)
+        
+        # Try new official agents first
+        agent = self._official_agents.get(action_plan.agent_name)
+        
+        if agent:
+            return self._run_official_agent(
+                case_id, message, state, agent, action_plan, intent_result
+            )
+        
+        # Fall back to legacy agents
         allowed_agents = IntentRouter.get_allowed_agents(UserIntent.DECIDE, dtp_stage)
         
         if not allowed_agents:
@@ -393,11 +439,11 @@ class ChatService:
                 "DECIDE", dtp_stage
             )
         
-        # Select and run agent
+        # Select and run legacy agent
         agent_name = self._select_agent(message, allowed_agents, dtp_stage)
-        agent = self._agents.get(agent_name)
+        legacy_agent = self._agents.get(agent_name)
         
-        if not agent:
+        if not legacy_agent:
             return self._create_response(
                 case_id, message,
                 "Unable to run analysis at this time.",
@@ -412,7 +458,7 @@ class ChatService:
             "dtp_stage": dtp_stage
         }
         
-        agent_result = agent.execute(case_context, message)
+        agent_result = legacy_agent.execute(case_context, message)
         
         # Update state
         if agent_result:
@@ -432,6 +478,110 @@ class ChatService:
             waiting=True,
             retrieval=agent_result.get("retrieval_context") if agent_result else None
         )
+    
+    def _run_official_agent(
+        self,
+        case_id: str,
+        message: str,
+        state: SupervisorState,
+        agent,
+        action_plan,
+        intent_result
+    ) -> ChatResponse:
+        """Run an official agent that returns ArtifactPack."""
+        dtp_stage = state["dtp_stage"]
+        
+        case_context = {
+            "case_id": case_id,
+            "category_id": state.get("category_id"),
+            "supplier_id": state.get("supplier_id"),
+            "contract_id": state.get("contract_id"),
+            "dtp_stage": dtp_stage,
+            # Add estimated values for implementation agent
+            "new_contract_value": state.get("latest_agent_output", {}).get("annual_value", 450000) if state.get("latest_agent_output") else 450000,
+            "old_contract_value": 500000,
+            "term_years": 3,
+        }
+        
+        # Execute agent
+        agent_result = agent.execute(case_context, message)
+        
+        if not agent_result.get("success"):
+            return self._create_response(
+                case_id, message,
+                "Analysis could not be completed. Please try again.",
+                intent_result.user_goal, dtp_stage
+            )
+        
+        # Get artifact pack
+        artifact_pack = agent_result.get("artifact_pack")
+        
+        # Persist artifact pack
+        if artifact_pack:
+            self.case_service.save_artifact_pack(case_id, artifact_pack)
+        
+        # Update state
+        state["latest_agent_output"] = agent_result.get("output", {})
+        state["latest_agent_name"] = agent_result.get("agent_name")
+        state["waiting_for_human"] = action_plan.approval_required
+        if action_plan.approval_required:
+            state["status"] = CaseStatus.WAITING_HUMAN.value
+        self.case_service.save_case_state(state)
+        
+        # Format response from artifact pack
+        response = self._format_artifact_pack_response(artifact_pack)
+        
+        return self._create_response(
+            case_id, message, response,
+            intent_result.user_goal, dtp_stage,
+            agents_called=[action_plan.agent_name],
+            tokens=agent_result.get("tokens_used", 0),
+            waiting=action_plan.approval_required,
+            workflow_summary={
+                "artifact_pack_id": artifact_pack.pack_id if artifact_pack else None,
+                "artifacts_created": len(artifact_pack.artifacts) if artifact_pack else 0,
+                "next_actions": len(artifact_pack.next_actions) if artifact_pack else 0,
+            }
+        )
+    
+    def _format_artifact_pack_response(self, pack: Optional[ArtifactPack]) -> str:
+        """Format artifact pack as conversational response."""
+        if not pack:
+            return "Analysis complete."
+        
+        response_parts = []
+        
+        # Add main artifacts
+        for artifact in pack.artifacts[:3]:
+            response_parts.append(f"**{artifact.title}**")
+            if artifact.content_text:
+                response_parts.append(artifact.content_text[:300])
+            response_parts.append("")
+        
+        # Add next actions
+        if pack.next_actions:
+            response_parts.append("**Recommended Next Steps:**")
+            for action in pack.next_actions[:3]:
+                response_parts.append(f"- {action.label}")
+            response_parts.append("")
+        
+        # Add risks if any
+        if pack.risks:
+            response_parts.append("**Risks Identified:**")
+            for risk in pack.risks[:2]:
+                response_parts.append(f"- [{risk.severity.upper()}] {risk.description}")
+            response_parts.append("")
+        
+        # Add notes
+        if pack.notes:
+            for note in pack.notes:
+                response_parts.append(f"*{note}*")
+        
+        # Add waiting notice if needed
+        response_parts.append("---")
+        response_parts.append("Review the artifacts above and approve to proceed, or request changes.")
+        
+        return "\n".join(response_parts)
     
     def _format_agent_response(self, agent_result: Optional[Dict]) -> str:
         """Format agent output as conversational response."""

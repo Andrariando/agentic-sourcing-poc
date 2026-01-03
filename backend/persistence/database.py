@@ -48,7 +48,8 @@ def init_db():
     """Initialize database tables."""
     from backend.persistence.models import (
         SupplierPerformance, SpendMetric, SLAEvent,
-        IngestionLog, DocumentRecord, CaseState
+        IngestionLog, DocumentRecord, CaseState,
+        Artifact, ArtifactPack
     )
     engine = get_engine()
     SQLModel.metadata.create_all(engine)

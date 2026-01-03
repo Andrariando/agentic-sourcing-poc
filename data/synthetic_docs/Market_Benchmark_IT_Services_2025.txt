@@ -1,0 +1,33 @@
+IT SERVICES MARKET BENCHMARK REPORT 2025
+
+EXECUTIVE SUMMARY
+The IT services market continues to show competitive pricing with rates stabilizing after the pandemic period.
+
+PRICING BENCHMARKS:
+
+Managed IT Services:
+- Small Business: $1,500 - $3,000/month
+- Mid-Market: $5,000 - $15,000/month
+- Enterprise: $20,000 - $100,000/month
+
+Help Desk Support:
+- Tier 1: $15 - $25/ticket
+- Tier 2: $35 - $55/ticket
+- Tier 3: $75 - $150/ticket
+
+SLA STANDARDS:
+- Response Time: 4-8 hours for critical issues
+- Uptime Guarantee: 99.5% - 99.9%
+- Resolution Time: 24-48 hours for standard issues
+
+CONTRACT TERMS:
+- Typical Duration: 24-36 months
+- Price Adjustments: 3-5% annual increases common
+- Payment Terms: Net 30-45 days standard
+
+KEY TRENDS:
+1. Cloud-first approaches driving managed services growth
+2. Security services commanding premium pricing
+3. AI/automation reducing operational costs
+4. Multi-vendor strategies increasing
+

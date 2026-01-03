@@ -218,6 +218,15 @@ class CaseState(SQLModel, table=True):
     latest_agent_output: Optional[str] = None
     latest_agent_name: Optional[str] = None
     
+    # Latest artifact pack ID
+    latest_artifact_pack_id: Optional[str] = None
+    
+    # Artifact index by type (JSON: {type: [artifact_ids]})
+    artifact_index: Optional[str] = None
+    
+    # Next actions cache (JSON)
+    next_actions_cache: Optional[str] = None
+    
     # Human decision
     human_decision: Optional[str] = None  # JSON
     
@@ -230,6 +239,69 @@ class CaseState(SQLModel, table=True):
     
     # Trigger
     trigger_source: str = Field(default="User")
+
+
+class Artifact(SQLModel, table=True):
+    """Persistent storage for agent-produced artifacts."""
+    __tablename__ = "artifacts"
+    
+    id: Optional[int] = Field(default=None, primary_key=True)
+    artifact_id: str = Field(unique=True, index=True)
+    
+    # Case association
+    case_id: str = Field(index=True)
+    
+    # Artifact metadata
+    type: str = Field(index=True)  # ArtifactType value
+    title: str
+    
+    # Content
+    content_json: Optional[str] = None  # JSON dict
+    content_text: Optional[str] = None  # Human-readable
+    
+    # Grounding (JSON array of GroundingReference)
+    grounded_in_json: Optional[str] = None
+    
+    # Provenance
+    created_by_agent: str
+    created_by_task: str = ""
+    
+    # Verification
+    verification_status: str = Field(default="VERIFIED")
+    
+    # Timestamps
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+class ArtifactPack(SQLModel, table=True):
+    """Bundle of artifacts produced in a single agent execution."""
+    __tablename__ = "artifact_packs"
+    
+    id: Optional[int] = Field(default=None, primary_key=True)
+    pack_id: str = Field(unique=True, index=True)
+    
+    # Case association
+    case_id: str = Field(index=True)
+    
+    # Pack metadata
+    agent_name: str
+    tasks_executed: Optional[str] = None  # JSON array
+    
+    # Artifact IDs in this pack (JSON array)
+    artifact_ids: Optional[str] = None
+    
+    # Next actions (JSON array)
+    next_actions_json: Optional[str] = None
+    
+    # Risks (JSON array)
+    risks_json: Optional[str] = None
+    
+    # Notes (JSON array)
+    notes_json: Optional[str] = None
+    
+    # Timestamps
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
 
 
 

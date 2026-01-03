@@ -511,17 +511,28 @@ def render_copilot_column(case, client) -> None:
     </div>
     """, unsafe_allow_html=True)
     
-    # Suggested prompts
+    # Suggested prompts - Happy Path demo sequence
     prompt_cols = st.columns(2)
     suggested_prompts = [
-        ("Why this?", "prompt_why"),
-        ("Risks?", "prompt_risks"),
-        ("Alternatives?", "prompt_alt"),
-        ("Missing?", "prompt_missing")
+        ("Scan signals", "prompt_scan"),
+        ("Score suppliers", "prompt_score"),
+        ("Draft RFx", "prompt_rfx"),
+        ("Support negotiation", "prompt_negotiate"),
     ]
     
     for i, (prompt, key) in enumerate(suggested_prompts):
         with prompt_cols[i % 2]:
+            if st.button(prompt, key=key, use_container_width=True):
+                st.session_state.pending_prompt = prompt
+    
+    # Additional prompts row
+    prompt_cols2 = st.columns(2)
+    more_prompts = [
+        ("Extract key terms", "prompt_terms"),
+        ("Generate implementation plan", "prompt_impl"),
+    ]
+    for i, (prompt, key) in enumerate(more_prompts):
+        with prompt_cols2[i]:
             if st.button(prompt, key=key, use_container_width=True):
                 st.session_state.pending_prompt = prompt
     
@@ -658,9 +669,225 @@ def get_next_stage(current_stage: str) -> str:
     return transitions.get(current_stage, "Next Stage")
 
 
+def render_next_best_actions_panel(case, client) -> None:
+    """Render the Next Best Actions panel at the top of the workbench."""
+    st.markdown(f"""
+    <div style="background-color: #F8F9FA; border: 2px solid {MIT_NAVY}; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+        <div style="color: {MIT_NAVY}; font-size: 1rem; font-weight: 600; margin-bottom: 12px;">
+            📋 Next Best Actions
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Get next actions from case or generate defaults
+    next_actions = []
+    if case.latest_agent_output:
+        # Try to get cached next actions
+        pass
+    
+    # Default actions based on stage
+    stage_actions = {
+        "DTP-01": [
+            ("Scan signals", "Identify sourcing opportunities and risks", "scan signals"),
+            ("Score suppliers", "Evaluate potential suppliers", "score suppliers"),
+            ("Review market data", "Understand market conditions", "explain market"),
+        ],
+        "DTP-02": [
+            ("Draft RFx", "Create request for proposal", "draft rfx"),
+            ("Define criteria", "Set evaluation criteria", "create evaluation criteria"),
+        ],
+        "DTP-03": [
+            ("Evaluate responses", "Score supplier proposals", "evaluate supplier responses"),
+            ("Compare bids", "Analyze pricing differences", "compare bids"),
+        ],
+        "DTP-04": [
+            ("Support negotiation", "Get negotiation insights", "support negotiation"),
+            ("Propose targets", "Define negotiation targets", "propose targets and fallbacks"),
+        ],
+        "DTP-05": [
+            ("Extract key terms", "Review contract terms", "extract key terms"),
+            ("Validate terms", "Check compliance", "validate contract terms"),
+        ],
+        "DTP-06": [
+            ("Generate implementation plan", "Create rollout checklist", "generate implementation plan"),
+            ("Define KPIs", "Set success metrics", "define early indicators"),
+        ],
+    }
+    
+    actions = stage_actions.get(case.dtp_stage, stage_actions["DTP-01"])
+    
+    cols = st.columns(len(actions))
+    for i, (label, why, prompt) in enumerate(actions):
+        with cols[i]:
+            if st.button(f"🎯 {label}", key=f"action_{i}", use_container_width=True, help=why):
+                st.session_state.pending_prompt = prompt
+
+
+def render_artifacts_tabs_panel(case, client) -> None:
+    """Render the Artifacts tabs panel."""
+    tabs = st.tabs([
+        "📊 Signals", "⭐ Scoring", "📝 RFx Drafts", 
+        "🤝 Negotiation", "📄 Contract Terms", "🚀 Implementation", "📜 History"
+    ])
+    
+    # Get artifacts from case if available
+    # For now, show placeholder content based on latest agent output
+    
+    with tabs[0]:  # Signals
+        if case.latest_agent_name == "SourcingSignal" or case.latest_agent_name == "SignalInterpretation":
+            output = case.latest_agent_output or {}
+            signals = output.get("signals", [])
+            if signals:
+                for signal in signals[:5]:
+                    severity_color = {"high": MIT_CARDINAL, "medium": "#F0AD4E", "low": "#5CB85C"}.get(signal.get("severity", "medium"), CHARCOAL)
+                    st.markdown(f"""
+                    <div style="border-left: 4px solid {severity_color}; padding: 8px 12px; margin-bottom: 8px; background: #FAFBFC;">
+                        <strong>{signal.get('signal_type', 'Signal')}</strong>: {signal.get('message', '')}
+                    </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.info("Run 'Scan signals' to detect sourcing opportunities.")
+        else:
+            st.info("Run 'Scan signals' to detect sourcing opportunities.")
+    
+    with tabs[1]:  # Scoring
+        if case.latest_agent_name == "SupplierScoring" or case.latest_agent_name == "SupplierEvaluation":
+            output = case.latest_agent_output or {}
+            suppliers = output.get("shortlisted_suppliers", [])
+            if suppliers:
+                for s in suppliers:
+                    score = s.get("total_score", s.get("score", 0))
+                    st.markdown(f"""
+                    <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid {LIGHT_GRAY};">
+                        <span><strong>{s.get('supplier_name', s.get('name', 'Supplier'))}</strong></span>
+                        <span style="color: {MIT_NAVY}; font-weight: bold;">{score:.1f}/10</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.info("Run 'Score suppliers' to evaluate options.")
+        else:
+            st.info("Run 'Score suppliers' to evaluate options.")
+    
+    with tabs[2]:  # RFx Drafts
+        if case.latest_agent_name == "RfxDraft":
+            output = case.latest_agent_output or {}
+            st.markdown(f"**RFx Type:** {output.get('rfx_type', 'Not determined')}")
+            st.markdown(f"**Completeness:** {output.get('completeness_score', 0)}%")
+            sections = output.get("sections", [])
+            if sections:
+                for s in sections:
+                    st.markdown(f"- {s.get('section', '')}: {s.get('status', 'pending')}")
+        else:
+            st.info("Run 'Draft RFx' to create solicitation documents.")
+    
+    with tabs[3]:  # Negotiation
+        if case.latest_agent_name == "NegotiationSupport":
+            output = case.latest_agent_output or {}
+            targets = output.get("target_terms", {})
+            if targets:
+                st.markdown(f"**Target Price:** ${targets.get('price_target', 0):,.0f}")
+                st.markdown("**Leverage Points:**")
+                for lp in output.get("leverage_points", [])[:3]:
+                    st.markdown(f"- {lp.get('description', '')}")
+        else:
+            st.info("Run 'Support negotiation' for insights.")
+    
+    with tabs[4]:  # Contract Terms
+        if case.latest_agent_name == "ContractSupport":
+            output = case.latest_agent_output or {}
+            key_terms = output.get("key_terms", {})
+            if key_terms:
+                st.json(key_terms)
+        else:
+            st.info("Run 'Extract key terms' to review contract.")
+    
+    with tabs[5]:  # Implementation
+        if case.latest_agent_name == "Implementation":
+            output = case.latest_agent_output or {}
+            st.markdown(f"**Projected Savings:** ${output.get('annual_savings', 0):,.0f}/year")
+            st.markdown(f"**Total Over Term:** ${output.get('total_savings', 0):,.0f}")
+        else:
+            st.info("Run 'Generate implementation plan' for rollout details.")
+    
+    with tabs[6]:  # History
+        if case.activity_log:
+            for entry in case.activity_log[-5:]:
+                st.markdown(f"""
+                <div style="padding: 4px 0; font-size: 0.85rem; color: {CHARCOAL};">
+                    {entry.get('timestamp', '')[:16]} | {entry.get('action', '')} | {entry.get('agent_name', '')}
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("Activity log will appear here as you work on the case.")
+
+
+def render_governance_panel(case, client) -> None:
+    """Render the Governance/Traceability panel."""
+    dtp_name = DTP_STAGE_NAMES.get(case.dtp_stage, case.dtp_stage)
+    is_waiting = case.status == "Waiting for Human Decision"
+    
+    st.markdown(f"""
+    <div style="background-color: {MIT_NAVY}; color: white; padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+        <div style="font-size: 0.85rem; opacity: 0.9;">Current Stage</div>
+        <div style="font-size: 1.2rem; font-weight: 600;">{case.dtp_stage} - {dtp_name}</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Status
+    status_color = MIT_CARDINAL if is_waiting else "#5CB85C"
+    st.markdown(f"""
+    <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid {LIGHT_GRAY};">
+        <span>Status</span>
+        <span style="color: {status_color}; font-weight: 600;">{case.status}</span>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Approval required
+    st.markdown(f"""
+    <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid {LIGHT_GRAY};">
+        <span>Approval Required</span>
+        <span style="font-weight: 600;">{'Yes' if is_waiting else 'No'}</span>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Last agent
+    st.markdown(f"""
+    <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid {LIGHT_GRAY};">
+        <span>Last Agent</span>
+        <span style="font-weight: 500;">{case.latest_agent_name or 'None'}</span>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Approval buttons
+    if is_waiting:
+        st.markdown("<br>", unsafe_allow_html=True)
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("✅ APPROVE", key="gov_approve", use_container_width=True):
+                try:
+                    result = client.approve_decision(case.case_id)
+                    st.success(f"Approved! Advanced to {result.new_dtp_stage}")
+                    st.rerun()
+                except APIError as e:
+                    st.error(f"Error: {e.message}")
+        with col2:
+            if st.button("↩️ REVISE", key="gov_reject", use_container_width=True):
+                try:
+                    client.reject_decision(case.case_id)
+                    st.info("Revision requested")
+                    st.rerun()
+                except APIError as e:
+                    st.error(f"Error: {e.message}")
+
+
 def render_case_copilot(case_id: str):
     """
-    Render the enterprise case copilot interface.
+    Render the Procurement Workbench interface.
+    
+    Layout:
+    - Top: Next Best Actions panel
+    - Middle: Artifacts (tabs) | Chat | Governance
+    - Evidence and approval controls integrated
     """
     client = get_api_client()
     
@@ -681,24 +908,31 @@ def render_case_copilot(case_id: str):
     inject_styles()
     
     # Back navigation
-    col_back, col_spacer = st.columns([1, 5])
+    col_back, col_title, col_spacer = st.columns([1, 4, 1])
     with col_back:
-        if st.button("Back to Dashboard", key="back_btn"):
+        if st.button("← Dashboard", key="back_btn"):
             st.session_state.selected_case_id = None
             st.session_state.current_page = "dashboard"
             st.rerun()
+    with col_title:
+        st.markdown(f"### 🏭 Procurement Workbench")
     
     # Full-width Case Header
     render_case_header(case)
     
-    # Three-column layout
-    col_context, col_decision, col_copilot = st.columns([2.5, 4.5, 3])
+    # Next Best Actions panel (full width)
+    render_next_best_actions_panel(case, client)
     
-    with col_context:
-        render_context_column(case)
+    # Three-column layout: Artifacts | Chat | Governance
+    col_artifacts, col_copilot, col_governance = st.columns([4, 3.5, 2.5])
     
-    with col_decision:
-        render_decision_column(case, client)
+    with col_artifacts:
+        st.markdown(f"<h4 style='color: {MIT_NAVY};'>📦 Artifacts</h4>", unsafe_allow_html=True)
+        render_artifacts_tabs_panel(case, client)
     
     with col_copilot:
         render_copilot_column(case, client)
+    
+    with col_governance:
+        st.markdown(f"<h4 style='color: {MIT_NAVY};'>🔐 Governance</h4>", unsafe_allow_html=True)
+        render_governance_panel(case, client)

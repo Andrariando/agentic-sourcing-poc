@@ -353,6 +353,87 @@ class AgentActionLog(BaseModel):
 
 
 # ============================================================
+# TWO-LEVEL INTENT CLASSIFICATION
+# ============================================================
+
+class IntentResult(BaseModel):
+    """Result of two-level intent classification."""
+    user_goal: str  # TRACK, UNDERSTAND, CREATE, CHECK, DECIDE
+    work_type: str  # ARTIFACT, DATA, APPROVAL, COMPLIANCE, VALUE
+    confidence: float = Field(ge=0.0, le=1.0, default=0.8)
+    rationale: str = ""
+
+
+# ============================================================
+# ACTION PLAN (Supervisor output)
+# ============================================================
+
+class ActionPlan(BaseModel):
+    """Action plan from Supervisor determining what agent/tasks to run."""
+    agent_name: str
+    tasks: List[str] = Field(default_factory=list)
+    approval_required: bool = False
+    ui_mode: str = "default"  # default, artifacts, scoring, negotiation, etc.
+
+
+# ============================================================
+# ARTIFACT SCHEMAS
+# ============================================================
+
+class GroundingReference(BaseModel):
+    """Reference to source data that grounds an artifact."""
+    ref_id: str
+    ref_type: str  # "document", "structured_data", "calculation"
+    source_name: str = ""
+    excerpt: Optional[str] = None
+
+
+class Artifact(BaseModel):
+    """A single work product artifact."""
+    artifact_id: str
+    type: str  # ArtifactType value
+    title: str
+    content: Dict[str, Any] = Field(default_factory=dict)
+    content_text: Optional[str] = None  # Human-readable summary
+    grounded_in: List[GroundingReference] = Field(default_factory=list)
+    created_at: str
+    created_by_agent: str
+    created_by_task: str = ""
+    verification_status: str = "VERIFIED"  # VERIFIED, UNVERIFIED, PARTIAL
+
+
+class NextAction(BaseModel):
+    """A recommended next action for the user."""
+    action_id: str
+    label: str
+    why: str = ""
+    owner: str = "user"  # user, agent, system
+    depends_on: List[str] = Field(default_factory=list)
+    recommended_by_agent: str = ""
+    recommended_by_task: str = ""
+
+
+class RiskItem(BaseModel):
+    """A risk or warning item."""
+    severity: str  # low, medium, high, critical
+    description: str
+    mitigation: str = ""
+
+
+class ArtifactPack(BaseModel):
+    """Bundle of artifacts, actions, and risks from agent execution."""
+    pack_id: str
+    artifacts: List[Artifact] = Field(default_factory=list)
+    next_actions: List[NextAction] = Field(default_factory=list)
+    risks: List[RiskItem] = Field(default_factory=list)
+    notes: List[str] = Field(default_factory=list)
+    grounded_in: List[GroundingReference] = Field(default_factory=list)
+    agent_name: str = ""
+    tasks_executed: List[str] = Field(default_factory=list)
+    created_at: str = ""
+
+
+# ============================================================
 # HEALTH CHECK
 # ============================================================
 
@@ -361,6 +442,7 @@ class HealthCheckResponse(BaseModel):
     status: str
     version: str
     components: Dict[str, str]  # component_name -> status
+
 
 
 

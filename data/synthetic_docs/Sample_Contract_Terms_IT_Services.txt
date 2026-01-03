@@ -1,0 +1,33 @@
+MASTER SERVICES AGREEMENT - SAMPLE KEY TERMS
+
+ARTICLE 1: TERM
+- Initial Term: 36 months from Effective Date
+- Renewal: Auto-renewal for successive 12-month periods
+- Notice Period: 90 days written notice to terminate
+
+ARTICLE 2: PRICING
+- Annual Service Fee: $450,000
+- Payment Terms: Net 30 days
+- Price Adjustment: Fixed for initial term
+
+ARTICLE 3: SERVICE LEVELS
+- Response Time: 4 hours for Priority 1 issues
+- Resolution Time: 24 hours for Priority 1 issues
+- System Uptime: 99.5% monthly minimum
+- Penalties: Service credits for SLA breaches
+
+ARTICLE 4: LIABILITY
+- Limitation: 12 months of fees maximum
+- Exclusions: Gross negligence, willful misconduct
+- Insurance: $5M comprehensive coverage required
+
+ARTICLE 5: TERMINATION
+- For Convenience: 90 days notice
+- For Cause: 30 days cure period
+- Effect: Data return, transition assistance
+
+ARTICLE 6: CONFIDENTIALITY
+- Duration: 3 years post-termination
+- Scope: All non-public information
+- Exceptions: Public information, legal requirements
+

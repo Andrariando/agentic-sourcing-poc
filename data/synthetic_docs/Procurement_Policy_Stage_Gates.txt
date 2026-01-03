@@ -1,0 +1,48 @@
+PROCUREMENT POLICY - STAGE GATE REQUIREMENTS
+
+DTP-01 STRATEGY STAGE
+Requirements:
+- Category analysis complete
+- Spend data reviewed
+- Market assessment conducted
+Approval: Category Manager
+
+DTP-02 PLANNING STAGE  
+Requirements:
+- Sourcing strategy documented
+- Evaluation criteria defined
+- Timeline established
+Approval: Procurement Manager
+
+DTP-03 SOURCING STAGE
+Requirements:
+- RFx issued and responses received
+- Supplier evaluations complete
+- Shortlist prepared
+Approval: Sourcing Lead
+
+DTP-04 NEGOTIATION STAGE
+Requirements:
+- Preferred supplier identified
+- Negotiation targets set
+- BATNA established
+Approval: Senior Procurement Manager
+
+DTP-05 CONTRACTING STAGE
+Requirements:
+- Terms validated against policy
+- Legal review complete
+- Contract execution ready
+Approval: Legal + CPO
+
+DTP-06 EXECUTION STAGE
+Requirements:
+- Implementation plan approved
+- KPIs defined
+- Governance structure established
+Approval: Contract Owner
+
+HUMAN APPROVAL REQUIRED:
+All stage transitions require explicit human approval.
+No automated advancement between stages.
+

@@ -1,6 +1,10 @@
 """
 Intent classification and routing for the Supervisor.
 
+TWO-LEVEL CLASSIFICATION:
+- Primary: User Goal (TRACK, UNDERSTAND, CREATE, CHECK, DECIDE)
+- Secondary: Work Type (ARTIFACT, DATA, APPROVAL, COMPLIANCE, VALUE)
+
 CONVERSATIONAL DESIGN:
 - Detect greetings and simple responses
 - STATUS for case updates
@@ -10,7 +14,8 @@ CONVERSATIONAL DESIGN:
 """
 import re
 from typing import Optional, Dict, Any, List
-from shared.constants import UserIntent
+from shared.constants import UserIntent, UserGoal, WorkType, AgentName
+from shared.schemas import IntentResult, ActionPlan
 
 
 class IntentRouter:
@@ -275,3 +280,171 @@ class IntentRouter:
         }
         
         return explanations.get(intent, blocked_reason)
+    
+    # =========================================================================
+    # TWO-LEVEL INTENT CLASSIFICATION
+    # =========================================================================
+    
+    # User goal patterns
+    GOAL_PATTERNS = {
+        UserGoal.TRACK: [
+            r'status', r'progress', r'update\b', r'where are we', r'current',
+            r'monitor', r'scan', r'signal', r'check status'
+        ],
+        UserGoal.UNDERSTAND: [
+            r'what is', r'explain\b', r'why\b', r'how does', r'tell me',
+            r'understand', r'reason', r'describe', r'clarify'
+        ],
+        UserGoal.CREATE: [
+            r'create', r'draft', r'generate', r'build', r'make', r'prepare',
+            r'score', r'evaluate', r'plan', r'template'
+        ],
+        UserGoal.CHECK: [
+            r'check\b', r'validate', r'verify', r'compliant', r'review',
+            r'audit', r'confirm'
+        ],
+        UserGoal.DECIDE: [
+            r'decide', r'approve', r'select', r'choose', r'finalize',
+            r'award', r'proceed', r'go ahead'
+        ],
+    }
+    
+    # Work type patterns
+    WORK_PATTERNS = {
+        WorkType.ARTIFACT: [
+            r'draft', r'document', r'template', r'report', r'plan',
+            r'checklist', r'scorecard', r'summary'
+        ],
+        WorkType.DATA: [
+            r'data', r'metric', r'performance', r'history', r'record'
+        ],
+        WorkType.APPROVAL: [
+            r'approve', r'decide', r'authorize', r'sign off'
+        ],
+        WorkType.COMPLIANCE: [
+            r'compliant', r'policy', r'rule', r'regulation', r'valid'
+        ],
+        WorkType.VALUE: [
+            r'saving', r'value', r'cost', r'roi', r'benefit', r'price'
+        ],
+    }
+    
+    @classmethod
+    def classify_intent_two_level(
+        cls,
+        user_message: str,
+        context: Optional[Dict[str, Any]] = None
+    ) -> IntentResult:
+        """
+        Classify user intent into two levels:
+        - user_goal: Primary intent (TRACK, UNDERSTAND, CREATE, CHECK, DECIDE)
+        - work_type: Secondary work type (ARTIFACT, DATA, APPROVAL, COMPLIANCE, VALUE)
+        """
+        message_lower = user_message.lower().strip()
+        context = context or {}
+        
+        # Determine user goal
+        user_goal = UserGoal.UNDERSTAND  # Default
+        goal_confidence = 0.5
+        
+        for goal, patterns in cls.GOAL_PATTERNS.items():
+            for pattern in patterns:
+                if re.search(pattern, message_lower):
+                    user_goal = goal
+                    goal_confidence = 0.85
+                    break
+            if goal_confidence > 0.5:
+                break
+        
+        # Special case patterns
+        if any(kw in message_lower for kw in ['score supplier', 'evaluate supplier', 'rank supplier']):
+            user_goal = UserGoal.CREATE
+            goal_confidence = 0.9
+        elif any(kw in message_lower for kw in ['draft rfx', 'draft rfp', 'draft rfq', 'create rfx']):
+            user_goal = UserGoal.CREATE
+            goal_confidence = 0.9
+        elif any(kw in message_lower for kw in ['negotiat', 'leverage', 'target term']):
+            user_goal = UserGoal.CREATE
+            goal_confidence = 0.85
+        elif any(kw in message_lower for kw in ['extract term', 'key term', 'contract term']):
+            user_goal = UserGoal.CREATE
+            goal_confidence = 0.85
+        elif any(kw in message_lower for kw in ['implement', 'rollout', 'checklist', 'kpi']):
+            user_goal = UserGoal.CREATE
+            goal_confidence = 0.85
+        
+        # Determine work type
+        work_type = WorkType.DATA  # Default
+        
+        for wtype, patterns in cls.WORK_PATTERNS.items():
+            for pattern in patterns:
+                if re.search(pattern, message_lower):
+                    work_type = wtype
+                    break
+        
+        return IntentResult(
+            user_goal=user_goal.value,
+            work_type=work_type.value,
+            confidence=goal_confidence,
+            rationale=f"Classified from message patterns"
+        )
+    
+    @classmethod
+    def get_action_plan(
+        cls,
+        intent: IntentResult,
+        dtp_stage: str,
+        context: Optional[Dict[str, Any]] = None
+    ) -> ActionPlan:
+        """
+        Generate action plan from two-level intent.
+        
+        Returns which agent and tasks to execute.
+        """
+        from backend.tasks.planners import AgentPlaybook
+        
+        playbook = AgentPlaybook()
+        user_goal = UserGoal(intent.user_goal)
+        work_type = WorkType(intent.work_type)
+        
+        # Get appropriate agent
+        agent_name = playbook.get_agent_for_intent(user_goal, work_type, dtp_stage)
+        
+        if not agent_name:
+            # Default based on stage
+            stage_defaults = {
+                "DTP-01": AgentName.SOURCING_SIGNAL,
+                "DTP-02": AgentName.SUPPLIER_SCORING,
+                "DTP-03": AgentName.RFX_DRAFT,
+                "DTP-04": AgentName.NEGOTIATION_SUPPORT,
+                "DTP-05": AgentName.CONTRACT_SUPPORT,
+                "DTP-06": AgentName.IMPLEMENTATION,
+            }
+            agent_name = stage_defaults.get(dtp_stage, AgentName.SOURCING_SIGNAL)
+        
+        # Get tasks
+        tasks = playbook.get_tasks_for_agent(agent_name, user_goal, work_type, dtp_stage)
+        
+        # Determine approval requirement
+        approval_required = (
+            user_goal == UserGoal.DECIDE or
+            work_type == WorkType.APPROVAL or
+            dtp_stage in ["DTP-04", "DTP-05"]
+        )
+        
+        # UI mode
+        ui_mode_map = {
+            AgentName.SOURCING_SIGNAL: "signals",
+            AgentName.SUPPLIER_SCORING: "scoring",
+            AgentName.RFX_DRAFT: "rfx",
+            AgentName.NEGOTIATION_SUPPORT: "negotiation",
+            AgentName.CONTRACT_SUPPORT: "contract",
+            AgentName.IMPLEMENTATION: "implementation",
+        }
+        
+        return ActionPlan(
+            agent_name=agent_name.value,
+            tasks=tasks,
+            approval_required=approval_required,
+            ui_mode=ui_mode_map.get(agent_name, "default")
+        )
