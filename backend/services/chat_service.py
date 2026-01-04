@@ -289,18 +289,97 @@ class ChatService:
                 response += "This indicates lower certainty. Consider gathering more information."
         
         else:
-            # General explanation
-            strategy = output.get("recommended_strategy", "N/A")
-            confidence = output.get("confidence", 0)
-            rationale = output.get("rationale", [])
+            # General explanation - handle different agent outputs
+            response = f"**Analysis from {agent_name} Agent**\n\n"
             
-            response = f"**Recommendation Explanation**\n\n"
-            response += f"The {agent_name} agent recommends **{strategy}** with {confidence:.0%} confidence.\n\n"
+            # Handle SourcingSignal agent output
+            if agent_name in ["SourcingSignal", "SignalInterpretation"]:
+                signals = output.get("signals", [])
+                urgency = output.get("urgency_score", 0)
+                summary = output.get("summary", "")
+                
+                if summary:
+                    response += f"{summary}\n\n"
+                
+                if signals:
+                    response += f"**Detected {len(signals)} Signals** (Urgency: {urgency}/10)\n\n"
+                    for s in signals[:5]:
+                        severity = s.get("severity", "medium")
+                        msg = s.get("message", "Signal detected")
+                        response += f"- [{severity.upper()}] {msg}\n"
+                else:
+                    response += "No significant signals detected at this time.\n"
             
-            if rationale:
-                response += "**Key Factors:**\n"
-                for r in rationale[:3]:
-                    response += f"- {r}\n"
+            # Handle SupplierScoring agent output
+            elif agent_name == "SupplierScoring":
+                shortlist = output.get("shortlisted_suppliers", [])
+                recommendation = output.get("recommendation", "")
+                
+                if recommendation:
+                    response += f"{recommendation}\n\n"
+                
+                if shortlist:
+                    response += f"**Shortlisted {len(shortlist)} Suppliers:**\n"
+                    for s in shortlist[:5]:
+                        name = s.get("supplier_name", s.get("supplier_id", "Unknown"))
+                        score = s.get("total_score", 0)
+                        response += f"- {name}: {score:.1f}/10\n"
+            
+            # Handle RfxDraft agent output
+            elif agent_name == "RfxDraft":
+                rfx_type = output.get("rfx_type", "RFx")
+                sections = output.get("sections", [])
+                completeness = output.get("completeness_score", 0)
+                
+                response += f"**{rfx_type} Draft** - {completeness}% complete\n\n"
+                if sections:
+                    response += f"Assembled {len(sections)} sections.\n"
+            
+            # Handle NegotiationSupport agent output
+            elif agent_name == "NegotiationSupport":
+                targets = output.get("target_terms", {})
+                leverage = output.get("leverage_points", [])
+                
+                if targets:
+                    price = targets.get("price_target", 0)
+                    response += f"**Target Price:** ${price:,.0f}\n\n"
+                
+                if leverage:
+                    response += f"**{len(leverage)} Leverage Points Identified**\n"
+            
+            # Handle ContractSupport agent output
+            elif agent_name == "ContractSupport":
+                key_terms = output.get("key_terms", {})
+                is_compliant = output.get("is_compliant", True)
+                
+                response += f"**Compliance Status:** {'Compliant' if is_compliant else 'Issues Found'}\n\n"
+                if key_terms:
+                    response += "Key contract terms extracted and validated.\n"
+            
+            # Handle Implementation agent output
+            elif agent_name == "Implementation":
+                annual = output.get("annual_savings", 0)
+                total = output.get("total_savings", 0)
+                checklist = output.get("checklist", [])
+                
+                response += f"**Projected Savings**\n"
+                response += f"- Annual: ${annual:,.0f}\n"
+                response += f"- Total: ${total:,.0f}\n\n"
+                if checklist:
+                    response += f"Rollout checklist with {len(checklist)} phases prepared.\n"
+            
+            # Fallback for Strategy agent or unknown
+            else:
+                strategy = output.get("recommended_strategy", "N/A")
+                confidence = output.get("confidence", 0)
+                rationale = output.get("rationale", [])
+                
+                response += f"Recommends **{strategy}** with {confidence:.0%} confidence.\n\n"
+                
+                if rationale:
+                    response += "**Key Factors:**\n"
+                    for r in rationale[:3]:
+                        response += f"- {r}\n"
             
             response += "\nWould you like me to explain any specific aspect in more detail?"
         

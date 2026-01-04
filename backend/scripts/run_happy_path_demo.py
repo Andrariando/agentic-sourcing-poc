@@ -25,12 +25,56 @@ sys.path.insert(0, str(project_root))
 
 from backend.services.case_service import get_case_service
 from backend.services.chat_service import get_chat_service
-from backend.persistence.database import init_db
+from backend.persistence.database import init_db, get_db_session
 from backend.scripts.seed_synthetic_data import (
-    seed_suppliers, seed_spend, seed_sla_events, seed_documents
+    seed_suppliers, seed_spend, seed_sla_events, seed_documents, seed_cases
 )
-from sqlmodel import Session
+from sqlmodel import Session, select
 from backend.persistence.database import get_engine
+from backend.persistence.models import SupplierPerformance, SpendMetric, SLAEvent
+
+
+def verify_and_seed_data():
+    """Verify synthetic data exists, seed if not."""
+    print("\n" + "="*60)
+    print("VERIFYING SYNTHETIC DATA")
+    print("="*60)
+    
+    session = get_db_session()
+    
+    # Check for supplier data
+    supplier_count = len(session.exec(select(SupplierPerformance)).all())
+    spend_count = len(session.exec(select(SpendMetric)).all())
+    sla_count = len(session.exec(select(SLAEvent)).all())
+    
+    session.close()
+    
+    print(f"  Supplier records: {supplier_count}")
+    print(f"  Spend records: {spend_count}")
+    print(f"  SLA records: {sla_count}")
+    
+    # Seed if data is missing
+    if supplier_count == 0 or spend_count == 0:
+        print("\n  ⚠ Missing synthetic data. Seeding now...")
+        
+        engine = get_engine()
+        with Session(engine) as session:
+            seed_cases(session)
+            seed_suppliers(session)
+            seed_spend(session)
+            seed_sla_events(session)
+        
+        # Seed documents
+        try:
+            from backend.rag.vector_store import get_vector_store
+            vector_store = get_vector_store()
+            seed_documents(vector_store)
+        except Exception as e:
+            print(f"  ⚠ ChromaDB seeding skipped: {e}")
+        
+        print("  ✓ Synthetic data seeded successfully")
+    else:
+        print("  ✓ Synthetic data already exists")
 
 
 # Demo case ID
