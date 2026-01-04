@@ -20,7 +20,7 @@ from datetime import datetime
 from backend.services.case_service import get_case_service
 from backend.supervisor.state import SupervisorState, StateManager
 from backend.supervisor.router import IntentRouter
-from shared.constants import UserIntent, CaseStatus, DTP_STAGE_NAMES, AgentName
+from shared.constants import UserIntent, UserGoal, CaseStatus, DTP_STAGE_NAMES, AgentName
 from shared.schemas import ChatResponse, ArtifactPack
 
 # Import new official agents
@@ -546,10 +546,12 @@ class ChatService:
         agent_result = agent.execute(case_context, message)
         
         if not agent_result.get("success"):
+            # Map user_goal to old intent format for _create_response
+            intent_for_response = self._map_user_goal_to_intent(intent_result.user_goal)
             return self._create_response(
                 case_id, message,
                 "Analysis could not be completed. Please try again.",
-                intent_result.user_goal, dtp_stage
+                intent_for_response, dtp_stage
             )
         
         # Get artifact pack
@@ -570,9 +572,12 @@ class ChatService:
         # Format response from artifact pack
         response = self._format_artifact_pack_response(artifact_pack)
         
+        # Map user_goal to old intent format for _create_response
+        intent_for_response = self._map_user_goal_to_intent(intent_result.user_goal)
+        
         return self._create_response(
             case_id, message, response,
-            intent_result.user_goal, dtp_stage,
+            intent_for_response, dtp_stage,
             agents_called=[action_plan.agent_name],
             tokens=agent_result.get("tokens_used", 0),
             waiting=action_plan.approval_required,
@@ -692,6 +697,17 @@ class ChatService:
                 return "NegotiationSupport"
         
         return allowed_agents[0] if allowed_agents else None
+    
+    def _map_user_goal_to_intent(self, user_goal: str) -> str:
+        """Map new UserGoal enum to old UserIntent format for ChatResponse."""
+        mapping = {
+            UserGoal.TRACK.value: UserIntent.STATUS.value,
+            UserGoal.UNDERSTAND.value: UserIntent.EXPLAIN.value,
+            UserGoal.CREATE.value: UserIntent.DECIDE.value,
+            UserGoal.CHECK.value: UserIntent.DECIDE.value,
+            UserGoal.DECIDE.value: UserIntent.DECIDE.value,
+        }
+        return mapping.get(user_goal, UserIntent.DECIDE.value)
     
     def _create_response(
         self,

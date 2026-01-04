@@ -518,12 +518,35 @@ def render_chat_interface(case, client) -> None:
         st.session_state.chat_history = {}
     
     if case.case_id not in st.session_state.chat_history:
-        # Add welcome message on first load
-        st.session_state.chat_history[case.case_id] = [{
-            "role": "assistant",
-            "content": f"👋 Hello! I'm your Case Copilot for **{case.case_id}**.\n\nI can help you with:\n- Scanning for sourcing signals\n- Scoring and evaluating suppliers\n- Drafting RFx documents\n- Preparing for negotiations\n- Extracting contract terms\n- Creating implementation plans\n\nWhat would you like to do?",
-            "metadata": {"agent": "System", "intent": "Welcome"}
-        }]
+        # Try to load chat history from activity log
+        chat_history = []
+        
+        if case.activity_log:
+            # Extract chat messages from activity log
+            for entry in case.activity_log:
+                if isinstance(entry, dict) and entry.get("action", "").startswith("Chat:"):
+                    role = "user" if "user" in entry.get("action", "").lower() else "assistant"
+                    details = entry.get("details", {})
+                    message = details.get("message", "")
+                    metadata = details.get("metadata", {})
+                    
+                    if message:
+                        chat_history.append({
+                            "role": role,
+                            "content": message,
+                            "timestamp": entry.get("timestamp", ""),
+                            "metadata": metadata if metadata else None
+                        })
+        
+        # If no chat history found, add welcome message
+        if not chat_history:
+            chat_history = [{
+                "role": "assistant",
+                "content": f"👋 Hello! I'm your Case Copilot for **{case.case_id}**.\n\nI can help you with:\n- Scanning for sourcing signals\n- Scoring and evaluating suppliers\n- Drafting RFx documents\n- Preparing for negotiations\n- Extracting contract terms\n- Creating implementation plans\n\nWhat would you like to do?",
+                "metadata": {"agent": "System", "intent": "Welcome"}
+            }]
+        
+        st.session_state.chat_history[case.case_id] = chat_history
     
     chat_history = st.session_state.chat_history[case.case_id]
     
