@@ -581,6 +581,7 @@ class ChatService:
             agents_called=[action_plan.agent_name],
             tokens=agent_result.get("tokens_used", 0),
             waiting=action_plan.approval_required,
+            retrieval=agent_result.get("retrieval_context") if agent_result else None,
             workflow_summary={
                 "artifact_pack_id": artifact_pack.pack_id if artifact_pack else None,
                 "artifacts_created": len(artifact_pack.artifacts) if artifact_pack else 0,
@@ -719,9 +720,14 @@ class ChatService:
         agents_called: List[str] = None,
         tokens: int = 0,
         waiting: bool = False,
-        retrieval: Dict = None
+        retrieval: Dict = None,
+        workflow_summary: Dict = None
     ) -> ChatResponse:
         """Create standardized response."""
+        # Build workflow_summary if not provided
+        if workflow_summary is None:
+            workflow_summary = {"retrieval": retrieval} if retrieval else None
+        
         return ChatResponse(
             case_id=case_id,
             user_message=user_message,
@@ -731,7 +737,7 @@ class ChatService:
             tokens_used=tokens,
             dtp_stage=dtp_stage,
             waiting_for_human=waiting,
-            workflow_summary={"retrieval": retrieval} if retrieval else None,
+            workflow_summary=workflow_summary,
             retrieval_context=retrieval,
             timestamp=datetime.now().isoformat()
         )

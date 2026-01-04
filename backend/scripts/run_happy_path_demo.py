@@ -463,6 +463,7 @@ def main():
     save_demo_data(demo_result)
     
     # Final verification
+    case_service = get_case_service()
     final_case = case_service.get_case(demo_result['case_id'])
     if final_case:
         print("\n" + "="*60)
