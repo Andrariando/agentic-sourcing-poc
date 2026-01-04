@@ -219,3 +219,4 @@ def _register_all_tasks(registry: TaskRegistry):
     registry.register("reporting_templates", ReportingTemplatesTask, "IMPLEMENTATION",
                       "Generate reporting templates")
 
+

@@ -73,3 +73,4 @@ def format_grounding_for_display(grounded_in: List[GroundingReference]) -> List[
         for ref in grounded_in
     ]
 
+

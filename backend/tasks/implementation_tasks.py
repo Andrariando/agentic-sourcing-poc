@@ -290,3 +290,4 @@ class ReportingTemplatesTask(BaseTask):
             "grounded_in": []
         }
 
+

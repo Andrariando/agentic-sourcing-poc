@@ -151,3 +151,4 @@ class ArtifactRenderer:
         
         return tab_mapping.get(artifact_type, "History")
 
+

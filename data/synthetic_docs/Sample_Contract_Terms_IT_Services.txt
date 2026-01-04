@@ -31,3 +31,4 @@ ARTICLE 6: CONFIDENTIALITY
 - Scope: All non-public information
 - Exceptions: Public information, legal requirements
 
+

@@ -1,10 +1,16 @@
 """
-Case Copilot Page - Enterprise Decision Console
+Case Copilot Page - Enterprise Decision Console (Redesigned)
 
 Design Philosophy:
 - The decision is the focal point
-- The AI is an advisor
+- The AI is an advisor via conversation (not buttons)
 - The human is accountable
+- Content first (case details), action second (chat), outputs last (artifacts)
+
+Layout:
+- Top: Condensed case header
+- Middle: Case Details (60%) | Chat (40%)
+- Bottom: Full-width artifacts panel
 
 MIT Color System:
 - MIT Navy (#003A8F): Structure and hierarchy
@@ -25,596 +31,543 @@ NEAR_BLACK = "#1F1F1F"
 CHARCOAL = "#4A4A4A"
 LIGHT_GRAY = "#D9D9D9"
 WHITE = "#FFFFFF"
+SUCCESS_GREEN = "#2E7D32"
+WARNING_YELLOW = "#F9A825"
 
 
 def inject_styles():
-    """Inject enterprise CSS styles."""
+    """Inject enterprise CSS styles for the new layout."""
     st.markdown(f"""
     <style>
-        /* Case Header */
-        .case-header {{
-            background-color: {MIT_NAVY};
+        /* Case Header - Condensed */
+        .case-header-condensed {{
+            background: linear-gradient(135deg, {MIT_NAVY} 0%, #002D6D 100%);
             color: {WHITE};
-            padding: 20px 24px;
-            border-radius: 4px;
-            margin-bottom: 24px;
-        }}
-        .case-header h1 {{
-            color: {WHITE};
-            margin: 0 0 8px 0;
-            font-size: 1.5rem;
-            font-weight: 600;
-        }}
-        .case-header-meta {{
+            padding: 16px 24px;
+            border-radius: 8px;
+            margin-bottom: 20px;
             display: flex;
-            gap: 24px;
+            justify-content: space-between;
+            align-items: center;
             flex-wrap: wrap;
-            font-size: 0.875rem;
-            opacity: 0.9;
+            gap: 16px;
         }}
-        .case-header-meta span {{
-            display: inline-flex;
+        .case-header-title {{
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 0;
+        }}
+        .case-header-metrics {{
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            font-size: 0.85rem;
+        }}
+        .case-header-metrics .metric {{
+            display: flex;
             align-items: center;
             gap: 6px;
         }}
-        .status-badge {{
-            background-color: transparent;
-            border: 2px solid {MIT_CARDINAL};
-            color: {WHITE};
-            padding: 4px 12px;
-            border-radius: 4px;
+        .case-header-metrics .metric-label {{
+            opacity: 0.8;
+        }}
+        .case-header-metrics .metric-value {{
             font-weight: 600;
+        }}
+        .status-pill {{
+            background-color: {MIT_CARDINAL};
+            padding: 4px 12px;
+            border-radius: 16px;
             font-size: 0.75rem;
+            font-weight: 600;
             text-transform: uppercase;
         }}
-        .status-badge.active {{
-            background-color: {MIT_CARDINAL};
+        .status-pill.success {{
+            background-color: {SUCCESS_GREEN};
         }}
         
-        /* Context Cards */
-        .context-card {{
+        /* Section Cards */
+        .section-card {{
             background-color: {WHITE};
             border: 1px solid {LIGHT_GRAY};
-            border-radius: 4px;
+            border-radius: 8px;
             padding: 16px;
             margin-bottom: 16px;
         }}
-        .context-card h3 {{
-            color: {MIT_NAVY};
-            font-size: 0.875rem;
-            font-weight: 600;
-            margin: 0 0 12px 0;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+        .section-card-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid {LIGHT_GRAY};
         }}
-        .context-item {{
+        .section-card-title {{
+            color: {MIT_NAVY};
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
+        .section-card-content {{
+            font-size: 0.875rem;
+            color: {NEAR_BLACK};
+        }}
+        
+        /* Detail Rows */
+        .detail-row {{
             display: flex;
             justify-content: space-between;
             padding: 8px 0;
-            border-bottom: 1px solid {LIGHT_GRAY};
+            border-bottom: 1px solid #F0F0F0;
             font-size: 0.875rem;
         }}
-        .context-item:last-child {{
+        .detail-row:last-child {{
             border-bottom: none;
         }}
-        .context-label {{
+        .detail-label {{
             color: {CHARCOAL};
         }}
-        .context-value {{
+        .detail-value {{
             color: {NEAR_BLACK};
             font-weight: 500;
         }}
         
-        /* Evidence Items in Expanders */
-        .evidence-value {{
-            color: {NEAR_BLACK};
-            font-weight: 500;
-            font-size: 0.875rem;
-        }}
-        .evidence-source {{
-            color: {CHARCOAL};
-            font-size: 0.75rem;
-            margin-top: 8px;
-        }}
-        
-        /* Copilot Section */
-        .copilot-header {{
-            color: {MIT_NAVY};
-            font-size: 1rem;
-            font-weight: 600;
-            margin-bottom: 4px;
-        }}
-        .copilot-subtitle {{
-            color: {CHARCOAL};
-            font-size: 0.75rem;
-            margin-bottom: 16px;
-        }}
-        .suggested-prompt {{
-            background-color: #F8F9FA;
-            border: 1px solid {LIGHT_GRAY};
-            border-radius: 4px;
-            padding: 8px 12px;
-            margin-bottom: 8px;
-            font-size: 0.8rem;
-            color: {NEAR_BLACK};
-            cursor: pointer;
-            transition: border-color 0.2s;
-        }}
-        .suggested-prompt:hover {{
-            border-color: {MIT_NAVY};
-        }}
-        
-        /* Transparency Footer */
-        .transparency-footer {{
-            background-color: #F8F9FA;
-            border: 1px solid {LIGHT_GRAY};
-            border-radius: 4px;
-            padding: 12px;
-            margin-top: 16px;
-            font-size: 0.75rem;
-            color: {CHARCOAL};
-        }}
-        .transparency-item {{
-            display: flex;
-            justify-content: space-between;
-            padding: 4px 0;
-        }}
-        
-        /* Document List */
-        .document-item {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 0;
-            border-bottom: 1px solid {LIGHT_GRAY};
-            font-size: 0.875rem;
-        }}
-        .document-item:last-child {{
-            border-bottom: none;
-        }}
-        .document-status {{
-            color: #2E7D32;
-            font-size: 0.75rem;
-        }}
-        
-        /* Signal Row */
-        .signal-row {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 0;
-            border-bottom: 1px solid {LIGHT_GRAY};
-            font-size: 0.875rem;
-        }}
-        .signal-row:last-child {{
-            border-bottom: none;
-        }}
+        /* Signal Indicators */
         .signal-indicator {{
             width: 8px;
             height: 8px;
             border-radius: 50%;
+            display: inline-block;
             margin-right: 8px;
         }}
-        .signal-indicator.green {{ background-color: #2E7D32; }}
-        .signal-indicator.yellow {{ background-color: #F9A825; }}
+        .signal-indicator.green {{ background-color: {SUCCESS_GREEN}; }}
+        .signal-indicator.yellow {{ background-color: {WARNING_YELLOW}; }}
         .signal-indicator.red {{ background-color: {MIT_CARDINAL}; }}
+        
+        /* Artifacts Panel */
+        .artifacts-panel {{
+            background-color: #FAFBFC;
+            border: 1px solid {LIGHT_GRAY};
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 20px;
+        }}
+        .artifacts-header {{
+            color: {MIT_NAVY};
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
+        .artifact-card {{
+            background-color: {WHITE};
+            border: 1px solid {LIGHT_GRAY};
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 8px;
+        }}
+        .artifact-card:hover {{
+            border-color: {MIT_NAVY};
+        }}
+        
+        /* Chat Interface */
+        .chat-header {{
+            color: {MIT_NAVY};
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
+        .chat-subtitle {{
+            color: {CHARCOAL};
+            font-size: 0.8rem;
+            margin-bottom: 16px;
+        }}
+        
+        /* Governance inline */
+        .governance-inline {{
+            background-color: #FFF8E1;
+            border: 1px solid {WARNING_YELLOW};
+            border-radius: 6px;
+            padding: 12px;
+            margin-top: 16px;
+            font-size: 0.85rem;
+        }}
+        .governance-inline.waiting {{
+            background-color: #FFEBEE;
+            border-color: {MIT_CARDINAL};
+        }}
         
         /* Override Streamlit defaults */
         .stButton > button {{
-            border-radius: 4px;
+            border-radius: 6px;
             font-weight: 500;
-            padding: 8px 24px;
         }}
         div[data-testid="stExpander"] {{
             border: 1px solid {LIGHT_GRAY};
-            border-radius: 4px;
+            border-radius: 6px;
+        }}
+        
+        /* Timeline styles */
+        .timeline-item {{
+            display: flex;
+            gap: 12px;
+            padding: 8px 0;
+            border-left: 2px solid {LIGHT_GRAY};
+            padding-left: 16px;
+            margin-left: 8px;
+        }}
+        .timeline-item:last-child {{
+            border-left-color: transparent;
+        }}
+        .timeline-dot {{
+            width: 10px;
+            height: 10px;
+            background-color: {MIT_NAVY};
+            border-radius: 50%;
+            margin-left: -21px;
+            margin-top: 4px;
+        }}
+        .timeline-content {{
+            flex: 1;
+        }}
+        .timeline-time {{
+            font-size: 0.75rem;
+            color: {CHARCOAL};
+        }}
+        .timeline-action {{
+            font-size: 0.85rem;
+            color: {NEAR_BLACK};
         }}
     </style>
     """, unsafe_allow_html=True)
 
 
-def render_case_header(case) -> None:
-    """Render full-width case status header."""
+def render_case_header_condensed(case) -> None:
+    """Render condensed case header with key metrics only."""
     dtp_name = DTP_STAGE_NAMES.get(case.dtp_stage, case.dtp_stage)
     is_waiting = case.status == "Waiting for Human Decision"
     
-    # Determine urgency
-    urgency = "Standard"
-    if "URGENT" in case.name.upper():
-        urgency = "High"
-    elif case.trigger_source == "Signal":
-        urgency = "Elevated"
-    
-    # Determine risk level from key findings
-    risk_level = "Medium"
-    if case.summary and case.summary.key_findings:
-        findings_text = " ".join(case.summary.key_findings).lower()
-        if "high" in findings_text or "critical" in findings_text:
-            risk_level = "High"
-        elif "low" in findings_text:
-            risk_level = "Low"
-    
-    status_class = "status-badge active" if is_waiting else "status-badge"
+    # Determine status class
+    status_class = "status-pill" if is_waiting else "status-pill success"
     
     st.markdown(f"""
-    <div class="case-header">
-        <h1>{case.name}</h1>
-        <div class="case-header-meta">
-            <span><strong>ID:</strong> {case.case_id}</span>
-            <span><strong>Category:</strong> {case.category_id}</span>
-            <span><strong>Supplier:</strong> {case.supplier_id or 'Not Assigned'}</span>
-            <span><strong>Stage:</strong> {case.dtp_stage} - {dtp_name}</span>
-            <span><strong>Risk:</strong> {risk_level}</span>
-            <span><strong>Urgency:</strong> {urgency}</span>
+    <div class="case-header-condensed">
+        <div>
+            <h1 class="case-header-title">{case.name}</h1>
+            <div style="font-size: 0.8rem; opacity: 0.8; margin-top: 4px;">
+                {case.case_id} • {case.category_id}
+            </div>
+        </div>
+        <div class="case-header-metrics">
+            <div class="metric">
+                <span class="metric-label">Stage:</span>
+                <span class="metric-value">{case.dtp_stage}</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Supplier:</span>
+                <span class="metric-value">{case.supplier_id or 'Not Assigned'}</span>
+            </div>
             <span class="{status_class}">{case.status}</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
 
-def render_context_column(case) -> None:
-    """Render left column - Case Context (read-only)."""
+def render_case_details_panel(case, client) -> None:
+    """
+    Render unified Case Details Panel (left 60%).
+    Consolidates all case information into a single scrollable panel.
     
-    # Case Summary Card
+    Sections:
+    1. Quick Overview
+    2. Strategy Rationale
+    3. Supporting Context
+    4. Governance Status
+    5. Documents & Timeline
+    """
+    
+    # ===== Section 1: Quick Overview =====
     st.markdown("""
-    <div class="context-card">
-        <h3>Case Summary</h3>
+    <div class="section-card">
+        <div class="section-card-header">
+            <h3 class="section-card-title">📋 Quick Overview</h3>
+        </div>
+        <div class="section-card-content">
+    """, unsafe_allow_html=True)
+    
+    # Get recommendation from latest agent output
+    recommendation = "Pending Analysis"
+    confidence = 0.0
+    if case.latest_agent_output:
+        output = case.latest_agent_output
+        rec = output.get("recommended_strategy") if isinstance(output, dict) else getattr(output, "recommended_strategy", None)
+        if rec:
+            recommendation = rec
+        conf = output.get("confidence") if isinstance(output, dict) else getattr(output, "confidence", None)
+        if conf:
+            confidence = conf
+    
+    # Overview details
+    st.markdown(f"""
+        <div class="detail-row">
+            <span class="detail-label">Case ID</span>
+            <span class="detail-value">{case.case_id}</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Category</span>
+            <span class="detail-value">{case.category_id}</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Supplier</span>
+            <span class="detail-value">{case.supplier_id or 'Not Assigned'}</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Contract</span>
+            <span class="detail-value">{case.contract_id or 'Not Specified'}</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Trigger Source</span>
+            <span class="detail-value">{case.trigger_source}</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Created</span>
+            <span class="detail-value">{case.created_date}</span>
+        </div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
     
-    with st.container():
-        st.markdown(f"""
-        <div class="context-item">
-            <span class="context-label">Case ID</span>
-            <span class="context-value">{case.case_id}</span>
+    # ===== Section 2: Strategy Rationale =====
+    st.markdown(f"""
+    <div class="section-card">
+        <div class="section-card-header">
+            <h3 class="section-card-title">🎯 Recommended Strategy</h3>
         </div>
-        <div class="context-item">
-            <span class="context-label">Category</span>
-            <span class="context-value">{case.category_id}</span>
-        </div>
-        <div class="context-item">
-            <span class="context-label">Supplier</span>
-            <span class="context-value">{case.supplier_id or 'Not Assigned'}</span>
-        </div>
-        <div class="context-item">
-            <span class="context-label">Contract</span>
-            <span class="context-value">{case.contract_id or 'Not Specified'}</span>
-        </div>
-        <div class="context-item">
-            <span class="context-label">Trigger Source</span>
-            <span class="context-value">{case.trigger_source}</span>
-        </div>
-        <div class="context-item">
-            <span class="context-label">Created</span>
-            <span class="context-value">{case.created_date}</span>
-        </div>
-        """, unsafe_allow_html=True)
+        <div class="section-card-content">
+            <div style="font-size: 1.25rem; font-weight: 600; color: {MIT_NAVY}; margin-bottom: 12px;">
+                {recommendation}
+            </div>
+            <div style="display: flex; gap: 16px; margin-bottom: 12px;">
+                <span style="font-size: 0.85rem;">
+                    <strong>Confidence:</strong> {confidence:.0%}
+                </span>
+                <span style="font-size: 0.85rem;">
+                    <strong>Stage:</strong> {case.dtp_stage}
+                </span>
+            </div>
+    """, unsafe_allow_html=True)
     
-    st.markdown("<br>", unsafe_allow_html=True)
+    # Show rationale if available
+    rationale = []
+    if case.latest_agent_output:
+        output = case.latest_agent_output
+        rationale = output.get("rationale", []) if isinstance(output, dict) else getattr(output, "rationale", [])
     
-    # Signals & Triggers Card
+    if rationale:
+        st.markdown("<div style='margin-top: 8px;'>", unsafe_allow_html=True)
+        for item in rationale[:5]:
+            st.markdown(f"""
+            <div style="display: flex; align-items: flex-start; gap: 8px; padding: 4px 0; font-size: 0.85rem;">
+                <span style="color: {SUCCESS_GREEN};">✓</span>
+                <span>{item}</span>
+            </div>
+            """, unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    st.markdown("</div></div>", unsafe_allow_html=True)
+    
+    # ===== Section 3: Supporting Context (Signals & Findings) =====
     st.markdown("""
-    <div class="context-card">
-        <h3>Signals & Triggers</h3>
-    </div>
+    <div class="section-card">
+        <div class="section-card-header">
+            <h3 class="section-card-title">📊 Signals & Key Findings</h3>
+        </div>
+        <div class="section-card-content">
     """, unsafe_allow_html=True)
     
     # Parse key findings for signals
-    signals = []
     if case.summary and case.summary.key_findings:
-        for finding in case.summary.key_findings:
+        for finding in case.summary.key_findings[:5]:
             indicator = "yellow"
             if "high" in finding.lower() or "breach" in finding.lower() or "decline" in finding.lower():
                 indicator = "red"
-            elif "strong" in finding.lower() or "improving" in finding.lower():
+            elif "strong" in finding.lower() or "improving" in finding.lower() or "good" in finding.lower():
                 indicator = "green"
-            signals.append({"text": finding, "indicator": indicator})
-    
-    if signals:
-        for signal in signals[:5]:
+            
             st.markdown(f"""
-            <div class="signal-row">
-                <span>
-                    <span class="signal-indicator {signal['indicator']}"></span>
-                    {signal['text'][:60]}{'...' if len(signal['text']) > 60 else ''}
-                </span>
+            <div style="display: flex; align-items: flex-start; padding: 6px 0; font-size: 0.85rem;">
+                <span class="signal-indicator {indicator}"></span>
+                <span>{finding}</span>
             </div>
             """, unsafe_allow_html=True)
     else:
-        st.markdown('<div style="color: #4A4A4A; font-size: 0.875rem;">No signals detected</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="color: {CHARCOAL}; font-size: 0.85rem;">No signals detected yet. Ask the copilot to scan for signals.</div>', unsafe_allow_html=True)
     
-    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("</div></div>", unsafe_allow_html=True)
     
-    # Documents Card
-    st.markdown("""
-    <div class="context-card">
-        <h3>Documents (RAG Sources)</h3>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Simulated document list - in production, query from ingestion service
-    documents = [
-        {"name": "Contract_Agreement.pdf", "status": "Ingested"},
-        {"name": "Performance_Q3.pdf", "status": "Ingested"},
-        {"name": "SLA_Terms.pdf", "status": "Pending"},
-    ]
-    
-    for doc in documents:
-        status_mark = "check" if doc["status"] == "Ingested" else "clock"
-        st.markdown(f"""
-        <div class="document-item">
-            <span>{doc['name']}</span>
-            <span class="document-status">{'Ingested' if doc['status'] == 'Ingested' else 'Pending'}</span>
-        </div>
-        """, unsafe_allow_html=True)
-
-
-def render_decision_column(case, client) -> None:
-    """Render center column - Decision & Evidence."""
-    
-    # Get recommendation from latest agent output
-    recommendation = "PENDING ANALYSIS"
-    confidence = 0.0
-    agent_name = "Awaiting"
-    rationale = []
-    has_recommendation = False
-    
-    if case.latest_agent_output:
-        output = case.latest_agent_output
-        rec = output.get("recommended_strategy")
-        if rec:
-            recommendation = rec.upper()
-            has_recommendation = True
-        confidence = output.get("confidence", 0.0)
-        rationale = output.get("rationale", [])
-    
-    if case.latest_agent_name:
-        agent_name = case.latest_agent_name
-    
-    # Decision Card - Complete HTML block
-    st.markdown(f"""
-    <div style="background-color: #FFFFFF; border: 2px solid #003A8F; border-radius: 4px; padding: 24px; margin-bottom: 20px;">
-        <div style="color: #003A8F; font-size: 0.875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 16px;">
-            Strategy Recommendation
-        </div>
-        <div style="font-size: 1.75rem; font-weight: 700; color: #1F1F1F; margin-bottom: 16px;">
-            {recommendation}
-        </div>
-        <div style="display: flex; gap: 24px; font-size: 0.875rem; color: #4A4A4A;">
-            <span><strong>Confidence:</strong> {confidence:.0%}</span>
-            <span><strong>Producing Agent:</strong> {agent_name}</span>
-            <span><strong>DTP Stage:</strong> {case.dtp_stage}</span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Action Buttons with improved styling
+    # ===== Section 4: Governance Status =====
     is_waiting = case.status == "Waiting for Human Decision"
+    dtp_name = DTP_STAGE_NAMES.get(case.dtp_stage, case.dtp_stage)
     
-    # Custom button styling
-    st.markdown("""
-    <style>
-        div[data-testid="column"]:first-child .stButton > button {
-            background-color: #A31F34 !important;
-            color: white !important;
-            font-weight: 700 !important;
-            border: none !important;
-            padding: 12px 32px !important;
-        }
-        div[data-testid="column"]:nth-child(2) .stButton > button {
-            background-color: #FFFFFF !important;
-            color: #1F1F1F !important;
-            font-weight: 700 !important;
-            border: 2px solid #4A4A4A !important;
-            padding: 12px 32px !important;
-        }
-        div[data-testid="column"]:nth-child(2) .stButton > button:hover {
-            border-color: #003A8F !important;
-            color: #003A8F !important;
-        }
-    </style>
-    """, unsafe_allow_html=True)
+    governance_class = "governance-inline waiting" if is_waiting else "governance-inline"
     
-    col_approve, col_reject, col_spacer = st.columns([1.2, 1.5, 2])
-    
-    with col_approve:
-        if st.button(
-            "APPROVE",
-            key="approve_decision",
-            disabled=not is_waiting
-        ):
-            try:
-                result = client.approve_decision(case.case_id)
-                st.success(f"Decision approved. Advanced to {result.new_dtp_stage}")
-                st.rerun()
-            except APIError as e:
-                st.error(f"Error: {e.message}")
-    
-    with col_reject:
-        if st.button(
-            "REQUEST REVISION",
-            key="reject_decision",
-            disabled=not is_waiting
-        ):
-            try:
-                result = client.reject_decision(case.case_id)
-                st.info("Revision requested. Case remains at current stage.")
-                st.rerun()
-            except APIError as e:
-                st.error(f"Error: {e.message}")
-    
-    # Governance Gate
-    next_stage = get_next_stage(case.dtp_stage)
     st.markdown(f"""
-    <div style="background-color: #FFFFFF; border: 1px solid #A31F34; border-left: 4px solid #A31F34; padding: 16px; margin: 20px 0; font-size: 0.875rem;">
-        <strong style="color: #A31F34;">Governance Notice:</strong> This recommendation will not advance to {next_stage} without explicit human approval. All decisions are logged for audit.
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Evidence Breakdown Header
-    st.markdown("""
-    <div style="background-color: #F8F9FA; border: 1px solid #D9D9D9; border-radius: 4px 4px 0 0; padding: 12px 16px; font-weight: 600; font-size: 0.875rem; color: #003A8F; margin-top: 8px;">
-        Evidence Breakdown
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Display rationale as evidence items
-    if rationale:
-        for i, item in enumerate(rationale):
-            with st.expander(f"Evidence {i+1}: {item[:50]}...", expanded=False):
-                st.markdown(f"""
-                <div class="evidence-item">
-                    <div class="evidence-value">{item}</div>
-                    <div class="evidence-source">Source: Agent Analysis | Retrieved: {datetime.now().strftime('%Y-%m-%d %H:%M')}</div>
+    <div class="{governance_class}">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <strong>🔐 Governance Status</strong>
+                <div style="margin-top: 4px; font-size: 0.8rem;">
+                    Stage: {case.dtp_stage} - {dtp_name} | 
+                    Last Agent: {case.latest_agent_name or 'None'}
                 </div>
-                """, unsafe_allow_html=True)
-    else:
-        with st.expander("Case Summary", expanded=True):
-            st.markdown(f"""
-            <div class="evidence-item">
-                <div class="evidence-value">{case.summary.summary_text if case.summary else 'No summary available'}</div>
-                <div class="evidence-source">Source: Case Data | Type: Summary</div>
             </div>
-            """, unsafe_allow_html=True)
+            <div style="text-align: right;">
+                <div style="font-weight: 600; color: {MIT_CARDINAL if is_waiting else SUCCESS_GREEN};">
+                    {'⚠️ Approval Required' if is_waiting else '✓ In Progress'}
+                </div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
     
-    # Show key findings as additional evidence
-    if case.summary and case.summary.key_findings:
-        with st.expander("Key Findings", expanded=False):
-            for finding in case.summary.key_findings:
+    # Show approval buttons if waiting
+    if is_waiting:
+        st.markdown("<br>", unsafe_allow_html=True)
+        col1, col2, col3 = st.columns([1, 1, 2])
+        with col1:
+            if st.button("✅ APPROVE", key="details_approve", use_container_width=True):
+                try:
+                    result = client.approve_decision(case.case_id)
+                    st.success(f"Approved! Advanced to {result.new_dtp_stage}")
+                    st.rerun()
+                except APIError as e:
+                    st.error(f"Error: {e.message}")
+        with col2:
+            if st.button("↩️ REVISE", key="details_reject", use_container_width=True):
+                try:
+                    client.reject_decision(case.case_id)
+                    st.info("Revision requested")
+                    st.rerun()
+                except APIError as e:
+                    st.error(f"Error: {e.message}")
+    
+    # ===== Section 5: Documents & Timeline =====
+    with st.expander("📁 Documents & Activity Timeline", expanded=False):
+        # Documents
+        st.markdown(f"<div style='font-weight: 600; color: {MIT_NAVY}; margin-bottom: 8px;'>Documents</div>", unsafe_allow_html=True)
+        
+        # Try to get documents from API
+        try:
+            docs = client.list_documents(category_id=case.category_id)
+            if docs and docs.documents:
+                for doc in docs.documents[:5]:
+                    st.markdown(f"""
+                    <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 0.85rem; border-bottom: 1px solid #F0F0F0;">
+                        <span>📄 {doc.filename}</span>
+                        <span style="color: {SUCCESS_GREEN}; font-size: 0.75rem;">Ingested</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.markdown(f'<div style="color: {CHARCOAL}; font-size: 0.85rem;">No documents ingested yet.</div>', unsafe_allow_html=True)
+        except:
+            st.markdown(f'<div style="color: {CHARCOAL}; font-size: 0.85rem;">No documents ingested yet.</div>', unsafe_allow_html=True)
+        
+        # Timeline
+        st.markdown(f"<div style='font-weight: 600; color: {MIT_NAVY}; margin: 16px 0 8px 0;'>Recent Activity</div>", unsafe_allow_html=True)
+        
+        if case.activity_log and len(case.activity_log) > 0:
+            for entry in case.activity_log[-5:]:
+                timestamp = entry.get('timestamp', '')[:16] if isinstance(entry, dict) else str(entry)[:16]
+                action = entry.get('action', 'Action') if isinstance(entry, dict) else 'Activity'
+                agent = entry.get('agent_name', '') if isinstance(entry, dict) else ''
+                
                 st.markdown(f"""
-                <div class="evidence-item">
-                    <div class="evidence-value">{finding}</div>
-                    <div class="evidence-source">Source: Signal Detection | Type: Finding</div>
+                <div class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-content">
+                        <div class="timeline-time">{timestamp}</div>
+                        <div class="timeline-action">{action} {f'({agent})' if agent else ''}</div>
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
+        else:
+            st.markdown(f'<div style="color: {CHARCOAL}; font-size: 0.85rem;">No activity yet. Start by asking the copilot a question.</div>', unsafe_allow_html=True)
 
 
-def render_copilot_column(case, client) -> None:
-    """Render right column - Case Copilot with fixed-height scrollable chat."""
+def render_chat_interface(case, client) -> None:
+    """
+    Render the Chat Interface (right 40%).
+    
+    Features:
+    - Scrollable chat history (Cursor-like)
+    - No action buttons (conversation-driven)
+    - Chat input at bottom
+    - Auto-scroll to latest message
+    """
     
     # Initialize chat history
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = {}
     
     if case.case_id not in st.session_state.chat_history:
-        st.session_state.chat_history[case.case_id] = []
+        # Add welcome message on first load
+        st.session_state.chat_history[case.case_id] = [{
+            "role": "assistant",
+            "content": f"👋 Hello! I'm your Case Copilot for **{case.case_id}**.\n\nI can help you with:\n- Scanning for sourcing signals\n- Scoring and evaluating suppliers\n- Drafting RFx documents\n- Preparing for negotiations\n- Extracting contract terms\n- Creating implementation plans\n\nWhat would you like to do?",
+            "metadata": {"agent": "System", "intent": "Welcome"}
+        }]
     
     chat_history = st.session_state.chat_history[case.case_id]
     
     # Header
     st.markdown(f"""
-    <div style="color: {MIT_NAVY}; font-size: 1rem; font-weight: 600; margin-bottom: 4px;">
-        Case Copilot
+    <div class="chat-header">
+        💬 Case Copilot
     </div>
-    <div style="color: {CHARCOAL}; font-size: 0.75rem; margin-bottom: 12px;">
-        Ask questions about {case.case_id}
+    <div class="chat-subtitle">
+        Ask questions or request actions for {case.case_id}
     </div>
     """, unsafe_allow_html=True)
     
-    # Suggested prompts - Happy Path demo sequence
-    prompt_cols = st.columns(2)
-    suggested_prompts = [
-        ("Scan signals", "prompt_scan"),
-        ("Score suppliers", "prompt_score"),
-        ("Draft RFx", "prompt_rfx"),
-        ("Support negotiation", "prompt_negotiate"),
-    ]
-    
-    for i, (prompt, key) in enumerate(suggested_prompts):
-        with prompt_cols[i % 2]:
-            if st.button(prompt, key=key, use_container_width=True):
-                st.session_state.pending_prompt = prompt
-    
-    # Additional prompts row
-    prompt_cols2 = st.columns(2)
-    more_prompts = [
-        ("Extract key terms", "prompt_terms"),
-        ("Generate implementation plan", "prompt_impl"),
-    ]
-    for i, (prompt, key) in enumerate(more_prompts):
-        with prompt_cols2[i]:
-            if st.button(prompt, key=key, use_container_width=True):
-                st.session_state.pending_prompt = prompt
-    
-    st.divider()
-    
-    # Fixed-height scrollable chat container using Streamlit's native container
-    # with CSS height constraint
-    st.markdown(f"""
-    <style>
-        [data-testid="stVerticalBlock"] > div:has(> div.chat-container-marker) {{
-            height: 350px;
-            max-height: 350px;
-            overflow-y: auto;
-            border: 1px solid {LIGHT_GRAY};
-            border-radius: 8px;
-            padding: 12px;
-            background-color: #FAFBFC;
-        }}
-    </style>
-    """, unsafe_allow_html=True)
-    
-    # Chat messages container
-    chat_container = st.container()
+    # Scrollable chat container with fixed height
+    chat_container = st.container(height=500)
     
     with chat_container:
-        # Marker for CSS targeting
-        st.markdown('<div class="chat-container-marker" style="display:none;"></div>', unsafe_allow_html=True)
-        
-        if not chat_history:
-            st.markdown(f"""
-            <div style="text-align: center; padding: 60px 20px; color: {CHARCOAL};">
-                <div style="font-size: 1.5rem; margin-bottom: 8px;">💬</div>
-                <div style="font-size: 0.875rem;">No messages yet</div>
-                <div style="font-size: 0.75rem; margin-top: 4px; opacity: 0.7;">
-                    Ask a question to get started
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            # Display messages using Streamlit's chat message components
-            for msg in chat_history:
-                if msg["role"] == "user":
-                    with st.chat_message("user"):
-                        st.write(msg["content"])
-                else:
-                    with st.chat_message("assistant"):
-                        st.write(msg["content"])
+        for msg in chat_history:
+            if msg["role"] == "user":
+                with st.chat_message("user"):
+                    st.markdown(msg["content"])
+            else:
+                with st.chat_message("assistant"):
+                    st.markdown(msg["content"])
     
-    # Transparency footer
+    # Transparency footer - show last metadata
     last_meta = None
     for msg in reversed(chat_history):
         if msg.get("metadata"):
             last_meta = msg["metadata"]
             break
     
-    agent_display = last_meta.get('agent', 'None') if last_meta else 'None'
-    intent_display = last_meta.get('intent', 'N/A') if last_meta else 'N/A'
-    docs_display = last_meta.get('docs_retrieved', 0) if last_meta else 0
-    
-    st.markdown(f"""
-    <div style="background-color: #F8F9FA; border: 1px solid {LIGHT_GRAY}; border-radius: 4px; padding: 8px 12px; margin-top: 12px; font-size: 0.7rem; color: {CHARCOAL};">
-        <div style="display: flex; justify-content: space-between; padding: 2px 0;">
-            <span>Agent</span>
-            <span><strong>{agent_display}</strong></span>
+    if last_meta:
+        agent_display = last_meta.get('agent', 'System')
+        intent_display = last_meta.get('intent', 'N/A')
+        docs_display = last_meta.get('docs_retrieved', 0)
+        
+        st.markdown(f"""
+        <div style="background-color: #F8F9FA; border: 1px solid {LIGHT_GRAY}; border-radius: 4px; padding: 6px 10px; margin-top: 8px; font-size: 0.7rem; color: {CHARCOAL};">
+            <span>Agent: <strong>{agent_display}</strong></span> • 
+            <span>Intent: <strong>{intent_display}</strong></span> • 
+            <span>Docs: <strong>{docs_display}</strong></span>
         </div>
-        <div style="display: flex; justify-content: space-between; padding: 2px 0;">
-            <span>Intent</span>
-            <span><strong>{intent_display}</strong></span>
-        </div>
-        <div style="display: flex; justify-content: space-between; padding: 2px 0;">
-            <span>Documents</span>
-            <span><strong>{docs_display}</strong></span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Check for pending prompt from button
-    if st.session_state.get("pending_prompt"):
-        user_input = st.session_state.pending_prompt
-        st.session_state.pending_prompt = None
-        process_chat_message(case.case_id, user_input, client, chat_history)
-        st.rerun()
+        """, unsafe_allow_html=True)
     
     # Chat input at bottom
     user_input = st.chat_input(
@@ -628,7 +581,7 @@ def render_copilot_column(case, client) -> None:
 
 
 def process_chat_message(case_id: str, message: str, client, chat_history: list) -> None:
-    """Process a chat message."""
+    """Process a chat message and get response from backend."""
     chat_history.append({
         "role": "user",
         "content": message
@@ -645,15 +598,256 @@ def process_chat_message(case_id: str, message: str, client, chat_history: list)
             "content": response.assistant_message,
             "metadata": {
                 "intent": response.intent_classified,
-                "agent": response.agents_called[0] if response.agents_called else None,
+                "agent": response.agents_called[0] if response.agents_called else "System",
                 "docs_retrieved": response.retrieval_context.get("documents_retrieved", 0) if response.retrieval_context else 0
             }
         })
     except APIError as e:
         chat_history.append({
             "role": "assistant",
-            "content": f"Unable to process request: {e.message}"
+            "content": f"I encountered an error processing your request: {e.message}\n\nPlease try again or rephrase your question."
         })
+
+
+def render_artifacts_panel_full_width(case, client) -> None:
+    """
+    Render full-width Artifacts Panel at the bottom.
+    
+    Features:
+    - Horizontal tabs for artifact types
+    - Expandable cards with full details
+    - Status badges (VERIFIED, PARTIAL, UNVERIFIED)
+    """
+    
+    st.markdown(f"""
+    <div style="margin-top: 24px; padding-top: 16px; border-top: 2px solid {LIGHT_GRAY};">
+        <div class="artifacts-header">
+            📦 Artifacts & Outputs
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Horizontal tabs for artifact types
+    tabs = st.tabs([
+        "📊 Signals", 
+        "⭐ Scoring", 
+        "📝 RFx Drafts", 
+        "🤝 Negotiation", 
+        "📄 Contract", 
+        "🚀 Implementation", 
+        "📜 History"
+    ])
+    
+    # Get artifacts from case
+    output = case.latest_agent_output
+    agent_name = case.latest_agent_name
+    
+    with tabs[0]:  # Signals
+        _render_signals_artifacts(case, output, agent_name)
+    
+    with tabs[1]:  # Scoring
+        _render_scoring_artifacts(case, output, agent_name)
+    
+    with tabs[2]:  # RFx Drafts
+        _render_rfx_artifacts(case, output, agent_name)
+    
+    with tabs[3]:  # Negotiation
+        _render_negotiation_artifacts(case, output, agent_name)
+    
+    with tabs[4]:  # Contract
+        _render_contract_artifacts(case, output, agent_name)
+    
+    with tabs[5]:  # Implementation
+        _render_implementation_artifacts(case, output, agent_name)
+    
+    with tabs[6]:  # History
+        _render_activity_history(case)
+
+
+def _render_signals_artifacts(case, output, agent_name):
+    """Render signals tab content."""
+    if agent_name in ["SourcingSignal", "SignalInterpretation"] and output:
+        signals = output.get("signals", []) if isinstance(output, dict) else getattr(output, "signals", [])
+        if signals:
+            cols = st.columns(min(len(signals), 3))
+            for i, signal in enumerate(signals[:6]):
+                with cols[i % 3]:
+                    severity = signal.get("severity", "medium")
+                    color = {"high": MIT_CARDINAL, "medium": WARNING_YELLOW, "low": SUCCESS_GREEN}.get(severity, CHARCOAL)
+                    st.markdown(f"""
+                    <div class="artifact-card" style="border-left: 4px solid {color};">
+                        <div style="font-weight: 600; font-size: 0.85rem;">{signal.get('signal_type', 'Signal')}</div>
+                        <div style="font-size: 0.8rem; color: {CHARCOAL}; margin-top: 4px;">{signal.get('message', signal.get('description', ''))}</div>
+                        <div style="font-size: 0.7rem; color: {CHARCOAL}; margin-top: 8px; text-transform: uppercase;">{severity} severity</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+        else:
+            st.info("No signals detected. Ask the copilot: \"Scan for sourcing signals\"")
+    else:
+        st.info("No signals detected yet. Ask the copilot: \"Scan for sourcing signals\"")
+
+
+def _render_scoring_artifacts(case, output, agent_name):
+    """Render scoring tab content."""
+    if agent_name in ["SupplierScoring", "SupplierEvaluation"] and output:
+        suppliers = output.get("shortlisted_suppliers", []) if isinstance(output, dict) else getattr(output, "shortlisted_suppliers", [])
+        if suppliers:
+            # Create a table-like display
+            st.markdown(f"""
+            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 8px; padding: 8px 12px; background-color: {MIT_NAVY}; color: white; font-weight: 600; font-size: 0.8rem; border-radius: 4px 4px 0 0;">
+                <span>Supplier</span>
+                <span>Score</span>
+                <span>Status</span>
+                <span>Rank</span>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            for i, s in enumerate(suppliers[:5]):
+                name = s.get('supplier_name', s.get('name', f'Supplier {i+1}'))
+                score = s.get("total_score", s.get("score", 0))
+                status = "Eligible" if score >= 6 else "Review Required"
+                status_color = SUCCESS_GREEN if score >= 6 else WARNING_YELLOW
+                
+                st.markdown(f"""
+                <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 8px; padding: 12px; border: 1px solid {LIGHT_GRAY}; border-top: none; font-size: 0.85rem;">
+                    <span style="font-weight: 500;">{name}</span>
+                    <span style="color: {MIT_NAVY}; font-weight: bold;">{score:.1f}/10</span>
+                    <span style="color: {status_color};">{status}</span>
+                    <span>#{i+1}</span>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("No supplier scores available. Ask the copilot: \"Score suppliers\"")
+    else:
+        st.info("No supplier scores available yet. Ask the copilot: \"Score suppliers\"")
+
+
+def _render_rfx_artifacts(case, output, agent_name):
+    """Render RFx drafts tab content."""
+    if agent_name == "RfxDraft" and output:
+        rfx_type = output.get("rfx_type", "RFP") if isinstance(output, dict) else getattr(output, "rfx_type", "RFP")
+        completeness = output.get("completeness_score", 0) if isinstance(output, dict) else getattr(output, "completeness_score", 0)
+        sections = output.get("rfx_sections", {}) if isinstance(output, dict) else getattr(output, "rfx_sections", {})
+        
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            st.markdown(f"""
+            <div class="artifact-card">
+                <div style="font-weight: 600; color: {MIT_NAVY};">RFx Type</div>
+                <div style="font-size: 1.5rem; font-weight: 700; margin-top: 4px;">{rfx_type}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with col2:
+            st.markdown(f"""
+            <div class="artifact-card">
+                <div style="font-weight: 600; color: {MIT_NAVY};">Completeness</div>
+                <div style="font-size: 1.5rem; font-weight: 700; margin-top: 4px;">{completeness}%</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        if sections:
+            st.markdown(f"<div style='font-weight: 600; color: {MIT_NAVY}; margin: 16px 0 8px 0;'>Sections</div>", unsafe_allow_html=True)
+            for section_name, content in sections.items():
+                with st.expander(f"📄 {section_name}"):
+                    st.markdown(content[:500] + "..." if len(content) > 500 else content)
+    else:
+        st.info("No RFx drafts created yet. Ask the copilot: \"Draft RFx\"")
+
+
+def _render_negotiation_artifacts(case, output, agent_name):
+    """Render negotiation tab content."""
+    if agent_name == "NegotiationSupport" and output:
+        targets = output.get("target_terms", {}) if isinstance(output, dict) else getattr(output, "target_terms", {})
+        leverage = output.get("leverage_points", []) if isinstance(output, dict) else getattr(output, "leverage_points", [])
+        
+        if targets:
+            st.markdown(f"""
+            <div class="artifact-card">
+                <div style="font-weight: 600; color: {MIT_NAVY}; margin-bottom: 12px;">Target Terms</div>
+            """, unsafe_allow_html=True)
+            for key, value in targets.items():
+                st.markdown(f"""
+                <div class="detail-row">
+                    <span class="detail-label">{key.replace('_', ' ').title()}</span>
+                    <span class="detail-value">{value}</span>
+                </div>
+                """, unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+        
+        if leverage:
+            st.markdown(f"<div style='font-weight: 600; color: {MIT_NAVY}; margin: 16px 0 8px 0;'>Leverage Points</div>", unsafe_allow_html=True)
+            for lp in leverage[:5]:
+                desc = lp.get('description', lp) if isinstance(lp, dict) else str(lp)
+                st.markdown(f"""
+                <div style="display: flex; align-items: flex-start; gap: 8px; padding: 4px 0; font-size: 0.85rem;">
+                    <span style="color: {MIT_NAVY};">→</span>
+                    <span>{desc}</span>
+                </div>
+                """, unsafe_allow_html=True)
+    else:
+        st.info("No negotiation artifacts yet. Ask the copilot: \"Support negotiation\"")
+
+
+def _render_contract_artifacts(case, output, agent_name):
+    """Render contract tab content."""
+    if agent_name == "ContractSupport" and output:
+        key_terms = output.get("key_terms", {}) if isinstance(output, dict) else getattr(output, "key_terms", {})
+        if key_terms:
+            st.json(key_terms)
+        else:
+            st.info("No contract terms extracted yet.")
+    else:
+        st.info("No contract terms extracted yet. Ask the copilot: \"Extract key terms\"")
+
+
+def _render_implementation_artifacts(case, output, agent_name):
+    """Render implementation tab content."""
+    if agent_name == "Implementation" and output:
+        annual = output.get("annual_savings", 0) if isinstance(output, dict) else getattr(output, "annual_savings", 0)
+        total = output.get("total_savings", 0) if isinstance(output, dict) else getattr(output, "total_savings", 0)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown(f"""
+            <div class="artifact-card">
+                <div style="font-weight: 600; color: {MIT_NAVY};">Annual Savings</div>
+                <div style="font-size: 1.5rem; font-weight: 700; color: {SUCCESS_GREEN}; margin-top: 4px;">${annual:,.0f}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with col2:
+            st.markdown(f"""
+            <div class="artifact-card">
+                <div style="font-weight: 600; color: {MIT_NAVY};">Total Over Term</div>
+                <div style="font-size: 1.5rem; font-weight: 700; color: {SUCCESS_GREEN}; margin-top: 4px;">${total:,.0f}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        checklist = output.get("rollout_checklist", []) if isinstance(output, dict) else getattr(output, "rollout_checklist", [])
+        if checklist:
+            st.markdown(f"<div style='font-weight: 600; color: {MIT_NAVY}; margin: 16px 0 8px 0;'>Rollout Checklist</div>", unsafe_allow_html=True)
+            for item in checklist[:10]:
+                st.markdown(f"- {item}")
+    else:
+        st.info("No implementation plan yet. Ask the copilot: \"Generate implementation plan\"")
+
+
+def _render_activity_history(case):
+    """Render activity history tab."""
+    if case.activity_log and len(case.activity_log) > 0:
+        for entry in case.activity_log[-10:]:
+            timestamp = entry.get('timestamp', '')[:19] if isinstance(entry, dict) else str(entry)[:19]
+            action = entry.get('action', 'Activity') if isinstance(entry, dict) else 'Activity'
+            agent = entry.get('agent_name', '') if isinstance(entry, dict) else ''
+            
+            st.markdown(f"""
+            <div style="display: flex; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid {LIGHT_GRAY}; font-size: 0.85rem;">
+                <span style="color: {CHARCOAL};">{timestamp}</span>
+                <span style="flex: 1; margin-left: 16px;">{action}</span>
+                <span style="color: {MIT_NAVY}; font-weight: 500;">{agent}</span>
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.info("Activity log will appear here as you work on the case.")
 
 
 def get_next_stage(current_stage: str) -> str:
@@ -669,225 +863,14 @@ def get_next_stage(current_stage: str) -> str:
     return transitions.get(current_stage, "Next Stage")
 
 
-def render_next_best_actions_panel(case, client) -> None:
-    """Render the Next Best Actions panel at the top of the workbench."""
-    st.markdown(f"""
-    <div style="background-color: #F8F9FA; border: 2px solid {MIT_NAVY}; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
-        <div style="color: {MIT_NAVY}; font-size: 1rem; font-weight: 600; margin-bottom: 12px;">
-            📋 Next Best Actions
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Get next actions from case or generate defaults
-    next_actions = []
-    if case.latest_agent_output:
-        # Try to get cached next actions
-        pass
-    
-    # Default actions based on stage
-    stage_actions = {
-        "DTP-01": [
-            ("Scan signals", "Identify sourcing opportunities and risks", "scan signals"),
-            ("Score suppliers", "Evaluate potential suppliers", "score suppliers"),
-            ("Review market data", "Understand market conditions", "explain market"),
-        ],
-        "DTP-02": [
-            ("Draft RFx", "Create request for proposal", "draft rfx"),
-            ("Define criteria", "Set evaluation criteria", "create evaluation criteria"),
-        ],
-        "DTP-03": [
-            ("Evaluate responses", "Score supplier proposals", "evaluate supplier responses"),
-            ("Compare bids", "Analyze pricing differences", "compare bids"),
-        ],
-        "DTP-04": [
-            ("Support negotiation", "Get negotiation insights", "support negotiation"),
-            ("Propose targets", "Define negotiation targets", "propose targets and fallbacks"),
-        ],
-        "DTP-05": [
-            ("Extract key terms", "Review contract terms", "extract key terms"),
-            ("Validate terms", "Check compliance", "validate contract terms"),
-        ],
-        "DTP-06": [
-            ("Generate implementation plan", "Create rollout checklist", "generate implementation plan"),
-            ("Define KPIs", "Set success metrics", "define early indicators"),
-        ],
-    }
-    
-    actions = stage_actions.get(case.dtp_stage, stage_actions["DTP-01"])
-    
-    cols = st.columns(len(actions))
-    for i, (label, why, prompt) in enumerate(actions):
-        with cols[i]:
-            if st.button(f"🎯 {label}", key=f"action_{i}", use_container_width=True, help=why):
-                st.session_state.pending_prompt = prompt
-
-
-def render_artifacts_tabs_panel(case, client) -> None:
-    """Render the Artifacts tabs panel."""
-    tabs = st.tabs([
-        "📊 Signals", "⭐ Scoring", "📝 RFx Drafts", 
-        "🤝 Negotiation", "📄 Contract Terms", "🚀 Implementation", "📜 History"
-    ])
-    
-    # Get artifacts from case if available
-    # For now, show placeholder content based on latest agent output
-    
-    with tabs[0]:  # Signals
-        if case.latest_agent_name == "SourcingSignal" or case.latest_agent_name == "SignalInterpretation":
-            output = case.latest_agent_output or {}
-            signals = output.get("signals", [])
-            if signals:
-                for signal in signals[:5]:
-                    severity_color = {"high": MIT_CARDINAL, "medium": "#F0AD4E", "low": "#5CB85C"}.get(signal.get("severity", "medium"), CHARCOAL)
-                    st.markdown(f"""
-                    <div style="border-left: 4px solid {severity_color}; padding: 8px 12px; margin-bottom: 8px; background: #FAFBFC;">
-                        <strong>{signal.get('signal_type', 'Signal')}</strong>: {signal.get('message', '')}
-                    </div>
-                    """, unsafe_allow_html=True)
-            else:
-                st.info("Run 'Scan signals' to detect sourcing opportunities.")
-        else:
-            st.info("Run 'Scan signals' to detect sourcing opportunities.")
-    
-    with tabs[1]:  # Scoring
-        if case.latest_agent_name == "SupplierScoring" or case.latest_agent_name == "SupplierEvaluation":
-            output = case.latest_agent_output or {}
-            suppliers = output.get("shortlisted_suppliers", [])
-            if suppliers:
-                for s in suppliers:
-                    score = s.get("total_score", s.get("score", 0))
-                    st.markdown(f"""
-                    <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid {LIGHT_GRAY};">
-                        <span><strong>{s.get('supplier_name', s.get('name', 'Supplier'))}</strong></span>
-                        <span style="color: {MIT_NAVY}; font-weight: bold;">{score:.1f}/10</span>
-                    </div>
-                    """, unsafe_allow_html=True)
-            else:
-                st.info("Run 'Score suppliers' to evaluate options.")
-        else:
-            st.info("Run 'Score suppliers' to evaluate options.")
-    
-    with tabs[2]:  # RFx Drafts
-        if case.latest_agent_name == "RfxDraft":
-            output = case.latest_agent_output or {}
-            st.markdown(f"**RFx Type:** {output.get('rfx_type', 'Not determined')}")
-            st.markdown(f"**Completeness:** {output.get('completeness_score', 0)}%")
-            sections = output.get("sections", [])
-            if sections:
-                for s in sections:
-                    st.markdown(f"- {s.get('section', '')}: {s.get('status', 'pending')}")
-        else:
-            st.info("Run 'Draft RFx' to create solicitation documents.")
-    
-    with tabs[3]:  # Negotiation
-        if case.latest_agent_name == "NegotiationSupport":
-            output = case.latest_agent_output or {}
-            targets = output.get("target_terms", {})
-            if targets:
-                st.markdown(f"**Target Price:** ${targets.get('price_target', 0):,.0f}")
-                st.markdown("**Leverage Points:**")
-                for lp in output.get("leverage_points", [])[:3]:
-                    st.markdown(f"- {lp.get('description', '')}")
-        else:
-            st.info("Run 'Support negotiation' for insights.")
-    
-    with tabs[4]:  # Contract Terms
-        if case.latest_agent_name == "ContractSupport":
-            output = case.latest_agent_output or {}
-            key_terms = output.get("key_terms", {})
-            if key_terms:
-                st.json(key_terms)
-        else:
-            st.info("Run 'Extract key terms' to review contract.")
-    
-    with tabs[5]:  # Implementation
-        if case.latest_agent_name == "Implementation":
-            output = case.latest_agent_output or {}
-            st.markdown(f"**Projected Savings:** ${output.get('annual_savings', 0):,.0f}/year")
-            st.markdown(f"**Total Over Term:** ${output.get('total_savings', 0):,.0f}")
-        else:
-            st.info("Run 'Generate implementation plan' for rollout details.")
-    
-    with tabs[6]:  # History
-        if case.activity_log:
-            for entry in case.activity_log[-5:]:
-                st.markdown(f"""
-                <div style="padding: 4px 0; font-size: 0.85rem; color: {CHARCOAL};">
-                    {entry.get('timestamp', '')[:16]} | {entry.get('action', '')} | {entry.get('agent_name', '')}
-                </div>
-                """, unsafe_allow_html=True)
-        else:
-            st.info("Activity log will appear here as you work on the case.")
-
-
-def render_governance_panel(case, client) -> None:
-    """Render the Governance/Traceability panel."""
-    dtp_name = DTP_STAGE_NAMES.get(case.dtp_stage, case.dtp_stage)
-    is_waiting = case.status == "Waiting for Human Decision"
-    
-    st.markdown(f"""
-    <div style="background-color: {MIT_NAVY}; color: white; padding: 12px; border-radius: 8px; margin-bottom: 12px;">
-        <div style="font-size: 0.85rem; opacity: 0.9;">Current Stage</div>
-        <div style="font-size: 1.2rem; font-weight: 600;">{case.dtp_stage} - {dtp_name}</div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Status
-    status_color = MIT_CARDINAL if is_waiting else "#5CB85C"
-    st.markdown(f"""
-    <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid {LIGHT_GRAY};">
-        <span>Status</span>
-        <span style="color: {status_color}; font-weight: 600;">{case.status}</span>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Approval required
-    st.markdown(f"""
-    <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid {LIGHT_GRAY};">
-        <span>Approval Required</span>
-        <span style="font-weight: 600;">{'Yes' if is_waiting else 'No'}</span>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Last agent
-    st.markdown(f"""
-    <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid {LIGHT_GRAY};">
-        <span>Last Agent</span>
-        <span style="font-weight: 500;">{case.latest_agent_name or 'None'}</span>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Approval buttons
-    if is_waiting:
-        st.markdown("<br>", unsafe_allow_html=True)
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("✅ APPROVE", key="gov_approve", use_container_width=True):
-                try:
-                    result = client.approve_decision(case.case_id)
-                    st.success(f"Approved! Advanced to {result.new_dtp_stage}")
-                    st.rerun()
-                except APIError as e:
-                    st.error(f"Error: {e.message}")
-        with col2:
-            if st.button("↩️ REVISE", key="gov_reject", use_container_width=True):
-                try:
-                    client.reject_decision(case.case_id)
-                    st.info("Revision requested")
-                    st.rerun()
-                except APIError as e:
-                    st.error(f"Error: {e.message}")
-
-
 def render_case_copilot(case_id: str):
     """
-    Render the Procurement Workbench interface.
+    Render the Procurement Workbench interface (Redesigned).
     
-    Layout:
-    - Top: Next Best Actions panel
-    - Middle: Artifacts (tabs) | Chat | Governance
-    - Evidence and approval controls integrated
+    New Layout:
+    - Top: Condensed case header (key metrics only)
+    - Middle: Case Details (60%) | Chat (40%)
+    - Bottom: Full-width artifacts panel
     """
     client = get_api_client()
     
@@ -908,31 +891,24 @@ def render_case_copilot(case_id: str):
     inject_styles()
     
     # Back navigation
-    col_back, col_title, col_spacer = st.columns([1, 4, 1])
+    col_back, col_spacer = st.columns([1, 5])
     with col_back:
         if st.button("← Dashboard", key="back_btn"):
             st.session_state.selected_case_id = None
             st.session_state.current_page = "dashboard"
             st.rerun()
-    with col_title:
-        st.markdown(f"### 🏭 Procurement Workbench")
     
-    # Full-width Case Header
-    render_case_header(case)
+    # Condensed Case Header (full width)
+    render_case_header_condensed(case)
     
-    # Next Best Actions panel (full width)
-    render_next_best_actions_panel(case, client)
+    # Main layout: Case Details (60%) | Chat (40%)
+    col_details, col_chat = st.columns([0.6, 0.4], gap="medium")
     
-    # Three-column layout: Artifacts | Chat | Governance
-    col_artifacts, col_copilot, col_governance = st.columns([4, 3.5, 2.5])
+    with col_details:
+        render_case_details_panel(case, client)
     
-    with col_artifacts:
-        st.markdown(f"<h4 style='color: {MIT_NAVY};'>📦 Artifacts</h4>", unsafe_allow_html=True)
-        render_artifacts_tabs_panel(case, client)
+    with col_chat:
+        render_chat_interface(case, client)
     
-    with col_copilot:
-        render_copilot_column(case, client)
-    
-    with col_governance:
-        st.markdown(f"<h4 style='color: {MIT_NAVY};'>🔐 Governance</h4>", unsafe_allow_html=True)
-        render_governance_panel(case, client)
+    # Full-width Artifacts Panel at bottom
+    render_artifacts_panel_full_width(case, client)
