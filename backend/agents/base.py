@@ -6,11 +6,13 @@ import os
 import json
 from typing import Dict, Any, Optional, List
 from abc import ABC, abstractmethod
+from datetime import datetime
 
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
 from backend.rag.retriever import get_retriever
+from shared.schemas import ExecutionMetadata, TaskExecutionDetail
 
 
 class BaseAgent(ABC):
@@ -182,6 +184,126 @@ class BaseAgent(ABC):
             context_text += "\n--- END RETRIEVED CONTEXT ---\n"
         
         return base_prompt + context_text
+    
+    # =========================================================================
+    # EXECUTION METADATA TRACKING (for Audit Trail)
+    # =========================================================================
+    
+    def create_execution_metadata(
+        self,
+        dtp_stage: str = "",
+        user_message: str = "",
+        intent_classified: str = ""
+    ) -> Dict[str, Any]:
+        """
+        Create a new execution metadata tracker.
+        Call this at the start of execute() to begin tracking.
+        
+        Returns a dict that agents update as they execute tasks.
+        """
+        return {
+            "agent_name": self.name,
+            "dtp_stage": dtp_stage,
+            "execution_timestamp": datetime.now().isoformat(),
+            "total_tokens_used": 0,
+            "estimated_cost_usd": 0.0,
+            "documents_retrieved": [],
+            "retrieval_sources": [],
+            "task_details": [],
+            "user_message": user_message,
+            "intent_classified": intent_classified,
+            "cache_hits": 0,
+            "total_tasks": 0,
+            "completed_tasks": 0,
+            "model_used": self.model_name,
+            "_task_order": 0,  # Internal counter
+        }
+    
+    def track_task_execution(
+        self,
+        metadata: Dict[str, Any],
+        task_name: str,
+        status: str = "completed",
+        tokens_used: int = 0,
+        output_summary: str = "",
+        grounding_sources: Optional[List[str]] = None,
+        error_message: Optional[str] = None
+    ) -> TaskExecutionDetail:
+        """
+        Track execution of a single task.
+        Call this after each task completes.
+        """
+        metadata["_task_order"] += 1
+        metadata["total_tasks"] += 1
+        
+        if status == "completed":
+            metadata["completed_tasks"] += 1
+        
+        metadata["total_tokens_used"] += tokens_used
+        
+        # Estimate cost (GPT-4o-mini: $0.15/$0.60 per 1M tokens)
+        if self.tier == 1:
+            metadata["estimated_cost_usd"] += (tokens_used / 1_000_000) * 0.30
+        else:
+            metadata["estimated_cost_usd"] += (tokens_used / 1_000_000) * 10.0
+        
+        task_detail = TaskExecutionDetail(
+            task_name=task_name,
+            execution_order=metadata["_task_order"],
+            status=status,
+            started_at=datetime.now().isoformat(),
+            completed_at=datetime.now().isoformat(),
+            tokens_used=tokens_used,
+            output_summary=output_summary[:200] if output_summary else "",
+            grounding_sources=grounding_sources or [],
+            error_message=error_message
+        )
+        
+        metadata["task_details"].append(task_detail)
+        
+        return task_detail
+    
+    def track_document_retrieval(
+        self,
+        metadata: Dict[str, Any],
+        document_ids: List[str],
+        retrieval_source: Optional[Dict[str, Any]] = None
+    ):
+        """Track documents retrieved during execution."""
+        for doc_id in document_ids:
+            if doc_id not in metadata["documents_retrieved"]:
+                metadata["documents_retrieved"].append(doc_id)
+        
+        if retrieval_source:
+            metadata["retrieval_sources"].append(retrieval_source)
+    
+    def finalize_execution_metadata(
+        self,
+        metadata: Dict[str, Any]
+    ) -> ExecutionMetadata:
+        """
+        Finalize and return the ExecutionMetadata object.
+        Call this at the end of execute() before returning.
+        """
+        # Remove internal counter
+        metadata.pop("_task_order", None)
+        
+        return ExecutionMetadata(
+            agent_name=metadata["agent_name"],
+            dtp_stage=metadata["dtp_stage"],
+            execution_timestamp=metadata["execution_timestamp"],
+            total_tokens_used=metadata["total_tokens_used"],
+            estimated_cost_usd=round(metadata["estimated_cost_usd"], 6),
+            documents_retrieved=metadata["documents_retrieved"],
+            retrieval_sources=metadata["retrieval_sources"],
+            task_details=metadata["task_details"],
+            user_message=metadata["user_message"],
+            intent_classified=metadata["intent_classified"],
+            cache_hits=metadata["cache_hits"],
+            total_tasks=metadata["total_tasks"],
+            completed_tasks=metadata["completed_tasks"],
+            model_used=metadata["model_used"]
+        )
 
 
 

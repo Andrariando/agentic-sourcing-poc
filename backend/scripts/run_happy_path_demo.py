@@ -36,56 +36,179 @@ from backend.persistence.database import get_engine
 # Demo case ID
 DEMO_CASE_ID = "CASE-DEMO-001"
 
-# Happy Path Messages for each stage
+# Comprehensive Happy Path Messages covering all sub-tasks
+# Each message is designed to trigger different task combinations from the playbooks
 HAPPY_PATH_MESSAGES = [
-    # DTP-01: Strategy - Scan signals first
+    # =========================================================================
+    # DTP-01: SOURCING SIGNAL AGENT
+    # Tasks: detect_contract_expiry, detect_performance_degradation, 
+    #        detect_spend_anomalies, apply_relevance_filters,
+    #        semantic_grounded_summary, produce_autoprep_recommendations
+    # =========================================================================
     {
         "stage": "DTP-01",
-        "message": "Scan signals",
+        "message": "Scan all sourcing signals for this category - check contracts, performance, and spend patterns",
         "approve": True,
-        "description": "Scan for sourcing signals"
+        "description": "Full signal scan (all 6 tasks)"
     },
-    # DTP-01: Strategy - Get recommendation (after signals)
     {
         "stage": "DTP-01",
-        "message": "Recommend a strategy for this case",
-        "approve": True,
-        "description": "Request strategy recommendation"
+        "message": "What contract expiry signals do we have?",
+        "approve": False,
+        "description": "TRACK variant - contract expiry only"
     },
-    # DTP-02: Planning - Score suppliers
+    {
+        "stage": "DTP-01",
+        "message": "Explain the urgency of the signals and what they mean for our sourcing strategy",
+        "approve": False,
+        "description": "UNDERSTAND variant - explanation with grounded summary"
+    },
+    {
+        "stage": "DTP-01",
+        "message": "Recommend a sourcing strategy based on the signals",
+        "approve": True,
+        "description": "Strategy recommendation (triggers stage advance)"
+    },
+    
+    # =========================================================================
+    # DTP-02: SUPPLIER SCORING AGENT
+    # Tasks: build_evaluation_criteria, pull_supplier_performance, 
+    #        pull_risk_indicators, normalize_metrics, compute_scores_and_rank,
+    #        eligibility_checks, generate_explanations
+    # =========================================================================
     {
         "stage": "DTP-02",
-        "message": "Score suppliers",
+        "message": "Score all suppliers in this category using performance, risk, and eligibility criteria",
         "approve": True,
-        "description": "Evaluate and score suppliers"
+        "description": "Full scoring workflow (all 7 tasks)"
     },
-    # DTP-03: Sourcing - Draft RFx
+    {
+        "stage": "DTP-02",
+        "message": "What are the supplier performance metrics?",
+        "approve": False,
+        "description": "TRACK variant - performance only"
+    },
+    {
+        "stage": "DTP-02",
+        "message": "Check supplier eligibility and any compliance issues",
+        "approve": False,
+        "description": "CHECK variant - eligibility checks"
+    },
+    {
+        "stage": "DTP-02",
+        "message": "Explain the scoring methodology and how the shortlist was determined",
+        "approve": True,
+        "description": "UNDERSTAND + approval for stage advance"
+    },
+    
+    # =========================================================================
+    # DTP-03: RFX DRAFT AGENT
+    # Tasks: determine_rfx_path, retrieve_templates_and_past_examples,
+    #        assemble_rfx_sections, completeness_checks,
+    #        draft_questions_and_requirements, create_qa_tracker
+    # =========================================================================
     {
         "stage": "DTP-03",
-        "message": "Draft RFx",
+        "message": "Draft an RFP for the shortlisted suppliers including all required sections and questions",
         "approve": True,
-        "description": "Create RFx document"
+        "description": "Full RFx draft (all 6 tasks)"
     },
-    # DTP-04: Negotiation
+    {
+        "stage": "DTP-03",
+        "message": "Check the completeness of the RFx document",
+        "approve": False,
+        "description": "CHECK variant - completeness checks only"
+    },
+    {
+        "stage": "DTP-03",
+        "message": "Show me the Q&A tracker and evaluation criteria",
+        "approve": True,
+        "description": "TRACK + approval for stage advance"
+    },
+    
+    # =========================================================================
+    # DTP-04: NEGOTIATION SUPPORT AGENT
+    # Tasks: compare_bids, leverage_point_extraction, benchmark_retrieval,
+    #        price_anomaly_detection, propose_targets_and_fallbacks,
+    #        negotiation_playbook
+    # =========================================================================
     {
         "stage": "DTP-04",
-        "message": "Support negotiation",
+        "message": "Prepare a complete negotiation plan with leverage points, targets, and fallback positions",
         "approve": True,
-        "description": "Prepare negotiation plan"
+        "description": "Full negotiation support (all 6 tasks)"
     },
-    # DTP-05: Contracting
+    {
+        "stage": "DTP-04",
+        "message": "Compare the bids and identify price anomalies",
+        "approve": False,
+        "description": "UNDERSTAND variant - bid comparison"
+    },
+    {
+        "stage": "DTP-04",
+        "message": "What benchmark data supports our negotiation position?",
+        "approve": False,
+        "description": "UNDERSTAND variant - benchmarks"
+    },
+    {
+        "stage": "DTP-04",
+        "message": "Finalize the negotiation playbook and target terms",
+        "approve": True,
+        "description": "CREATE + approval for stage advance"
+    },
+    
+    # =========================================================================
+    # DTP-05: CONTRACT SUPPORT AGENT  
+    # Tasks: extract_key_terms, term_validation, term_alignment_summary,
+    #        implementation_handoff_packet
+    # =========================================================================
     {
         "stage": "DTP-05",
-        "message": "Extract key terms",
+        "message": "Extract key contract terms and validate against our requirements",
         "approve": True,
-        "description": "Extract and validate contract terms"
+        "description": "Full contract support (all 4 tasks)"
     },
-    # DTP-06: Implementation
+    {
+        "stage": "DTP-05",
+        "message": "Validate that all contract terms are compliant with policy",
+        "approve": False,
+        "description": "CHECK variant - term validation"
+    },
+    {
+        "stage": "DTP-05",
+        "message": "Prepare the handoff packet for implementation team",
+        "approve": True,
+        "description": "CREATE + approval for stage advance"
+    },
+    
+    # =========================================================================
+    # DTP-06: IMPLEMENTATION AGENT
+    # Tasks: build_rollout_checklist, compute_expected_savings,
+    #        define_early_indicators, reporting_templates
+    # =========================================================================
     {
         "stage": "DTP-06",
-        "message": "Generate implementation plan",
+        "message": "Generate a complete implementation plan with rollout checklist and success indicators",
         "approve": True,
-        "description": "Create implementation plan"
+        "description": "Full implementation plan (all 4 tasks)"
+    },
+    {
+        "stage": "DTP-06",
+        "message": "What are the expected savings from this contract?",
+        "approve": False,
+        "description": "TRACK variant - savings calculation"
+    },
+    {
+        "stage": "DTP-06",
+        "message": "Define the KPIs and early warning indicators for monitoring",
+        "approve": False,
+        "description": "CREATE variant - indicators only"
+    },
+    {
+        "stage": "DTP-06",
+        "message": "Finalize the value capture template and reporting dashboards",
+        "approve": True,
+        "description": "Final approval - case complete"
     },
 ]
 

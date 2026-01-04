@@ -658,7 +658,8 @@ def render_artifacts_panel_full_width(case, client) -> None:
         "🤝 Negotiation", 
         "📄 Contract", 
         "🚀 Implementation", 
-        "📜 History"
+        "📜 History",
+        "🔍 Audit Trail"
     ])
     
     # Get artifacts from case
@@ -685,6 +686,9 @@ def render_artifacts_panel_full_width(case, client) -> None:
     
     with tabs[6]:  # History
         _render_activity_history(case)
+    
+    with tabs[7]:  # Audit Trail
+        _render_audit_trail(case, client)
 
 
 def _render_signals_artifacts(case, output, agent_name):
@@ -871,6 +875,188 @@ def _render_activity_history(case):
             """, unsafe_allow_html=True)
     else:
         st.info("Activity log will appear here as you work on the case.")
+
+
+def _render_audit_trail(case, client):
+    """
+    Render comprehensive audit trail panel showing:
+    - Agent execution timeline
+    - Task details with status
+    - Token usage and costs
+    - Artifact outputs
+    - Document retrieval sources
+    """
+    # Agent color mapping
+    AGENT_COLORS = {
+        "SourcingSignal": "#1E88E5",
+        "SupplierScoring": "#43A047", 
+        "RfxDraft": "#FB8C00",
+        "NegotiationSupport": "#8E24AA",
+        "ContractSupport": "#00ACC1",
+        "Implementation": "#E53935",
+    }
+    
+    # Try to get artifact packs with execution metadata
+    artifact_packs = []
+    try:
+        if hasattr(client, 'get_artifact_packs'):
+            packs_response = client.get_artifact_packs(case.case_id)
+            if packs_response and isinstance(packs_response, list):
+                artifact_packs = packs_response
+        elif hasattr(case, 'artifact_packs') and case.artifact_packs:
+            artifact_packs = case.artifact_packs
+    except Exception as e:
+        st.warning(f"Could not load artifact packs: {e}")
+    
+    if not artifact_packs:
+        # Fallback: show activity log summary
+        st.info("No detailed execution metadata available yet. Run the demo to see the full audit trail.")
+        if case.activity_log:
+            st.markdown(f"<div style='font-weight: 600; margin-bottom: 8px;'>Activity Summary</div>", unsafe_allow_html=True)
+            for entry in case.activity_log[-5:]:
+                if isinstance(entry, dict):
+                    st.markdown(f"• {entry.get('timestamp', '')[:16]} - {entry.get('action', 'Activity')}")
+        return
+    
+    # Summary statistics
+    total_agents = len(artifact_packs)
+    total_tasks = 0
+    total_tokens = 0
+    total_cost = 0.0
+    
+    for pack in artifact_packs:
+        exec_meta = pack.get('execution_metadata') if isinstance(pack, dict) else getattr(pack, 'execution_metadata', None)
+        if exec_meta:
+            meta_dict = exec_meta if isinstance(exec_meta, dict) else exec_meta.__dict__ if hasattr(exec_meta, '__dict__') else {}
+            total_tasks += meta_dict.get('total_tasks', 0)
+            total_tokens += meta_dict.get('total_tokens_used', 0)
+            total_cost += meta_dict.get('estimated_cost_usd', 0)
+    
+    # Summary header
+    st.markdown(f"""
+    <div style="display: flex; gap: 24px; padding: 12px 16px; background: linear-gradient(135deg, {MIT_NAVY} 0%, #002D6D 100%); 
+                border-radius: 8px; margin-bottom: 16px; color: white;">
+        <div>
+            <div style="font-size: 0.75rem; opacity: 0.8;">Agents Run</div>
+            <div style="font-size: 1.25rem; font-weight: 700;">{total_agents}</div>
+        </div>
+        <div>
+            <div style="font-size: 0.75rem; opacity: 0.8;">Tasks Executed</div>
+            <div style="font-size: 1.25rem; font-weight: 700;">{total_tasks}</div>
+        </div>
+        <div>
+            <div style="font-size: 0.75rem; opacity: 0.8;">Tokens Used</div>
+            <div style="font-size: 1.25rem; font-weight: 700;">{total_tokens:,}</div>
+        </div>
+        <div>
+            <div style="font-size: 0.75rem; opacity: 0.8;">Est. Cost</div>
+            <div style="font-size: 1.25rem; font-weight: 700;">${total_cost:.4f}</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Execution timeline
+    for pack in artifact_packs:
+        pack_dict = pack if isinstance(pack, dict) else pack.__dict__ if hasattr(pack, '__dict__') else {}
+        agent_name = pack_dict.get('agent_name', 'Unknown')
+        exec_meta = pack_dict.get('execution_metadata')
+        tasks_executed = pack_dict.get('tasks_executed', [])
+        artifacts = pack_dict.get('artifacts', [])
+        created_at = pack_dict.get('created_at', '')
+        
+        agent_color = AGENT_COLORS.get(agent_name, MIT_NAVY)
+        
+        # Parse execution metadata
+        meta_dict = {}
+        task_details = []
+        if exec_meta:
+            meta_dict = exec_meta if isinstance(exec_meta, dict) else exec_meta.__dict__ if hasattr(exec_meta, '__dict__') else {}
+            task_details = meta_dict.get('task_details', [])
+        
+        # Agent execution card
+        with st.expander(f"**{agent_name}** — {meta_dict.get('dtp_stage', 'DTP-??')} — {created_at[:16] if created_at else 'N/A'}", expanded=True):
+            # Metrics row
+            st.markdown(f"""
+            <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {LIGHT_GRAY}; margin-bottom: 12px; font-size: 0.85rem;">
+                <span><strong>Tasks:</strong> {len(task_details) or len(tasks_executed)}</span>
+                <span><strong>Tokens:</strong> {meta_dict.get('total_tokens_used', 0):,}</span>
+                <span><strong>Cost:</strong> ${meta_dict.get('estimated_cost_usd', 0):.6f}</span>
+                <span><strong>Model:</strong> {meta_dict.get('model_used', 'N/A')}</span>
+                <span><strong>Docs Retrieved:</strong> {len(meta_dict.get('documents_retrieved', []))}</span>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # User message that triggered this
+            user_msg = meta_dict.get('user_message', '')
+            if user_msg:
+                st.markdown(f"<div style='font-size: 0.85rem; color: {CHARCOAL}; margin-bottom: 12px;'><strong>User Request:</strong> \"{user_msg}\"</div>", unsafe_allow_html=True)
+            
+            # Task execution details
+            if task_details:
+                st.markdown(f"<div style='font-weight: 600; color: {MIT_NAVY}; margin-bottom: 8px;'>Task Execution</div>", unsafe_allow_html=True)
+                
+                for td in task_details:
+                    td_dict = td if isinstance(td, dict) else td.__dict__ if hasattr(td, '__dict__') else {}
+                    task_name = td_dict.get('task_name', 'Unknown')
+                    status = td_dict.get('status', 'completed')
+                    order = td_dict.get('execution_order', 0)
+                    tokens = td_dict.get('tokens_used', 0)
+                    output_summary = td_dict.get('output_summary', '')[:100]
+                    grounding = td_dict.get('grounding_sources', [])
+                    
+                    status_icon = "✓" if status == "completed" else "⚠" if status == "error" else "○"
+                    status_color = SUCCESS_GREEN if status == "completed" else MIT_CARDINAL if status == "error" else CHARCOAL
+                    
+                    st.markdown(f"""
+                    <div style="display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-bottom: 1px dashed {LIGHT_GRAY}; font-size: 0.85rem;">
+                        <span style="color: {status_color}; font-weight: 700; min-width: 20px;">{status_icon}</span>
+                        <span style="min-width: 24px; color: {CHARCOAL};">#{order}</span>
+                        <span style="font-weight: 500; min-width: 200px; font-family: monospace; font-size: 0.8rem;">{task_name}</span>
+                        <span style="color: {CHARCOAL}; min-width: 60px;">{tokens} tok</span>
+                        <span style="color: {CHARCOAL}; flex: 1; font-size: 0.8rem;">{output_summary}...</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+            elif tasks_executed:
+                # Fallback to simple task list
+                st.markdown(f"<div style='font-weight: 600; color: {MIT_NAVY}; margin-bottom: 8px;'>Tasks Executed</div>", unsafe_allow_html=True)
+                for i, task in enumerate(tasks_executed, 1):
+                    st.markdown(f"""
+                    <div style="display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 0.85rem;">
+                        <span style="color: {SUCCESS_GREEN}; font-weight: 700;">✓</span>
+                        <span>#{i}</span>
+                        <span style="font-family: monospace; font-size: 0.8rem;">{task}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+            
+            # Artifacts produced
+            if artifacts:
+                st.markdown(f"<div style='font-weight: 600; color: {MIT_NAVY}; margin: 12px 0 8px 0;'>Artifacts Produced</div>", unsafe_allow_html=True)
+                for artifact in artifacts:
+                    art_dict = artifact if isinstance(artifact, dict) else artifact.__dict__ if hasattr(artifact, '__dict__') else {}
+                    art_type = art_dict.get('type', 'Unknown')
+                    art_title = art_dict.get('title', art_type)
+                    art_status = art_dict.get('verification_status', 'VERIFIED')
+                    
+                    status_badge_color = SUCCESS_GREEN if art_status == "VERIFIED" else WARNING_YELLOW
+                    
+                    st.markdown(f"""
+                    <div style="display: flex; align-items: center; gap: 8px; padding: 4px 8px; background: #f5f5f5; border-radius: 4px; margin-bottom: 4px; font-size: 0.85rem;">
+                        <span style="background: {status_badge_color}; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.7rem; font-weight: 600;">{art_status}</span>
+                        <span style="font-weight: 500;">{art_title}</span>
+                        <span style="color: {CHARCOAL}; font-size: 0.75rem;">({art_type})</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+            
+            # Documents retrieved
+            docs = meta_dict.get('documents_retrieved', [])
+            if docs:
+                st.markdown(f"<div style='font-weight: 600; color: {MIT_NAVY}; margin: 12px 0 8px 0;'>Documents Retrieved</div>", unsafe_allow_html=True)
+                for doc_id in docs[:5]:
+                    st.markdown(f"""
+                    <div style="font-size: 0.8rem; padding: 2px 0; color: {CHARCOAL};">
+                        <span style="font-family: monospace;">📄 {doc_id}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
 
 
 def get_next_stage(current_stage: str) -> str:

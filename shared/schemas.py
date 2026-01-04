@@ -420,6 +420,41 @@ class RiskItem(BaseModel):
     mitigation: str = ""
 
 
+# ============================================================
+# EXECUTION METADATA SCHEMAS (Audit Trail)
+# ============================================================
+
+class TaskExecutionDetail(BaseModel):
+    """Detailed execution information for a single task."""
+    task_name: str
+    execution_order: int
+    status: str = "completed"  # completed, skipped, error
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+    tokens_used: int = 0
+    output_summary: str = ""
+    grounding_sources: List[str] = Field(default_factory=list)  # Document IDs used
+    error_message: Optional[str] = None
+
+
+class ExecutionMetadata(BaseModel):
+    """Comprehensive execution metadata for audit trail."""
+    agent_name: str
+    dtp_stage: str = ""
+    execution_timestamp: str
+    total_tokens_used: int = 0
+    estimated_cost_usd: float = 0.0
+    documents_retrieved: List[str] = Field(default_factory=list)
+    retrieval_sources: List[Dict[str, Any]] = Field(default_factory=list)
+    task_details: List[TaskExecutionDetail] = Field(default_factory=list)
+    user_message: str = ""
+    intent_classified: str = ""
+    cache_hits: int = 0
+    total_tasks: int = 0
+    completed_tasks: int = 0
+    model_used: str = ""
+
+
 class ArtifactPack(BaseModel):
     """Bundle of artifacts, actions, and risks from agent execution."""
     pack_id: str
@@ -431,6 +466,7 @@ class ArtifactPack(BaseModel):
     agent_name: str = ""
     tasks_executed: List[str] = Field(default_factory=list)
     created_at: str = ""
+    execution_metadata: Optional[ExecutionMetadata] = None
 
 
 # ============================================================

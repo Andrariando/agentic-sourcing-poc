@@ -202,6 +202,48 @@ class APIClient:
         data = self._handle_response(response)
         return CaseDetail(**data)
     
+    def get_artifact_packs(self, case_id: str) -> List[Dict[str, Any]]:
+        """Get all artifact packs for a case (for audit trail)."""
+        if self._integrated_mode:
+            self._init_services()
+            packs = self._case_service.get_all_artifact_packs(case_id)
+            # Convert to dicts for consistent handling
+            result = []
+            for pack in packs:
+                pack_dict = {
+                    "pack_id": pack.pack_id,
+                    "agent_name": pack.agent_name,
+                    "tasks_executed": pack.tasks_executed,
+                    "artifacts": [
+                        {
+                            "artifact_id": a.artifact_id,
+                            "type": a.type,
+                            "title": a.title,
+                            "content_text": a.content_text,
+                            "verification_status": a.verification_status
+                        }
+                        for a in pack.artifacts
+                    ],
+                    "created_at": pack.created_at,
+                    "execution_metadata": pack.execution_metadata.__dict__ if pack.execution_metadata and hasattr(pack.execution_metadata, '__dict__') else (
+                        pack.execution_metadata.model_dump() if pack.execution_metadata and hasattr(pack.execution_metadata, 'model_dump') else None
+                    )
+                }
+                # Handle task_details conversion
+                if pack_dict["execution_metadata"] and "task_details" in pack_dict["execution_metadata"]:
+                    task_details = pack_dict["execution_metadata"]["task_details"]
+                    pack_dict["execution_metadata"]["task_details"] = [
+                        td.__dict__ if hasattr(td, '__dict__') else (td.model_dump() if hasattr(td, 'model_dump') else td)
+                        for td in task_details
+                    ]
+                result.append(pack_dict)
+            return result
+        
+        # HTTP mode - not yet implemented
+        response = requests.get(self._url(f"/api/cases/{case_id}/artifact_packs"))
+        data = self._handle_response(response)
+        return data if isinstance(data, list) else []
+    
     def create_case(
         self,
         category_id: str,

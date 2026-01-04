@@ -44,6 +44,13 @@ class RfxDraftAgent(BaseAgent):
         
         Returns ArtifactPack with RFx draft, path determination, and Q&A tracker.
         """
+        # Initialize execution metadata tracking
+        exec_metadata = self.create_execution_metadata(
+            dtp_stage=case_context.get("dtp_stage", "DTP-03"),
+            user_message=user_intent,
+            intent_classified="CREATE"
+        )
+        
         # Get tasks to execute
         tasks = self.playbook.get_tasks_for_agent(
             AgentName.RFX_DRAFT,
@@ -66,6 +73,19 @@ class RfxDraftAgent(BaseAgent):
                 all_grounded_in.extend(result.grounded_in)
                 total_tokens += result.tokens_used
                 tasks_executed.append(task_name)
+                
+                # Track task execution for audit trail
+                grounding_ids = [g.ref_id for g in result.grounded_in] if result.grounded_in else []
+                self.track_task_execution(
+                    exec_metadata,
+                    task_name=task_name,
+                    status="completed",
+                    tokens_used=result.tokens_used,
+                    output_summary=str(result.data)[:200] if result.data else "",
+                    grounding_sources=grounding_ids
+                )
+                if grounding_ids:
+                    self.track_document_retrieval(exec_metadata, grounding_ids)
         
         # Build artifacts
         artifacts = []
@@ -172,13 +192,17 @@ class RfxDraftAgent(BaseAgent):
                 mitigation="Complete remaining sections before distribution"
             ))
         
-        # Build artifact pack
+        # Finalize execution metadata
+        final_exec_metadata = self.finalize_execution_metadata(exec_metadata)
+        
+        # Build artifact pack with execution metadata
         pack = build_artifact_pack(
             agent_name=AgentName.RFX_DRAFT,
             artifacts=artifacts,
             next_actions=next_actions,
             risks=risks,
-            tasks_executed=tasks_executed
+            tasks_executed=tasks_executed,
+            execution_metadata=final_exec_metadata
         )
         
         return {

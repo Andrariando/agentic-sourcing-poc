@@ -16,7 +16,8 @@ from backend.persistence.models import (
 from backend.supervisor.state import StateManager, SupervisorState
 from shared.schemas import (
     CaseSummary, CaseDetail, Artifact, ArtifactPack, 
-    NextAction, RiskItem, GroundingReference
+    NextAction, RiskItem, GroundingReference,
+    ExecutionMetadata, TaskExecutionDetail
 )
 
 
@@ -274,6 +275,40 @@ class CaseService:
                 session.add(artifact_model)
                 artifact_ids.append(artifact.artifact_id)
             
+            # Serialize execution metadata if present
+            execution_metadata_json = None
+            if pack.execution_metadata:
+                exec_meta = pack.execution_metadata
+                execution_metadata_json = json.dumps({
+                    "agent_name": exec_meta.agent_name,
+                    "dtp_stage": exec_meta.dtp_stage,
+                    "execution_timestamp": exec_meta.execution_timestamp,
+                    "total_tokens_used": exec_meta.total_tokens_used,
+                    "estimated_cost_usd": exec_meta.estimated_cost_usd,
+                    "documents_retrieved": exec_meta.documents_retrieved,
+                    "retrieval_sources": exec_meta.retrieval_sources,
+                    "task_details": [
+                        {
+                            "task_name": t.task_name,
+                            "execution_order": t.execution_order,
+                            "status": t.status,
+                            "started_at": t.started_at,
+                            "completed_at": t.completed_at,
+                            "tokens_used": t.tokens_used,
+                            "output_summary": t.output_summary,
+                            "grounding_sources": t.grounding_sources,
+                            "error_message": t.error_message
+                        }
+                        for t in exec_meta.task_details
+                    ],
+                    "user_message": exec_meta.user_message,
+                    "intent_classified": exec_meta.intent_classified,
+                    "cache_hits": exec_meta.cache_hits,
+                    "total_tasks": exec_meta.total_tasks,
+                    "completed_tasks": exec_meta.completed_tasks,
+                    "model_used": exec_meta.model_used
+                })
+            
             # Save the pack
             pack_model = ArtifactPackModel(
                 pack_id=pack.pack_id,
@@ -293,6 +328,7 @@ class CaseService:
                     for r in pack.risks
                 ]),
                 notes_json=json.dumps(pack.notes),
+                execution_metadata_json=execution_metadata_json,
                 created_at=pack.created_at
             )
             session.add(pack_model)
@@ -391,6 +427,23 @@ class CaseService:
         
         return self._model_to_pack(pack, case_id) if pack else None
     
+    def get_all_artifact_packs(self, case_id: str) -> List[ArtifactPack]:
+        """
+        Get all artifact packs for a case, ordered by creation time.
+        Includes full execution metadata for audit trail.
+        """
+        session = get_db_session()
+        
+        packs = session.exec(
+            select(ArtifactPackModel)
+            .where(ArtifactPackModel.case_id == case_id)
+            .order_by(ArtifactPackModel.created_at)
+        ).all()
+        
+        session.close()
+        
+        return [self._model_to_pack(p, case_id) for p in packs]
+    
     def get_next_actions(self, case_id: str) -> List[NextAction]:
         """Get cached next actions for a case."""
         session = get_db_session()
@@ -482,6 +535,45 @@ class CaseService:
             except (json.JSONDecodeError, TypeError):
                 pass
         
+        # Load execution metadata (for audit trail)
+        execution_metadata = None
+        if model.execution_metadata_json:
+            try:
+                exec_data = json.loads(model.execution_metadata_json)
+                # Reconstruct TaskExecutionDetail objects
+                task_details = []
+                for td in exec_data.get("task_details", []):
+                    task_details.append(TaskExecutionDetail(
+                        task_name=td.get("task_name", ""),
+                        execution_order=td.get("execution_order", 0),
+                        status=td.get("status", "completed"),
+                        started_at=td.get("started_at"),
+                        completed_at=td.get("completed_at"),
+                        tokens_used=td.get("tokens_used", 0),
+                        output_summary=td.get("output_summary", ""),
+                        grounding_sources=td.get("grounding_sources", []),
+                        error_message=td.get("error_message")
+                    ))
+                
+                execution_metadata = ExecutionMetadata(
+                    agent_name=exec_data.get("agent_name", ""),
+                    dtp_stage=exec_data.get("dtp_stage", ""),
+                    execution_timestamp=exec_data.get("execution_timestamp", ""),
+                    total_tokens_used=exec_data.get("total_tokens_used", 0),
+                    estimated_cost_usd=exec_data.get("estimated_cost_usd", 0.0),
+                    documents_retrieved=exec_data.get("documents_retrieved", []),
+                    retrieval_sources=exec_data.get("retrieval_sources", []),
+                    task_details=task_details,
+                    user_message=exec_data.get("user_message", ""),
+                    intent_classified=exec_data.get("intent_classified", ""),
+                    cache_hits=exec_data.get("cache_hits", 0),
+                    total_tasks=exec_data.get("total_tasks", 0),
+                    completed_tasks=exec_data.get("completed_tasks", 0),
+                    model_used=exec_data.get("model_used", "")
+                )
+            except (json.JSONDecodeError, TypeError, KeyError) as e:
+                print(f"Warning: Could not parse execution metadata: {e}")
+        
         return ArtifactPack(
             pack_id=model.pack_id,
             artifacts=artifacts,
@@ -491,7 +583,8 @@ class CaseService:
             grounded_in=[],  # Aggregated from artifacts
             agent_name=model.agent_name,
             tasks_executed=json.loads(model.tasks_executed) if model.tasks_executed else [],
-            created_at=model.created_at
+            created_at=model.created_at,
+            execution_metadata=execution_metadata
         )
 
 

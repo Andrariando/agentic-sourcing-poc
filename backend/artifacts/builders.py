@@ -5,7 +5,8 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 
 from shared.schemas import (
-    Artifact, ArtifactPack, NextAction, RiskItem, GroundingReference
+    Artifact, ArtifactPack, NextAction, RiskItem, GroundingReference,
+    ExecutionMetadata
 )
 from shared.constants import ArtifactType, AgentName
 from backend.artifacts.utils import (
@@ -75,7 +76,8 @@ def build_artifact_pack(
     next_actions: Optional[List[NextAction]] = None,
     risks: Optional[List[RiskItem]] = None,
     notes: Optional[List[str]] = None,
-    tasks_executed: Optional[List[str]] = None
+    tasks_executed: Optional[List[str]] = None,
+    execution_metadata: Optional[ExecutionMetadata] = None
 ) -> ArtifactPack:
     """
     Build a complete artifact pack from agent execution.
@@ -87,6 +89,7 @@ def build_artifact_pack(
         risks: Identified risks
         notes: Additional notes
         tasks_executed: List of task names that were executed
+        execution_metadata: Detailed execution metadata for audit trail
         
     Returns:
         Complete ArtifactPack
@@ -104,7 +107,8 @@ def build_artifact_pack(
         grounded_in=merged_grounding,
         agent_name=agent_name.value,
         tasks_executed=tasks_executed or [],
-        created_at=datetime.now().isoformat()
+        created_at=datetime.now().isoformat(),
+        execution_metadata=execution_metadata
     )
 
 

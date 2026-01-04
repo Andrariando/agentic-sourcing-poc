@@ -299,6 +299,9 @@ class ArtifactPack(SQLModel, table=True):
     # Notes (JSON array)
     notes_json: Optional[str] = None
     
+    # Execution metadata for audit trail (JSON)
+    execution_metadata_json: Optional[str] = None
+    
     # Timestamps
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
 
