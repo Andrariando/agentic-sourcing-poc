@@ -185,6 +185,19 @@ class ChatService:
         dtp_stage = state["dtp_stage"]
         stage_name = DTP_STAGE_NAMES.get(dtp_stage, dtp_stage)
         status = state.get("status", "Unknown")
+        message_lower = message.lower().strip()
+        
+        # Check if user is giving an affirmative/action response (wants analysis, not just status)
+        affirmative_patterns = [
+            r'\byes\b', r'\byeah\b', r'\bsure\b', r'\bplease\b',
+            r'\banalyze\b', r'\bstart\b', r'\bdo it\b', r'\bproceed\b',
+            r'tell me everything', r'show me everything', r'full analysis'
+        ]
+        
+        # If user says "yes" or similar AND there's no recommendation yet, run analysis
+        if not state.get("latest_agent_output"):
+            if any(re.search(p, message_lower) for p in affirmative_patterns):
+                return self._run_agent_analysis(case_id, message, state)
         
         # Build status summary
         response = f"**Current Status: {status}**\n\n"
@@ -220,10 +233,23 @@ class ChatService:
     ) -> ChatResponse:
         """Handle EXPLAIN intent - explain existing recommendation."""
         dtp_stage = state["dtp_stage"]
+        message_lower = message.lower().strip()
         
         if not state.get("latest_agent_output"):
+            # Check if user is giving an affirmative response (e.g., "yes", "tell me everything")
+            # This means they want us to actually run analysis
+            affirmative_patterns = [
+                r'\byes\b', r'\byeah\b', r'\bsure\b', r'\bplease\b', r'\bok\b', r'\bokay\b',
+                r'\bgo\b', r'\bdo it\b', r'\bproceed\b', r'\banalyze\b', r'\bstart\b',
+                r'tell me', r'show me', r'everything', r'all\b', r'full\b'
+            ]
+            
+            if any(re.search(p, message_lower) for p in affirmative_patterns):
+                # User wants analysis - run the appropriate agent
+                return self._run_agent_analysis(case_id, message, state)
+            
             response = "No recommendation has been generated yet for this case.\n\n"
-            response += "Would you like me to analyze this case and provide a strategy recommendation?"
+            response += "Would you like me to analyze this case and provide a strategy recommendation? Just say 'yes' or 'analyze this case'."
             return self._create_response(case_id, message, response, "EXPLAIN", dtp_stage)
         
         output = state["latest_agent_output"]
@@ -389,6 +415,19 @@ class ChatService:
         """Handle general/unknown intent with helpful response."""
         dtp_stage = state["dtp_stage"]
         stage_name = DTP_STAGE_NAMES.get(dtp_stage, dtp_stage)
+        message_lower = message.lower().strip()
+        
+        # Check if user is giving an affirmative/action response
+        affirmative_patterns = [
+            r'\byes\b', r'\byeah\b', r'\bsure\b', r'\bplease\b',
+            r'\banalyze\b', r'\bstart\b', r'\bdo it\b', r'\bproceed\b',
+            r'tell me everything', r'show me everything', r'everything'
+        ]
+        
+        # If no recommendation yet and user says "yes" or similar, run analysis
+        if not state.get("latest_agent_output"):
+            if any(re.search(p, message_lower) for p in affirmative_patterns):
+                return self._run_agent_analysis(case_id, message, state)
         
         response = f"I'm here to help with case {case_id}.\n\n"
         response += f"Currently at **{dtp_stage} - {stage_name}**.\n\n"
