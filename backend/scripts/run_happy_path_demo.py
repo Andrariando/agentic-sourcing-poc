@@ -105,8 +105,15 @@ def setup_demo_case() -> str:
         ).first()
         
         if existing:
+            # Check if already completed
+            if existing.dtp_stage == "DTP-06":
+                print(f"  ✓ Found existing {DEMO_CASE_ID} already at DTP-06 (completed)")
+                print(f"  → To re-run, delete the case first or use a different case ID")
+                session.close()
+                return DEMO_CASE_ID
+            
             # Reset to DTP-01 for fresh demo
-            print(f"  ✓ Found existing {DEMO_CASE_ID}, resetting to DTP-01...")
+            print(f"  ✓ Found existing {DEMO_CASE_ID} at {existing.dtp_stage}, resetting to DTP-01...")
             existing.dtp_stage = "DTP-01"
             existing.status = "In Progress"
             existing.latest_agent_output = None
@@ -153,13 +160,20 @@ def run_happy_path(case_id: str) -> Dict[str, Any]:
     
     chat_history = []
     stage_history = []
+    max_iterations = 50  # Safety limit
+    iteration = 0
     
     print("\n" + "="*60)
     print("Running Happy Path Demo")
     print("="*60 + "\n")
     
     # Process each message in sequence, advancing stages
-    for msg_config in HAPPY_PATH_MESSAGES:
+    for msg_idx, msg_config in enumerate(HAPPY_PATH_MESSAGES):
+        iteration += 1
+        if iteration > max_iterations:
+            print(f"  ⚠ Reached maximum iterations, stopping...")
+            break
+        
         # Get current case state
         state = case_service.get_case_state(case_id)
         if not state:
@@ -169,11 +183,22 @@ def run_happy_path(case_id: str) -> Dict[str, Any]:
         current_stage = state["dtp_stage"]
         expected_stage = msg_config["stage"]
         
+        # If we're already past this stage, skip
+        if current_stage > expected_stage:
+            print(f"  → Skipping {expected_stage} message (already at {current_stage})")
+            continue
+        
         # Wait until we reach the expected stage
-        while current_stage != expected_stage:
-            # If we're ahead, skip this message
+        attempts = 0
+        while current_stage != expected_stage and attempts < 5:
+            attempts += 1
+            state = case_service.get_case_state(case_id)
+            if not state:
+                break
+            current_stage = state["dtp_stage"]
+            
+            # If we're ahead, break
             if current_stage > expected_stage:
-                print(f"  → Skipping {expected_stage} message (already at {current_stage})")
                 break
             
             # If waiting for approval, approve to advance
@@ -181,21 +206,25 @@ def run_happy_path(case_id: str) -> Dict[str, Any]:
                 print(f"  → Currently at {current_stage}, approving to advance to {expected_stage}...")
                 decision_result = chat_service.process_decision(case_id, "Approve")
                 if decision_result["success"]:
-                    current_stage = decision_result.get("new_dtp_stage", current_stage)
+                    # Wait a moment for state to update
+                    import time
+                    time.sleep(0.5)
                     state = case_service.get_case_state(case_id)
                     if state:
                         current_stage = state["dtp_stage"]
+                        print(f"  ✓ Advanced to {current_stage}")
                 else:
                     print(f"  ✗ Failed to approve: {decision_result.get('message')}")
+                    # Continue anyway, might not need approval
                     break
             else:
-                # No approval needed but stage hasn't advanced - might need to run agent first
-                print(f"  → Currently at {current_stage}, waiting for {expected_stage}...")
+                # No approval needed - might need to run agent first
                 break
         
         # Check if we should process this message
         if current_stage != expected_stage:
-            continue
+            # Try to send message anyway - might trigger agent
+            pass
         
         # Send message
         print(f"\n[{current_stage}] {msg_config['description']}")
@@ -229,10 +258,15 @@ def run_happy_path(case_id: str) -> Dict[str, Any]:
                 "stage": current_stage
             })
             
-            print(f"  AI: {response.assistant_message[:100]}...")
+            print(f"  AI: {response.assistant_message[:150]}...")
             
-            # Check if waiting for approval
-            if response.waiting_for_human and msg_config.get("approve"):
+            # Wait a moment for state to update
+            import time
+            time.sleep(1.0)
+            
+            # Check current state again
+            state = case_service.get_case_state(case_id)
+            if state and state.get("waiting_for_human") and msg_config.get("approve"):
                 print(f"  → Approving decision to advance...")
                 
                 # Approve decision
@@ -242,33 +276,35 @@ def run_happy_path(case_id: str) -> Dict[str, Any]:
                 )
                 
                 if decision_result["success"]:
-                    new_stage = decision_result.get("new_dtp_stage", current_stage)
-                    stage_history.append({
-                        "from_stage": current_stage,
-                        "to_stage": new_stage,
-                        "timestamp": datetime.now().isoformat(),
-                        "action": "Approved",
-                        "message": msg_config["message"]
-                    })
-                    
-                    # Add approval to chat history
-                    chat_history.append({
-                        "role": "user",
-                        "content": "Approve",
-                        "timestamp": datetime.now().isoformat(),
-                        "stage": current_stage
-                    })
-                    
-                    chat_history.append({
-                        "role": "assistant",
-                        "content": f"Decision approved. Advanced to {new_stage}.",
-                        "timestamp": datetime.now().isoformat(),
-                        "stage": new_stage
-                    })
-                    
-                    print(f"  ✓ Approved - Advanced to {new_stage}")
-                else:
-                    print(f"  ⚠ Approval failed: {decision_result.get('message')}")
+                    # Wait for state update
+                    time.sleep(0.5)
+                    state = case_service.get_case_state(case_id)
+                    if state:
+                        new_stage = state["dtp_stage"]
+                        stage_history.append({
+                            "from_stage": current_stage,
+                            "to_stage": new_stage,
+                            "timestamp": datetime.now().isoformat(),
+                            "action": "Approved",
+                            "message": msg_config["message"]
+                        })
+                        
+                        # Add approval to chat history
+                        chat_history.append({
+                            "role": "user",
+                            "content": "Approve",
+                            "timestamp": datetime.now().isoformat(),
+                            "stage": current_stage
+                        })
+                        
+                        chat_history.append({
+                            "role": "assistant",
+                            "content": f"Decision approved. Advanced to {new_stage}.",
+                            "timestamp": datetime.now().isoformat(),
+                            "stage": new_stage
+                        })
+                        
+                        print(f"  ✓ Approved - Advanced to {new_stage}")
             
         except Exception as e:
             print(f"  ✗ Error processing message: {e}")
@@ -280,6 +316,36 @@ def run_happy_path(case_id: str) -> Dict[str, Any]:
         # Small delay to ensure state is saved
         import time
         time.sleep(0.5)
+    
+    # Final check - ensure we're at DTP-06
+    print("\n  → Verifying final state...")
+    final_state = case_service.get_case_state(case_id)
+    if final_state and final_state["dtp_stage"] != "DTP-06":
+        print(f"  ⚠ Case is at {final_state['dtp_stage']}, not DTP-06. Attempting to complete...")
+        # Try to complete remaining stages
+        current = final_state["dtp_stage"]
+        stage_order = ["DTP-01", "DTP-02", "DTP-03", "DTP-04", "DTP-05", "DTP-06"]
+        try:
+            current_idx = stage_order.index(current)
+            # Send messages for remaining stages
+            for remaining_idx in range(current_idx + 1, len(stage_order)):
+                remaining_stage = stage_order[remaining_idx]
+                # Find message for this stage
+                for msg_cfg in HAPPY_PATH_MESSAGES:
+                    if msg_cfg["stage"] == remaining_stage:
+                        print(f"  → Completing {remaining_stage}...")
+                        try:
+                            resp = chat_service.process_message(case_id, msg_cfg["message"])
+                            time.sleep(1)
+                            state = case_service.get_case_state(case_id)
+                            if state and state.get("waiting_for_human"):
+                                chat_service.process_decision(case_id, "Approve")
+                                time.sleep(0.5)
+                        except:
+                            pass
+                        break
+        except:
+            pass
     
     # Get final state
     final_case = case_service.get_case(case_id)
@@ -396,6 +462,23 @@ def main():
     
     save_demo_data(demo_result)
     
+    # Final verification
+    final_case = case_service.get_case(demo_result['case_id'])
+    if final_case:
+        print("\n" + "="*60)
+        print("FINAL VERIFICATION")
+        print("="*60)
+        print(f"  Current Stage: {final_case.dtp_stage}")
+        print(f"  Status: {final_case.status}")
+        print(f"  Activity Log Entries: {len(final_case.activity_log) if final_case.activity_log else 0}")
+        
+        if final_case.dtp_stage != "DTP-06":
+            print(f"\n  ⚠ WARNING: Case is at {final_case.dtp_stage}, not DTP-06!")
+            print(f"  → The demo may not have completed all stages.")
+            print(f"  → Try running the script again or check the logs above.")
+        else:
+            print(f"\n  ✓ SUCCESS: Case completed all stages (DTP-06)")
+    
     # Summary
     print("\n" + "="*60)
     print("DEMO COMPLETE")
@@ -406,10 +489,18 @@ def main():
     print(f"Chat Messages: {len([m for m in demo_result['chat_history'] if m['role'] == 'user'])}")
     print(f"Stage Transitions: {len(demo_result['stage_transitions'])}")
     
-    print("\nTo view in UI:")
-    print(f"  1. Start backend: python -m uvicorn backend.main:app --reload")
-    print(f"  2. Start frontend: streamlit run frontend/app.py")
-    print(f"  3. Open case: {demo_result['case_id']}")
+    if demo_result['final_stage'] == "DTP-06":
+        print("\n✅ Demo case is complete and ready to view!")
+        print("\nTo view in UI:")
+        print(f"  1. Start backend: python -m uvicorn backend.main:app --reload")
+        print(f"  2. Start frontend: streamlit run frontend/app.py")
+        print(f"  3. Open case: {demo_result['case_id']}")
+        print(f"  4. Chat history will be loaded automatically from activity log")
+    else:
+        print("\n⚠ Demo case did not complete all stages.")
+        print("  Check the logs above for errors.")
+        print("  You may need to re-run the script.")
+    
     print(f"\nDemo data saved to: data/happy_path_demo.json")
     print("")
 

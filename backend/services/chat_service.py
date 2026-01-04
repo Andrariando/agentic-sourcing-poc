@@ -770,10 +770,14 @@ class ChatService:
         state["waiting_for_human"] = False
         self.case_service.save_case_state(state)
         
+        # Get updated state to return correct stage (in case it advanced)
+        updated_state = self.case_service.get_case_state(case_id)
+        final_stage = updated_state["dtp_stage"] if updated_state else state["dtp_stage"]
+        
         return {
             "success": True,
             "decision": decision,
-            "new_dtp_stage": state["dtp_stage"],
+            "new_dtp_stage": final_stage,
             "message": f"Decision '{decision}' processed successfully"
         }
 
