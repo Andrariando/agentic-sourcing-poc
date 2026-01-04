@@ -235,6 +235,18 @@ class ChatService:
         dtp_stage = state["dtp_stage"]
         message_lower = message.lower().strip()
         
+        # Check if message is actually an action request (should be DECIDE, not EXPLAIN)
+        action_keywords = [
+            "scan", "score", "draft", "support", "extract", "generate", "create",
+            "recommend", "evaluate", "analyze", "prepare", "compare", "validate",
+            "check", "build", "define", "track"
+        ]
+        is_action_request = any(kw in message_lower for kw in action_keywords)
+        
+        if is_action_request:
+            # This is actually a CREATE/DECIDE request - route to agent execution
+            return self._run_agent_analysis(case_id, message, state)
+        
         if not state.get("latest_agent_output"):
             # Check if user is giving an affirmative response (e.g., "yes", "tell me everything")
             # This means they want us to actually run analysis

@@ -210,6 +210,37 @@ class APIClient:
             # Convert to dicts for consistent handling
             result = []
             for pack in packs:
+                # Convert execution metadata properly
+                exec_meta_dict = None
+                if pack.execution_metadata:
+                    try:
+                        # Try model_dump first (Pydantic v2)
+                        if hasattr(pack.execution_metadata, 'model_dump'):
+                            exec_meta_dict = pack.execution_metadata.model_dump()
+                        # Try dict() method (Pydantic v1)
+                        elif hasattr(pack.execution_metadata, 'dict'):
+                            exec_meta_dict = pack.execution_metadata.dict()
+                        # Fallback to __dict__
+                        elif hasattr(pack.execution_metadata, '__dict__'):
+                            exec_meta_dict = pack.execution_metadata.__dict__
+                        else:
+                            exec_meta_dict = pack.execution_metadata
+                        
+                        # Convert task_details list
+                        if exec_meta_dict and "task_details" in exec_meta_dict:
+                            task_details_list = exec_meta_dict["task_details"]
+                            exec_meta_dict["task_details"] = [
+                                (
+                                    td.model_dump() if hasattr(td, 'model_dump') else
+                                    (td.dict() if hasattr(td, 'dict') else
+                                    (td.__dict__ if hasattr(td, '__dict__') else td))
+                                )
+                                for td in task_details_list
+                            ]
+                    except Exception as e:
+                        print(f"Warning: Could not convert execution metadata: {e}")
+                        exec_meta_dict = None
+                
                 pack_dict = {
                     "pack_id": pack.pack_id,
                     "agent_name": pack.agent_name,
@@ -225,24 +256,18 @@ class APIClient:
                         for a in pack.artifacts
                     ],
                     "created_at": pack.created_at,
-                    "execution_metadata": pack.execution_metadata.__dict__ if pack.execution_metadata and hasattr(pack.execution_metadata, '__dict__') else (
-                        pack.execution_metadata.model_dump() if pack.execution_metadata and hasattr(pack.execution_metadata, 'model_dump') else None
-                    )
+                    "execution_metadata": exec_meta_dict
                 }
-                # Handle task_details conversion
-                if pack_dict["execution_metadata"] and "task_details" in pack_dict["execution_metadata"]:
-                    task_details = pack_dict["execution_metadata"]["task_details"]
-                    pack_dict["execution_metadata"]["task_details"] = [
-                        td.__dict__ if hasattr(td, '__dict__') else (td.model_dump() if hasattr(td, 'model_dump') else td)
-                        for td in task_details
-                    ]
                 result.append(pack_dict)
             return result
         
         # HTTP mode - not yet implemented
-        response = requests.get(self._url(f"/api/cases/{case_id}/artifact_packs"))
-        data = self._handle_response(response)
-        return data if isinstance(data, list) else []
+        try:
+            response = requests.get(self._url(f"/api/cases/{case_id}/artifact_packs"))
+            data = self._handle_response(response)
+            return data if isinstance(data, list) else []
+        except:
+            return []
     
     def create_case(
         self,
