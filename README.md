@@ -6,6 +6,16 @@ A **human-in-the-loop, multi-agent decision-support system** for procurement sou
 
 ---
 
+## 📚 Documentation
+
+- **[System Documentation](SYSTEM_DOCUMENTATION.md)** — Complete technical documentation covering all system logic, mechanisms, and architectural decisions
+- **[Architecture Diagrams Status](ARCHITECTURE_DIAGRAMS_STATUS.md)** — Status of PlantUML diagrams (currently outdated)
+- **This README** — Quick start guide and overview
+
+**Note**: See `architecture.puml` for visual architecture diagram (PlantUML format). Render with PlantUML extension or online tool.
+
+---
+
 ## 🎯 Design Philosophy
 
 | Principle | Implementation |
@@ -175,22 +185,33 @@ This creates:
 
 ---
 
-## 🎮 Happy Path Demo Sequence
+## 🎮 Happy Path Demo
 
-Open **CASE-0001** in the Procurement Workbench and run:
+Run the complete demo workflow:
 
-1. **"Scan signals"** → Signal Report with urgency score + recommendations
-2. **"Score suppliers"** → Supplier Scorecard + Shortlist (SUP-001 ranked #1)
-3. **"Draft RFx"** → RFx Draft Pack + Q&A Tracker
-4. **"Support negotiation"** → Negotiation Plan + Leverage Points + Targets
-5. **"Extract key terms"** → Key Terms Extract + Validation Report + Handoff Packet
-6. **"Generate implementation plan"** → Implementation Checklist + Early Indicators + Value Capture
+```bash
+# 1. Generate demo case with full workflow
+python backend/scripts/run_happy_path_demo.py
 
-Each step produces **ArtifactPacks** with:
-- Multiple artifacts (reports, scorecards, drafts)
-- Next best actions
-- Risk items
-- Grounding references (doc IDs, data sources)
+# 2. Start backend
+python -m uvicorn backend.main:app --reload --port 8000
+
+# 3. Start frontend (in another terminal)
+streamlit run frontend/app.py
+
+# 4. Open CASE-DEMO-001 in the UI
+#    - Navigate to Case Dashboard
+#    - Select CASE-DEMO-001
+#    - View complete chat history and artifacts
+```
+
+The demo creates `CASE-DEMO-001` with:
+- Full DTP-01 to DTP-06 workflow
+- Complete chat history from all interactions
+- All artifacts from each stage
+- Execution metadata for audit trail
+
+For detailed demo instructions, see [System Documentation - Demo & Testing](SYSTEM_DOCUMENTATION.md#demo--testing).
 
 ---
 
@@ -241,304 +262,34 @@ Each step produces **ArtifactPacks** with:
 2. **Decision logic hierarchy** — Rules → Retrieval → Analytics → LLM (in that order)
 3. **Human approval required** — For any DECIDE-type recommendation or stage change
 4. **Traceability** — Every artifact includes `grounded_in` references; missing = UNVERIFIED
-5. **Two-level intent routing** — (UserGoal, WorkType) → Agent + Tasks
-6. **Artifact persistence** — All agent outputs saved as ArtifactPacks with verification status
+5. **Hybrid intent classification** — Rule-based (fast) + LLM fallback (accurate) for ambiguous cases
+6. **Artifact persistence** — All agent outputs saved as ArtifactPacks with execution metadata
 
 ---
 
 ## 🎨 UI Design
 
-**Procurement Workbench** — Three-panel layout:
+**Procurement Workbench** — Modern SaaS layout:
 
-- **Top Panel**: Next Best Actions (stage-specific quick actions)
-- **Left Panel**: Artifacts (tabs: Signals, Scoring, RFx, Negotiation, Contract, Implementation, History)
-- **Center Panel**: Chat Copilot (conversational interface)
-- **Right Panel**: Governance (stage, status, approval controls)
+- **Top**: Condensed case header (ID, category, stage, status)
+- **Main**: Two-column layout
+  - **Left (60%)**: Case details (overview, strategy, signals, governance, timeline)
+  - **Right (40%)**: Chat interface (scrollable history, message input)
+- **Bottom**: Full-width artifacts panel (tabs: Signals, Scoring, RFx, Negotiation, Contract, Implementation, History, Audit Trail)
 
-MIT color system:
-- **MIT Navy** (`#003A8F`) — Headers, structure
-- **MIT Cardinal Red** (`#A31F34`) — Actions, alerts
-- **Near Black** (`#1F1F1F`) — Body text
-- **Charcoal** (`#4A4A4A`) — Secondary text
+For detailed UI/UX flow, see [System Documentation - UI/UX Flow](SYSTEM_DOCUMENTATION.md#uiux-flow).
 
 ---
 
 ## 📦 Artifact System
 
-Agents produce **ArtifactPacks** containing:
-
-- **Artifacts** — Work products (reports, scorecards, drafts, checklists)
-- **Next Actions** — Recommended next steps with rationale
-- **Risks** — Identified risks with mitigation
-- **Grounding** — References to source documents/data
-- **Verification Status** — VERIFIED, PARTIAL, or UNVERIFIED
-
-Artifact types include:
-- `SIGNAL_REPORT`, `SUPPLIER_SCORECARD`, `RFX_DRAFT_PACK`
-- `NEGOTIATION_PLAN`, `KEY_TERMS_EXTRACT`, `IMPLEMENTATION_CHECKLIST`
-- And more (see `shared/constants.py` for full list)
+For complete artifact system documentation including structure, verification status, and persistence, see [System Documentation - Artifact System](SYSTEM_DOCUMENTATION.md#artifact-system).
 
 ---
 
-## 🧪 Task System
+## 🤖 Agents & Tasks
 
-Each agent has **sub-tasks** that follow the decision hierarchy:
-
-1. **run_rules()** — Deterministic policy checks
-2. **run_retrieval()** — ChromaDB + SQLite data retrieval
-3. **run_analytics()** — Scoring, normalization, comparison
-4. **run_llm()** — Narrative generation (only if needed)
-
-Tasks are **internal to agents** and not exposed separately in UI.
-
----
-
-## 🤖 Agent Details & Sub-Tasks
-
-### 1. Supervisor Agent
-
-**Purpose**: Orchestrates workflow, validates inputs, selects sourcing pathway, routes to downstream agents.
-
-**Key Responsibilities**:
-- Two-level intent classification (UserGoal, WorkType)
-- Stage transition validation
-- Required input validation
-- Agent and task routing
-- Human checkpoint enforcement
-- **ONLY component allowed to write case state**
-
-**Sub-Tasks**:
-1. **`classify_intent_two_level`** — Classifies user message into (UserGoal, WorkType) using pattern matching
-2. **`validate_stage_transition`** — Checks if requested action is allowed at current DTP stage
-3. **`validate_required_inputs`** — Verifies all required data is present (category, supplier, contract, etc.)
-4. **`select_sourcing_pathway`** — Determines sourcing approach (strategic, competitive, simplified) based on rules
-5. **`route_agent_and_tasks`** — Creates ActionPlan with agent name and ordered task list
-6. **`enforce_human_checkpoints`** — Determines if approval is required
-7. **`update_state_and_log`** — Updates case state (dtp_stage, status, waiting_for_human) and activity log
-
-**Outputs**:
-- `STATUS_SUMMARY` artifact
-- `NEXT_BEST_ACTIONS` artifact
-- `ActionPlan` (internal)
-
-**Analytical Logic**: Heuristic routing rules, context memory, retrieval of procedural references/playbooks.
-
----
-
-### 2. Sourcing Signal Agent
-
-**Purpose**: Monitors contract metadata, spend patterns, supplier performance, and approved external signals to proactively identify sourcing cases.
-
-**Key Responsibilities**:
-- Detect contract expiry signals
-- Identify performance degradation
-- Flag spend anomalies
-- Apply relevance filters
-- Generate autoprep recommendations
-
-**Sub-Tasks**:
-1. **`detect_contract_expiry_signals`** — Queries SQLite contracts table for expiring contracts (30-90 day window)
-2. **`detect_performance_degradation_signals`** — Analyzes supplier performance trends for declining scores or high risk
-3. **`detect_spend_anomalies`** — Statistical deviation analysis on spend patterns (2+ standard deviations)
-4. **`apply_relevance_filters`** — Filters signals by category, DTP stage, and severity
-5. **`semantic_grounded_summary`** — LLM narration of signals (only after retrieval/analytics)
-6. **`produce_autoprep_recommendations`** — Generates next actions and required inputs for case preparation
-
-**Outputs**:
-- `SIGNAL_REPORT` — Signal details with urgency score (1-10)
-- `SIGNAL_SUMMARY` — Human-readable summary
-- `AUTOPREP_BUNDLE` — Recommended actions + required inputs
-- `NEXT_BEST_ACTIONS` — Actionable next steps
-
-**Analytical Logic**: Signal retrieval from SQLite + approved external feeds, structured summarization, relevance filters, semantic grounding.
-
-**Example**: Detects contract expiring in 35 days → Urgency score 7 → Recommends "Review contract terms" + "Evaluate alternatives"
-
----
-
-### 3. Supplier Scoring Agent
-
-**Purpose**: Converts human-defined evaluation criteria into structured score inputs; processes historical performance and risk data.
-
-**Key Responsibilities**:
-- Build evaluation criteria from inputs
-- Pull supplier performance data
-- Pull risk indicators
-- Normalize metrics for comparison
-- Compute weighted scores and ranking
-- Check eligibility against rules
-- Generate explanations
-
-**Sub-Tasks**:
-1. **`build_evaluation_criteria`** — Constructs criteria from user inputs + templates (weights, descriptions)
-2. **`pull_supplier_performance`** — Retrieves performance KPIs from SQLite (quality, delivery, responsiveness, cost variance)
-3. **`pull_risk_indicators`** — Gets SLA events, breach counts, severity from SQLite
-4. **`normalize_metrics`** — Normalizes all metrics to 0-10 scale for fair comparison
-5. **`compute_scores_and_rank`** — Calculates weighted scores using criteria weights, ranks suppliers
-6. **`eligibility_checks`** — Applies rule-based thresholds (min score, max breaches, required capabilities)
-7. **`generate_explanations`** — LLM narration explaining why suppliers scored as they did
-
-**Outputs**:
-- `EVALUATION_SCORECARD` — Criteria and weights used
-- `SUPPLIER_SCORECARD` — Scored table with all suppliers + ranking
-- `SUPPLIER_SHORTLIST` — Top N suppliers with rationale
-
-**Analytical Logic**: Deterministic scoring formulas, ML performance normalization (optional), rule-based eligibility checks, explanatory generation.
-
-**Example**: Evaluates 3 suppliers → SUP-001 scores 7.8/10 (best) → SUP-002 scores 7.2/10 → SUP-003 scores 8.2/10 but has eligibility issues → Shortlist: SUP-001, SUP-003
-
----
-
-### 4. RFx Draft Agent
-
-**Purpose**: Assembles RFx drafts using templates, past examples, and structured generation based on sourcing manager inputs.
-
-**Key Responsibilities**:
-- Determine RFx path (RFI/RFP/RFQ)
-- Retrieve templates and past examples
-- Assemble document sections
-- Check completeness
-- Draft questions and requirements
-- Create Q&A tracker
-
-**Sub-Tasks**:
-1. **`determine_rfx_path`** — Rules-based selection: RFI if requirements undefined, RFQ if <$50K and specs complete, RFP otherwise
-2. **`retrieve_templates_and_past_examples`** — Searches ChromaDB for RFx templates and past examples by category
-3. **`assemble_rfx_sections`** — Builds standard sections (Executive Summary, Scope, Technical Requirements, Pricing, etc.)
-4. **`completeness_checks`** — Rule-based validation: all required sections present, no placeholder content
-5. **`draft_questions_and_requirements`** — LLM generation of key questions grounded in templates
-6. **`create_qa_tracker`** — Creates structured Q&A tracking table for supplier responses
-
-**Outputs**:
-- `RFX_PATH` — Determined path (RFI/RFP/RFQ) with rationale
-- `RFX_DRAFT_PACK` — Complete draft document with sections
-- `RFX_QA_TRACKER` — Q&A tracking table
-
-**Analytical Logic**: Template assembly, retrieval of past RFx materials, controlled narrative generation, rule-based completeness checks.
-
-**Example**: Category IT Services, $450K value → Determines RFP path → Retrieves IT Services RFP template → Assembles 7 sections → Completeness 85% → Generates 5 key questions → Creates tracker
-
----
-
-### 5. Negotiation Support Agent
-
-**Purpose**: Highlights bid differences, identifies negotiation levers, provides structured insights **WITHOUT making award decisions**.
-
-**Key Responsibilities**:
-- Compare supplier bids
-- Extract leverage points
-- Retrieve market benchmarks
-- Detect price anomalies
-- Propose targets and fallbacks
-- Generate negotiation playbook
-
-**Sub-Tasks**:
-1. **`compare_bids`** — Structured comparison of bids (price, terms, SLA, services) with variance calculations
-2. **`leverage_point_extraction`** — Identifies negotiation leverage from performance data and competitive alternatives
-3. **`benchmark_retrieval`** — Searches ChromaDB for market rate benchmarks and industry standards
-4. **`price_anomaly_detection`** — Statistical analysis to flag unusually high/low bids (>20% from mean)
-5. **`propose_targets_and_fallbacks`** — Calculates target price (5% below lowest), fallback (lowest bid), walk-away (10% above lowest)
-6. **`negotiation_playbook`** — LLM generation of talking points, give/get trades, closing techniques
-
-**Outputs**:
-- `NEGOTIATION_PLAN` — Targets, fallbacks, playbook summary
-- `LEVERAGE_SUMMARY` — Identified leverage points with strength ratings
-- `TARGET_TERMS` — Specific target values for key terms
-
-**Analytical Logic**: Structured bid comparison, price anomaly detection, benchmark retrieval, negotiation heuristics.
-
-**Example**: 3 bids received → Price spread 5.6% → Identifies competition leverage → Target: $427,500 (5% below lowest) → Fallback: $450,000 → Walk-away: $495,000 → Generates playbook with talking points
-
----
-
-### 6. Contract Support Agent
-
-**Purpose**: Extracts key award terms and prepares structured inputs for contracting and implementation.
-
-**Key Responsibilities**:
-- Extract key terms from documents
-- Validate terms against policy
-- Summarize term alignment
-- Create implementation handoff packet
-
-**Sub-Tasks**:
-1. **`extract_key_terms`** — Retrieves contract documents from ChromaDB, extracts structured terms (pricing, term, SLA, liability, termination)
-2. **`term_validation`** — Rule-based checks against policy (liability limits, SLA minimums, cure periods, payment terms)
-3. **`term_alignment_summary`** — LLM narration summarizing term alignment and any issues
-4. **`implementation_handoff_packet`** — Creates structured handoff with contract summary, contacts, SLA summary, payment schedule, critical dates, risk items
-
-**Outputs**:
-- `KEY_TERMS_EXTRACT` — Structured extraction of all key terms
-- `TERM_VALIDATION_REPORT` — Validation results with issues flagged
-- `CONTRACT_HANDOFF_PACKET` — Complete handoff for implementation team
-
-**Analytical Logic**: Template-guided extraction, rule-based contract field validation, knowledge graph grounding (optional), term alignment.
-
-**Example**: Extracts terms from contract doc → Validates: liability OK, SLA 99.5% OK, payment Net 30 OK → 1 issue: termination clause missing → Creates handoff with all details
-
----
-
-### 7. Implementation Agent
-
-**Purpose**: Produces rollout steps and early post-award indicators (savings + service impacts).
-
-**Key Responsibilities**:
-- Build rollout checklist
-- Compute expected savings
-- Define early success indicators
-- Generate reporting templates
-
-**Sub-Tasks**:
-1. **`build_rollout_checklist`** — Retrieves rollout playbooks from ChromaDB, creates phased checklist (Preparation, Kick-off, Transition, Steady State)
-2. **`compute_expected_savings`** — Deterministic calculations: annual savings = old value - new value, total = annual × term years, breakdown (hard 70%, soft 20%, avoidance 10%)
-3. **`define_early_indicators`** — Defines KPIs for early monitoring (SLA compliance, response time, delivery, invoice accuracy, satisfaction) with risk triggers
-4. **`reporting_templates`** — Generates structured templates for monthly reports, quarterly reviews, savings tracking
-
-**Outputs**:
-- `IMPLEMENTATION_CHECKLIST` — Phased rollout checklist with owners and dates
-- `EARLY_INDICATORS_REPORT` — KPI definitions with targets and risk triggers
-- `VALUE_CAPTURE_TEMPLATE` — Savings breakdown and reporting templates
-
-**Analytical Logic**: Deterministic calculations, retrieval of rollout playbooks, structured reporting templates.
-
-**Example**: Contract value $450K (old $500K) → Annual savings $50K (10%) → Total $150K over 3 years → Creates 4-phase checklist (90 days) → Defines 5 KPIs → Sets up monthly/quarterly templates
-
----
-
-## 🔄 Task Execution Flow
-
-All sub-tasks follow the same execution hierarchy:
-
-```
-Task.execute(context)
-  ↓
-1. run_rules(context)
-   → Deterministic checks, policy validation
-   → May short-circuit if rules block execution
-  ↓
-2. run_retrieval(context, rules_result)
-   → Query ChromaDB for documents
-   → Query SQLite for structured data
-   → Build grounding references
-  ↓
-3. run_analytics(context, rules_result, retrieval_result)
-   → Compute scores, normalize metrics
-   → Compare, rank, detect anomalies
-   → Apply eligibility rules
-  ↓
-4. run_llm(context, rules_result, retrieval_result, analytics_result)
-   → Only if needs_llm_narration() returns True
-   → Generate narrative summaries
-   → Create explanations
-  ↓
-TaskResult(data, grounded_in, tokens_used)
-```
-
-**Key Principles**:
-- **Rules first** — Never call LLM if rules block
-- **Retrieval second** — Always ground in data before analysis
-- **Analytics third** — Use deterministic calculations when possible
-- **LLM last** — Only for narration/packaging, not decision-making
+For detailed information about all 7 agents, their sub-tasks, execution flow, and examples, see [System Documentation - Agent System](SYSTEM_DOCUMENTATION.md#agent-system) and [Task Execution Hierarchy](SYSTEM_DOCUMENTATION.md#task-execution-hierarchy).
 
 ---
 

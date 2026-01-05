@@ -7,90 +7,120 @@
 ' Purpose: Visual representation of the human-in-the-loop, multi-agent 
 '          decision-support system for procurement sourcing.
 '
-' Methodology: C4-style component diagram showing containers, components,
-'              control flow, and human-in-the-loop checkpoints.
+' Version: Current (2025) - Reflects actual implementation
+'
+' Key Features:
+'   • Hybrid Intent Classification (Rule-based + LLM fallback)
+'   • 7 Official Agents with Task Execution Hierarchy
+'   • Artifact System with Execution Metadata
+'   • Two-Level Intent Classification (UserGoal + WorkType)
+'   • Supervisor-only State Changes
 '
 ' To render: Use PlantUML extension in VS Code/Cursor (Alt+D) or online at
 '            http://www.plantuml.com/plantuml
 ' =============================================================================
 
-title Agentic Sourcing Copilot - Enterprise Architecture\nHuman-in-the-Loop Multi-Agent Decision Support System
+title Agentic Sourcing Copilot - Enterprise Architecture\n//Human-in-the-Loop Multi-Agent Decision Support System//\n\n**Current Implementation** — Hybrid Classification & Artifact System
 
-skinparam backgroundColor #FFFFFF
+skinparam backgroundColor #FEFEFE
 skinparam defaultFontSize 11
 skinparam roundcorner 10
-skinparam shadowing false
+skinparam shadowing true
 
 skinparam rectangle {
     BackgroundColor<<human>> #FFEBEE
     BorderColor<<human>> #C62828
+    BorderThickness 2
     BackgroundColor<<frontend>> #E3F2FD
     BorderColor<<frontend>> #1976D2
+    BorderThickness 2
     BackgroundColor<<backend>> #E8F5E9
     BorderColor<<backend>> #388E3C
+    BorderThickness 2
     BackgroundColor<<supervisor>> #FFF3E0
     BorderColor<<supervisor>> #F57C00
+    BorderThickness 3
     BackgroundColor<<agent>> #F3E5F5
     BorderColor<<agent>> #7B1FA2
+    BorderThickness 2
+    BackgroundColor<<task>> #FFF9C4
+    BorderColor<<task>> #F9A825
+    BorderThickness 2
     BackgroundColor<<data>> #ECEFF1
     BorderColor<<data>> #546E7A
+    BorderThickness 2
     BackgroundColor<<external>> #E8E8E8
     BorderColor<<external>> #999999
+    BorderThickness 2
 }
 
 ' ============== EXTERNAL ACTORS ==============
-rectangle "Procurement Officer\n(Human Decision-Maker)" as human <<human>>
+rectangle "👤 **Procurement Officer**\n(Human Decision-Maker)" as human <<human>>
 
-rectangle "OpenAI GPT-4\n(LLM Provider)" as llm <<external>>
+rectangle "🤖 **OpenAI GPT-4**\n(LLM Provider)" as llm <<external>>
 
 ' ============== FRONTEND CONTAINER ==============
-package "FRONTEND - Streamlit UI" <<frontend>> {
-    rectangle "Case Dashboard\nCase list, metrics,\nfiltering, status view" as dashboard
-    rectangle "Case Copilot\nDecision console,\nchat interface,\napproval buttons" as copilot
-    rectangle "Knowledge Management\nDocument upload,\ndata ingestion" as knowledge
-    rectangle "API Client\nHTTP/Direct mode\ncommunication layer" as api_client
+package "**FRONTEND** - Streamlit UI" <<frontend>> {
+    rectangle "📊 **Case Dashboard**\nCase list, metrics,\nfiltering, status view" as dashboard
+    rectangle "💬 **Case Copilot**\nChat interface,\nartifact display,\naudit trail" as copilot
+    rectangle "📁 **Knowledge Management**\nDocument upload,\ndata ingestion" as knowledge
+    rectangle "🔌 **API Client**\nHTTP/REST communication\nor Direct imports" as api_client
 }
 
 ' ============== BACKEND CONTAINER ==============
-package "BACKEND - FastAPI Server" <<backend>> {
+package "**BACKEND** - FastAPI Server" <<backend>> {
     
-    rectangle "REST API\n/cases, /chat, /decisions,\n/ingest, /health" as api
+    rectangle "🌐 **REST API**\n/cases, /chat, /decisions,\n/ingest, /health" as api
     
-    package "Services Layer" {
-        rectangle "Case Service\nCase CRUD" as case_svc
-        rectangle "Chat Service\nCopilot logic" as chat_svc
-        rectangle "Ingestion Service\nUpload orchestration" as ingest_svc
+    package "**Services Layer**" {
+        rectangle "💬 **Chat Service**\nMessage processing,\nintent handling,\nresponse formatting" as chat_svc
+        rectangle "📋 **Case Service**\nCase CRUD,\nartifact management,\nstate persistence" as case_svc
+        rectangle "📥 **Ingestion Service**\nUpload orchestration,\nvalidation" as ingest_svc
     }
     
-    package "SUPERVISOR - Central Orchestrator" <<supervisor>> {
-        rectangle "Intent Router\nClassify: EXPLAIN |\nEXPLORE | DECIDE | STATUS" as router
-        rectangle "State Manager\nDTP stage tracking,\nvalidation, transitions" as state_mgr
-        rectangle "LangGraph Workflow\nAgent routing,\nconditional edges" as graph
+    package "**SUPERVISOR** - Central Orchestrator" <<supervisor>> {
+        rectangle "🧠 **Intent Router**\nHybrid Classification:\n• Rule-based (fast)\n• LLM fallback (accurate)\n• Two-level (UserGoal+WorkType)" as router
+        rectangle "📊 **State Manager**\nDTP stage tracking,\nvalidation, transitions,\nONLY state writer" as state_mgr
+        rectangle "📋 **Action Planner**\nAgent selection,\ntask planning" as planner
     }
     
-    package "SPECIALIST AGENTS" <<agent>> {
-        rectangle "Strategy Agent\n(DTP-01)\nRules -> Analytics -> LLM" as strategy
-        rectangle "Supplier Agent\n(DTP-03/04)\nScoring, evaluation" as supplier
-        rectangle "Negotiation Agent\n(DTP-04)\nLeverage analysis" as negotiation
-        rectangle "Signal Agent\nMarket intelligence,\nrisk detection" as signal
+    package "**7 OFFICIAL AGENTS**" <<agent>> {
+        rectangle "📡 **Sourcing Signal**\n(DTP-01)\nSignal detection,\nurgency scoring" as signal_agent
+        rectangle "⭐ **Supplier Scoring**\n(DTP-02)\nEvaluation, ranking,\neligibility checks" as supplier_agent
+        rectangle "📝 **RFx Draft**\n(DTP-03)\nRFI/RFP/RFQ assembly" as rfx_agent
+        rectangle "🤝 **Negotiation Support**\n(DTP-04)\nLeverage analysis,\ntargets, playbook" as negotiation_agent
+        rectangle "📄 **Contract Support**\n(DTP-05)\nTerm extraction,\nvalidation, handoff" as contract_agent
+        rectangle "🚀 **Implementation**\n(DTP-06)\nRollout planning,\nvalue capture" as impl_agent
     }
     
-    package "INGESTION LAYER" {
-        rectangle "Doc Ingest\nPDF, DOCX, TXT\n-> chunks -> embed" as doc_ingest
-        rectangle "Data Ingest\nCSV, Excel\n-> validate -> store" as data_ingest
+    package "**TASK EXECUTION LAYER**" <<task>> {
+        rectangle "1️⃣ **Rules**\nDeterministic checks,\npolicy validation" as task_rules
+        rectangle "2️⃣ **Retrieval**\nChromaDB + SQLite\nquery, grounding" as task_retrieval
+        rectangle "3️⃣ **Analytics**\nScoring, normalization,\ncomparison, ranking" as task_analytics
+        rectangle "4️⃣ **LLM**\nNarration, summaries\n(last resort only)" as task_llm
     }
     
-    package "RAG LAYER" {
-        rectangle "Retriever\nSemantic search,\nmetadata filter" as retriever
-        rectangle "Vector Store\nChromaDB wrapper" as vector_store
+    package "**ARTIFACT SYSTEM**" {
+        rectangle "📦 **Artifact Builder**\nPack creation,\nverification status,\ngrounding references" as artifact_builder
+        rectangle "📊 **Execution Metadata**\nTokens, costs,\ntask details,\nretrieval sources" as exec_metadata
+    }
+    
+    package "**RAG LAYER**" {
+        rectangle "🔍 **Retriever**\nSemantic search,\nmetadata filter" as retriever
+        rectangle "📦 **Vector Store**\nChromaDB wrapper" as vector_store
+    }
+    
+    package "**INGESTION LAYER**" {
+        rectangle "📄 **Doc Ingest**\nPDF, DOCX, TXT\n→ chunks → embed" as doc_ingest
+        rectangle "📊 **Data Ingest**\nCSV, Excel\n→ validate → store" as data_ingest
     }
 }
 
 ' ============== DATA LAYER ==============
-package "DATA LAYER - Persistence" <<data>> {
-    rectangle "SQLite\nData Lake\n(Suppliers, Spend,\nSLAs, Cases)" as sqlite
-    rectangle "ChromaDB\nVector Store\n(Document embeddings)" as chromadb
-    rectangle "JSON Files\nSynthetic seed data" as json_data
+package "**DATA LAYER** - Persistence" <<data>> {
+    rectangle "🗄️ **SQLite**\nData Lake\n• Cases\n• ArtifactPacks\n• Execution Metadata\n• Suppliers, Spend, SLAs" as sqlite
+    rectangle "🧲 **ChromaDB**\nVector Store\n• Document embeddings\n• Semantic search" as chromadb
+    rectangle "📁 **Files**\nUploaded documents\nSynthetic test data" as files
 }
 
 ' ============== FLOW ARROWS ==============
@@ -106,85 +136,166 @@ human --> knowledge : "Uploads documents\n& data files"
 dashboard --> api_client
 copilot --> api_client
 knowledge --> api_client
-api_client --> api : "REST API calls\n(Separated Mode)\nor Direct imports\n(Integrated Mode)"
+api_client --> api : "REST API calls\nor Direct imports"
 
 ' API to Services
 api --> case_svc : "Case CRUD"
 api --> chat_svc : "Chat messages"
 api --> ingest_svc : "File uploads"
 
-' Services to Supervisor
-chat_svc --> router : "Classifies\nuser intent"
+' Chat Service to Supervisor
+chat_svc --> router : "User message\n+ context"
 router --> state_mgr : "Validates\nDTP stage"
-state_mgr --> graph : "Routes to\nallowed agents"
+router --> planner : "Two-level intent\n→ Action Plan"
+planner --> chat_svc : "Agent + Tasks"
 
 ' Supervisor to Agents
-graph --> strategy : "DTP-01:\nStrategy task"
-graph --> supplier : "DTP-03/04:\nEvaluate suppliers"
-graph --> negotiation : "DTP-04:\nNegotiation support"
-graph --> signal : "Any stage:\nInterpret signals"
+chat_svc --> signal_agent : "DTP-01:\nSignal detection"
+chat_svc --> supplier_agent : "DTP-02:\nSupplier scoring"
+chat_svc --> rfx_agent : "DTP-03:\nRFx drafting"
+chat_svc --> negotiation_agent : "DTP-04:\nNegotiation support"
+chat_svc --> contract_agent : "DTP-05:\nContract extraction"
+chat_svc --> impl_agent : "DTP-06:\nImplementation planning"
 
-' Agents return to Supervisor
-strategy --> graph : "Returns structured\nrecommendation"
-supplier --> graph : "Returns scored\nshortlist"
-negotiation --> graph : "Returns leverage\nanalysis"
-signal --> graph : "Returns risk\nassessment"
+' Agents execute Tasks (in order)
+signal_agent --> task_rules : "1. Rules"
+supplier_agent --> task_rules : "1. Rules"
+rfx_agent --> task_rules : "1. Rules"
+negotiation_agent --> task_rules : "1. Rules"
+contract_agent --> task_rules : "1. Rules"
+impl_agent --> task_rules : "1. Rules"
+
+task_rules --> task_retrieval : "2. Retrieval"
+task_retrieval --> task_analytics : "3. Analytics"
+task_analytics --> task_llm : "4. LLM\n(if needed)"
+
+' Agents use RAG
+task_retrieval --> retriever : "Query documents"
+retriever --> vector_store : "Semantic search"
+vector_store --> chromadb : "Vector query"
+
+' Agents query structured data
+task_retrieval --> sqlite : "Query structured data\n(Suppliers, Spend, SLAs)"
+
+' Agents return ArtifactPacks
+signal_agent --> artifact_builder : "Build ArtifactPack"
+supplier_agent --> artifact_builder : "Build ArtifactPack"
+rfx_agent --> artifact_builder : "Build ArtifactPack"
+negotiation_agent --> artifact_builder : "Build ArtifactPack"
+contract_agent --> artifact_builder : "Build ArtifactPack"
+impl_agent --> artifact_builder : "Build ArtifactPack"
+
+' Execution Metadata tracking
+signal_agent --> exec_metadata : "Track execution"
+supplier_agent --> exec_metadata : "Track execution"
+rfx_agent --> exec_metadata : "Track execution"
+negotiation_agent --> exec_metadata : "Track execution"
+contract_agent --> exec_metadata : "Track execution"
+impl_agent --> exec_metadata : "Track execution"
+
+' Artifacts return to Chat Service
+artifact_builder --> chat_svc : "ArtifactPack\n+ Metadata"
+exec_metadata --> artifact_builder : "Include metadata"
 
 ' Human-in-the-Loop Checkpoint
-graph --> state_mgr : "Pauses for\nhuman approval"
-state_mgr --> chat_svc : "Pending\napproval state"
+chat_svc --> state_mgr : "Check approval\nrequired?"
+state_mgr --> chat_svc : "Set waiting_for_human\n= true"
+
+' State updates (ONLY Supervisor/State Manager)
+state_mgr --> sqlite : "Save case state\n(ONLY writer)"
+
+' Artifact persistence
+artifact_builder --> case_svc : "Save ArtifactPack"
+case_svc --> sqlite : "Persist artifacts\n+ execution metadata"
 
 ' Ingestion Flow
 ingest_svc --> doc_ingest : "Documents"
 ingest_svc --> data_ingest : "Structured data"
 doc_ingest --> vector_store : "Embed & store\nchunks"
 data_ingest --> sqlite : "Validate & insert\nrecords"
+doc_ingest --> files : "Store original"
 
-' RAG Retrieval
-strategy --> retriever : "Retrieves\nrelevant context"
-supplier --> retriever : "Retrieves\nsupplier docs"
-negotiation --> retriever : "Retrieves\ncontract terms"
-signal --> retriever : "Retrieves\nmarket intel"
-retriever --> vector_store : "Semantic\nsearch"
-vector_store --> chromadb : "Query\nvectors"
+' LLM Calls (only via task_llm)
+task_llm --> llm : "Narration only\n(after rules/retrieval/analytics)"
 
-' Data Queries
-supplier --> sqlite : "Query\nperformance data"
-signal --> sqlite : "Query\nspend & SLA"
-state_mgr --> sqlite : "Load/save\ncase state"
-
-' LLM Calls
-strategy --> llm : "Narration only\n(after rules)"
-supplier --> llm : "Summarization"
-negotiation --> llm : "Insight generation"
-signal --> llm : "Risk interpretation"
-
-' Seed Data
-json_data ..> sqlite : "Seed\nDemo Data"
+' Hybrid Classification LLM call
+router --> llm : "LLM Classification\n(if confidence < 0.85)"
 
 ' ============== NOTES ==============
-note right of graph
-    **Central Control Point**
-    • Validates all state transitions
-    • Blocks invalid DTP jumps
+note right of router
+    **Hybrid Intent Classification**
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    1. Rule-based (fast, 80-90% cases)
+    2. LLM fallback (ambiguous cases)
+    3. Two-level: UserGoal + WorkType
+    4. Context-aware (DTP stage, outputs)
+    5. Cached results
+end note
+
+note bottom of task_rules
+    **Task Execution Hierarchy**
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    All agents follow same order:
+    1. Rules (deterministic)
+    2. Retrieval (ground in data)
+    3. Analytics (calculate)
+    4. LLM (narrate only)
+    ⚠️ Never skip steps
+end note
+
+note right of state_mgr
+    **Supervisor Governance**
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    • ONLY component that writes
+      case state
+    • Validates all transitions
     • Enforces human approval
-    • Logs all override events
+    • Blocks invalid DTP jumps
+    • Logs all changes
 end note
 
-note bottom of strategy
-    **Decision Logic Hierarchy**
-    1. Heuristic / policy rules
-    2. Deterministic validation
-    3. Analytics (normalization)
-    4. Retrieval-augmented context
-    5. LLM narration (last resort)
+note left of artifact_builder
+    **Artifact System**
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    • ArtifactPacks with multiple
+      artifacts
+    • Verification status (VERIFIED/
+      PARTIAL/UNVERIFIED)
+    • Grounding references
+    • Execution metadata (tokens,
+      costs, task details)
+    • Full audit trail
 end note
 
-note right of human
+note top of human
     **Human-in-the-Loop**
-    Approve -> Advance stage
-    Edit -> Modify & resubmit
-    Reject -> Stay at stage
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ✅ Approve → Advance stage
+    ✏️ Edit → Modify & resubmit
+    ❌ Reject → Stay at stage
+    
+    AI advises, Human decides
 end note
+
+' ============== LEGEND ==============
+legend right
+    |= Color |= Component Type |
+    | <#FFEBEE> | Human Actor |
+    | <#E3F2FD> | Frontend (Streamlit) |
+    | <#E8F5E9> | Backend (FastAPI) |
+    | <#FFF3E0> | Supervisor (Orchestrator) |
+    | <#F3E5F5> | Official Agents (7) |
+    | <#FFF9C4> | Task Execution Layer |
+    | <#ECEFF1> | Data / Persistence |
+    | <#E8E8E8> | External System |
+    
+    **Key Governance Rules:**
+    1. Supervisor is ONLY state writer
+    2. Rules → Retrieval → Analytics → LLM
+    3. Hybrid classification (rules + LLM)
+    4. Stage advancement requires approval
+    5. All artifacts tracked with metadata
+endlegend
 
 @enduml
+

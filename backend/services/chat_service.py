@@ -96,8 +96,16 @@ class ChatService:
             if approval_response:
                 return approval_response
         
-        # Classify intent
-        intent = IntentRouter.classify_intent(user_message)
+        # Classify intent with context awareness
+        classification_context = {
+            "dtp_stage": state["dtp_stage"],
+            "has_existing_output": bool(state.get("latest_agent_output")),
+            "category_id": state.get("category_id"),
+            "status": state.get("status"),
+            "waiting_for_human": state.get("waiting_for_human", False)
+        }
+        
+        intent = IntentRouter.classify_intent(user_message, classification_context)
         
         # Handle different intents appropriately
         if intent == UserIntent.STATUS:
@@ -542,11 +550,16 @@ class ChatService:
         """Run agent analysis when explicitly requested."""
         dtp_stage = state["dtp_stage"]
         
-        # Use two-level intent classification
-        intent_result = IntentRouter.classify_intent_two_level(message, {
+        # Use hybrid two-level intent classification (rules + LLM)
+        classification_context = {
             "dtp_stage": dtp_stage,
             "category_id": state.get("category_id"),
-        })
+            "has_existing_output": bool(state.get("latest_agent_output")),
+            "status": state.get("status"),
+            "waiting_for_human": state.get("waiting_for_human", False)
+        }
+        
+        intent_result = IntentRouter.classify_intent_hybrid(message, classification_context)
         
         # Get action plan from intent
         action_plan = IntentRouter.get_action_plan(intent_result, dtp_stage)
