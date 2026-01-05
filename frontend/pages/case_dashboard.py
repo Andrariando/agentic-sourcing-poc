@@ -130,17 +130,25 @@ def inject_dashboard_styles():
             border-radius: 4px;
             padding: 16px 24px;
             text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 80px;
         }}
         .stat-value {{
             font-size: 1.5rem;
             font-weight: 700;
             color: {MIT_NAVY};
+            line-height: 1.2;
+            margin-bottom: 4px;
         }}
         .stat-label {{
             font-size: 0.75rem;
             color: {CHARCOAL};
             text-transform: uppercase;
             letter-spacing: 0.5px;
+            line-height: 1.4;
         }}
         
         /* Empty State */
@@ -273,7 +281,7 @@ def render_case_dashboard():
     
     # Filters
     st.markdown('<div class="filter-section">', unsafe_allow_html=True)
-    col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
+    col1, col2, col3, col4 = st.columns([2, 2, 2, 1.5])
     
     with col1:
         status_filter = st.selectbox(
@@ -303,8 +311,8 @@ def render_case_dashboard():
         st.caption("Filter by Category")
     
     with col4:
-        st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("New Case", type="primary"):
+        st.caption("&nbsp;")  # Spacer for alignment with other captions
+        if st.button("New Case", type="primary", use_container_width=True):
             st.session_state.show_create_form = True
     
     st.markdown('</div>', unsafe_allow_html=True)
@@ -423,7 +431,7 @@ def render_case_dashboard():
         stage_name = DTP_STAGE_NAMES.get(case.dtp_stage, case.dtp_stage)
         
         # Create case card
-        col_info, col_stage, col_action = st.columns([5, 2, 1])
+        col_info, col_stage, col_action = st.columns([5, 2, 1.2])
         
         with col_info:
             signal_badge = ""
@@ -447,16 +455,18 @@ def render_case_dashboard():
             """, unsafe_allow_html=True)
         
         with col_stage:
+            # Align stage badge with case card header (approximately 20px from top)
             st.markdown(f"""
-            <div style="padding-top: 20px;">
+            <div style="display: flex; flex-direction: column; justify-content: flex-start; padding-top: 20px; height: 100%;">
                 <span class="stage-badge">{case.dtp_stage}</span>
                 <div style="font-size: 0.75rem; color: {CHARCOAL}; margin-top: 4px;">{stage_name}</div>
             </div>
             """, unsafe_allow_html=True)
         
         with col_action:
-            st.markdown("<div style='padding-top: 16px;'></div>", unsafe_allow_html=True)
-            if st.button("Open", key=f"open_{case.case_id}"):
+            # Align button with case card header - add proper spacing
+            st.markdown("<div style='padding-top: 20px;'></div>", unsafe_allow_html=True)
+            if st.button("Open", key=f"open_{case.case_id}", use_container_width=True):
                 st.session_state.selected_case_id = case.case_id
                 st.session_state.current_page = "copilot"
                 st.rerun()
