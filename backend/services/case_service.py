@@ -85,6 +85,9 @@ class CaseService:
         if not case:
             return None
         
+        # Get latest artifact pack ID if available
+        latest_artifact_pack_id = case.latest_artifact_pack_id if hasattr(case, 'latest_artifact_pack_id') else None
+        
         # Build summary
         summary = CaseSummary(
             case_id=case.case_id,
@@ -197,7 +200,10 @@ class CaseService:
         if not case:
             return None
         
-        return SupervisorState(
+        # Get latest artifact pack ID if available
+        latest_artifact_pack_id = case.latest_artifact_pack_id if hasattr(case, 'latest_artifact_pack_id') else None
+        
+        state = SupervisorState(
             case_id=case.case_id,
             dtp_stage=case.dtp_stage,
             category_id=case.category_id,
@@ -218,6 +224,12 @@ class CaseService:
             blocked_reason=None,
             error_state=None
         )
+        
+        # Add latest_artifact_pack_id to state (as additional field, not in TypedDict)
+        if latest_artifact_pack_id:
+            state["latest_artifact_pack_id"] = latest_artifact_pack_id
+        
+        return state
     
     def save_case_state(self, state: SupervisorState) -> bool:
         """Save Supervisor state back to case."""
@@ -426,6 +438,23 @@ class CaseService:
         session.close()
         
         return self._model_to_pack(pack, case_id) if pack else None
+    
+    def get_artifact_pack(self, pack_id: str) -> Optional[ArtifactPack]:
+        """
+        Get artifact pack by ID.
+        """
+        session = get_db_session()
+        
+        pack = session.exec(
+            select(ArtifactPackModel).where(ArtifactPackModel.pack_id == pack_id)
+        ).first()
+        
+        session.close()
+        
+        if not pack:
+            return None
+        
+        return self._model_to_pack(pack, pack.case_id)
     
     def get_all_artifact_packs(self, case_id: str) -> List[ArtifactPack]:
         """

@@ -151,13 +151,17 @@ class ChatService:
                         logger.warning(f"Failed to save user message: {e}")
                 return approval_response
         
-        # Classify intent with context awareness
+        # Enhanced classification context with conversation history
         classification_context = {
             "dtp_stage": state["dtp_stage"],
             "has_existing_output": bool(state.get("latest_agent_output")),
             "category_id": state.get("category_id"),
             "status": state.get("status"),
-            "waiting_for_human": state.get("waiting_for_human", False)
+            "waiting_for_human": state.get("waiting_for_human", False),
+            # NEW: Enhanced context for better intent classification
+            "latest_agent_name": state.get("latest_agent_name"),
+            "conversation_history": conversation_history[:3] if conversation_history else [],  # Last 3 messages
+            "conversation_length": len(conversation_history) if conversation_history else 0
         }
         
         intent = IntentRouter.classify_intent(user_message, classification_context)
@@ -360,10 +364,13 @@ class ChatService:
         output = state["latest_agent_output"]
         agent_name = state.get("latest_agent_name", "Unknown")
         
+        # Extract topic to understand what aspect user is asking about
+        topic = self._extract_explanation_topic(message)
+        
         # Build explanation based on what was asked
         message_lower = message.lower()
         
-        if "why" in message_lower or "reason" in message_lower:
+        if "why" in message_lower or "reason" in message_lower or topic == "rationale":
             # Explain the rationale
             strategy = output.get("recommended_strategy", "N/A")
             rationale = output.get("rationale", [])
@@ -397,8 +404,8 @@ class ChatService:
             # General explanation - handle different agent outputs
             response = f"**Analysis from {agent_name} Agent**\n\n"
             
-            # Handle SourcingSignal agent output
-            if agent_name in ["SourcingSignal", "SignalInterpretation"]:
+            # Handle SourcingSignal agent output (support enum and legacy names)
+            if agent_name in ["SOURCING_SIGNAL", "SourcingSignal", "SignalInterpretation"]:
                 signals = output.get("signals", [])
                 urgency = output.get("urgency_score", 0)
                 summary = output.get("summary", "")
@@ -415,8 +422,8 @@ class ChatService:
                 else:
                     response += "No significant signals detected at this time.\n"
             
-            # Handle SupplierScoring agent output
-            elif agent_name == "SupplierScoring":
+            # Handle SupplierScoring agent output (support enum and legacy names)
+            elif agent_name in ["SUPPLIER_SCORING", "SupplierScoring"]:
                 shortlist = output.get("shortlisted_suppliers", [])
                 recommendation = output.get("recommendation", "")
                 
@@ -430,18 +437,86 @@ class ChatService:
                         score = s.get("total_score", 0)
                         response += f"- {name}: {score:.1f}/10\n"
             
-            # Handle RfxDraft agent output
-            elif agent_name == "RfxDraft":
+            # Handle RfxDraft agent output (support enum and legacy names)
+            elif agent_name in ["RFX_DRAFT", "RfxDraft"]:
+                # Try to get detailed info from artifact pack
+                case_state = self.case_service.get_case_state(case_id)
+                artifact_pack = None
+                if case_state:
+                    latest_pack_id = case_state.get("latest_artifact_pack_id")
+                    if latest_pack_id and topic in ["requirements", "sections", "completeness"]:
+                        artifact_pack = self.case_service.get_artifact_pack(latest_pack_id)
+                
                 rfx_type = output.get("rfx_type", "RFx")
                 sections = output.get("sections", [])
                 completeness = output.get("completeness_score", 0)
                 
-                response += f"**{rfx_type} Draft** - {completeness}% complete\n\n"
-                if sections:
-                    response += f"Assembled {len(sections)} sections.\n"
+                # Topic-based responses
+                if topic == "requirements":
+                    # Extract requirements-related info from artifacts or output
+                    missing_info = output.get("missing_info", [])
+                    missing_sections = output.get("missing_sections", [])
+                    incomplete_sections = output.get("incomplete_sections", [])
+                    
+                    if artifact_pack:
+                        # Extract from artifact content
+                        for artifact in artifact_pack.artifacts:
+                            if artifact.type == "RFX_PATH" and artifact.content:
+                                missing_info = artifact.content.get("missing_info", missing_info)
+                            elif artifact.type == "RFX_DRAFT_PACK" and artifact.content:
+                                missing_sections = artifact.content.get("missing_sections", missing_sections)
+                                incomplete_sections = artifact.content.get("incomplete_sections", incomplete_sections)
+                    
+                    response += f"**{rfx_type} Draft - Requirements Status**\n\n"
+                    if missing_sections or missing_info:
+                        response += "**The following requirements/sections are not fully defined:**\n\n"
+                        if missing_sections:
+                            for section in missing_sections[:5]:
+                                response += f"- {section}\n"
+                        if missing_info:
+                            for info in missing_info[:5]:
+                                response += f"- {info}\n"
+                    else:
+                        response += "All requirements appear to be defined. The draft is ready for review.\n"
+                
+                elif topic == "sections":
+                    response += f"**{rfx_type} Draft - Sections**\n\n"
+                    if sections:
+                        response += f"**Assembled {len(sections)} sections:**\n"
+                        for section in sections[:10]:
+                            section_name = section if isinstance(section, str) else section.get("name", section.get("title", str(section)))
+                            response += f"- {section_name}\n"
+                    else:
+                        response += "No sections have been assembled yet.\n"
+                
+                elif topic == "completeness":
+                    response += f"**{rfx_type} Draft - Completeness: {completeness}%**\n\n"
+                    missing_sections = output.get("missing_sections", [])
+                    incomplete_sections = output.get("incomplete_sections", [])
+                    
+                    if artifact_pack:
+                        for artifact in artifact_pack.artifacts:
+                            if artifact.type == "RFX_DRAFT_PACK" and artifact.content:
+                                missing_sections = artifact.content.get("missing_sections", missing_sections)
+                                incomplete_sections = artifact.content.get("incomplete_sections", incomplete_sections)
+                    
+                    if missing_sections or incomplete_sections:
+                        response += "**To complete the draft:**\n"
+                        if missing_sections:
+                            response += f"- Add {len(missing_sections)} missing sections\n"
+                        if incomplete_sections:
+                            response += f"- Complete {len(incomplete_sections)} incomplete sections\n"
+                    else:
+                        response += "The draft is complete and ready for review.\n"
+                
+                else:
+                    # General explanation
+                    response += f"**{rfx_type} Draft** - {completeness}% complete\n\n"
+                    if sections:
+                        response += f"Assembled {len(sections)} sections.\n"
             
-            # Handle NegotiationSupport agent output
-            elif agent_name == "NegotiationSupport":
+            # Handle NegotiationSupport agent output (support enum and legacy names)
+            elif agent_name in ["NEGOTIATION_SUPPORT", "NegotiationSupport"]:
                 targets = output.get("target_terms", {})
                 leverage = output.get("leverage_points", [])
                 
@@ -452,8 +527,8 @@ class ChatService:
                 if leverage:
                     response += f"**{len(leverage)} Leverage Points Identified**\n"
             
-            # Handle ContractSupport agent output
-            elif agent_name == "ContractSupport":
+            # Handle ContractSupport agent output (support enum and legacy names)
+            elif agent_name in ["CONTRACT_SUPPORT", "ContractSupport"]:
                 key_terms = output.get("key_terms", {})
                 is_compliant = output.get("is_compliant", True)
                 
@@ -461,8 +536,8 @@ class ChatService:
                 if key_terms:
                     response += "Key contract terms extracted and validated.\n"
             
-            # Handle Implementation agent output
-            elif agent_name == "Implementation":
+            # Handle Implementation agent output (support enum and legacy names)
+            elif agent_name in ["IMPLEMENTATION", "Implementation"]:
                 annual = output.get("annual_savings", 0)
                 total = output.get("total_savings", 0)
                 checklist = output.get("checklist", [])
@@ -492,6 +567,42 @@ class ChatService:
             case_id, message, response, "EXPLAIN", dtp_stage,
             agents_called=[agent_name] if agent_name else []
         )
+    
+    def _extract_explanation_topic(self, message: str) -> str:
+        """
+        Extract what aspect of the output the user is asking about.
+        
+        Returns: "requirements", "risks", "completeness", "sections", "rationale", "suppliers", "general"
+        """
+        message_lower = message.lower()
+        
+        # Requirements topic
+        if any(kw in message_lower for kw in ["requirements", "requirement", "not defined", "not fully defined", 
+                                               "undefined", "missing requirements", "what requirements"]):
+            return "requirements"
+        
+        # Sections topic
+        if any(kw in message_lower for kw in ["sections", "section", "what sections", "which sections"]):
+            return "sections"
+        
+        # Completeness topic
+        if any(kw in message_lower for kw in ["completeness", "complete", "how complete", "how finished"]):
+            return "completeness"
+        
+        # Risks topic
+        if any(kw in message_lower for kw in ["risk", "risks", "issues", "problems", "concerns"]):
+            return "risks"
+        
+        # Rationale topic
+        if any(kw in message_lower for kw in ["why", "reason", "rationale", "because", "explain why"]):
+            return "rationale"
+        
+        # Suppliers topic
+        if any(kw in message_lower for kw in ["suppliers", "supplier", "scoring", "scores", "shortlist"]):
+            return "suppliers"
+        
+        # General (default)
+        return "general"
     
     def _handle_explore_intent(
         self,

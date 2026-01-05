@@ -131,6 +131,11 @@ class IntentRouter:
         context = context or {}
         has_existing_output = context.get("has_existing_output", False)
         dtp_stage = context.get("dtp_stage", "")
+        latest_agent_name = context.get("latest_agent_name")
+        conversation_history = context.get("conversation_history", [])
+        
+        # NEW: Check if this is a follow-up question about previous conversation
+        is_followup = cls._is_followup_question(user_message, conversation_history, latest_agent_name)
         
         # Check for greetings (map to STATUS for friendly response)
         if any(re.search(p, message_lower) for p in cls.GREETING_PATTERNS):
@@ -142,6 +147,10 @@ class IntentRouter:
         if any(re.search(p, message_lower) for p in cls.STATUS_PATTERNS):
             return UserIntent.STATUS
         
+        # NEW: If follow-up question and has output, likely EXPLAIN
+        if is_followup and has_existing_output:
+            return UserIntent.EXPLAIN
+        
         # Check for explicit DECIDE patterns (ACTION VERBS FIRST - important!)
         # This catches "scan signals", "score suppliers", etc. before EXPLAIN patterns
         action_verb_detected = any(re.search(p, message_lower) for p in cls.DECIDE_PATTERNS)
@@ -152,7 +161,7 @@ class IntentRouter:
                 return UserIntent.DECIDE
             # If has output but action verb, could be re-running or new request
             # Check if it's a question about the action
-            if '?' in user_message and any(kw in message_lower for kw in ['what', 'how', 'why']):
+            if '?' in user_message and any(kw in message_lower for kw in ['what', 'how', 'why', 'which']):
                 # "What signals did you scan?" -> EXPLAIN
                 return UserIntent.EXPLAIN
             # Otherwise, action verb = DECIDE
@@ -162,9 +171,16 @@ class IntentRouter:
         if any(re.search(p, message_lower) for p in cls.EXPLORE_PATTERNS):
             return UserIntent.EXPLORE
         
-        # Check for EXPLAIN patterns
+        # Check for EXPLAIN patterns (enhanced with domain-specific terms)
         if any(re.search(p, message_lower) for p in cls.EXPLAIN_PATTERNS):
             return UserIntent.EXPLAIN
+        
+        # NEW: Domain-specific EXPLAIN patterns (requirements, sections, etc.)
+        if any(kw in message_lower for kw in ['requirements', 'requirement', 'not defined', 'not fully defined', 
+                                                'missing', 'undefined', 'incomplete', 'what sections', 
+                                                'which sections', 'what requirements']):
+            if has_existing_output:
+                return UserIntent.EXPLAIN
         
         # Check if it's a question about existing recommendation
         if '?' in user_message:
@@ -172,7 +188,9 @@ class IntentRouter:
             if not has_existing_output and any(kw in message_lower for kw in ['can you', 'could you', 'will you']):
                 # "Can you scan signals?" -> DECIDE (action request)
                 return UserIntent.DECIDE
-            # Otherwise, questions default to EXPLAIN
+            # Otherwise, questions default to EXPLAIN (especially with conversation history)
+            if has_existing_output or conversation_history:
+                return UserIntent.EXPLAIN
             return UserIntent.EXPLAIN
         
         # Short messages without clear intent -> STATUS
@@ -186,6 +204,55 @@ class IntentRouter:
         
         # Default to EXPLAIN (safest - no agent call needed)
         return UserIntent.EXPLAIN
+    
+    @classmethod
+    def _is_followup_question(
+        cls,
+        message: str,
+        conversation_history: List[Dict[str, str]],
+        latest_agent_name: Optional[str]
+    ) -> bool:
+        """
+        Check if message is a follow-up question about previous conversation.
+        
+        Follow-up indicators:
+        - Pronouns referring to previous output ("it", "that", "this", "the requirements", "the draft")
+        - Questions about something mentioned in conversation history
+        - Questions with domain terms that match latest agent output
+        """
+        if not conversation_history and not latest_agent_name:
+            return False
+        
+        message_lower = message.lower()
+        
+        # Check for pronouns/definite articles referring to something
+        followup_indicators = [
+            r'\b(it|that|this|these|those)\s+(is|are|was|were|has|have|does|do)',
+            r'the\s+(requirements?|draft|rfx|strategy|suppliers?|signals?)',
+            r'what\s+(requirements?|sections?|parts?)',
+            r'which\s+(requirements?|sections?|parts?)',
+            r'how\s+(complete|defined|many)'
+        ]
+        
+        if any(re.search(p, message_lower) for p in followup_indicators):
+            return True
+        
+        # Check if question contains terms related to latest agent
+        if latest_agent_name:
+            agent_keywords = {
+                "RFX_DRAFT": ["requirements", "sections", "draft", "rfx", "rfp", "rfq", "rfi"],
+                "SOURCING_SIGNAL": ["signals", "signal"],
+                "SUPPLIER_SCORING": ["suppliers", "scoring", "score", "shortlist"],
+                "NEGOTIATION_SUPPORT": ["negotiation", "leverage", "targets"],
+                "CONTRACT_SUPPORT": ["contract", "terms", "compliance"],
+                "IMPLEMENTATION": ["implementation", "checklist", "savings"]
+            }
+            
+            keywords = agent_keywords.get(latest_agent_name, [])
+            if any(kw in message_lower for kw in keywords):
+                return True
+        
+        return False
     
     @classmethod
     def is_approval_attempt(cls, message: str) -> bool:
@@ -564,6 +631,17 @@ class IntentRouter:
         dtp_stage = context.get("dtp_stage", "DTP-01")
         has_output = context.get("has_existing_output", False)
         category_id = context.get("category_id", "")
+        latest_agent_name = context.get("latest_agent_name", "")
+        conversation_history = context.get("conversation_history", [])
+        
+        # Format conversation history for prompt
+        conv_context = ""
+        if conversation_history:
+            conv_context = "\nRecent conversation:\n"
+            for msg in conversation_history[-2:]:  # Last 2 messages
+                role = msg.get("role", "user")
+                content = msg.get("content", "")[:100]  # Truncate for brevity
+                conv_context += f"- {role}: {content}\n"
         
         # Check cache first
         cache_key = cls._get_cache_key(user_message, context)
@@ -579,12 +657,19 @@ Context:
 - DTP Stage: {dtp_stage}
 - Has Existing Output: {has_output}
 - Category: {category_id or "N/A"}
+- Latest Agent: {latest_agent_name or "N/A"}{conv_context}
 
-Classification Options:
+Classification Guidelines:
+- If user is asking about something already generated/mentioned → UNDERSTAND (EXPLAIN)
+- If user is requesting new work/analysis → CREATE or DECIDE
+- If user is checking status/progress → TRACK
+- If user is exploring alternatives → EXPLORE
+- If user mentions "requirements", "sections", "not defined" and has output → UNDERSTAND
+- Consider conversation history: follow-up questions are usually UNDERSTAND
 
 User Goals:
 - TRACK: Monitor/check status, scan data, get updates
-- UNDERSTAND: Explain existing recommendations/data, clarify rationale
+- UNDERSTAND: Explain existing recommendations/data, clarify rationale (use for follow-up questions)
 - CREATE: Generate artifacts (draft RFx, score suppliers, create plans)
 - CHECK: Validate/comply with policy, verify eligibility
 - DECIDE: Make decision requiring approval, select option
