@@ -8,11 +8,59 @@ A **human-in-the-loop, multi-agent decision-support system** for procurement sou
 
 ## 📚 Documentation
 
-- **[System Documentation](SYSTEM_DOCUMENTATION.md)** — Complete technical documentation covering all system logic, mechanisms, and architectural decisions
-- **[Architecture Diagrams Status](ARCHITECTURE_DIAGRAMS_STATUS.md)** — Status of PlantUML diagrams (currently outdated)
-- **This README** — Quick start guide and overview
+This project includes comprehensive documentation covering all aspects of the system:
 
-**Note**: See `architecture.puml` for visual architecture diagram (PlantUML format). Render with PlantUML extension or online tool.
+### Core Documentation
+
+- **[SYSTEM_DOCUMENTATION.md](SYSTEM_DOCUMENTATION.md)** — Complete technical documentation
+  - Architecture overview and design philosophy
+  - Intent classification system (hybrid rule-based + LLM)
+  - Chat service flow and message processing
+  - Agent system (all 7 agents with detailed sub-tasks)
+  - Task execution hierarchy (Rules → Retrieval → Analytics → LLM)
+  - DTP stage progression and governance
+  - Artifact system and persistence
+  - Data models and schemas
+  - UI/UX flow and components
+  - Demo & testing instructions
+
+- **[architecture.puml](architecture.puml)** — Visual architecture diagram (PlantUML)
+  - Complete system architecture visualization
+  - Shows all 7 agents, task execution, artifact system
+  - Data flows and component interactions
+  - **Render**: Use PlantUML extension in VS Code/Cursor (`Alt+D`) or online at [plantuml.com](http://www.plantuml.com/plantuml)
+
+- **[ARCHITECTURE_DIAGRAMS_STATUS.md](ARCHITECTURE_DIAGRAMS_STATUS.md)** — Architecture diagram status and usage guide
+  - Diagram version and update status
+  - How to render and view the diagram
+  - What the diagram covers
+
+### Configuration & Setup
+
+- **[requirements.txt](requirements.txt)** — Python dependencies
+  - All required packages and versions
+  - Install with: `pip install -r requirements.txt`
+
+### Reference Materials
+
+- **[methodology_extract.txt](methodology_extract.txt)** — Research methodology notes
+  - Background on DTP methodology
+  - Design principles and approach
+
+### Quick Links
+
+- **This README** — Quick start guide, overview, and navigation
+- **API Documentation** — Auto-generated at `http://localhost:8000/docs` when backend is running
+- **Code Documentation** — Inline docstrings throughout the codebase
+
+### Documentation Sections by Topic
+
+- **Getting Started**: See [Quick Start](#-quick-start) below
+- **Architecture**: [SYSTEM_DOCUMENTATION.md - Architecture Overview](SYSTEM_DOCUMENTATION.md#architecture-overview)
+- **Intent Classification**: [SYSTEM_DOCUMENTATION.md - Intent Classification System](SYSTEM_DOCUMENTATION.md#intent-classification-system)
+- **Agents & Tasks**: [SYSTEM_DOCUMENTATION.md - Agent System](SYSTEM_DOCUMENTATION.md#agent-system)
+- **Demo & Testing**: [SYSTEM_DOCUMENTATION.md - Demo & Testing](SYSTEM_DOCUMENTATION.md#demo--testing)
+- **API Reference**: See [API Reference](#-api-reference) section below
 
 ---
 
