@@ -156,6 +156,23 @@ class IntentRouter:
         if any(re.search(p, message_lower) for p in cls.STATUS_PATTERNS):
             return UserIntent.STATUS
         
+        # Check for action requests (CREATE/DECIDE intent)
+        # These should route to agent execution, not EXPLAIN
+        action_keywords = [
+            "recommend", "analyze", "evaluate", "score", "draft", "create",
+            "generate", "scan", "compare", "prepare", "suggest", "propose",
+            "assess", "check", "build", "define"
+        ]
+        # Check if it's a question
+        is_question = (
+            message_lower.startswith(("what", "which", "how", "when", "where", "why")) or
+            "should i" in message_lower or "should we" in message_lower or
+            "can you" in message_lower or "could you" in message_lower
+        )
+        # If it contains action keywords and is NOT a question, it's a DECIDE intent
+        if not is_question and any(kw in message_lower for kw in action_keywords):
+            return UserIntent.DECIDE
+        
         # Default to EXPLAIN (safest - no agent call)
         return UserIntent.EXPLAIN
     
@@ -461,6 +478,10 @@ class IntentRouter:
             user_goal = UserGoal.CHECK
             goal_confidence = 0.95
         # Composite action patterns (high confidence)
+        elif any(kw in message_lower for kw in ['recommend a strategy', 'recommend strategy', 'suggest a strategy', 'recommend']):
+            # Strategy recommendation requests - always CREATE (even if output exists, user wants new analysis)
+            user_goal = UserGoal.CREATE
+            goal_confidence = 0.95
         elif any(kw in message_lower for kw in ['score supplier', 'evaluate supplier', 'rank supplier']):
             user_goal = UserGoal.CREATE
             goal_confidence = 0.95
