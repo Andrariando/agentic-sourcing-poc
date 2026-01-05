@@ -67,9 +67,10 @@ class ChatService:
         self.supervisor = SupervisorAgent(tier=1)
         
         # Feature flag for conversation memory
-        self.enable_conversation_memory = os.getenv(
-            "ENABLE_CONVERSATION_MEMORY", "false"
-        ).lower() == "true"
+            # Enable conversation memory by default for better ChatGPT-like experience
+            self.enable_conversation_memory = os.getenv(
+                "ENABLE_CONVERSATION_MEMORY", "true"
+            ).lower() == "true"
         
         # Initialize conversation context manager if enabled
         if self.enable_conversation_memory:
@@ -342,7 +343,18 @@ class ChatService:
         
         if is_action_request:
             # This is actually a CREATE/DECIDE request - route to agent execution
-            return self._run_agent_analysis(case_id, message, state)
+            # Get conversation history for context
+            conversation_history = []
+            if self.conversation_manager and self.enable_conversation_memory:
+                try:
+                    conversation_history = self.conversation_manager.get_relevant_context(
+                        case_id=case_id,
+                        current_message=message,
+                        max_tokens=1500
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to retrieve conversation context: {e}")
+            return self._run_agent_analysis(case_id, message, state, conversation_history, False)
         
         if not state.get("latest_agent_output"):
             # Check if user is giving an affirmative response (e.g., "yes", "tell me everything")
