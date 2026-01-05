@@ -67,10 +67,10 @@ class ChatService:
         self.supervisor = SupervisorAgent(tier=1)
         
         # Feature flag for conversation memory
-            # Enable conversation memory by default for better ChatGPT-like experience
-            self.enable_conversation_memory = os.getenv(
-                "ENABLE_CONVERSATION_MEMORY", "true"
-            ).lower() == "true"
+        # Enable conversation memory by default for better ChatGPT-like experience
+        self.enable_conversation_memory = os.getenv(
+            "ENABLE_CONVERSATION_MEMORY", "true"
+        ).lower() == "true"
         
         # Initialize conversation context manager if enabled
         if self.enable_conversation_memory:
