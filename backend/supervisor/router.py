@@ -548,16 +548,46 @@ class IntentRouter:
         agent_name = playbook.get_agent_for_intent(user_goal, work_type, dtp_stage)
         
         if not agent_name:
-            # Default based on stage
-            stage_defaults = {
-                "DTP-01": AgentName.SOURCING_SIGNAL,
-                "DTP-02": AgentName.SUPPLIER_SCORING,
-                "DTP-03": AgentName.RFX_DRAFT,
-                "DTP-04": AgentName.NEGOTIATION_SUPPORT,
-                "DTP-05": AgentName.CONTRACT_SUPPORT,
-                "DTP-06": AgentName.IMPLEMENTATION,
-            }
-            agent_name = stage_defaults.get(dtp_stage, AgentName.SOURCING_SIGNAL)
+            # Log warning when routing returns None
+            logger.warning(
+                f"Agent routing returned None for user_goal={user_goal.value}, "
+                f"work_type={work_type.value}, dtp_stage={dtp_stage}. Using stage default."
+            )
+            # Default based on stage and work_type
+            # For CREATE+ARTIFACT, prefer RFx Draft agents
+            if user_goal == UserGoal.CREATE and work_type == WorkType.ARTIFACT:
+                if dtp_stage in ["DTP-01", "DTP-02", "DTP-03"]:
+                    agent_name = AgentName.RFX_DRAFT
+                elif dtp_stage == "DTP-04":
+                    agent_name = AgentName.NEGOTIATION_SUPPORT
+                elif dtp_stage == "DTP-05":
+                    agent_name = AgentName.CONTRACT_SUPPORT
+                elif dtp_stage == "DTP-06":
+                    agent_name = AgentName.IMPLEMENTATION
+            # For CREATE+DATA, prefer data analysis agents
+            elif user_goal == UserGoal.CREATE and work_type == WorkType.DATA:
+                if dtp_stage == "DTP-01":
+                    agent_name = AgentName.SOURCING_SIGNAL
+                elif dtp_stage in ["DTP-02", "DTP-03"]:
+                    agent_name = AgentName.SUPPLIER_SCORING
+                elif dtp_stage == "DTP-04":
+                    agent_name = AgentName.NEGOTIATION_SUPPORT
+                elif dtp_stage == "DTP-05":
+                    agent_name = AgentName.CONTRACT_SUPPORT
+                elif dtp_stage == "DTP-06":
+                    agent_name = AgentName.IMPLEMENTATION
+            # Fallback to stage defaults
+            if not agent_name:
+                stage_defaults = {
+                    "DTP-01": AgentName.SOURCING_SIGNAL,
+                    "DTP-02": AgentName.SUPPLIER_SCORING,
+                    "DTP-03": AgentName.RFX_DRAFT,
+                    "DTP-04": AgentName.NEGOTIATION_SUPPORT,
+                    "DTP-05": AgentName.CONTRACT_SUPPORT,
+                    "DTP-06": AgentName.IMPLEMENTATION,
+                }
+                agent_name = stage_defaults.get(dtp_stage, AgentName.SOURCING_SIGNAL)
+                logger.debug(f"Using stage default agent: {agent_name.value} for stage {dtp_stage}")
         
         # Get tasks
         tasks = playbook.get_tasks_for_agent(agent_name, user_goal, work_type, dtp_stage)

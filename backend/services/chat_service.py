@@ -928,8 +928,21 @@ class ChatService:
         
         intent_result = IntentRouter.classify_intent_hybrid(message, classification_context)
         
+        # Log classification result for debugging
+        logger.debug(
+            f"Intent classification: user_goal={intent_result.user_goal}, "
+            f"work_type={intent_result.work_type}, confidence={intent_result.confidence:.2f}, "
+            f"rationale={intent_result.rationale}"
+        )
+        
         # Get action plan from intent
         action_plan = IntentRouter.get_action_plan(intent_result, dtp_stage)
+        
+        # Log action plan for debugging
+        logger.debug(
+            f"Action plan: agent={action_plan.agent_name}, tasks={len(action_plan.tasks)}, "
+            f"approval_required={action_plan.approval_required}"
+        )
         
         # Try new official agents first
         agent = self._official_agents.get(action_plan.agent_name)

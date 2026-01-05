@@ -230,6 +230,26 @@ class AgentPlaybook:
                     return AgentName.CONTRACT_SUPPORT
                 elif dtp_stage == "DTP-06":
                     return AgentName.IMPLEMENTATION
+            elif work_type == WorkType.DATA:
+                # CREATE + DATA: Route based on stage
+                if dtp_stage == "DTP-01":
+                    return AgentName.SOURCING_SIGNAL  # Signal scanning
+                elif dtp_stage in ["DTP-02", "DTP-03"]:
+                    return AgentName.SUPPLIER_SCORING  # Supplier evaluation/scoring
+                elif dtp_stage == "DTP-04":
+                    return AgentName.NEGOTIATION_SUPPORT  # Negotiation analysis
+                elif dtp_stage == "DTP-05":
+                    return AgentName.CONTRACT_SUPPORT  # Contract analysis
+                elif dtp_stage == "DTP-06":
+                    return AgentName.IMPLEMENTATION  # Implementation tracking
+            elif work_type == WorkType.VALUE:
+                # CREATE + VALUE: Cost/savings analysis
+                if dtp_stage in ["DTP-02", "DTP-03"]:
+                    return AgentName.SUPPLIER_SCORING
+                elif dtp_stage == "DTP-04":
+                    return AgentName.NEGOTIATION_SUPPORT
+                elif dtp_stage == "DTP-06":
+                    return AgentName.IMPLEMENTATION
         
         # CHECK routes to validation agents
         if user_goal == UserGoal.CHECK:
