@@ -609,7 +609,6 @@ class ChatService:
                         # Add completeness info if 0%
                         if completeness == 0:
                             response += f"\n**Note:** The draft is {completeness}% complete, indicating requirements need to be defined.\n"
-                            response += f"\n**Note:** The draft is {completeness}% complete, indicating requirements need to be defined.\n"
                     else:
                         response += "All requirements appear to be defined. The draft is ready for review.\n"
                 
@@ -634,13 +633,36 @@ class ChatService:
                                 missing_sections = artifact.content.get("missing_sections", missing_sections)
                                 incomplete_sections = artifact.content.get("incomplete_sections", incomplete_sections)
                     
-                    if missing_sections or incomplete_sections:
+                    # Check if draft is actually complete (completeness > 0 AND no missing/incomplete sections)
+                    if completeness == 0:
+                        # Draft is not complete - provide actionable steps
+                        response += "**The draft is not complete.**\n\n"
+                        if artifact_pack and artifact_pack.next_actions:
+                            response += "**Recommended Next Steps:**\n"
+                            for action in artifact_pack.next_actions[:5]:
+                                response += f"- {action.label}\n"
+                        else:
+                            response += "**To complete the draft:**\n"
+                            if missing_sections:
+                                response += f"- Add {len(missing_sections)} missing sections\n"
+                            if incomplete_sections:
+                                response += f"- Complete {len(incomplete_sections)} incomplete sections\n"
+                            if not missing_sections and not incomplete_sections:
+                                response += "- Define requirements before proceeding\n"
+                                response += "- Consider running RFI to gather information from suppliers\n"
+                    elif missing_sections or incomplete_sections:
+                        # Draft is partially complete but has missing/incomplete sections
                         response += "**To complete the draft:**\n"
-                        if missing_sections:
-                            response += f"- Add {len(missing_sections)} missing sections\n"
-                        if incomplete_sections:
-                            response += f"- Complete {len(incomplete_sections)} incomplete sections\n"
+                        if artifact_pack and artifact_pack.next_actions:
+                            for action in artifact_pack.next_actions[:5]:
+                                response += f"- {action.label}\n"
+                        else:
+                            if missing_sections:
+                                response += f"- Add {len(missing_sections)} missing sections\n"
+                            if incomplete_sections:
+                                response += f"- Complete {len(incomplete_sections)} incomplete sections\n"
                     else:
+                        # Draft is complete
                         response += "The draft is complete and ready for review.\n"
                 
                 else:
@@ -719,8 +741,10 @@ class ChatService:
         if any(kw in message_lower for kw in ["sections", "section", "what sections", "which sections"]):
             return "sections"
         
-        # Completeness topic
-        if any(kw in message_lower for kw in ["completeness", "complete", "how complete", "how finished"]):
+        # Completeness topic - includes "how to complete" questions
+        if any(kw in message_lower for kw in ["completeness", "complete", "how complete", "how finished", 
+                                               "how to complete", "how can we complete", "how do i complete",
+                                               "how can i complete", "how to finish", "how can we finish"]):
             return "completeness"
         
         # Risks topic

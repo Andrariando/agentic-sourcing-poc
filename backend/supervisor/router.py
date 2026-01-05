@@ -5,10 +5,11 @@ TWO-LEVEL CLASSIFICATION:
 - Primary: User Goal (TRACK, UNDERSTAND, CREATE, CHECK, DECIDE)
 - Secondary: Work Type (ARTIFACT, DATA, APPROVAL, COMPLIANCE, VALUE)
 
-HYBRID CLASSIFICATION:
-- Rule-based for clear cases (fast, deterministic)
-- LLM-based for ambiguous cases (accurate, context-aware)
-- Caching for performance
+LLM-FIRST CLASSIFICATION:
+- LLM-based classification with structured output (primary path)
+- Aggressive caching for performance (500 entries)
+- Rule-based fallback (only for API errors or simple cases like greetings)
+- Context-aware with conversation history
 
 CONVERSATIONAL DESIGN:
 - Detect greetings and simple responses
@@ -23,10 +24,21 @@ import hashlib
 import json
 from typing import Optional, Dict, Any, List, Tuple
 from langchain_openai import ChatOpenAI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from shared.constants import UserIntent, UserGoal, WorkType, AgentName
 from shared.schemas import IntentResult, ActionPlan
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class IntentClassificationSchema(BaseModel):
+    """Structured output schema for LLM intent classification."""
+    user_goal: str = Field(description="Primary user goal: TRACK, UNDERSTAND, CREATE, CHECK, or DECIDE")
+    work_type: str = Field(description="Type of work needed: ARTIFACT, DATA, APPROVAL, COMPLIANCE, or VALUE")
+    confidence: float = Field(ge=0.0, le=1.0, description="Confidence score between 0.0 and 1.0")
+    rationale: str = Field(description="Brief explanation of the classification decision")
 
 
 class IntentRouter:
@@ -113,97 +125,73 @@ class IntentRouter:
     ]
     
     @classmethod
+    def _user_goal_to_intent(cls, user_goal: str) -> UserIntent:
+        """Map UserGoal to UserIntent for single-level classification."""
+        goal_to_intent = {
+            UserGoal.TRACK.value: UserIntent.STATUS,
+            UserGoal.UNDERSTAND.value: UserIntent.EXPLAIN,
+            UserGoal.CREATE.value: UserIntent.DECIDE,
+            UserGoal.CHECK.value: UserIntent.DECIDE,
+            UserGoal.DECIDE.value: UserIntent.DECIDE,
+        }
+        return goal_to_intent.get(user_goal, UserIntent.EXPLAIN)
+    
+    @classmethod
+    def _classify_intent_rules_fallback(
+        cls,
+        user_message: str,
+        context: Optional[Dict[str, Any]] = None
+    ) -> UserIntent:
+        """Fallback rule-based classification (only for errors or simple cases)."""
+        message_lower = user_message.lower().strip()
+        context = context or {}
+        has_existing_output = context.get("has_existing_output", False)
+        
+        # Simple greeting check (no LLM needed)
+        if any(re.search(p, message_lower) for p in cls.GREETING_PATTERNS):
+            if len(message_lower.split()) <= 5:
+                return UserIntent.STATUS
+        
+        # Simple status check
+        if any(re.search(p, message_lower) for p in cls.STATUS_PATTERNS):
+            return UserIntent.STATUS
+        
+        # Default to EXPLAIN (safest - no agent call)
+        return UserIntent.EXPLAIN
+    
+    @classmethod
     def classify_intent(
         cls, 
         user_message: str,
         context: Optional[Dict[str, Any]] = None
     ) -> UserIntent:
         """
-        Classify user intent from message with optional context.
+        Classify user intent using LLM-first approach with rule-based fallback.
         
-        Priority:
-        1. STATUS - Quick status checks
-        2. DECIDE - Explicit action requests
-        3. EXPLORE - Hypotheticals and alternatives
-        4. EXPLAIN - Understanding existing info (default)
+        Flow:
+        1. Quick greeting check (no LLM needed)
+        2. LLM classification (primary path)
+        3. Fallback rules (only on error)
         """
         message_lower = user_message.lower().strip()
         context = context or {}
-        has_existing_output = context.get("has_existing_output", False)
-        dtp_stage = context.get("dtp_stage", "")
-        latest_agent_name = context.get("latest_agent_name")
-        conversation_history = context.get("conversation_history", [])
         
-        # NEW: Check if this is a follow-up question about previous conversation
-        is_followup = cls._is_followup_question(user_message, conversation_history, latest_agent_name)
-        
-        # Check for greetings (map to STATUS for friendly response)
+        # 1. Quick greeting check (no LLM needed)
         if any(re.search(p, message_lower) for p in cls.GREETING_PATTERNS):
-            # Short greetings default to status
             if len(message_lower.split()) <= 5:
                 return UserIntent.STATUS
         
-        # Check for STATUS intent
-        if any(re.search(p, message_lower) for p in cls.STATUS_PATTERNS):
-            return UserIntent.STATUS
+        # 2. LLM classification (primary path)
+        try:
+            # Use LLM to get two-level classification
+            intent_result = cls.classify_intent_llm(user_message, context)
+            # Convert UserGoal to UserIntent
+            return cls._user_goal_to_intent(intent_result.user_goal)
+        except Exception as e:
+            logger.warning(f"LLM classification failed in classify_intent: {e}, using fallback")
         
-        # NEW: If follow-up question and has output, likely EXPLAIN
-        if is_followup and has_existing_output:
-            return UserIntent.EXPLAIN
-        
-        # Check for explicit DECIDE patterns (ACTION VERBS FIRST - important!)
-        # This catches "scan signals", "score suppliers", etc. before EXPLAIN patterns
-        action_verb_detected = any(re.search(p, message_lower) for p in cls.DECIDE_PATTERNS)
-        
-        if action_verb_detected:
-            # Context-aware: If no existing output and action verb, it's CREATE/DECIDE
-            if not has_existing_output:
-                return UserIntent.DECIDE
-            # If has output but action verb, could be re-running or new request
-            # Check if it's a question about the action
-            if '?' in user_message and any(kw in message_lower for kw in ['what', 'how', 'why', 'which']):
-                # "What signals did you scan?" -> EXPLAIN
-                return UserIntent.EXPLAIN
-            # Otherwise, action verb = DECIDE
-            return UserIntent.DECIDE
-        
-        # Check for EXPLORE patterns
-        if any(re.search(p, message_lower) for p in cls.EXPLORE_PATTERNS):
-            return UserIntent.EXPLORE
-        
-        # Check for EXPLAIN patterns (enhanced with domain-specific terms)
-        if any(re.search(p, message_lower) for p in cls.EXPLAIN_PATTERNS):
-            return UserIntent.EXPLAIN
-        
-        # NEW: Domain-specific EXPLAIN patterns (requirements, sections, etc.)
-        if any(kw in message_lower for kw in ['requirements', 'requirement', 'not defined', 'not fully defined', 
-                                                'missing', 'undefined', 'incomplete', 'what sections', 
-                                                'which sections', 'what requirements']):
-            if has_existing_output:
-                return UserIntent.EXPLAIN
-        
-        # Check if it's a question about existing recommendation
-        if '?' in user_message:
-            # Context-aware: If no output exists, question might be asking to create
-            if not has_existing_output and any(kw in message_lower for kw in ['can you', 'could you', 'will you']):
-                # "Can you scan signals?" -> DECIDE (action request)
-                return UserIntent.DECIDE
-            # Otherwise, questions default to EXPLAIN (especially with conversation history)
-            if has_existing_output or conversation_history:
-                return UserIntent.EXPLAIN
-            return UserIntent.EXPLAIN
-        
-        # Short messages without clear intent -> STATUS
-        if len(message_lower.split()) <= 3:
-            return UserIntent.STATUS
-        
-        # Default: If action verb detected anywhere, prefer DECIDE over EXPLAIN
-        # This prevents action requests from defaulting to EXPLAIN
-        if any(kw in message_lower for kw in ['scan', 'score', 'draft', 'generate', 'create', 'build']):
-            return UserIntent.DECIDE
-        
-        # Default to EXPLAIN (safest - no agent call needed)
-        return UserIntent.EXPLAIN
+        # 3. Fallback rules (only on error)
+        return cls._classify_intent_rules_fallback(user_message, context)
     
     @classmethod
     def _is_followup_question(
@@ -599,7 +587,7 @@ class IntentRouter:
         )
     
     # =========================================================================
-    # HYBRID CLASSIFICATION: RULE + LLM
+    # LLM-FIRST CLASSIFICATION
     # =========================================================================
     
     # LLM classification cache (in-memory, simple hash-based)
@@ -607,11 +595,21 @@ class IntentRouter:
     
     @classmethod
     def _get_cache_key(cls, message: str, context: Dict[str, Any]) -> str:
-        """Generate cache key from message and context."""
+        """Generate cache key from message and context (enhanced for better cache hits)."""
+        # Include more context for better cache key generation
+        conversation_history = context.get("conversation_history", [])
+        conv_hash = ""
+        if conversation_history:
+            # Hash last 3 messages for context-aware caching
+            last_messages = [msg.get("content", "")[:50] for msg in conversation_history[-3:]]
+            conv_hash = hashlib.md5("|".join(last_messages).encode()).hexdigest()[:8]
+        
         cache_data = {
             "message": message.lower().strip(),
             "dtp_stage": context.get("dtp_stage", ""),
-            "has_output": context.get("has_existing_output", False)
+            "has_output": context.get("has_existing_output", False),
+            "latest_agent": context.get("latest_agent_name", ""),
+            "conv_hash": conv_hash
         }
         cache_str = json.dumps(cache_data, sort_keys=True)
         return hashlib.md5(cache_str.encode()).hexdigest()
@@ -623,7 +621,7 @@ class IntentRouter:
         context: Optional[Dict[str, Any]] = None
     ) -> IntentResult:
         """
-        Use LLM to classify intent for ambiguous cases.
+        Use LLM to classify intent with structured output and Pydantic validation.
         
         Returns structured IntentResult with confidence and rationale.
         """
@@ -633,22 +631,27 @@ class IntentRouter:
         category_id = context.get("category_id", "")
         latest_agent_name = context.get("latest_agent_name", "")
         conversation_history = context.get("conversation_history", [])
+        case_id = context.get("case_id", "")
         
-        # Format conversation history for prompt
+        # Format conversation history for prompt (last 5-10 messages)
         conv_context = ""
         if conversation_history:
             conv_context = "\nRecent conversation:\n"
-            for msg in conversation_history[-2:]:  # Last 2 messages
+            for msg in conversation_history[-5:]:  # Last 5 messages for better context
                 role = msg.get("role", "user")
-                content = msg.get("content", "")[:100]  # Truncate for brevity
+                content = msg.get("content", "")
+                # Truncate long messages but keep more context
+                if len(content) > 150:
+                    content = content[:150] + "..."
                 conv_context += f"- {role}: {content}\n"
         
         # Check cache first
         cache_key = cls._get_cache_key(user_message, context)
         if cache_key in cls._llm_cache:
+            logger.debug(f"Cache hit for classification: {cache_key[:8]}...")
             return cls._llm_cache[cache_key]
         
-        # Build LLM prompt
+        # Build LLM prompt with few-shot examples
         prompt = f"""Classify this user message in a procurement sourcing context.
 
 Message: "{user_message}"
@@ -659,18 +662,45 @@ Context:
 - Category: {category_id or "N/A"}
 - Latest Agent: {latest_agent_name or "N/A"}{conv_context}
 
+Examples:
+1. "What RFI requirements should I define first to proceed with this case?" (has_output=True)
+   → {{"user_goal": "UNDERSTAND", "work_type": "ARTIFACT", "confidence": 0.9, "rationale": "Question about existing RFI requirements - asking what's missing, not requesting new work"}}
+
+2. "Draft RFx" (has_output=False)
+   → {{"user_goal": "CREATE", "work_type": "ARTIFACT", "confidence": 0.95, "rationale": "Direct action request to create RFx document"}}
+
+3. "How to complete it?" (has_output=True, latest_agent="RFX_DRAFT")
+   → {{"user_goal": "UNDERSTAND", "work_type": "ARTIFACT", "confidence": 0.9, "rationale": "Follow-up question about completing existing draft - asking for guidance, not creating new"}}
+
+4. "Scan signals" (has_output=False)
+   → {{"user_goal": "CREATE", "work_type": "DATA", "confidence": 0.95, "rationale": "Action request to scan and analyze sourcing signals"}}
+
+5. "Explain the scoring" (has_output=True, latest_agent="SUPPLIER_SCORING")
+   → {{"user_goal": "UNDERSTAND", "work_type": "DATA", "confidence": 0.95, "rationale": "Question about existing scoring results - requesting explanation"}}
+
+6. "What signals do we have?" (has_output=True)
+   → {{"user_goal": "TRACK", "work_type": "DATA", "confidence": 0.9, "rationale": "Question asking for status/inventory of existing signals"}}
+
+7. "Score suppliers based on quality, delivery, and cost" (has_output=False)
+   → {{"user_goal": "CREATE", "work_type": "DATA", "confidence": 0.95, "rationale": "Action request to evaluate and score suppliers"}}
+
+8. "Check supplier eligibility" (has_output=False)
+   → {{"user_goal": "CHECK", "work_type": "COMPLIANCE", "confidence": 0.95, "rationale": "Validation request to check compliance/eligibility"}}
+
 Classification Guidelines:
-- If user is asking about something already generated/mentioned → UNDERSTAND (EXPLAIN)
-- If user is requesting new work/analysis → CREATE or DECIDE
-- If user is checking status/progress → TRACK
-- If user is exploring alternatives → EXPLORE
-- If user mentions "requirements", "sections", "not defined" and has output → UNDERSTAND
-- Consider conversation history: follow-up questions are usually UNDERSTAND
+- Questions about requirements/data/sections when output exists → UNDERSTAND (not CREATE)
+- "How to X" questions → UNDERSTAND (asking for guidance, not creating)
+- Action verbs in questions with existing output → UNDERSTAND (asking about the action, not requesting it)
+- Follow-up questions (check conversation history) → UNDERSTAND
+- Questions about requirements/data = UNDERSTAND (not CREATE)
+- "How to X" questions = UNDERSTAND (not CREATE)
+- Action verbs in questions = UNDERSTAND if output exists
+- Follow-up questions = UNDERSTAND (check conversation history)
 
 User Goals:
-- TRACK: Monitor/check status, scan data, get updates
-- UNDERSTAND: Explain existing recommendations/data, clarify rationale (use for follow-up questions)
-- CREATE: Generate artifacts (draft RFx, score suppliers, create plans)
+- TRACK: Monitor/check status, scan data, get updates, inventory queries
+- UNDERSTAND: Explain existing recommendations/data, clarify rationale, follow-up questions about what was generated
+- CREATE: Generate artifacts (draft RFx, score suppliers, create plans) - only when no output or explicit new request
 - CHECK: Validate/comply with policy, verify eligibility
 - DECIDE: Make decision requiring approval, select option
 
@@ -681,7 +711,7 @@ Work Types:
 - COMPLIANCE: Policy/rule check, validation
 - VALUE: Savings/ROI analysis, cost analysis
 
-Return ONLY valid JSON in this exact format:
+Return ONLY valid JSON in this exact format (no markdown, no code blocks):
 {{
     "user_goal": "TRACK" | "UNDERSTAND" | "CREATE" | "CHECK" | "DECIDE",
     "work_type": "ARTIFACT" | "DATA" | "APPROVAL" | "COMPLIANCE" | "VALUE",
@@ -693,33 +723,60 @@ Return ONLY valid JSON in this exact format:
             api_key = os.getenv("OPENAI_API_KEY")
             if not api_key:
                 # Fallback to rule-based if no API key
+                logger.warning("No OpenAI API key found, using rule-based fallback")
                 return cls.classify_intent_two_level(user_message, context)
             
             llm = ChatOpenAI(
                 model="gpt-4o-mini",
                 temperature=0.1,
                 max_tokens=200,
-                api_key=api_key
+                api_key=api_key,
+                model_kwargs={"response_format": {"type": "json_object"}}  # JSON mode
             )
             
             response = llm.invoke(prompt)
             content = response.content.strip()
             
-            # Extract JSON from response
-            if "```json" in content:
-                json_str = content.split("```json")[1].split("```")[0].strip()
-            elif "```" in content:
-                json_str = content.split("```")[1].split("```")[0].strip()
-            else:
-                json_str = content.strip()
+            # Parse JSON (should be clean JSON in JSON mode)
+            try:
+                result_data = json.loads(content)
+            except json.JSONDecodeError:
+                # Fallback: try to extract JSON if wrapped
+                if "```json" in content:
+                    json_str = content.split("```json")[1].split("```")[0].strip()
+                elif "```" in content:
+                    json_str = content.split("```")[1].split("```")[0].strip()
+                else:
+                    json_str = content.strip()
+                result_data = json.loads(json_str)
             
-            result_data = json.loads(json_str)
+            # Validate with Pydantic schema
+            try:
+                validated = IntentClassificationSchema(**result_data)
+                user_goal_str = validated.user_goal
+                work_type_str = validated.work_type
+                confidence = validated.confidence
+                rationale = validated.rationale
+            except Exception as schema_error:
+                logger.warning(f"Schema validation failed, using direct parsing: {schema_error}")
+                # Fallback to direct parsing
+                user_goal_str = result_data.get("user_goal", "UNDERSTAND")
+                work_type_str = result_data.get("work_type", "DATA")
+                confidence = float(result_data.get("confidence", 0.8))
+                rationale = result_data.get("rationale", "LLM classification")
             
-            # Validate and create IntentResult
-            user_goal = UserGoal(result_data.get("user_goal", "UNDERSTAND"))
-            work_type = WorkType(result_data.get("work_type", "DATA"))
-            confidence = float(result_data.get("confidence", 0.8))
-            rationale = result_data.get("rationale", "LLM classification")
+            # Validate enum values
+            try:
+                user_goal = UserGoal(user_goal_str)
+            except ValueError:
+                logger.warning(f"Invalid user_goal: {user_goal_str}, defaulting to UNDERSTAND")
+                user_goal = UserGoal.UNDERSTAND
+            
+            try:
+                work_type = WorkType(work_type_str)
+            except ValueError:
+                logger.warning(f"Invalid work_type: {work_type_str}, defaulting to DATA")
+                work_type = WorkType.DATA
             
             result = IntentResult(
                 user_goal=user_goal.value,
@@ -730,17 +787,18 @@ Return ONLY valid JSON in this exact format:
             
             # Cache result
             cls._llm_cache[cache_key] = result
-            # Limit cache size (keep last 100)
-            if len(cls._llm_cache) > 100:
+            # Limit cache size (keep last 500 entries with LRU-like eviction)
+            if len(cls._llm_cache) > 500:
                 # Remove oldest (simple: remove first item)
                 oldest_key = next(iter(cls._llm_cache))
                 del cls._llm_cache[oldest_key]
             
+            logger.debug(f"LLM classification: {user_goal.value}/{work_type.value} (confidence: {confidence:.2f})")
             return result
             
         except Exception as e:
             # Fallback to rule-based on error
-            print(f"LLM classification error: {e}, falling back to rules")
+            logger.warning(f"LLM classification error: {e}, falling back to rules")
             return cls.classify_intent_two_level(user_message, context)
     
     @classmethod
@@ -750,36 +808,18 @@ Return ONLY valid JSON in this exact format:
         context: Optional[Dict[str, Any]] = None
     ) -> IntentResult:
         """
-        Hybrid classification: Rules for clear cases, LLM for ambiguous.
+        LLM-first classification for two-level intent (UserGoal + WorkType).
         
         Flow:
-        1. Try rule-based classification
-        2. If confidence < 0.85, use LLM
-        3. Merge results with confidence weighting
+        1. LLM classification (primary path)
+        2. Fallback to rule-based (only on error)
         """
         context = context or {}
         
-        # Step 1: Rule-based classification
-        rule_result = cls.classify_intent_two_level(user_message, context)
-        
-        # Step 2: Check if we need LLM
-        if rule_result.confidence >= 0.85:
-            # High confidence rule result - use it
-            return rule_result
-        
-        # Step 3: Use LLM for ambiguous cases
-        llm_result = cls.classify_intent_llm(user_message, context)
-        
-        # Step 4: Merge results (prefer LLM if rule confidence is low)
-        if rule_result.confidence < 0.7:
-            # Very low rule confidence - trust LLM more
-            return llm_result
-        else:
-            # Medium rule confidence - use weighted average
-            # If LLM confidence is higher, use LLM
-            if llm_result.confidence > rule_result.confidence:
-                return llm_result
-            else:
-                # Keep rule result but note LLM was consulted
-                rule_result.rationale += f" (LLM confirmed: {llm_result.user_goal})"
-                return rule_result
+        # Primary path: Use LLM classification
+        try:
+            return cls.classify_intent_llm(user_message, context)
+        except Exception as e:
+            logger.warning(f"LLM classification failed in classify_intent_hybrid: {e}, using rule fallback")
+            # Fallback to rule-based on error
+            return cls.classify_intent_two_level(user_message, context)

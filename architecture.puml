@@ -10,18 +10,19 @@
 ' Version: Current (2025) - Reflects actual implementation
 '
 ' Key Features:
-'   • Hybrid Intent Classification (Rule-based + LLM fallback)
+'   • LLM-First Intent Classification with Structured Output
 '   • 7 Official Agents with Task Execution Hierarchy
 '   • Artifact System with Execution Metadata
 '   • Two-Level Intent Classification (UserGoal + WorkType)
 '   • Supervisor-only State Changes
 '   • Conversation Memory with Cost-Aware Context Management (optional)
+'   • Aggressive Caching (500 entries, 80%+ hit rate expected)
 '
 ' To render: Use PlantUML extension in VS Code/Cursor (Alt+D) or online at
 '            http://www.plantuml.com/plantuml
 ' =============================================================================
 
-title Agentic Sourcing Copilot - Enterprise Architecture\n//Human-in-the-Loop Multi-Agent Decision Support System//\n\n**Current Implementation** — Hybrid Classification & Artifact System
+title Agentic Sourcing Copilot - Enterprise Architecture\n//Human-in-the-Loop Multi-Agent Decision Support System//\n\n**Current Implementation** — LLM-First Classification & Artifact System
 
 skinparam backgroundColor #FEFEFE
 skinparam defaultFontSize 11
@@ -81,7 +82,7 @@ package "**BACKEND** - FastAPI Server" <<backend>> {
     }
     
     package "**SUPERVISOR** - Central Orchestrator" <<supervisor>> {
-        rectangle "🧠 **Intent Router**\nHybrid Classification:\n• Rule-based (fast)\n• LLM fallback (accurate)\n• Two-level (UserGoal+WorkType)" as router
+        rectangle "🧠 **Intent Router**\nLLM-First Classification:\n• LLM with structured output (primary)\n• Aggressive caching (500 entries)\n• Rule fallback (errors only)\n• Two-level (UserGoal+WorkType)" as router
         rectangle "📊 **State Manager**\nDTP stage tracking,\nvalidation, transitions,\nONLY state writer" as state_mgr
         rectangle "📋 **Action Planner**\nAgent selection,\ntask planning" as planner
     }
@@ -226,17 +227,19 @@ doc_ingest --> files : "Store original"
 task_llm --> llm : "Narration only\n(after rules/retrieval/analytics)"
 
 ' Hybrid Classification LLM call
-router --> llm : "LLM Classification\n(if confidence < 0.85)"
+router --> llm : "LLM Classification\n(primary, JSON mode)"
 
 ' ============== NOTES ==============
 note right of router
-    **Hybrid Intent Classification**
+    **LLM-First Intent Classification**
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    1. Rule-based (fast, 80-90% cases)
-    2. LLM fallback (ambiguous cases)
-    3. Two-level: UserGoal + WorkType
-    4. Context-aware (DTP stage, outputs)
-    5. Cached results
+    1. LLM classification (primary path)
+    2. Structured output (Pydantic schema)
+    3. Aggressive caching (500 entries)
+    4. Two-level: UserGoal + WorkType
+    5. Context-aware (DTP stage, conversation history)
+    6. Rule fallback (errors only)
+    7. Few-shot examples in prompt
 end note
 
 note bottom of task_rules

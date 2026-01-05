@@ -206,60 +206,56 @@ User Message
 - **COMPLIANCE** - Policy/rule check
 - **VALUE** - Savings/ROI analysis
 
-**Rule-Based Classification**:
+**LLM-First Classification**:
 
-1. **Special Case Patterns** (highest priority, confidence 0.95):
-   - `check eligibility`, `validate` → CHECK
-   - `score supplier`, `evaluate supplier` → CREATE
-   - `draft rfx`, `create rfx` → CREATE
-   - `scan signals` → CREATE (if no output) or TRACK (if has output)
-   - `negotiat`, `leverage` → CREATE
-   - `extract terms` → CREATE
-   - `implement`, `rollout` → CREATE
+1. **Primary Path - LLM Classification**:
+   - **Model**: GPT-4o-mini (temperature 0.1, JSON mode)
+   - **Structured Output**: Pydantic schema validation for reliable parsing
+   - **Input**: Message + enhanced context (DTP stage, has output, latest agent, conversation history)
+   - **Output**: JSON with `user_goal`, `work_type`, `confidence`, `rationale`
+   - **Caching**: MD5 hash of (message + context + conversation hash) → cached result
+   - **Cache Size**: 500 entries (LRU-like eviction)
+   - **Few-Shot Examples**: 8 examples in prompt covering edge cases
+   - **Context**: Last 5 conversation messages included for better disambiguation
 
-2. **Action Verb Detection** (confidence 0.95):
-   - If action verb detected + no existing output → CREATE
-   - Action verbs: `scan`, `score`, `draft`, `support`, `extract`, `generate`, `create`, `build`, `prepare`, `compare`, `define`, `track`, `evaluate`, `analyze`
+2. **Fallback Rules** (only for API errors or simple cases):
+   - Greetings: Simple pattern matching (no LLM call needed)
+   - Status checks: Simple pattern matching
+   - Default: EXPLAIN (safest - no agent call)
 
-3. **Pattern Matching** (confidence 0.85):
-   - Matches against GOAL_PATTERNS and WORK_PATTERNS dictionaries
-   - First match wins
-
-4. **Context-Aware Adjustments**:
-   - Question + existing output → UNDERSTAND (instead of CREATE)
-
-**LLM Classification** (for ambiguous cases):
-
-- **Trigger**: Rule-based confidence < 0.85
-- **Model**: GPT-4o-mini (temperature 0.1)
-- **Input**: Message + context (DTP stage, has output, status)
-- **Output**: JSON with `user_goal`, `work_type`, `confidence`, `rationale`
-- **Caching**: MD5 hash of (message + context) → cached result
-- **Cache Size**: 100 entries (LRU eviction)
-
-**Hybrid Routing**:
+**Classification Flow**:
 ```python
-if rule_confidence >= 0.85:
-    return rule_result
-else:
-    llm_result = classify_intent_llm(message, context)
-    if rule_confidence < 0.7:
-        return llm_result  # Trust LLM more
-    else:
-        # Weighted merge
-        return llm_result if llm_confidence > rule_confidence else rule_result
+# 1. Quick greeting check (no LLM needed)
+if is_greeting(message):
+    return STATUS
+
+# 2. LLM classification (primary path)
+try:
+    result = classify_intent_llm(message, context)
+    return result
+except Exception:
+    # 3. Fallback rules (only on error)
+    return classify_intent_rules_fallback(message, context)
 ```
+
+**Prompt Engineering**:
+- Few-shot examples covering common edge cases
+- Explicit guidelines for misclassification patterns
+- Conversation history context (last 5 messages)
+- Context-aware disambiguation based on existing output
 
 ### Example Classifications
 
-| Message | Context | Single-Level | Two-Level | Confidence |
-|---------|---------|--------------|-----------|------------|
-| "Scan signals" | DTP-01, no output | DECIDE | CREATE + DATA | 0.95 |
-| "What signals do we have?" | DTP-01, has output | EXPLAIN | TRACK + DATA | 0.85 |
-| "Score suppliers" | DTP-02, no output | DECIDE | CREATE + DATA | 0.95 |
-| "Check supplier eligibility" | DTP-02, no output | DECIDE | CHECK + DATA | 0.95 |
-| "Explain the scoring" | DTP-02, has output | EXPLAIN | UNDERSTAND + DATA | 0.85 |
-| "Can you draft an RFx?" | DTP-03, no output | DECIDE | CREATE + ARTIFACT | 0.95 |
+| Message | Context | Single-Level | Two-Level | Confidence | Notes |
+|---------|---------|--------------|-----------|------------|-------|
+| "Scan signals" | DTP-01, no output | DECIDE | CREATE + DATA | 0.95 | LLM classification |
+| "What signals do we have?" | DTP-01, has output | EXPLAIN | TRACK + DATA | 0.90 | LLM classification |
+| "What RFI requirements should I define?" | DTP-03, has output | EXPLAIN | UNDERSTAND + ARTIFACT | 0.90 | LLM (not CREATE - question about existing) |
+| "Score suppliers" | DTP-02, no output | DECIDE | CREATE + DATA | 0.95 | LLM classification |
+| "Check supplier eligibility" | DTP-02, no output | DECIDE | CHECK + COMPLIANCE | 0.95 | LLM classification |
+| "Explain the scoring" | DTP-02, has output | EXPLAIN | UNDERSTAND + DATA | 0.95 | LLM classification |
+| "How to complete it?" | DTP-03, has output, latest_agent=RFX_DRAFT | EXPLAIN | UNDERSTAND + ARTIFACT | 0.90 | LLM (follow-up question) |
+| "Draft RFx" | DTP-03, no output | DECIDE | CREATE + ARTIFACT | 0.95 | LLM classification |
 
 ---
 
