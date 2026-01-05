@@ -1074,6 +1074,9 @@ class ChatService:
         state["waiting_for_human"] = action_plan.approval_required
         if action_plan.approval_required:
             state["status"] = CaseStatus.WAITING_HUMAN.value
+        # Update latest_artifact_pack_id in state (save_artifact_pack already updated the case in DB)
+        if artifact_pack:
+            state["latest_artifact_pack_id"] = artifact_pack.pack_id
         self.case_service.save_case_state(state)
         
         # Format response from artifact pack
@@ -1104,10 +1107,21 @@ class ChatService:
         response_parts = []
         
         # Add main artifacts
-        for artifact in pack.artifacts[:3]:
-            response_parts.append(f"**{artifact.title}**")
-            if artifact.content_text:
-                response_parts.append(artifact.content_text[:300])
+        if pack.artifacts:
+            for artifact in pack.artifacts[:3]:
+                response_parts.append(f"**{artifact.title}**")
+                if artifact.content_text:
+                    # Truncate long content but keep more context
+                    content = artifact.content_text[:500] if len(artifact.content_text) > 500 else artifact.content_text
+                    response_parts.append(content)
+                elif artifact.content:
+                    # Fallback to content dict if content_text is empty
+                    content_str = str(artifact.content)[:500]
+                    response_parts.append(content_str)
+                response_parts.append("")
+        else:
+            # No artifacts - indicate this
+            response_parts.append("**Analysis completed.**")
             response_parts.append("")
         
         # Add next actions
@@ -1129,9 +1143,13 @@ class ChatService:
             for note in pack.notes:
                 response_parts.append(f"*{note}*")
         
-        # Add waiting notice if needed
-        response_parts.append("---")
-        response_parts.append("Review the artifacts above and approve to proceed, or request changes.")
+        # Add waiting notice only if we have artifacts or content to review
+        if pack.artifacts or pack.next_actions or pack.risks:
+            response_parts.append("---")
+            response_parts.append("Review the artifacts above and approve to proceed, or request changes.")
+        else:
+            response_parts.append("---")
+            response_parts.append("Analysis complete. Please review the results above.")
         
         return "\n".join(response_parts)
     

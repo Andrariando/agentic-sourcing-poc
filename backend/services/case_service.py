@@ -233,17 +233,18 @@ class CaseService:
     
     def save_case_state(self, state: SupervisorState) -> bool:
         """Save Supervisor state back to case."""
-        return self.update_case(
-            state["case_id"],
-            {
-                "dtp_stage": state["dtp_stage"],
-                "status": state["status"],
-                "latest_agent_output": state.get("latest_agent_output"),
-                "latest_agent_name": state.get("latest_agent_name"),
-                "activity_log": state.get("activity_log"),
-                "human_decision": state.get("human_decision")
-            }
-        )
+        updates = {
+            "dtp_stage": state["dtp_stage"],
+            "status": state["status"],
+            "latest_agent_output": state.get("latest_agent_output"),
+            "latest_agent_name": state.get("latest_agent_name"),
+            "activity_log": state.get("activity_log"),
+            "human_decision": state.get("human_decision")
+        }
+        # Include latest_artifact_pack_id if present in state
+        if "latest_artifact_pack_id" in state:
+            updates["latest_artifact_pack_id"] = state["latest_artifact_pack_id"]
+        return self.update_case(state["case_id"], updates)
     
     # =========================================================================
     # ARTIFACT OPERATIONS
