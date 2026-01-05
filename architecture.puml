@@ -15,6 +15,7 @@
 '   • Artifact System with Execution Metadata
 '   • Two-Level Intent Classification (UserGoal + WorkType)
 '   • Supervisor-only State Changes
+'   • Conversation Memory with Cost-Aware Context Management (optional)
 '
 ' To render: Use PlantUML extension in VS Code/Cursor (Alt+D) or online at
 '            http://www.plantuml.com/plantuml
@@ -73,7 +74,8 @@ package "**BACKEND** - FastAPI Server" <<backend>> {
     rectangle "🌐 **REST API**\n/cases, /chat, /decisions,\n/ingest, /health" as api
     
     package "**Services Layer**" {
-        rectangle "💬 **Chat Service**\nMessage processing,\nintent handling,\nresponse formatting" as chat_svc
+        rectangle "💬 **Chat Service**\nMessage processing,\nintent handling,\nresponse formatting\n+ Conversation memory\n+ Cost estimation" as chat_svc
+        rectangle "💾 **Conversation Context\nManager**\nContext retrieval,\nmessage storage,\ncost-aware selection" as conv_mgr
         rectangle "📋 **Case Service**\nCase CRUD,\nartifact management,\nstate persistence" as case_svc
         rectangle "📥 **Ingestion Service**\nUpload orchestration,\nvalidation" as ingest_svc
     }
@@ -118,7 +120,7 @@ package "**BACKEND** - FastAPI Server" <<backend>> {
 
 ' ============== DATA LAYER ==============
 package "**DATA LAYER** - Persistence" <<data>> {
-    rectangle "🗄️ **SQLite**\nData Lake\n• Cases\n• ArtifactPacks\n• Execution Metadata\n• Suppliers, Spend, SLAs" as sqlite
+    rectangle "🗄️ **SQLite**\nData Lake\n• Cases\n• ArtifactPacks\n• ChatMessages\n• Execution Metadata\n• Suppliers, Spend, SLAs" as sqlite
     rectangle "🧲 **ChromaDB**\nVector Store\n• Document embeddings\n• Semantic search" as chromadb
     rectangle "📁 **Files**\nUploaded documents\nSynthetic test data" as files
 }
@@ -208,6 +210,11 @@ state_mgr --> sqlite : "Save case state\n(ONLY writer)"
 artifact_builder --> case_svc : "Save ArtifactPack"
 case_svc --> sqlite : "Persist artifacts\n+ execution metadata"
 
+' Conversation Memory (optional, if enabled)
+chat_svc --> conv_mgr : "Get context\nSave messages"
+conv_mgr --> case_svc : "Query/Save messages"
+case_svc --> sqlite : "Persist ChatMessages"
+
 ' Ingestion Flow
 ingest_svc --> doc_ingest : "Documents"
 ingest_svc --> data_ingest : "Structured data"
@@ -265,6 +272,18 @@ note left of artifact_builder
     • Execution metadata (tokens,
       costs, task details)
     • Full audit trail
+end note
+
+note right of conv_mgr
+    **Conversation Memory**
+    (Optional Feature)
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    • Enabled via env var
+    • Cost-aware context selection
+    • Pre-execution cost estimation
+    • Backward compatible (disabled
+      by default)
+    • Messages persist in database
 end note
 
 note top of human

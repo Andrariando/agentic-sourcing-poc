@@ -32,3 +32,4 @@ ARTICLE 6: CONFIDENTIALITY
 - Exceptions: Public information, legal requirements
 
 
+

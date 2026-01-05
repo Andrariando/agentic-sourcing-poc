@@ -220,3 +220,4 @@ def _register_all_tasks(registry: TaskRegistry):
                       "Generate reporting templates")
 
 
+

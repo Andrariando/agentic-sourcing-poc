@@ -11,11 +11,20 @@ ARTIFACT PACK FLOW:
 - Agents now return ArtifactPacks instead of simple JSON
 - ArtifactPacks are persisted via CaseService
 - UI receives artifacts, next_actions, and risks
+
+CONVERSATION MEMORY:
+- Optional conversation history with cost-aware context management
+- Enabled via ENABLE_CONVERSATION_MEMORY environment variable
+- Backward compatible (graceful degradation if disabled)
 """
 import json
 import re
+import os
+import logging
 from typing import Dict, Any, Optional, List
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 from backend.services.case_service import get_case_service
 from backend.supervisor.state import SupervisorState, StateManager
@@ -50,11 +59,30 @@ class ChatService:
     3. Detect approval/rejection in natural language
     4. Provide varied, contextual responses
     5. Return ArtifactPacks from agent executions
+    6. NEW: Support conversation memory with cost-aware context management
     """
     
     def __init__(self):
         self.case_service = get_case_service()
         self.supervisor = SupervisorAgent(tier=1)
+        
+        # Feature flag for conversation memory
+        self.enable_conversation_memory = os.getenv(
+            "ENABLE_CONVERSATION_MEMORY", "false"
+        ).lower() == "true"
+        
+        # Initialize conversation context manager if enabled
+        if self.enable_conversation_memory:
+            try:
+                from backend.services.conversation_context import ConversationContextManager
+                self.conversation_manager = ConversationContextManager(self.case_service)
+                logger.info("Conversation memory enabled")
+            except Exception as e:
+                logger.warning(f"Failed to initialize conversation manager: {e}")
+                self.conversation_manager = None
+                self.enable_conversation_memory = False
+        else:
+            self.conversation_manager = None
         
         # New official agent instances
         self._official_agents = {
@@ -82,6 +110,8 @@ class ChatService:
     ) -> ChatResponse:
         """
         Process user message conversationally.
+        
+        NEW: If conversation memory enabled, retrieve context and save messages.
         """
         # Load case state
         state = self.case_service.get_case_state(case_id)
@@ -90,10 +120,35 @@ class ChatService:
                 case_id, user_message, "Case not found.", "UNKNOWN", ""
             )
         
+        # NEW: Get conversation context (if enabled)
+        conversation_history = []
+        if self.conversation_manager and self.enable_conversation_memory:
+            try:
+                conversation_history = self.conversation_manager.get_relevant_context(
+                    case_id=case_id,
+                    current_message=user_message,
+                    max_tokens=1500  # Configurable
+                )
+            except Exception as e:
+                # Graceful degradation: log error, continue without context
+                logger.warning(f"Failed to retrieve conversation context: {e}")
+                conversation_history = []
+        
         # Check for approval/rejection in natural language
         if state.get("waiting_for_human"):
             approval_response = self._check_for_approval(user_message, case_id, state)
             if approval_response:
+                # Save user message if conversation memory enabled
+                if self.conversation_manager and self.enable_conversation_memory:
+                    try:
+                        self.conversation_manager.save_message(
+                            case_id=case_id,
+                            role="user",
+                            content=user_message,
+                            metadata={"intent": "APPROVAL_REJECTION"}
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to save user message: {e}")
                 return approval_response
         
         # Classify intent with context awareness
@@ -107,22 +162,52 @@ class ChatService:
         
         intent = IntentRouter.classify_intent(user_message, classification_context)
         
+        # NEW: Save user message to database (if enabled)
+        if self.conversation_manager and self.enable_conversation_memory:
+            try:
+                self.conversation_manager.save_message(
+                    case_id=case_id,
+                    role="user",
+                    content=user_message,
+                    metadata={
+                        "intent": intent.value if hasattr(intent, 'value') else str(intent),
+                        "use_tier_2": use_tier_2
+                    }
+                )
+            except Exception as e:
+                logger.warning(f"Failed to save user message: {e}")
+                # Continue processing - message saving is non-critical
+        
         # Handle different intents appropriately
         if intent == UserIntent.STATUS:
-            return self._handle_status_intent(case_id, user_message, state)
-        
+            response = self._handle_status_intent(case_id, user_message, state)
         elif intent == UserIntent.EXPLAIN:
-            return self._handle_explain_intent(case_id, user_message, state)
-        
+            response = self._handle_explain_intent(case_id, user_message, state)
         elif intent == UserIntent.EXPLORE:
-            return self._handle_explore_intent(case_id, user_message, state)
-        
+            response = self._handle_explore_intent(case_id, user_message, state)
         elif intent == UserIntent.DECIDE:
-            return self._handle_decide_intent(case_id, user_message, state)
-        
+            response = self._handle_decide_intent(case_id, user_message, state, conversation_history, use_tier_2)
         else:
             # Default: provide helpful context
-            return self._handle_general_intent(case_id, user_message, state)
+            response = self._handle_general_intent(case_id, user_message, state)
+        
+        # NEW: Save assistant response (if enabled)
+        if self.conversation_manager and self.enable_conversation_memory:
+            try:
+                self.conversation_manager.save_message(
+                    case_id=case_id,
+                    role="assistant",
+                    content=response.assistant_message,
+                    metadata={
+                        "intent": response.intent_classified,
+                        "agents_called": response.agents_called,
+                        "tokens_used": response.tokens_used
+                    }
+                )
+            except Exception as e:
+                logger.warning(f"Failed to save assistant message: {e}")
+        
+        return response
     
     def _check_for_approval(
         self,
@@ -485,7 +570,7 @@ class ChatService:
         
         if needs_analysis:
             # Run appropriate agent
-            return self._run_agent_analysis(case_id, message, state)
+            return self._run_agent_analysis(case_id, message, state, conversation_history, use_tier_2)
         
         # If already waiting and they say something like "proceed"
         if state.get("waiting_for_human"):
@@ -526,7 +611,16 @@ class ChatService:
         # If no recommendation yet and user says "yes" or similar, run analysis
         if not state.get("latest_agent_output"):
             if any(re.search(p, message_lower) for p in affirmative_patterns):
-                return self._run_agent_analysis(case_id, message, state)
+                # Get conversation history if enabled
+                conversation_history = []
+                if self.conversation_manager and self.enable_conversation_memory:
+                    try:
+                        conversation_history = self.conversation_manager.get_relevant_context(
+                            case_id, message, max_tokens=1500
+                        )
+                    except Exception:
+                        pass
+                return self._run_agent_analysis(case_id, message, state, conversation_history, False)
         
         response = f"I'm here to help with case {case_id}.\n\n"
         response += f"Currently at **{dtp_stage} - {stage_name}**.\n\n"
@@ -545,7 +639,9 @@ class ChatService:
         self,
         case_id: str,
         message: str,
-        state: SupervisorState
+        state: SupervisorState,
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+        use_tier_2: bool = False
     ) -> ChatResponse:
         """Run agent analysis when explicitly requested."""
         dtp_stage = state["dtp_stage"]
@@ -645,6 +741,35 @@ class ChatService:
             "old_contract_value": 500000,
             "term_years": 3,
         }
+        
+        # NEW: Add conversation history if available (optional)
+        if conversation_history:
+            case_context["conversation_history"] = conversation_history
+        
+        # NEW: Estimate cost before execution (if conversation memory enabled)
+        if self.conversation_manager and self.enable_conversation_memory:
+            try:
+                estimated_tokens, estimated_cost = self.conversation_manager.estimate_execution_cost(
+                    conversation_history=conversation_history or [],
+                    user_message=message,
+                    agent_name=action_plan.agent_name,
+                    use_tier_2=use_tier_2
+                )
+                
+                # Check budget (configurable threshold)
+                max_cost_per_message = float(os.getenv("MAX_COST_PER_MESSAGE", "1.0"))  # $1 default
+                if estimated_cost > max_cost_per_message:
+                    # Suggest more specific question or return cost warning
+                    intent_for_response = self._map_user_goal_to_intent(intent_result.user_goal)
+                    return self._create_response(
+                        case_id, message,
+                        f"⚠️ Estimated cost (${estimated_cost:.2f}) exceeds limit (${max_cost_per_message:.2f}). "
+                        f"Please try a more specific question.",
+                        intent_for_response, dtp_stage
+                    )
+            except Exception as e:
+                logger.warning(f"Cost estimation failed: {e}")
+                # Continue without cost check (backward compatible)
         
         # Execute agent
         agent_result = agent.execute(case_context, message)

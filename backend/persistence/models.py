@@ -306,5 +306,27 @@ class ArtifactPack(SQLModel, table=True):
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
 
 
+class ChatMessage(SQLModel, table=True):
+    """Persistent chat message storage for conversation memory."""
+    __tablename__ = "chat_messages"
+    
+    id: Optional[int] = Field(default=None, primary_key=True)
+    message_id: str = Field(default_factory=generate_uuid, unique=True, index=True)
+    case_id: str = Field(index=True)  # Indexed for fast queries by case
+    
+    # Message content
+    role: str  # "user" | "assistant"
+    content: str
+    
+    # Metadata
+    intent_classified: Optional[str] = None
+    agents_called: Optional[str] = None  # JSON array
+    tokens_used: Optional[int] = None
+    estimated_cost_usd: Optional[float] = None
+    
+    # Timestamps
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
 
 

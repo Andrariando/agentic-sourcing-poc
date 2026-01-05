@@ -15,7 +15,8 @@ Comprehensive documentation of all system logic, mechanisms, and architectural d
 7. [Artifact System](#artifact-system)
 8. [Data Models & Persistence](#data-models--persistence)
 9. [UI/UX Flow](#uiux-flow)
-10. [Demo & Testing](#demo--testing)
+10. [Conversation Memory & Context Management](#conversation-memory--context-management)
+11. [Demo & Testing](#demo--testing)
 
 ---
 
@@ -278,11 +279,20 @@ User Message
 └────────────┬────────────────────┘
              ↓
 ┌─────────────────────────────────┐
+│  1a. Get Conversation Context   │
+│     (if memory enabled)         │
+│     - Retrieve recent messages  │
+│     - Summarize older messages  │
+│     - Estimate token cost       │
+└────────────┬────────────────────┘
+             ↓
+┌─────────────────────────────────┐
 │  2. Check for Approval/Rejection│
 │     (if waiting_for_human)      │
 │     - Pattern matching          │
 │     - Process decision          │
 │     - Advance stage if approved │
+│     - Save message to DB        │
 └────────────┬────────────────────┘
              ↓
 ┌─────────────────────────────────┐
@@ -293,7 +303,12 @@ User Message
 └────────────┬────────────────────┘
              ↓
 ┌─────────────────────────────────┐
-│  4. Route to Intent Handler     │
+│  4. Save User Message to DB     │
+│     (if memory enabled)         │
+└────────────┬────────────────────┘
+             ↓
+┌─────────────────────────────────┐
+│  5. Route to Intent Handler     │
 │                                 │
 │  STATUS → _handle_status_intent │
 │  EXPLAIN → _handle_explain_intent│
@@ -302,10 +317,15 @@ User Message
 └────────────┬────────────────────┘
              ↓
 ┌─────────────────────────────────┐
-│  5. Generate Response           │
+│  6. Generate Response           │
 │     - Format agent output       │
 │     - Include grounding         │
 │     - Set waiting flag          │
+└────────────┬────────────────────┘
+             ↓
+┌─────────────────────────────────┐
+│  7. Save Assistant Response     │
+│     (if memory enabled)         │
 └─────────────────────────────────┘
 ```
 
@@ -870,10 +890,32 @@ class TaskExecutionDetail(BaseModel):
     grounding_sources: List[Dict[str, Any]]
 ```
 
+### ChatMessage Model
+
+```python
+class ChatMessage(SQLModel, table=True):
+    message_id: str  # Primary key (UUID)
+    case_id: str  # Foreign key to CaseState
+    role: str  # "user" | "assistant"
+    content: str  # Message text
+    intent_classified: Optional[str]  # UserIntent enum value
+    agents_called: Optional[str]  # JSON array
+    tokens_used: Optional[int]
+    estimated_cost_usd: Optional[float]
+    created_at: str  # ISO timestamp
+```
+
+**Purpose**: Persistent storage for conversation history to enable multi-turn conversations with context awareness.
+
+**Usage**: 
+- Messages saved after each user/assistant exchange (if conversation memory enabled)
+- Retrieved for context when processing new messages
+- Used for cost estimation and budget enforcement
+
 ### Data Stores
 
 1. **SQLite** (`data/datalake.db`):
-   - Cases, ArtifactPacks (via SQLModel)
+   - Cases, ArtifactPacks, ChatMessages (via SQLModel)
    - Structured data: Suppliers, Contracts, Performance, Spend, SLA Events
 
 2. **ChromaDB** (`data/chromadb/`):
@@ -972,6 +1014,138 @@ Chat history is loaded from case `activity_log`:
 3. Parse metadata (agent, intent, timestamp)
 4. Display in chronological order
 5. Auto-scroll to bottom (latest message)
+
+---
+
+## Conversation Memory & Context Management
+
+### Overview
+
+The system supports **optional conversation memory** to enable ChatGPT-like multi-turn conversations with cost-aware context management. This feature is **disabled by default** for backward compatibility and must be explicitly enabled via environment variable.
+
+**Key Features**:
+- Persistent conversation history in database
+- Cost-aware context selection (recent messages + summaries)
+- Pre-execution cost estimation and budget enforcement
+- Graceful degradation (system works if feature disabled)
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              ConversationContextManager                 │
+│  • Retrieve recent messages (last N)                    │
+│  • Summarize older conversations                        │
+│  • Estimate token costs                                 │
+│  • Filter context within budget                         │
+└────────────────────┬────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────┐
+│                    ChatService                          │
+│  1. Get relevant context (if enabled)                   │
+│  2. Estimate cost before execution                      │
+│  3. Check budget limits                                 │
+│  4. Include context in agent execution                  │
+│  5. Save messages to database                           │
+└────────────────────┬────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────┐
+│                    Agents                               │
+│  • Receive conversation_history in case_context         │
+│  • Use context for better reasoning (optional)          │
+│  • Work without context (backward compatible)           │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Configuration
+
+**Environment Variables**:
+
+```bash
+# Enable/disable conversation memory (default: false)
+ENABLE_CONVERSATION_MEMORY=false
+
+# Cost management
+MAX_COST_PER_MESSAGE=1.0  # Maximum cost per message in USD
+MAX_CONTEXT_TOKENS=1500   # Maximum tokens for conversation context
+RECENT_MESSAGES_COUNT=10  # Always include last N messages
+SUMMARIZE_THRESHOLD=20    # Summarize if more than N messages
+
+# Summarization (optional)
+ENABLE_SUMMARIZATION=true  # Enable conversation summarization
+```
+
+### Context Selection Strategy
+
+1. **Recent Messages First**: Always include last N messages (default: 10)
+2. **Token Budget**: Context limited by `MAX_CONTEXT_TOKENS` (default: 1500 tokens)
+3. **Summarization**: If >N messages exist, summarize older messages (future enhancement)
+4. **Trimming**: If still over limit, trim oldest messages until within budget
+
+### Cost Estimation
+
+**Pre-execution cost estimation**:
+- Estimates tokens for conversation context
+- Estimates tokens for user message
+- Estimates tokens for agent execution (base + output)
+- Calculates cost based on model tier (gpt-4o-mini vs gpt-4o)
+- Enforces `MAX_COST_PER_MESSAGE` limit
+
+**Cost Calculation**:
+- **Tier 1 (gpt-4o-mini)**: $0.15/1K input, $0.60/1K output
+- **Tier 2 (gpt-4o)**: $5.00/1K input, $15.00/1K output
+
+### Token Estimation
+
+Uses **tiktoken** if available for accurate token counting, otherwise falls back to approximation (4 characters ≈ 1 token).
+
+### Backward Compatibility
+
+**All changes are backward compatible**:
+- Feature disabled by default (`ENABLE_CONVERSATION_MEMORY=false`)
+- System works identically if feature disabled
+- Agents receive `conversation_history` in `case_context` but can ignore it
+- Graceful degradation if database/conversation manager fails
+
+### Message Storage
+
+**ChatMessage Table**:
+- Stores all user and assistant messages
+- Includes metadata: intent, agents called, tokens used, cost
+- Indexed by `case_id` and `created_at` for efficient retrieval
+- Messages persist across sessions
+
+**Retrieval**:
+- Messages retrieved by `case_id`
+- Ordered by `created_at` (chronological)
+- Limited to recent messages (configurable limit)
+
+### Integration Points
+
+1. **ChatService.process_message()**:
+   - Retrieves context at start (if enabled)
+   - Saves user message after classification
+   - Saves assistant response after generation
+
+2. **Agent Execution**:
+   - `case_context` includes `conversation_history` (if available)
+   - Agents can use context for better reasoning
+   - Agents work without context (backward compatible)
+
+3. **Cost Enforcement**:
+   - Pre-execution cost estimation
+   - Budget check before agent execution
+   - Returns cost warning if exceeds limit
+
+### Future Enhancements
+
+1. **LLM-based Summarization**: Use gpt-4o-mini to summarize older conversations
+2. **Semantic Search**: Use embeddings to find relevant past messages
+3. **Cross-Case Context**: Reference conversations from related cases
+4. **User Preferences**: Per-user conversation memory settings
+5. **Advanced Compression**: More sophisticated token reduction techniques
 
 ---
 
