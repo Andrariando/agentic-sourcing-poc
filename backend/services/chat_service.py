@@ -557,7 +557,9 @@ class ChatService:
         self,
         case_id: str,
         message: str,
-        state: SupervisorState
+        state: SupervisorState,
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+        use_tier_2: bool = False
     ) -> ChatResponse:
         """Handle DECIDE intent - either process decision or run agent."""
         dtp_stage = state["dtp_stage"]
