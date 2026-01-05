@@ -407,21 +407,50 @@ class ChatService:
                         if artifact_pack.artifacts:
                             # Build response from RFx artifact pack
                             response = "**RFI/RFx Requirements Status**\n\n"
+                            has_missing = False
+                            missing_info_list = []
+                            missing_sections_list = []
+                            completeness_score = 100
+                            
                             for artifact in artifact_pack.artifacts:
-                                if artifact.type == "RFX_PATH" and artifact.content:
-                                    missing_info = artifact.content.get("missing_info", [])
-                                    if missing_info:
-                                        response += "**The following requirements are not fully defined:**\n\n"
-                                        for info in missing_info[:5]:
-                                            response += f"- {info}\n"
-                                elif artifact.type == "RFX_DRAFT_PACK" and artifact.content:
-                                    missing_sections = artifact.content.get("missing_sections", [])
-                                    if missing_sections:
-                                        if "not fully defined" not in response:
-                                            response += "**The following requirements/sections are not fully defined:**\n\n"
-                                        for section in missing_sections[:5]:
-                                            response += f"- {section}\n"
-                            if "not fully defined" not in response:
+                                if artifact.type == "RFX_PATH":
+                                    if artifact.content:
+                                        missing_info_list = artifact.content.get("missing_info", [])
+                                    # Check content_text for indicators
+                                    if artifact.content_text:
+                                        if ("not fully defined" in artifact.content_text.lower() or 
+                                            "requirements not" in artifact.content_text.lower() or
+                                            "gather information" in artifact.content_text.lower()):
+                                            has_missing = True
+                                            if not missing_info_list:
+                                                # Extract from content_text if available
+                                                if "Requirements not fully defined" in artifact.content_text:
+                                                    if "RFI to gather information" in artifact.content_text:
+                                                        missing_info_list = ["Requirements not fully defined - RFI to gather information"]
+                                elif artifact.type == "RFX_DRAFT_PACK":
+                                    if artifact.content:
+                                        missing_sections_list = artifact.content.get("missing_sections", [])
+                                        completeness_score = artifact.content.get("completeness_score", 100)
+                                        if completeness_score == 0 or completeness_score < 50:
+                                            has_missing = True
+                            
+                            # Build response based on findings
+                            # Completeness of 0% is a strong indicator
+                            if has_missing or missing_info_list or missing_sections_list or completeness_score == 0:
+                                response += "**Requirements are not fully defined.**\n\n"
+                                if missing_info_list:
+                                    for info in missing_info_list[:5]:
+                                        response += f"- {info}\n"
+                                elif completeness_score == 0:
+                                    response += "- Requirements need to be defined before proceeding with the RFx\n"
+                                    response += "- RFI is recommended to gather information from suppliers\n"
+                                if missing_sections_list:
+                                    response += "\n**Missing sections:**\n"
+                                    for section in missing_sections_list[:5]:
+                                        response += f"- {section}\n"
+                                if completeness_score == 0:
+                                    response += f"\n**Note:** The draft is {completeness_score}% complete, indicating requirements need to be defined.\n"
+                            else:
                                 response += "All requirements appear to be defined. The draft is ready for review.\n"
                             return self._create_response(case_id, message, response, "EXPLAIN", state["dtp_stage"], agents_called=["RFX_DRAFT"])
                     else:
@@ -524,25 +553,63 @@ class ChatService:
                     missing_info = output.get("missing_info", [])
                     missing_sections = output.get("missing_sections", [])
                     incomplete_sections = output.get("incomplete_sections", [])
+                    has_missing_requirements = False
                     
                     if artifact_pack:
-                        # Extract from artifact content
+                        # Extract from artifact content - check both content dict and content_text
                         for artifact in artifact_pack.artifacts:
-                            if artifact.type == "RFX_PATH" and artifact.content:
-                                missing_info = artifact.content.get("missing_info", missing_info)
-                            elif artifact.type == "RFX_DRAFT_PACK" and artifact.content:
-                                missing_sections = artifact.content.get("missing_sections", missing_sections)
-                                incomplete_sections = artifact.content.get("incomplete_sections", incomplete_sections)
+                            if artifact.type == "RFX_PATH":
+                                if artifact.content:
+                                    missing_info = artifact.content.get("missing_info", missing_info)
+                                # Also check content_text for "Requirements not fully defined" or similar
+                                if artifact.content_text and ("not fully defined" in artifact.content_text.lower() or 
+                                                               "requirements not" in artifact.content_text.lower() or
+                                                               "gather information" in artifact.content_text.lower()):
+                                    has_missing_requirements = True
+                                    # Extract missing info from content_text if not in content dict
+                                    if not missing_info and "Requirements not fully defined" in artifact.content_text:
+                                        # Try to extract the reason from content_text
+                                        if "RFI to gather information" in artifact.content_text:
+                                            missing_info = ["Requirements not fully defined - RFI to gather information"]
+                            elif artifact.type == "RFX_DRAFT_PACK":
+                                if artifact.content:
+                                    missing_sections = artifact.content.get("missing_sections", missing_sections)
+                                    incomplete_sections = artifact.content.get("incomplete_sections", incomplete_sections)
+                                    # Check completeness score from content
+                                    pack_completeness = artifact.content.get("completeness_score", completeness)
+                                    if pack_completeness == 0 or pack_completeness < 50:
+                                        has_missing_requirements = True
+                                    completeness = pack_completeness  # Use the pack's completeness score
+                    
+                    # Also check completeness score - 0% means requirements are not defined
+                    if completeness == 0:
+                        has_missing_requirements = True
                     
                     response += f"**{rfx_type} Draft - Requirements Status**\n\n"
-                    if missing_sections or missing_info:
-                        response += "**The following requirements/sections are not fully defined:**\n\n"
-                        if missing_sections:
-                            for section in missing_sections[:5]:
-                                response += f"- {section}\n"
+                    
+                    # Determine if requirements are missing based on multiple indicators
+                    # Completeness of 0% is a strong indicator that requirements are not defined
+                    if has_missing_requirements or missing_sections or missing_info or completeness == 0:
+                        response += "**Requirements are not fully defined.**\n\n"
                         if missing_info:
                             for info in missing_info[:5]:
                                 response += f"- {info}\n"
+                        elif completeness == 0:
+                            # If completeness is 0%, requirements are definitely not defined
+                            response += "- Requirements need to be defined before proceeding with the RFx\n"
+                            response += "- RFI is recommended to gather information from suppliers\n"
+                        if missing_sections:
+                            response += "\n**Missing sections:**\n"
+                            for section in missing_sections[:5]:
+                                response += f"- {section}\n"
+                        if incomplete_sections:
+                            response += "\n**Incomplete sections:**\n"
+                            for section in incomplete_sections[:5]:
+                                response += f"- {section}\n"
+                        # Add completeness info if 0%
+                        if completeness == 0:
+                            response += f"\n**Note:** The draft is {completeness}% complete, indicating requirements need to be defined.\n"
+                            response += f"\n**Note:** The draft is {completeness}% complete, indicating requirements need to be defined.\n"
                     else:
                         response += "All requirements appear to be defined. The draft is ready for review.\n"
                 
