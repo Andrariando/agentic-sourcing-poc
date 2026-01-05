@@ -667,7 +667,7 @@ class ChatService:
         
         if agent:
             return self._run_official_agent(
-                case_id, message, state, agent, action_plan, intent_result
+                case_id, message, state, agent, action_plan, intent_result, conversation_history, use_tier_2
             )
         
         # Fall back to legacy agents
@@ -727,7 +727,9 @@ class ChatService:
         state: SupervisorState,
         agent,
         action_plan,
-        intent_result
+        intent_result,
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+        use_tier_2: bool = False
     ) -> ChatResponse:
         """Run an official agent that returns ArtifactPack."""
         dtp_stage = state["dtp_stage"]
