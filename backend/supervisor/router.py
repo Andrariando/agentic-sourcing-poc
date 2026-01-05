@@ -738,15 +738,19 @@ Examples:
 8. "Check supplier eligibility" (has_output=False)
    → {{"user_goal": "CHECK", "work_type": "COMPLIANCE", "confidence": 0.95, "rationale": "Validation request to check compliance/eligibility"}}
 
+9. "Recommend a strategy" (has_output=False or True)
+   → {{"user_goal": "CREATE", "work_type": "DATA", "confidence": 0.95, "rationale": "Command to analyze and generate strategy recommendation - action request, not a question"}}
+
+10. "Recommend a strategy for this case" (has_output=False or True)
+   → {{"user_goal": "CREATE", "work_type": "DATA", "confidence": 0.95, "rationale": "Command to analyze and generate strategy recommendation - action request, not a question"}}
+
 Classification Guidelines:
-- Questions about requirements/data/sections when output exists → UNDERSTAND (not CREATE)
+- COMMANDS (not questions) with action verbs → CREATE (e.g., "Recommend a strategy", "Draft RFx", "Scan signals")
+- QUESTIONS (starts with what/which/how/when/where/why or contains "should I") about requirements/data/sections when output exists → UNDERSTAND
 - "How to X" questions → UNDERSTAND (asking for guidance, not creating)
-- Action verbs in questions with existing output → UNDERSTAND (asking about the action, not requesting it)
+- Action verbs in QUESTIONS with existing output → UNDERSTAND (asking about the action, not requesting it)
 - Follow-up questions (check conversation history) → UNDERSTAND
-- Questions about requirements/data = UNDERSTAND (not CREATE)
-- "How to X" questions = UNDERSTAND (not CREATE)
-- Action verbs in questions = UNDERSTAND if output exists
-- Follow-up questions = UNDERSTAND (check conversation history)
+- Key distinction: COMMANDS (imperative) = CREATE, QUESTIONS (interrogative) = UNDERSTAND/TRACK
 
 User Goals:
 - TRACK: Monitor/check status, scan data, get updates, inventory queries
