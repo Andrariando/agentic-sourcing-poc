@@ -903,7 +903,12 @@ class ChatService:
         
         # Persist artifact pack
         if artifact_pack:
-            self.case_service.save_artifact_pack(case_id, artifact_pack)
+            try:
+                success = self.case_service.save_artifact_pack(case_id, artifact_pack)
+                if not success:
+                    logger.warning(f"Failed to save artifact pack {artifact_pack.pack_id} for case {case_id}")
+            except Exception as e:
+                logger.error(f"Error saving artifact pack: {e}", exc_info=True)
         
         # Update state
         state["latest_agent_output"] = agent_result.get("output", {})
