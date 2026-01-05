@@ -117,6 +117,23 @@ def inject_dashboard_styles():
             padding: 16px;
             margin-bottom: 24px;
         }}
+        /* Ensure filter inputs align vertically */
+        .filter-section [data-testid="column"] {{
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+        }}
+        /* Align button with input fields - match Streamlit input height (38px) */
+        .filter-section button[data-testid="baseButton-primary"] {{
+            margin-top: 0 !important;
+            height: 38px;
+        }}
+        /* Ensure all input fields have same baseline */
+        .filter-section [data-testid="column"] > div:first-child {{
+            min-height: 38px;
+            display: flex;
+            align-items: stretch;
+        }}
         
         /* Stats Bar */
         .stats-bar {{
@@ -311,9 +328,10 @@ def render_case_dashboard():
         st.caption("Filter by Category")
     
     with col4:
-        st.caption("&nbsp;")  # Spacer for alignment with other captions
-        if st.button("New Case", type="primary", use_container_width=True):
+        # Align button with filter inputs - remove extra spacing
+        if st.button("New Case", type="primary", use_container_width=True, key="new_case_btn"):
             st.session_state.show_create_form = True
+        st.caption("&nbsp;")  # Spacer for caption alignment
     
     st.markdown('</div>', unsafe_allow_html=True)
     
