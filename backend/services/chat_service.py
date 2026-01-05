@@ -334,12 +334,21 @@ class ChatService:
         message_lower = message.lower().strip()
         
         # Check if message is actually an action request (should be DECIDE, not EXPLAIN)
+        # Only treat as action request if it's a command, not a question
+        # Questions like "What should I define?" are EXPLAIN, not DECIDE
         action_keywords = [
             "scan", "score", "draft", "support", "extract", "generate", "create",
             "recommend", "evaluate", "analyze", "prepare", "compare", "validate",
             "check", "build", "define", "track"
         ]
-        is_action_request = any(kw in message_lower for kw in action_keywords)
+        # Check if it's a question (starts with what/which/how/when/where/why or contains "should I")
+        is_question = (
+            message_lower.startswith(("what", "which", "how", "when", "where", "why")) or
+            "should i" in message_lower or "should we" in message_lower or
+            "can you" in message_lower or "could you" in message_lower
+        )
+        # Only treat as action request if it's NOT a question AND contains action keywords
+        is_action_request = not is_question and any(kw in message_lower for kw in action_keywords)
         
         if is_action_request:
             # This is actually a CREATE/DECIDE request - route to agent execution
@@ -378,6 +387,52 @@ class ChatService:
         
         # Extract topic to understand what aspect user is asking about
         topic = self._extract_explanation_topic(message)
+        
+        # Check if user is asking about RFI/RFx requirements but latest output is from different agent
+        # If asking about requirements and we're at DTP-03, they probably want RFx Draft info
+        if topic == "requirements" and ("rfi" in message_lower or "rfx" in message_lower or "rfp" in message_lower):
+            if agent_name not in ["RFX_DRAFT", "RfxDraft"]:
+                # User is asking about RFI/RFx requirements but we don't have RFx Draft output
+                # Check if we have any RFx artifact packs
+                case_state = self.case_service.get_case_state(case_id)
+                if case_state:
+                    # Try to find RFx Draft artifact pack
+                    all_packs = self.case_service.get_all_artifact_packs(case_id)
+                    rfx_packs = [p for p in all_packs if p.agent_name in ["RFX_DRAFT", "RfxDraft"]]
+                    if rfx_packs:
+                        # Use the most recent RFx pack
+                        latest_rfx_pack = rfx_packs[-1]
+                        artifact_pack = latest_rfx_pack
+                        # Extract output from artifact pack
+                        if artifact_pack.artifacts:
+                            # Build response from RFx artifact pack
+                            response = "**RFI/RFx Requirements Status**\n\n"
+                            for artifact in artifact_pack.artifacts:
+                                if artifact.type == "RFX_PATH" and artifact.content:
+                                    missing_info = artifact.content.get("missing_info", [])
+                                    if missing_info:
+                                        response += "**The following requirements are not fully defined:**\n\n"
+                                        for info in missing_info[:5]:
+                                            response += f"- {info}\n"
+                                elif artifact.type == "RFX_DRAFT_PACK" and artifact.content:
+                                    missing_sections = artifact.content.get("missing_sections", [])
+                                    if missing_sections:
+                                        if "not fully defined" not in response:
+                                            response += "**The following requirements/sections are not fully defined:**\n\n"
+                                        for section in missing_sections[:5]:
+                                            response += f"- {section}\n"
+                            if "not fully defined" not in response:
+                                response += "All requirements appear to be defined. The draft is ready for review.\n"
+                            return self._create_response(case_id, message, response, "EXPLAIN", state["dtp_stage"], agents_called=["RFX_DRAFT"])
+                    else:
+                        # No RFx Draft has been run yet
+                        response = "I don't have RFI/RFx requirements information yet. "
+                        if state["dtp_stage"] in ["DTP-03", "DTP-04", "DTP-05"]:
+                            response += "Would you like me to draft an RFx? Just say 'Draft RFx' or 'Create RFx draft'."
+                        else:
+                            response += f"RFx drafting is typically done at DTP-03 stage. You're currently at {state['dtp_stage']}. "
+                            response += "Would you like me to proceed with RFx drafting?"
+                        return self._create_response(case_id, message, response, "EXPLAIN", state["dtp_stage"])
         
         # Build explanation based on what was asked
         message_lower = message.lower()
