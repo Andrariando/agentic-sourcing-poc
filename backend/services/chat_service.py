@@ -422,7 +422,7 @@ class ChatService:
             
             response = "No recommendation has been generated yet for this case.\n\n"
             response += "Would you like me to analyze this case and provide a strategy recommendation? Just say 'yes' or 'analyze this case'."
-            return self._create_response(case_id, message, response, "EXPLAIN", dtp_stage)
+            return self._create_response(case_id, message, response, "EXPLAIN", dtp_stage, trace_id=trace_id)
         
         output = state["latest_agent_output"]
         agent_name = state.get("latest_agent_name", "Unknown")
@@ -808,7 +808,8 @@ class ChatService:
         self,
         case_id: str,
         message: str,
-        state: SupervisorState
+        state: SupervisorState,
+        trace_id: str = ""
     ) -> ChatResponse:
         """Handle EXPLORE intent - explore alternatives without state change."""
         dtp_stage = state["dtp_stage"]
@@ -861,7 +862,7 @@ class ChatService:
             response += "\nThis exploration won't change the case state."
         
         return self._create_response(
-            case_id, message, response, "EXPLORE", dtp_stage
+            case_id, message, response, "EXPLORE", dtp_stage, trace_id=trace_id
         )
     
     def _handle_decide_intent(
@@ -870,7 +871,8 @@ class ChatService:
         message: str,
         state: SupervisorState,
         conversation_history: Optional[List[Dict[str, str]]] = None,
-        use_tier_2: bool = False
+        use_tier_2: bool = False,
+        trace_id: str = ""
     ) -> ChatResponse:
         """Handle DECIDE intent - either process decision or run agent."""
         dtp_stage = state["dtp_stage"]
@@ -901,13 +903,14 @@ class ChatService:
         response += "- Ask me to **evaluate suppliers** (at DTP-03)\n"
         response += "- Ask me to **create a negotiation plan** (at DTP-04)\n"
         
-        return self._create_response(case_id, message, response, "DECIDE", dtp_stage)
+        return self._create_response(case_id, message, response, "DECIDE", dtp_stage, trace_id=trace_id)
     
     def _handle_general_intent(
         self,
         case_id: str,
         message: str,
-        state: SupervisorState
+        state: SupervisorState,
+        trace_id: str = ""
     ) -> ChatResponse:
         """Handle general/unknown intent with helpful response."""
         dtp_stage = state["dtp_stage"]
@@ -946,7 +949,7 @@ class ChatService:
         if state.get("waiting_for_human"):
             response += "\n**Note:** This case is awaiting your approval decision."
         
-        return self._create_response(case_id, message, response, "UNKNOWN", dtp_stage)
+        return self._create_response(case_id, message, response, "UNKNOWN", dtp_stage, trace_id=trace_id)
     
     def _run_agent_analysis(
         self,
