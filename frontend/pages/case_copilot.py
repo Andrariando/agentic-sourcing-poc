@@ -21,7 +21,8 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 from frontend.api_client import get_api_client, APIError
-from shared.constants import DTP_STAGES, DTP_STAGE_NAMES
+from shared.constants import DTP_STAGES, DTP_STAGE_NAMES, ArtifactType
+from backend.artifacts.placement import get_artifact_placement, ArtifactPlacement, get_artifacts_by_placement
 
 
 # MIT Color Constants
@@ -650,6 +651,19 @@ def render_artifacts_panel_full_width(case, client) -> None:
     </div>
     """, unsafe_allow_html=True)
     
+    # NEW: Fetch all artifact packs for the case
+    try:
+        artifact_packs = client.get_artifact_packs(case.case_id)
+    except Exception as e:
+        st.warning(f"Could not load artifact history: {e}")
+        artifact_packs = []
+    
+    # Extract all artifacts from all packs
+    all_artifacts = []
+    for pack in artifact_packs:
+        if isinstance(pack, dict) and "artifacts" in pack:
+            all_artifacts.extend(pack.artifacts)
+    
     # Horizontal tabs for artifact types
     tabs = st.tabs([
         "📊 Signals", 
@@ -662,200 +676,191 @@ def render_artifacts_panel_full_width(case, client) -> None:
         "🔍 Audit Trail"
     ])
     
-    # Get artifacts from case
+    # Get latest agent info for context
     output = case.latest_agent_output
     agent_name = case.latest_agent_name
     
     with tabs[0]:  # Signals
-        _render_signals_artifacts(case, output, agent_name)
+        _render_signals_artifacts(case, output, agent_name, all_artifacts)
     
     with tabs[1]:  # Scoring
-        _render_scoring_artifacts(case, output, agent_name)
+        _render_scoring_artifacts(case, output, agent_name, all_artifacts)
     
     with tabs[2]:  # RFx Drafts
-        _render_rfx_artifacts(case, output, agent_name)
+        _render_rfx_artifacts(case, output, agent_name, all_artifacts)
     
     with tabs[3]:  # Negotiation
-        _render_negotiation_artifacts(case, output, agent_name)
+        _render_negotiation_artifacts(case, output, agent_name, all_artifacts)
     
     with tabs[4]:  # Contract
-        _render_contract_artifacts(case, output, agent_name)
+        _render_contract_artifacts(case, output, agent_name, all_artifacts)
     
     with tabs[5]:  # Implementation
-        _render_implementation_artifacts(case, output, agent_name)
+        _render_implementation_artifacts(case, output, agent_name, all_artifacts)
     
     with tabs[6]:  # History
         _render_activity_history(case)
     
     with tabs[7]:  # Audit Trail
-        _render_audit_trail(case, client)
+        _render_audit_history_from_packs(artifact_packs)
 
 
-def _render_signals_artifacts(case, output, agent_name):
+def _render_signals_artifacts(case, output, agent_name, all_artifacts):
     """Render signals tab content."""
-    if agent_name in ["SourcingSignal", "SignalInterpretation"] and output:
-        signals = output.get("signals", []) if isinstance(output, dict) else getattr(output, "signals", [])
-        if signals:
-            cols = st.columns(min(len(signals), 3))
-            for i, signal in enumerate(signals[:6]):
-                with cols[i % 3]:
-                    severity = signal.get("severity", "medium")
-                    color = {"high": MIT_CARDINAL, "medium": WARNING_YELLOW, "low": SUCCESS_GREEN}.get(severity, CHARCOAL)
-                    st.markdown(f"""
-                    <div class="artifact-card" style="border-left: 4px solid {color};">
-                        <div style="font-weight: 600; font-size: 0.85rem;">{signal.get('signal_type', 'Signal')}</div>
-                        <div style="font-size: 0.8rem; color: {CHARCOAL}; margin-top: 4px;">{signal.get('message', signal.get('description', ''))}</div>
-                        <div style="font-size: 0.7rem; color: {CHARCOAL}; margin-top: 8px; text-transform: uppercase;">{severity} severity</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-        else:
-            st.info("No signals detected. Ask the copilot: \"Scan for sourcing signals\"")
+    # Filter artifacts that belong in Decision Console or Case Summary
+    signals_artifacts = [a for a in all_artifacts if get_artifact_placement(a.get("type")) in [ArtifactPlacement.DECISION_CONSOLE, ArtifactPlacement.CASE_SUMMARY]]
+    # Further filter by signal types
+    signals_artifacts = [a for a in signals_artifacts if "SIGNAL" in a.get("type", "")]
+    
+    if signals_artifacts:
+        for art in signals_artifacts:
+            st.markdown(f"#### {art.get('title')}")
+            content = art.get("content_text") or str(art.get("content", ""))
+            st.markdown(content)
+            
+            # Show grounding if available
+            if art.get("grounded_in"):
+                with st.expander("🔍 Grounding Sources"):
+                    for g in art["grounded_in"]:
+                        st.markdown(f"- **{g.get('source_name')}**: {g.get('excerpt')[:200]}...")
+            st.markdown("---")
     else:
         st.info("No signals detected yet. Ask the copilot: \"Scan for sourcing signals\"")
 
 
-def _render_scoring_artifacts(case, output, agent_name):
+def _render_scoring_artifacts(case, output, agent_name, all_artifacts):
     """Render scoring tab content."""
-    if agent_name in ["SupplierScoring", "SupplierEvaluation"] and output:
-        suppliers = output.get("shortlisted_suppliers", []) if isinstance(output, dict) else getattr(output, "shortlisted_suppliers", [])
-        if suppliers:
-            # Create a table-like display
-            st.markdown(f"""
-            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 8px; padding: 8px 12px; background-color: {MIT_NAVY}; color: white; font-weight: 600; font-size: 0.8rem; border-radius: 4px 4px 0 0;">
-                <span>Supplier</span>
-                <span>Score</span>
-                <span>Status</span>
-                <span>Rank</span>
-            </div>
-            """, unsafe_allow_html=True)
+    # Filter for Supplier Compare section
+    scoring_artifacts = [a for a in all_artifacts if get_artifact_placement(a.get("type")) == ArtifactPlacement.SUPPLIER_COMPARE]
+    
+    if scoring_artifacts:
+        for art in scoring_artifacts:
+            st.markdown(f"#### {art.get('title')}")
             
-            for i, s in enumerate(suppliers[:5]):
-                name = s.get('supplier_name', s.get('name', f'Supplier {i+1}'))
-                score = s.get("total_score", s.get("score", 0))
-                status = "Eligible" if score >= 6 else "Review Required"
-                status_color = SUCCESS_GREEN if score >= 6 else WARNING_YELLOW
-                
+            # Special handling for evaluation scorecard
+            content = art.get("content")
+            if isinstance(content, dict) and "shortlisted_suppliers" in content:
+                suppliers = content["shortlisted_suppliers"]
+                # Create a table-like display
                 st.markdown(f"""
-                <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 8px; padding: 12px; border: 1px solid {LIGHT_GRAY}; border-top: none; font-size: 0.85rem;">
-                    <span style="font-weight: 500;">{name}</span>
-                    <span style="color: {MIT_NAVY}; font-weight: bold;">{score:.1f}/10</span>
-                    <span style="color: {status_color};">{status}</span>
-                    <span>#{i+1}</span>
+                <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 8px; padding: 8px 12px; background-color: {MIT_NAVY}; color: white; font-weight: 600; font-size: 0.8rem; border-radius: 4px 4px 0 0;">
+                    <span>Supplier</span>
+                    <span>Score</span>
+                    <span>Status</span>
+                    <span>Comments</span>
                 </div>
                 """, unsafe_allow_html=True)
-        else:
-            st.info("No supplier scores available. Ask the copilot: \"Score suppliers\"")
+                
+                for s in suppliers:
+                    name = s.get('name', s.get('supplier_name', 'Unknown'))
+                    score = s.get('score', s.get('total_score', 0))
+                    status = s.get('status', 'Eligible')
+                    comments = s.get('comments', '')[:50]
+                    
+                    st.markdown(f"""
+                    <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 8px; padding: 12px; border: 1px solid {LIGHT_GRAY}; border-top: none; font-size: 0.85rem;">
+                        <span style="font-weight: 500;">{name}</span>
+                        <span style="color: {MIT_NAVY}; font-weight: bold;">{score if isinstance(score, (int, float)) else 0:.1f}/10</span>
+                        <span>{status}</span>
+                        <span style="color: {CHARCOAL}; font-size: 0.75rem;">{comments}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.markdown(art.get("content_text") or str(art.get("content", "")))
+            st.markdown("---")
     else:
         st.info("No supplier scores available yet. Ask the copilot: \"Score suppliers\"")
 
 
-def _render_rfx_artifacts(case, output, agent_name):
+def _render_rfx_artifacts(case, output, agent_name, all_artifacts):
     """Render RFx drafts tab content."""
-    if agent_name == "RfxDraft" and output:
-        rfx_type = output.get("rfx_type", "RFP") if isinstance(output, dict) else getattr(output, "rfx_type", "RFP")
-        completeness = output.get("completeness_score", 0) if isinstance(output, dict) else getattr(output, "completeness_score", 0)
-        sections = output.get("rfx_sections", {}) if isinstance(output, dict) else getattr(output, "rfx_sections", {})
-        
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            st.markdown(f"""
-            <div class="artifact-card">
-                <div style="font-weight: 600; color: {MIT_NAVY};">RFx Type</div>
-                <div style="font-size: 1.5rem; font-weight: 700; margin-top: 4px;">{rfx_type}</div>
-            </div>
-            """, unsafe_allow_html=True)
-        with col2:
-            st.markdown(f"""
-            <div class="artifact-card">
-                <div style="font-weight: 600; color: {MIT_NAVY};">Completeness</div>
-                <div style="font-size: 1.5rem; font-weight: 700; margin-top: 4px;">{completeness}%</div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        if sections:
-            st.markdown(f"<div style='font-weight: 600; color: {MIT_NAVY}; margin: 16px 0 8px 0;'>Sections</div>", unsafe_allow_html=True)
-            for section_name, content in sections.items():
-                with st.expander(f"📄 {section_name}"):
-                    st.markdown(content[:500] + "..." if len(content) > 500 else content)
+    # RFx artifacts usually in Decision Console or Activity Log
+    rfx_artifacts = [a for a in all_artifacts if "RFX" in a.get("type", "")]
+    
+    if rfx_artifacts:
+        for art in rfx_artifacts:
+            with st.expander(f"📄 {art.get('title')}"):
+                st.markdown(art.get("content_text") or str(art.get("content", "")))
     else:
         st.info("No RFx drafts created yet. Ask the copilot: \"Draft RFx\"")
 
 
-def _render_negotiation_artifacts(case, output, agent_name):
+def _render_negotiation_artifacts(case, output, agent_name, all_artifacts):
     """Render negotiation tab content."""
-    if agent_name == "NegotiationSupport" and output:
-        targets = output.get("target_terms", {}) if isinstance(output, dict) else getattr(output, "target_terms", {})
-        leverage = output.get("leverage_points", []) if isinstance(output, dict) else getattr(output, "leverage_points", [])
-        
-        if targets:
-            st.markdown(f"""
-            <div class="artifact-card">
-                <div style="font-weight: 600; color: {MIT_NAVY}; margin-bottom: 12px;">Target Terms</div>
-            """, unsafe_allow_html=True)
-            for key, value in targets.items():
-                st.markdown(f"""
-                <div class="detail-row">
-                    <span class="detail-label">{key.replace('_', ' ').title()}</span>
-                    <span class="detail-value">{value}</span>
-                </div>
-                """, unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-        
-        if leverage:
-            st.markdown(f"<div style='font-weight: 600; color: {MIT_NAVY}; margin: 16px 0 8px 0;'>Leverage Points</div>", unsafe_allow_html=True)
-            for lp in leverage[:5]:
-                desc = lp.get('description', lp) if isinstance(lp, dict) else str(lp)
-                st.markdown(f"""
-                <div style="display: flex; align-items: flex-start; gap: 8px; padding: 4px 0; font-size: 0.85rem;">
-                    <span style="color: {MIT_NAVY};">→</span>
-                    <span>{desc}</span>
-                </div>
-                """, unsafe_allow_html=True)
+    neg_artifacts = [a for a in all_artifacts if any(t in a.get("type", "") for t in ["NEGOTIATION", "LEVERAGE", "TARGET_TERMS"])]
+    
+    if neg_artifacts:
+        for art in neg_artifacts:
+            st.markdown(f"#### {art.get('title')}")
+            st.markdown(art.get("content_text") or str(art.get("content", "")))
+            st.markdown("---")
     else:
-        st.info("No negotiation artifacts yet. Ask the copilot: \"Support negotiation\"")
+        st.info("No negotiation plan created yet. Ask the copilot: \"Prepare negotiation plan\"")
 
 
-def _render_contract_artifacts(case, output, agent_name):
+def _render_contract_artifacts(case, output, agent_name, all_artifacts):
     """Render contract tab content."""
-    if agent_name == "ContractSupport" and output:
-        key_terms = output.get("key_terms", {}) if isinstance(output, dict) else getattr(output, "key_terms", {})
-        if key_terms:
-            st.json(key_terms)
-        else:
-            st.info("No contract terms extracted yet.")
+    # Contract artifacts in Risk Panel
+    contract_artifacts = [a for a in all_artifacts if get_artifact_placement(a.get("type")) == ArtifactPlacement.RISK_PANEL]
+    
+    if contract_artifacts:
+        for art in contract_artifacts:
+            st.markdown(f"#### {art.get('title')}")
+            st.markdown(art.get("content_text") or str(art.get("content", "")))
+            st.markdown("---")
     else:
-        st.info("No contract terms extracted yet. Ask the copilot: \"Extract key terms\"")
+        st.info("No contract analysis available yet. Ask the copilot: \"Review contract\"")
 
 
-def _render_implementation_artifacts(case, output, agent_name):
+def _render_implementation_artifacts(case, output, agent_name, all_artifacts):
     """Render implementation tab content."""
-    if agent_name == "Implementation" and output:
-        annual = output.get("annual_savings", 0) if isinstance(output, dict) else getattr(output, "annual_savings", 0)
-        total = output.get("total_savings", 0) if isinstance(output, dict) else getattr(output, "total_savings", 0)
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown(f"""
-            <div class="artifact-card">
-                <div style="font-weight: 600; color: {MIT_NAVY};">Annual Savings</div>
-                <div style="font-size: 1.5rem; font-weight: 700; color: {SUCCESS_GREEN}; margin-top: 4px;">${annual:,.0f}</div>
-            </div>
-            """, unsafe_allow_html=True)
-        with col2:
-            st.markdown(f"""
-            <div class="artifact-card">
-                <div style="font-weight: 600; color: {MIT_NAVY};">Total Over Term</div>
-                <div style="font-size: 1.5rem; font-weight: 700; color: {SUCCESS_GREEN}; margin-top: 4px;">${total:,.0f}</div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        checklist = output.get("rollout_checklist", []) if isinstance(output, dict) else getattr(output, "rollout_checklist", [])
-        if checklist:
-            st.markdown(f"<div style='font-weight: 600; color: {MIT_NAVY}; margin: 16px 0 8px 0;'>Rollout Checklist</div>", unsafe_allow_html=True)
-            for item in checklist[:10]:
-                st.markdown(f"- {item}")
+    # Implementation artifacts in Timeline
+    impl_artifacts = [a for a in all_artifacts if get_artifact_placement(a.get("type")) == ArtifactPlacement.TIMELINE]
+    
+    if impl_artifacts:
+        for art in impl_artifacts:
+            st.markdown(f"#### {art.get('title')}")
+            st.markdown(art.get("content_text") or str(art.get("content", "")))
+            st.markdown("---")
     else:
-        st.info("No implementation plan yet. Ask the copilot: \"Generate implementation plan\"")
+        st.info("No implementation plan ready yet. Ask the copilot: \"Draft implementation plan\"")
+
+
+def _render_audit_history_from_packs(packs):
+    """Render the detailed audit trail of all agent executions."""
+    if not packs:
+        st.info("No historical data available for this case.")
+        return
+        
+    st.markdown("### 🔍 Agent Execution Audit Trail")
+    st.markdown("Full history of all agent calls, reasoning, and produced artifacts.")
+    
+    for i, pack in enumerate(reversed(packs)):
+        with st.expander(f"Execution {len(packs)-i}: {pack.get('agent_name')} ({pack.get('created_at', '')[:16]})"):
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                st.markdown(f"**Agent:** {pack.get('agent_name')}")
+                st.markdown(f"**Timestamp:** {pack.get('created_at')}")
+                st.markdown(f"**Pack ID:** `{pack.get('pack_id')}`")
+            
+            with col2:
+                # Show execution metadata if available
+                meta = pack.get("execution_metadata")
+                if meta:
+                    st.markdown(f"**User Message:** {meta.get('user_message', 'N/A')}")
+                    st.markdown(f"**Tokens:** {meta.get('total_tokens_used', 0)}")
+                    st.markdown(f"**Tasks:** {meta.get('completed_tasks', 0)}/{meta.get('total_tasks', 0)}")
+            
+            # Show tasks
+            st.markdown("#### Tasks Executed")
+            tasks = pack.get("tasks_executed", [])
+            for t in tasks:
+                st.markdown(f"- {t}")
+                
+            # Show artifacts
+            st.markdown("#### Artifacts Produced")
+            for art in pack.get("artifacts", []):
+                st.info(f"📄 {art.get('title')} ({art.get('type')})")
 
 
 def _render_activity_history(case):

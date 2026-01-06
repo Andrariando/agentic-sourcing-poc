@@ -1163,6 +1163,43 @@ class ChatService:
             return "Analysis complete."
         
         response_parts = []
+        agent_name = pack.agent_name if pack else ""
+        
+        # Agent-specific introduction
+        if "SOURCING_SIGNAL" in agent_name or "Signal" in agent_name:
+            response_parts.append("**Sourcing Signal Analysis Complete**")
+            response_parts.append("")
+            if pack.artifacts:
+                response_parts.append(f"I've analyzed {len(pack.artifacts)} signal(s) for this category:")
+        elif "SUPPLIER_SCORING" in agent_name or "Supplier" in agent_name:
+            response_parts.append("**Supplier Evaluation Complete**")
+            response_parts.append("")
+            if pack.artifacts:
+                response_parts.append(f"I've scored and evaluated suppliers. Here are the results:")
+        elif "RFX_DRAFT" in agent_name or "RFx" in agent_name or "Rfx" in agent_name:
+            response_parts.append("**RFx Draft Complete**")
+            response_parts.append("")
+            if pack.artifacts:
+                response_parts.append(f"I've prepared the RFx documentation:")
+        elif "NEGOTIATION" in agent_name or "Negotiation" in agent_name:
+            response_parts.append("**Negotiation Plan Ready**")
+            response_parts.append("")
+            if pack.artifacts:
+                response_parts.append(f"I've created a negotiation strategy:")
+        elif "CONTRACT" in agent_name or "Contract" in agent_name:
+            response_parts.append("**Contract Analysis Complete**")
+            response_parts.append("")
+            if pack.artifacts:
+                response_parts.append(f"I've reviewed the contract terms:")
+        elif "IMPLEMENTATION" in agent_name or "Implementation" in agent_name:
+            response_parts.append("**Implementation Plan Ready**")
+            response_parts.append("")
+            if pack.artifacts:
+                response_parts.append(f"I've created an implementation roadmap:")
+        else:
+            # Generic fallback
+            response_parts.append("**Analysis Complete**")
+            response_parts.append("")
         
         # Add main artifacts
         if pack.artifacts:
@@ -1179,12 +1216,26 @@ class ChatService:
                 response_parts.append("")
         else:
             # No artifacts - indicate this
-            response_parts.append("**Analysis completed.**")
+            response_parts.append("Analysis completed successfully.")
             response_parts.append("")
         
-        # Add next actions
+        # Add next actions with agent-specific framing
         if pack.next_actions:
-            response_parts.append("**Recommended Next Steps:**")
+            if "SOURCING_SIGNAL" in agent_name:
+                response_parts.append("**Recommended Actions:**")
+            elif "SUPPLIER_SCORING" in agent_name:
+                response_parts.append("**Next Steps in Supplier Selection:**")
+            elif "RFX_DRAFT" in agent_name:
+                response_parts.append("**Before Sending the RFx:**")
+            elif "NEGOTIATION" in agent_name:
+                response_parts.append("**Negotiation Preparation:**")
+            elif "CONTRACT" in agent_name:
+                response_parts.append("**Contract Review Actions:**")
+            elif "IMPLEMENTATION" in agent_name:
+                response_parts.append("**Implementation Steps:**")
+            else:
+                response_parts.append("**Recommended Next Steps:**")
+            
             for action in pack.next_actions[:3]:
                 response_parts.append(f"- {action.label}")
             response_parts.append("")
@@ -1201,13 +1252,26 @@ class ChatService:
             for note in pack.notes:
                 response_parts.append(f"*{note}*")
         
-        # Add waiting notice only if we have artifacts or content to review
+        # Agent-specific closing message
         if pack.artifacts or pack.next_actions or pack.risks:
             response_parts.append("---")
-            response_parts.append("Review the artifacts above and approve to proceed, or request changes.")
+            if "SOURCING_SIGNAL" in agent_name:
+                response_parts.append("Review the signal analysis above. Would you like me to proceed with supplier evaluation?")
+            elif "SUPPLIER_SCORING" in agent_name:
+                response_parts.append("Review the supplier scores above. Ready to move forward with the shortlist?")
+            elif "RFX_DRAFT" in agent_name:
+                response_parts.append("Review the RFx draft above. Ready to send it to suppliers?")
+            elif "NEGOTIATION" in agent_name:
+                response_parts.append("Review the negotiation plan above. Ready to proceed with negotiations?")
+            elif "CONTRACT" in agent_name:
+                response_parts.append("Review the contract analysis above. Ready to finalize the agreement?")
+            elif "IMPLEMENTATION" in agent_name:
+                response_parts.append("Review the implementation plan above. Ready to begin rollout?")
+            else:
+                response_parts.append("Review the analysis above and let me know if you'd like to proceed or make changes.")
         else:
             response_parts.append("---")
-            response_parts.append("Analysis complete. Please review the results above.")
+            response_parts.append("Analysis complete. What would you like to do next?")
         
         return "\n".join(response_parts)
     
