@@ -20,11 +20,19 @@ CONVERSATION MEMORY:
 import json
 import re
 import os
+import uuid
 import logging
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+# Import feature flags
+try:
+    from backend.services.feature_flags import ENABLE_ROUTING_LOGS, ENABLE_CLARIFIER_FALLBACK
+except ImportError:
+    ENABLE_ROUTING_LOGS = True
+    ENABLE_CLARIFIER_FALLBACK = True
 
 from backend.services.case_service import get_case_service
 from backend.supervisor.state import SupervisorState, StateManager
@@ -113,12 +121,21 @@ class ChatService:
         Process user message conversationally.
         
         NEW: If conversation memory enabled, retrieve context and save messages.
+        NEW: Generate trace_id for request tracking and logging.
         """
+        # Generate trace_id for this request
+        trace_id = str(uuid.uuid4())
+        
+        # Log incoming message if routing logs enabled
+        if ENABLE_ROUTING_LOGS:
+            logger.info(f"[{trace_id}] CHAT_INPUT case={case_id} message={user_message[:100]}...")
+        
         # Load case state
         state = self.case_service.get_case_state(case_id)
         if not state:
+            logger.warning(f"[{trace_id}] Case not found: {case_id}")
             return self._create_response(
-                case_id, user_message, "Case not found.", "UNKNOWN", ""
+                case_id, user_message, "Case not found.", "UNKNOWN", "", trace_id=trace_id
             )
         
         # NEW: Get conversation context (if enabled)
@@ -165,7 +182,18 @@ class ChatService:
             "conversation_length": len(conversation_history) if conversation_history else 0
         }
         
-        intent = IntentRouter.classify_intent(user_message, classification_context)
+        # Classify intent with fallback handling
+        fallback_used = False
+        try:
+            intent = IntentRouter.classify_intent(user_message, classification_context)
+        except Exception as e:
+            logger.error(f"[{trace_id}] Intent classification failed: {e}", exc_info=True)
+            intent = UserIntent.EXPLAIN  # Safe fallback
+            fallback_used = True
+        
+        # Log routing decision
+        if ENABLE_ROUTING_LOGS:
+            logger.info(f"[{trace_id}] ROUTING intent={intent.value} fallback_used={fallback_used}")
         
         # NEW: Save user message to database (if enabled)
         if self.conversation_manager and self.enable_conversation_memory:
@@ -176,25 +204,26 @@ class ChatService:
                     content=user_message,
                     metadata={
                         "intent": intent.value if hasattr(intent, 'value') else str(intent),
-                        "use_tier_2": use_tier_2
+                        "use_tier_2": use_tier_2,
+                        "trace_id": trace_id
                     }
                 )
             except Exception as e:
-                logger.warning(f"Failed to save user message: {e}")
+                logger.warning(f"[{trace_id}] Failed to save user message: {e}")
                 # Continue processing - message saving is non-critical
         
         # Handle different intents appropriately
         if intent == UserIntent.STATUS:
-            response = self._handle_status_intent(case_id, user_message, state)
+            response = self._handle_status_intent(case_id, user_message, state, trace_id)
         elif intent == UserIntent.EXPLAIN:
-            response = self._handle_explain_intent(case_id, user_message, state)
+            response = self._handle_explain_intent(case_id, user_message, state, trace_id)
         elif intent == UserIntent.EXPLORE:
-            response = self._handle_explore_intent(case_id, user_message, state)
+            response = self._handle_explore_intent(case_id, user_message, state, trace_id)
         elif intent == UserIntent.DECIDE:
-            response = self._handle_decide_intent(case_id, user_message, state, conversation_history, use_tier_2)
+            response = self._handle_decide_intent(case_id, user_message, state, conversation_history, use_tier_2, trace_id)
         else:
             # Default: provide helpful context
-            response = self._handle_general_intent(case_id, user_message, state)
+            response = self._handle_general_intent(case_id, user_message, state, trace_id)
         
         # NEW: Save assistant response (if enabled)
         if self.conversation_manager and self.enable_conversation_memory:
@@ -277,7 +306,8 @@ class ChatService:
         self,
         case_id: str,
         message: str,
-        state: SupervisorState
+        state: SupervisorState,
+        trace_id: str = ""
     ) -> ChatResponse:
         """Handle STATUS intent - summarize current state without running agents."""
         dtp_stage = state["dtp_stage"]
@@ -311,23 +341,35 @@ class ChatService:
             if output.get("recommended_strategy"):
                 response += f"\n**Current Recommendation:** {output['recommended_strategy']}\n"
         
-        # Add waiting for approval notice
+        # Add waiting for approval notice OR provide contextual next step
         if state.get("waiting_for_human"):
             response += "\n**Action Required:** This case is awaiting your approval to proceed. "
             response += "You can approve the recommendation or request changes."
+        elif not state.get("latest_agent_output"):
+            # No analysis yet - offer to run one
+            response += "\n\nNo analysis has been run yet. Would you like me to **analyze this case** and provide a recommendation?"
         else:
-            response += "\n\nIs there anything specific you'd like to know about this case?"
+            # Have output - offer specific follow-up based on output type
+            agent_name = state.get("latest_agent_name", "")
+            if "Strategy" in agent_name or "SOURCING_SIGNAL" in agent_name:
+                response += "\n\nWould you like me to **explain the rationale** or **explore alternatives**?"
+            elif "Supplier" in agent_name or "SUPPLIER_SCORING" in agent_name:
+                response += "\n\nWould you like to **review supplier details** or **proceed to negotiation**?"
+            else:
+                response += "\n\nHow can I help you move forward?"
         
         return self._create_response(
             case_id, message, response, "STATUS", dtp_stage,
-            waiting=state.get("waiting_for_human", False)
+            waiting=state.get("waiting_for_human", False),
+            trace_id=trace_id
         )
     
     def _handle_explain_intent(
         self,
         case_id: str,
         message: str,
-        state: SupervisorState
+        state: SupervisorState,
+        trace_id: str = ""
     ) -> ChatResponse:
         """Handle EXPLAIN intent - explain existing recommendation."""
         dtp_stage = state["dtp_stage"]
@@ -1259,12 +1301,17 @@ class ChatService:
         tokens: int = 0,
         waiting: bool = False,
         retrieval: Dict = None,
-        workflow_summary: Dict = None
+        workflow_summary: Dict = None,
+        trace_id: str = ""
     ) -> ChatResponse:
         """Create standardized response."""
         # Build workflow_summary if not provided
         if workflow_summary is None:
-            workflow_summary = {"retrieval": retrieval} if retrieval else None
+            workflow_summary = {"retrieval": retrieval} if retrieval else {}
+        
+        # Include trace_id in workflow_summary for debugging
+        if trace_id:
+            workflow_summary["trace_id"] = trace_id
         
         return ChatResponse(
             case_id=case_id,

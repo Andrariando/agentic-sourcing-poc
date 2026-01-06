@@ -69,6 +69,19 @@ class ArtifactType(str, Enum):
 
 
 # =============================================================================
+# ARTIFACT PLACEMENT (UI section routing)
+# =============================================================================
+class ArtifactPlacement(str, Enum):
+    """UI sections where artifacts can be placed."""
+    DECISION_CONSOLE = "decision_console"
+    RISK_PANEL = "risk_panel"
+    SUPPLIER_COMPARE = "supplier_compare"
+    CASE_SUMMARY = "case_summary"
+    TIMELINE = "timeline"
+    ACTIVITY_LOG = "activity_log"
+
+
+# =============================================================================
 # USER INTENT CLASSIFICATION (Two-level)
 # =============================================================================
 class UserGoal(str, Enum):
