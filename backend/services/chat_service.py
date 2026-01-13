@@ -1068,10 +1068,24 @@ class ChatService:
         # Here we assume state keys mostly match PipelineState.
         workflow_state = dict(state)
         
-        # MAPPING FIXES:
-        # Case object uses "summary" but PipelineState expects "case_summary"
-        if "summary" in workflow_state and "case_summary" not in workflow_state:
-            workflow_state["case_summary"] = workflow_state["summary"]
+        # CRITICAL MAPPING FIX:
+        # SupervisorState does NOT have a "case_summary" key. 
+        # PipelineState expects it. We must CONSTRUCT it from flat fields.
+        if "case_summary" not in workflow_state:
+            from utils.schemas import CaseSummary
+            workflow_state["case_summary"] = CaseSummary(
+                case_id=workflow_state.get("case_id", case_id),
+                category_id=workflow_state.get("category_id", "UNKNOWN"),
+                contract_id=workflow_state.get("contract_id"),
+                supplier_id=workflow_state.get("supplier_id"),
+                dtp_stage=workflow_state.get("dtp_stage", "DTP-01"),
+                trigger_source=workflow_state.get("trigger_source", "User"),
+                status=workflow_state.get("status", "In Progress"),
+                created_date=workflow_state.get("created_date", ""),
+                summary_text=workflow_state.get("summary_text", ""),
+                key_findings=workflow_state.get("key_findings", []),
+                recommended_action=workflow_state.get("recommended_action")
+            )
             
         # Map chat history to simplified format for Agents if needed
         # PipelineState expects List[Dict[str, str]]
