@@ -68,6 +68,7 @@ ARTIFACT_PLACEMENT_MAP: Dict[ArtifactType, ArtifactPlacement] = {
     ArtifactType.CASE_SUMMARY_BRIEF: ArtifactPlacement.CASE_SUMMARY,
     ArtifactType.APPROVAL_CHECKLIST: ArtifactPlacement.TIMELINE,
     ArtifactType.AUDIT_LOG_EVENT: ArtifactPlacement.ACTIVITY_LOG,
+}
 
 
 def get_artifact_placement(artifact_type: str) -> ArtifactPlacement:
