@@ -200,6 +200,11 @@ impl_agent --> exec_metadata : "Track execution"
 artifact_builder --> chat_svc : "ArtifactPack\n+ Metadata"
 exec_metadata --> artifact_builder : "Include metadata"
 
+' Talk Back Loop (Agent Logic)
+negotiation_agent ..> router : "Dialogue: NeedClarification\n/ConcernRaised"
+signal_agent ..> router : "Dialogue"
+supplier_agent ..> router : "Dialogue"
+
 ' Human-in-the-Loop Checkpoint
 chat_svc --> state_mgr : "Check approval\nrequired?"
 state_mgr --> chat_svc : "Set waiting_for_human\n= true"

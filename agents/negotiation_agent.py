@@ -10,11 +10,21 @@ Per Table 3:
 - NO policy enforcement
 """
 from typing import Dict, Any, Optional
-from utils.schemas import NegotiationPlan, CaseSummary
+from utils.schemas import NegotiationPlan, CaseSummary, AgentDialogue
 from utils.data_loader import get_contract, get_performance, get_market_data, get_category, get_requirements, get_supplier
 from utils.knowledge_layer import get_vector_context
 from agents.base_agent import BaseAgent
+from pydantic import BaseModel, Field
+from typing import Literal, Union
 import json
+
+
+class NegotiationDecision(BaseModel):
+    """Internal decision on whether to proceed or talk back"""
+    action: Literal["Proceed", "NeedClarification", "ConcernRaised", "SuggestAlternative"]
+    reasoning: str
+    message_to_supervisor: Optional[str] = None
+
 
 
 class NegotiationSupportAgent(BaseAgent):
@@ -36,10 +46,10 @@ class NegotiationSupportAgent(BaseAgent):
         use_cache: bool = True,
         user_intent: str = "",
         conversation_history: Optional[list[dict]] = None
-    ) -> tuple[NegotiationPlan, Dict[str, Any], Dict[str, Any], int, int]:
+    ) -> tuple[Union[NegotiationPlan, AgentDialogue], Dict[str, Any], Dict[str, Any], int, int]:
         """
-        Create negotiation plan for a supplier.
-        Returns (plan, llm_input_payload, output_payload, input_tokens, output_tokens)
+        Create negotiation plan OR return AgentDialogue/ClarificationRequest.
+        Returns (plan_or_dialogue, llm_input_payload, output_payload, input_tokens, output_tokens)
         """
         # Check cache
         if use_cache:
@@ -78,8 +88,56 @@ class NegotiationSupportAgent(BaseAgent):
             topic="negotiation_playbook"
         )
         
+        # Step 1: Reasoning & Critique Loop
+        # Agent decides whether to proceed or talk back
+        reasoning_prompt = f"""You are a Negotiation Support Agent (DTP-04).
+        User Intent: {user_intent if user_intent else "No instructions"}
+        
+        Information Available:
+        - Case: {case_summary.case_id} ({case_summary.category_id})
+        - Supplier: {supplier_id}
+        - Contract: {"Available" if contract else "Missing"}
+        - Performance: {"Available" if performance else "Missing"}
+        - Market Data: {"Available" if market else "Missing"}
+        
+        Review the request and available data.
+        1. Do you have enough information to create a negotiation plan? (Missing contract/performance is critical)
+        2. Is the request feasible given the market data?
+        3. Is the strategy (Negotiation) appropriate?
+        
+        Decide:
+        - "Proceed": Logic is sound, data is sufficient (or can be inferred).
+        - "NeedClarification": Critical data missing (e.g. which supplier?) or ambiguous intent.
+        - "ConcernRaised": Significant risk detected (e.g. trying to negotiate with a sole-source without leverage).
+        - "SuggestAlternative": Strategy seems wrong (e.g. should be RFx instead).
+        
+        Respond with JSON:
+        {{
+            "action": "Proceed" | "NeedClarification" | "ConcernRaised" | "SuggestAlternative",
+            "reasoning": "Internal thought process...",
+            "message_to_supervisor": "Message if not Proceeding..."
+        }}
+        """
+        
+        reasoning_decision, _, _, r_input, r_output = self.call_llm_with_schema(
+            reasoning_prompt, NegotiationDecision
+        )
+        
+        if reasoning_decision.action != "Proceed":
+             # Return AgentDialogue
+            dialogue = AgentDialogue(
+                agent_name=self.name,
+                message=reasoning_decision.message_to_supervisor or reasoning_decision.reasoning,
+                reasoning=reasoning_decision.reasoning,
+                status=reasoning_decision.action,
+                metadata={"case_id": case_summary.case_id}
+            )
+            return dialogue, {"reasoning_prompt": reasoning_prompt}, {}, r_input, r_output
+
+        # Step 2: Proceed to Plan Generation (if Proceed)
         # Build prompt aligned with Table 3: comparative and advisory only
         prompt = f"""You are a Negotiation Support Agent for dynamic sourcing pipelines (DTP-04).
+        REASONING CONTEXT: {reasoning_decision.reasoning}
 
 Your role (Table 3 alignment):
 - Highlight bid differences and identify negotiation levers

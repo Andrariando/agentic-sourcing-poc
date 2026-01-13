@@ -269,6 +269,15 @@ class OutOfScopeNotice(BaseModel):
     external_action_required: bool = False
 
 
+class AgentDialogue(BaseModel):
+    """Agent 'Talk Back' message for reasoning, clarification, or strategic pivots"""
+    agent_name: str
+    message: str  # The "Talk Back" content (Visible to User)
+    reasoning: str # Internal reasoning trace (Visible in "Thought Process")
+    status: Literal["NeedClarification", "ConcernRaised", "SuggestAlternative", "Success"]
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
 class ChatMessage(BaseModel):
     """A single message in the conversation history"""
     role: Literal["user", "assistant", "system"]
@@ -295,7 +304,7 @@ class Case(BaseModel):
     latest_agent_output: Optional[Union[
         SignalAssessment, StrategyRecommendation, SupplierShortlist, NegotiationPlan,
         RFxDraft, ContractExtraction, ImplementationPlan,
-        ClarificationRequest, OutOfScopeNotice
+        ClarificationRequest, OutOfScopeNotice, AgentDialogue
     ]] = None
     latest_agent_name: Optional[str] = None
     activity_log: List[AgentActionLog] = Field(default_factory=list)

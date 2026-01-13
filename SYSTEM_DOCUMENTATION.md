@@ -64,8 +64,12 @@ Once the path is chosen, the system executes the workflow:
 1.  **Specialist Agent Node**: The selected agent (e.g., `StrategyAgent`) runs.
     *   It retrieves necessary data (SQL + RAG).
     *   It generates a structured artifact (e.g., `StrategyRecommendation`).
+    *   **"Talk Back" Capability**: If the agent identifies missing data or risks, it can return an `AgentDialogue` object (e.g. "I need clarification") instead of a plan.
     *   It is **deterministic** in its calculations (e.g. scoring) but uses LLM for synthesis.
-2.  **Loop**: The output is fed back to the Supervisor to determine if more work is needed or if it should return to the user.
+2.  **Loop**: The output is fed back to the Supervisor.
+    *   **Success**: Output stored, stage advances.
+    *   **Clarification Needed**: Supervisor routes to `CaseClarifier`.
+    *   **Concern Raised**: Supervisor routes to `WaitForHuman`.
 
 ### Step 6: Persistence & State Update
 The output and conversation history are saved:
@@ -348,3 +352,9 @@ Agents follow a structured **Task-Based** execution model:
 ### Architecture Clarifications
 - Frontend (`frontend/app.py`) communicates with backend API on port 8000.
 - The root `app.py` is a legacy standalone version (not used with API architecture).
+
+### Agent-Supervisor Dialogue ("Talking Back")
+1.  **Bi-Directional Communication**: Agents can now return `AgentDialogue` objects to "talk back" to the Supervisor instead of strictly returning plans.
+    *   `NeedClarification`: Routes to user for more info.
+    *   `ConcernRaised`: Routes to human for safety check.
+2.  **Separate Agent Logs**: Internal agent reasoning and dialogues are now displayed in a dedicated "🔍 Agent Logs" panel in the frontend, keeping the main chat clean.

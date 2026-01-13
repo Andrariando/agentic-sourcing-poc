@@ -32,7 +32,10 @@ from utils.schemas import (
     OutOfScopeNotice,
     RFxDraft,
     ContractExtraction,
-    ImplementationPlan
+    RFxDraft,
+    ContractExtraction,
+    ImplementationPlan,
+    AgentDialogue
 )
 from utils.state import PipelineState
 from utils.rules import RuleEngine
@@ -345,6 +348,21 @@ class SupervisorAgent:
                 if not is_capable:
                     # Return None to pause workflow, with out-of-scope notice
                     return None, "out_of_scope", None
+        
+                if not is_capable:
+                    # Return None to pause workflow, with out-of-scope notice
+                    return None, "out_of_scope", None
+        
+        # Check if output is AgentDialogue (Talking Back)
+        if latest_output and isinstance(latest_output, AgentDialogue):
+            if latest_output.status == "NeedClarification":
+                return "CaseClarifier", "agent_requested_clarification", None
+            elif latest_output.status == "ConcernRaised":
+                return "wait_for_human", "agent_raised_concern", None
+            elif latest_output.status == "SuggestAlternative":
+                # For now, route to human to decide on alternative
+                return "wait_for_human", "agent_suggested_alternative", None
+            return None, "agent_dialogue_handled", None
         
         # Check confidence if output has it
         confidence = None

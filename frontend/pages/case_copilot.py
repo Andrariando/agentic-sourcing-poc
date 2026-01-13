@@ -603,6 +603,60 @@ def render_chat_interface(case, client) -> None:
         process_chat_message(case.case_id, user_input, client, chat_history)
         st.rerun()
 
+    # Render Agent Logs (Internal Monologue) - Separate from Chat
+    _render_agent_logs(case)
+
+
+def _render_agent_logs(case):
+    """Render internal agent dialogue logs (reasoning/critique) separately."""
+    if not case.activity_log:
+        return
+
+    # Filter for Agent Dialogue logs
+    dialogue_logs = [
+        entry for entry in case.activity_log 
+        if (isinstance(entry, dict) and entry.get("task_name") == "Agent Dialogue") or
+           (hasattr(entry, "task_name") and entry.task_name == "Agent Dialogue")
+    ]
+    
+    if not dialogue_logs:
+        return
+        
+    with st.expander("🔍 Agent Logs (Internal Monologue)", expanded=False):
+        for entry in reversed(dialogue_logs): # Newest first
+            if isinstance(entry, dict):
+                agent = entry.get("agent_name", "Unknown")
+                timestamp = entry.get("timestamp", "")[:19]
+                summary = entry.get("output_summary", "")
+                payload = entry.get("output_payload", {})
+            else:
+                agent = entry.agent_name
+                timestamp = entry.timestamp[:19]
+                summary = entry.output_summary
+                payload = entry.output_payload
+            
+            # Extract reasoning/message from payload if available
+            reasoning = payload.get("reasoning", "No reasoning provided")
+            status = payload.get("status", "Info")
+            
+            st.markdown(f"""
+            <div style="background-color: #F8F9FA; border-left: 3px solid {MIT_NAVY}; padding: 8px 12px; margin-bottom: 8px; font-size: 0.85rem;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <strong>{agent}</strong>
+                    <span style="color: {CHARCOAL}; font-size: 0.75rem;">{timestamp}</span>
+                </div>
+                <div style="font-weight: 600; font-size: 0.8rem; color: {MIT_NAVY}; margin-bottom: 4px;">
+                    Status: {status}
+                </div>
+                <div style="color: {NEAR_BLACK}; margin-bottom: 6px;">
+                    {summary}
+                </div>
+                <div style="font-size: 0.8rem; color: {CHARCOAL}; font-style: italic; background-color: #EEE; padding: 4px; border-radius: 4px;">
+                    Reasoning: {reasoning}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
 
 def process_chat_message(case_id: str, message: str, client, chat_history: list) -> None:
     """Process a chat message and get response from backend."""

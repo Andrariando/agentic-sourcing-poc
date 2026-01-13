@@ -9,7 +9,7 @@ from utils.schemas import (
     CaseSummary, HumanDecision, BudgetState, AgentActionLog,
     StrategyRecommendation, SupplierShortlist, NegotiationPlan, SignalAssessment,
     SignalRegisterEntry, ClarificationRequest, OutOfScopeNotice, CaseTrigger,
-    RFxDraft, ContractExtraction, ImplementationPlan
+    RFxDraft, ContractExtraction, ImplementationPlan, AgentDialogue
 )
 from utils.token_accounting import create_initial_budget_state, update_budget_state, calculate_cost
 from utils.logging_utils import create_agent_log, add_log_to_state
@@ -940,12 +940,24 @@ def negotiation_node(state: PipelineState) -> PipelineState:
         
         tier = 2 if state.get("use_tier_2") else 1
         cost = calculate_cost(tier, input_tokens, output_tokens)
+
+        
+        # Helper to convert output to dict safely for logging
+        if isinstance(plan, AgentDialogue):
+            output_payload_safe = plan.model_dump()
+            output_summary_safe = f"Agent Dialogue ({plan.status}): {plan.message}"
+            task_name_safe = "Agent Dialogue"
+        else:
+            output_payload_safe = output_dict
+            output_summary_safe = f"Created negotiation plan for {supplier_id}"
+            task_name_safe = "Create Negotiation Plan"
+            
         log = create_agent_log(
             case_id=case_summary.case_id,
             dtp_stage=state["dtp_stage"],
             trigger_source=state["trigger_source"],
             agent_name="NegotiationSupport",
-            task_name="Create Negotiation Plan",
+            task_name=task_name_safe,
             model_used="gpt-4o" if tier == 2 else "gpt-4o-mini",
             token_input=input_tokens,
             token_output=output_tokens,
@@ -954,8 +966,8 @@ def negotiation_node(state: PipelineState) -> PipelineState:
             cache_key=cache_meta.cache_key,
             input_hash=cache_meta.input_hash,
             llm_input_payload=llm_input,
-            output_payload=output_dict,
-            output_summary=f"Created negotiation plan for {supplier_id}",
+            output_payload=output_payload_safe,
+            output_summary=output_summary_safe,
             guardrail_events=["Budget exceeded"] if budget_exceeded else []
         )
         state = add_log_to_state(state, log)
@@ -964,10 +976,12 @@ def negotiation_node(state: PipelineState) -> PipelineState:
         state["latest_agent_name"] = "NegotiationSupport"
         
         # PHASE 3: Run constraint compliance check (MANDATORY)
-        compliance_result, reflection = _check_constraint_compliance(state, plan, "NegotiationSupport")
-        state["constraint_compliance_status"] = compliance_result.status.value
-        state["constraint_violations"] = [f"{v.constraint_name}: {v.expected_behavior}" for v in compliance_result.violations]
-        state["constraint_reflection"] = reflection
+        # Skip if it is a Dialogue (no execution yet)
+        if not isinstance(plan, AgentDialogue):
+            compliance_result, reflection = _check_constraint_compliance(state, plan, "NegotiationSupport")
+            state["constraint_compliance_status"] = compliance_result.status.value
+            state["constraint_violations"] = [f"{v.constraint_name}: {v.expected_behavior}" for v in compliance_result.violations]
+            state["constraint_reflection"] = reflection
 
     except Exception as e:
         fallback = negotiation_agent.create_fallback_output(
