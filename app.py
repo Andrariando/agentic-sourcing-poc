@@ -1257,404 +1257,56 @@ def run_copilot(case_id: str, user_intent: str, use_tier_2: bool = False):
         return
 
     # =========================================================================
-    # UNIFIED WORKFLOW EXECUTION (GOAL A.3)
-    # Always pass user intent to the Supervisor/Workflow.
-    # The Supervisor determines if we need Strategy, Status, Clarification, etc.
+    # UNIFIED EXECUTION PATH
+    # =========================================================================
+    # All logic is now encapsulated in ChatService to ensure detailed consistency.
+    # The frontend is now a "dumb" renderer of the service's output.
     # =========================================================================
     
-    # Initialize workflow state
-    # Use existing agent output if available (for context)
-    latest_agent_output = case.latest_agent_output
-    latest_agent_name = case.latest_agent_name
-    
-    workflow_state: PipelineState = {
-        "case_id": case.case_id,
-        "dtp_stage": case.dtp_stage,
-        "trigger_source": case.trigger_source,
-        "user_intent": user_intent, # Pass intent to workflow
-        "case_summary": case.summary,
-        "latest_agent_output": latest_agent_output,  # Preserve existing output for context
-        "latest_agent_name": latest_agent_name,
-        "activity_log": [],
-        "human_decision": None,
-        "budget_state": create_initial_budget_state(),
-        "cache_meta": CacheMeta(cache_hit=False, cache_key=None, input_hash=None, schema_version="1.0"),
-        "error_state": None,
-        "waiting_for_human": False,
-        "use_tier_2": use_tier_2,
-        "visited_agents": [],  # Track visited agents to prevent loops
-        "iteration_count": 0,  # Track Supervisor iterations
-        "dtp_policy_context": build_policy_context(case.dtp_stage),
-        "signal_register": initial_signal_register(),
-        # PHASE 3: Pass execution constraints (binding user preferences from collaboration)
-        "execution_constraints": execution_constraints,
-    }
-
-    # Store tier preference for agent initialization
-    workflow_state["use_tier_2"] = use_tier_2
-    
-    # Mark workflow as started in chat response
-    if st.session_state.chat_responses[case_id] and st.session_state.chat_responses[case_id][-1].get("pending"):
-        st.session_state.chat_responses[case_id][-1]["workflow_started"] = True
-        st.session_state.chat_responses[case_id][-1]["assistant"] = "🔄 **Processing...**"
+    from backend.services.chat_service import get_chat_service
+    chat_service = get_chat_service()
     
     try:
-        # Run workflow
-        graph = get_workflow_graph()
-        # Increased recursion limit to handle Supervisor → Agent → Supervisor cycles
-        # With loop detection, this should be sufficient
-        config = {"recursion_limit": 30}
-        
-        # Invoke workflow
-        final_state = graph.invoke(workflow_state, config)
-        
-        # Update chat with completion status
-        last_action = final_state.get("activity_log", [])[-1] if final_state.get("activity_log") else None
-        
-        # Construct Response Envelope
-        # If the workflow produced a routed response (e.g. from an agent), use it.
-        # Otherwise, fallback to a geneated summary.
-        
-        response_message = "I've processed your request." # Default
-        agent_id = final_state.get("latest_agent_name", "Supervisor")
-        artifacts = []
-        
-        # Check if the latest agent returned a ResponseEnvelope-compatible dict or object
-        if final_state.get("latest_agent_output"):
-            output = final_state["latest_agent_output"]
-            if hasattr(output, "message"): # Assuming standard response format
-                 response_message = output.message
-            elif isinstance(output, dict) and "message" in output:
-                 response_message = output["message"]
-            elif hasattr(output, "summary_text"): # CaseSummary-like
-                 response_message = output.summary_text
-            else:
-                 # If it's a domain object (Strategy, etc), wrap it
-                 response_message = f"Generatd {type(output).__name__}."
-
-            # Extract artifacts if present
-            if hasattr(output, "artifacts"):
-                 artifacts = output.artifacts
-            elif isinstance(output, dict) and "artifacts" in output:
-                 artifacts = output["artifacts"]
-            # Auto-wrap domain objects as artifacts if they are important
-            # (Logic for Goal C.10 would be in Supervisor, but we can double check here)
-
-        # Standard Response Envelope
-        envelope = ResponseEnvelope(
-            message=response_message,
-            intent=intent_classification.intent,
-            agent_id=agent_id,
-            artifacts=artifacts,
-            fallback_used=False
+        # Delegate to ChatService
+        response = chat_service.process_message(
+            case_id=case_id,
+            user_message=user_intent,
+            use_tier_2=use_tier_2
         )
         
+        # Update case object in session state from the service's persistence
+        # (The service already saved it to DB/memory, we just refresh our view)
+        updated_state = chat_service.case_service.get_case_state(case_id)
+        if updated_state:
+            # map state back to Case object
+            case.dtp_stage = updated_state.get("dtp_stage", case.dtp_stage)
+            case.status = updated_state.get("status", case.status)
+            case.latest_agent_output = updated_state.get("latest_agent_output")
+            case.latest_agent_name = updated_state.get("latest_agent_name")
+            case.summary = updated_state.get("case_summary")
+            case.activity_log = updated_state.get("activity_log", [])
+            case.updated_timestamp = datetime.now().isoformat()
+            st.session_state.cases[case_id] = case
+            
+        # Update chat UI
         if st.session_state.chat_responses[case_id] and st.session_state.chat_responses[case_id][-1].get("pending"):
-            agents_called = [log.agent_name for log in final_state.get("activity_log", [])]
-            unique_agents = list(set(agents_called))
-            
-            # Use the message from the envelope for display
-            display_msg = envelope.to_display_message()
-            
-            st.session_state.chat_responses[case_id][-1]["assistant"] = display_msg
-            st.session_state.chat_responses[case_id][-1]["envelope"] = envelope.model_dump()
-        
-        # Update case with results
-        case.latest_agent_output = final_state.get("latest_agent_output")
-        case.latest_agent_name = final_state.get("latest_agent_name")
-        case.activity_log.extend(final_state.get("activity_log", []))
-        case.summary = final_state["case_summary"]
-        case.dtp_stage = final_state["dtp_stage"]
-        now = datetime.now()
-        case.updated_date = now.strftime("%Y-%m-%d")
-        case.updated_timestamp = now.isoformat()
-        case.user_intent = user_intent
-        
-        if final_state.get("waiting_for_human"):
-            case.status = "Waiting for Human Decision"
-        
-        # UX PRINCIPLE:
-        # - SupervisorAgent is the conceptual narrator of the workflow.
-        # - The chat never decides what happens next; it explains
-        #   what the Supervisor + policies have already allowed.
-        if "chat_responses" not in st.session_state:
-            st.session_state.chat_responses = {}
-        if case_id not in st.session_state.chat_responses:
-            st.session_state.chat_responses[case_id] = []
-        
-        # PHASE 2 - OBJECTIVE A: Update case memory from workflow result
-        case_memory = final_state.get("case_memory")
-        if case_memory is None:
-            case_memory = create_case_memory(case_id)
-        
-        if case.latest_agent_output and case.latest_agent_name:
-            update_memory_from_workflow_result(
-                case_memory,
-                case.latest_agent_name,
-                case.latest_agent_output,
-                user_intent=user_intent
-            )
-        
-        # Store memory in session state for persistence within session
-        if "case_memories" not in st.session_state:
-            st.session_state.case_memories = {}
-        st.session_state.case_memories[case_id] = case_memory
-        
-        # PHASE 2 - OBJECTIVE E: Get detected contradictions
-        detected_contradictions = final_state.get("detected_contradictions", [])
-        
-        # PHASE 2 - OBJECTIVE B: Use ResponseAdapter for response generation
-        response_adapter = get_response_adapter()
-        case_state_dict = {
-            "case_id": case.case_id,
-            "dtp_stage": case.dtp_stage,
-            "status": case.status,
-            "category_id": case.category_id,
-        }
-        
-        # Create natural, conversational response based on agent output
-        assistant_response = ""
-        if case.latest_agent_output:
-            if isinstance(case.latest_agent_output, StrategyRecommendation):
-                # Check for error first
-                is_error, error_msg = is_agent_output_error(case.latest_agent_output)
-                if is_error:
-                    assistant_response = "⚠️ I encountered an issue while generating the strategy recommendation. "
-                    assistant_response += f"**Error:** {error_msg}\n\n"
-                    assistant_response += "Please check your API configuration and try again."
-                else:
-                    # Use richer, stage‑aware, collaborative phrasing
-                    assistant_response = build_strategy_chat_response(case, user_intent)
-            elif isinstance(case.latest_agent_output, SupplierShortlist):
-                supplier_count = len(case.latest_agent_output.shortlisted_suppliers)
-                
-                # Check if this is a fallback error response
-                is_error, error_msg = is_agent_output_error(case.latest_agent_output)
-                
-                if is_error:
-                    # Error case - provide helpful troubleshooting message
-                    assistant_response = "⚠️ I encountered an issue while evaluating suppliers. "
-                    assistant_response += f"**Error:** {case.latest_agent_output.recommendation}\n\n"
-                    if "LLM" in case.latest_agent_output.comparison_summary:
-                        assistant_response += "**Details:** " + case.latest_agent_output.comparison_summary + "\n\n"
-                    assistant_response += "**Possible causes:**\n"
-                    assistant_response += "• OpenAI API key not configured or invalid\n"
-                    assistant_response += "• Network connectivity issue\n"
-                    assistant_response += "• API rate limit reached\n\n"
-                    assistant_response += "Please check your API configuration and try again."
-                elif supplier_count == 0:
-                    # No suppliers found but no error
-                    assistant_response = f"I've completed the supplier evaluation for **{case.category_id}**. "
-                    assistant_response += f"**{case.latest_agent_output.recommendation}**\n\n"
-                    assistant_response += "This may be due to strict eligibility requirements or performance thresholds. "
-                    assistant_response += "Would you like me to review the requirements or adjust the criteria?"
-                else:
-                    # Success case
-                    assistant_response = f"Perfect! I've completed the supplier evaluation. I've identified and analyzed **{supplier_count} qualified suppliers** for this category."
-                    if case.latest_agent_output.top_choice_supplier_id:
-                        assistant_response += f" Based on my analysis, **{case.latest_agent_output.top_choice_supplier_id}** stands out as the top recommendation."
-                    if case.latest_agent_output.comparison_summary:
-                        assistant_response += f" {case.latest_agent_output.comparison_summary[:100]}..."
-                    assistant_response += " Would you like me to prepare a detailed comparison or start the negotiation process?"
-            elif isinstance(case.latest_agent_output, RFxDraft):
-                is_error, error_msg = is_agent_output_error(case.latest_agent_output)
-                if is_error:
-                    assistant_response = "⚠️ I encountered an issue while creating the RFx draft. "
-                    assistant_response += f"**Error:** {error_msg}\n\n"
-                    assistant_response += "**Possible causes:**\n"
-                    assistant_response += "• OpenAI API key not configured or invalid\n"
-                    assistant_response += "• Network connectivity issue\n"
-                    assistant_response += "• API rate limit reached\n\n"
-                    assistant_response += "Please check your API configuration and try again."
-                else:
-                    sections_count = len(case.latest_agent_output.rfx_sections)
-                    completeness = case.latest_agent_output.completeness_check
-                    assistant_response = f"I've created an RFx draft with **{sections_count} sections** based on the template and category requirements."
-                    if completeness.get("all_sections_filled"):
-                        assistant_response += " All required sections have been filled."
-                    else:
-                        assistant_response += " Some sections may need additional review."
-                    assistant_response += " The draft is ready for your review. Would you like me to proceed with supplier evaluation next?"
-            elif isinstance(case.latest_agent_output, NegotiationPlan):
-                is_error, error_msg = is_agent_output_error(case.latest_agent_output)
-                if is_error:
-                    assistant_response = "⚠️ I encountered an issue while creating the negotiation plan. "
-                    assistant_response += f"**Error:** {error_msg}\n\n"
-                    assistant_response += "Please check your API configuration and try again."
-                else:
-                    objectives_count = len(case.latest_agent_output.negotiation_objectives)
-                    assistant_response = f"Excellent! I've prepared a comprehensive negotiation plan with **{objectives_count} key objectives**."
-                    if case.latest_agent_output.leverage_points:
-                        assistant_response += f" I've identified several leverage points we can use: {', '.join(case.latest_agent_output.leverage_points[:2])}."
-                    assistant_response += " The plan is ready for your review. Policy still requires your approval before any negotiation is initiated."
-            elif isinstance(case.latest_agent_output, ContractExtraction):
-                is_error, error_msg = is_agent_output_error(case.latest_agent_output)
-                if is_error:
-                    assistant_response = "⚠️ I encountered an issue while extracting contract terms. "
-                    assistant_response += f"**Error:** {error_msg}\n\n"
-                    assistant_response += "Please check your API configuration and try again."
-                else:
-                    terms_count = len(case.latest_agent_output.extracted_terms)
-                    validation = case.latest_agent_output.validation_results
-                    assistant_response = f"I've extracted **{terms_count} contract terms** using template-guided extraction."
-                    if validation.get("required_fields_present"):
-                        assistant_response += " All required fields are present."
-                    if case.latest_agent_output.inconsistencies:
-                        assistant_response += f" I've flagged {len(case.latest_agent_output.inconsistencies)} inconsistencies that need your review."
-                    assistant_response += " The extracted terms are ready for contracting. Would you like me to proceed with the implementation plan?"
-            elif isinstance(case.latest_agent_output, ImplementationPlan):
-                is_error, error_msg = is_agent_output_error(case.latest_agent_output)
-                if is_error:
-                    assistant_response = "⚠️ I encountered an issue while creating the implementation plan. "
-                    assistant_response += f"**Error:** {error_msg}\n\n"
-                    assistant_response += "Please check your API configuration and try again."
-                else:
-                    steps_count = len(case.latest_agent_output.rollout_steps)
-                    savings = case.latest_agent_output.projected_savings
-                    assistant_response = f"I've created an implementation plan with **{steps_count} rollout steps**."
-                    if savings:
-                        assistant_response += f" Projected savings: **${savings:,.2f}** (deterministic calculation)."
-                    assistant_response += " The plan includes structured KPIs and impact explanations. Ready for your review and approval."
-            elif isinstance(case.latest_agent_output, ClarificationRequest):
-                # Case Clarifier Agent output: render as natural follow-up questions,
-                # not as an error. This is a collaboration request, not a failure.
-                cr = case.latest_agent_output
-                assistant_response = f"Before I can proceed, I need a bit more context: **{cr.reason}**.\n\n"
-                if cr.questions:
-                    assistant_response += "Here are the key questions I need you to answer:\n"
-                    for q in cr.questions:
-                        assistant_response += f"- {q}\n"
-                if cr.suggested_options:
-                    assistant_response += "\nYou can pick from these options or provide your own wording:\n"
-                    for opt in cr.suggested_options:
-                        assistant_response += f"- {opt}\n"
-                assistant_response += "\nOnce you respond, I'll route your answer through the Supervisor so we stay within policy."
-            else:
-                # PHASE 2: Use ResponseAdapter for unknown output types
-                # PHASE 3: Include constraint reflection and violations (MANDATORY)
-                assistant_response = response_adapter.generate_response(
-                    case.latest_agent_output,
-                    case_state_dict,
-                    memory=case_memory,
-                    user_intent=user_intent,
-                    waiting_for_human=final_state.get("waiting_for_human", False),
-                    contradictions=detected_contradictions,
-                    constraint_reflection=final_state.get("constraint_reflection"),
-                    constraint_violations=final_state.get("constraint_violations")
-                )
-        
-        # PHASE 2 - OBJECTIVE E: Add contradiction warnings to response
-        if detected_contradictions and assistant_response:
-            contradiction_warning = "\n\n---\n⚠️ **Heads up:** I've detected some conflicting information:\n"
-            for c in detected_contradictions[:3]:
-                contradiction_warning += f"• {c}\n"
-            contradiction_warning += "\nPlease review and let me know how you'd like to proceed."
-            assistant_response += contradiction_warning
-        
-        if not case.latest_agent_output:
-            # Fallback if no output yet - but show what actually happened
-            activity_count = len(final_state.get("activity_log", []))
-            if activity_count > 0:
-                last_activity = final_state["activity_log"][-1]
-                assistant_response = f"✅ **Workflow executed successfully**\n\n"
-                assistant_response += f"• **{activity_count} actions** completed\n"
-                assistant_response += f"• Last agent: **{last_activity.agent_name}** - {last_activity.task_name}\n"
-                assistant_response += f"• DTP Stage: **{final_state['dtp_stage']}**\n\n"
-                assistant_response += "However, no specific output was generated. The workflow may have completed without producing a recommendation. Would you like me to run a specific analysis?"
-            else:
-                assistant_response = "⚠️ **Workflow executed but no actions were logged**\n\n"
-                assistant_response += "The workflow ran but didn't produce any agent activity. This might indicate:\n"
-                assistant_response += "• The case is in a stage that doesn't require agent action\n"
-                assistant_response += "• All required analyses are already complete\n"
-                assistant_response += "• The workflow determined no action is needed\n\n"
-                assistant_response += "Would you like me to run a specific analysis or check the case status?"
-        
-        # Update the pending message with the actual response
-        if st.session_state.chat_responses[case_id] and st.session_state.chat_responses[case_id][-1].get("pending"):
-            # Add workflow execution summary
-            agents_called = list(set([log.agent_name for log in final_state.get('activity_log', [])]))
-            total_tokens = sum([log.token_total for log in final_state.get('activity_log', [])])
-            cache_hits = sum([1 for log in final_state.get('activity_log', []) if log.cache_hit])
-            
-            workflow_summary = f"\n\n---\n**Backend Execution Summary:**\n"
-            workflow_summary += f"• **Agents called:** {', '.join(agents_called) if agents_called else 'None'}\n"
-            workflow_summary += f"• **Total actions:** {len(final_state.get('activity_log', []))}\n"
-            workflow_summary += f"• **Tokens used:** {total_tokens}\n"
-            workflow_summary += f"• **Cache hits:** {cache_hits}/{len(final_state.get('activity_log', []))}\n"
-            workflow_summary += f"• **DTP Stage:** {final_state['dtp_stage']}\n"
-            
+            # Update the pending message
             st.session_state.chat_responses[case_id][-1] = {
                 "user": user_intent,
-                "assistant": assistant_response + workflow_summary,
-                "timestamp": datetime.now().isoformat(),
+                "assistant": response.assistant_message,
+                "timestamp": response.timestamp,
                 "pending": False,
-                "workflow_started": True,
-                "workflow_summary": {
-                    "agents_called": agents_called,
-                    "total_actions": len(final_state.get('activity_log', [])),
-                    "tokens_used": total_tokens,
-                    "cache_hits": cache_hits,
-                    "dtp_stage": final_state['dtp_stage']
-                }
+                "workflow_summary": response.workflow_summary
             }
         else:
-            # Fallback: add new entry if pending message not found
+            # Fallback (shouldn't happen if initialized above)
             st.session_state.chat_responses[case_id].append({
                 "user": user_intent,
-                "assistant": assistant_response,
-                "timestamp": datetime.now().isoformat(),
-                "pending": False
-            })
-        
-        # Store workflow state for HIL
-        st.session_state.workflow_state = final_state
-        st.session_state.cases[case_id] = case
-        
-        st.rerun()
-        
-    except Exception as e:
-        # Check if it's a recursion error
-        error_msg = str(e)
-        is_recursion_error = "Recursion limit" in error_msg or "GraphRecursionError" in error_msg
-        
-        if is_recursion_error:
-            error_response = f"⚠️ **Workflow Loop Detected**\n\n"
-            error_response += "The workflow exceeded the recursion limit, indicating a possible infinite loop.\n\n"
-            error_response += "**What happened:**\n"
-            error_response += "• Workflow entered a loop (Supervisor → Agent → Supervisor)\n"
-            error_response += "• Loop detection mechanisms were triggered\n"
-            error_response += "• Workflow was terminated to prevent infinite execution\n\n"
-            error_response += "**Possible causes:**\n"
-            error_response += "• Agent routing logic creating cycles\n"
-            error_response += "• Missing stop conditions in workflow\n"
-            error_response += "• Human decision not properly injected\n\n"
-            error_response += "**Backend details:** Check Agent Activity Log for Supervisor routing decisions."
-        else:
-            error_response = f"❌ **Workflow Execution Error**\n\n"
-            error_response += f"**Error:** {error_msg}\n\n"
-            error_response += "**What happened:**\n"
-            error_response += "• Workflow was initialized\n"
-            error_response += "• Attempted to execute agent pipeline\n"
-            error_response += "• Error occurred during execution\n\n"
-            error_response += "**Possible causes:**\n"
-            error_response += "• API key not configured\n"
-            error_response += "• Network connectivity issue\n"
-            error_response += "• Agent processing error\n"
-            error_response += "• Invalid case state\n\n"
-            error_response += "Check the error details below or try again."
-        
-        if st.session_state.chat_responses[case_id] and st.session_state.chat_responses[case_id][-1].get("pending"):
-            st.session_state.chat_responses[case_id][-1] = {
-                "user": user_intent,
-                "assistant": error_response,
-                "timestamp": datetime.now().isoformat(),
+                "assistant": response.assistant_message,
+                "timestamp": response.timestamp,
                 "pending": False,
-                "workflow_started": True,
-                "error": True
-            }
-        
-        st.error(f"Error running workflow: {e}")
-        if not is_recursion_error:
+                "workflow_summary": response.workflow_summary
+            })
             st.exception(e)
 
 

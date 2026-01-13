@@ -37,8 +37,15 @@ except ImportError:
 from backend.services.case_service import get_case_service
 from backend.supervisor.state import SupervisorState, StateManager
 from backend.supervisor.router import IntentRouter
-from shared.constants import UserIntent, UserGoal, CaseStatus, DTP_STAGE_NAMES, AgentName
-from shared.schemas import ChatResponse, ArtifactPack
+from shared.constants import DTP_STAGE_NAMES, AgentName
+from utils.schemas import (
+    StrategyRecommendation, SupplierShortlist, NegotiationPlan, 
+    RFxDraft, ContractExtraction, ImplementationPlan, ClarificationRequest
+)
+from shared.schemas import (
+    ChatResponse, ArtifactPack, NextAction, CaseStatus, Artifact, RiskItem
+)
+from shared.constants import UserIntent, UserGoal
 
 # Import new official agents
 from backend.agents import (
@@ -998,365 +1005,172 @@ class ChatService:
             )
         
         # Fall back to legacy agents
-        allowed_agents = IntentRouter.get_allowed_agents(UserIntent.DECIDE, dtp_stage)
-        
-        if not allowed_agents:
-            return self._create_response(
-                case_id, message,
-                f"No analysis available at stage {dtp_stage}.",
-                "DECIDE", dtp_stage
-            )
-        
-        # Select and run legacy agent
-        agent_name = self._select_agent(message, allowed_agents, dtp_stage)
-        legacy_agent = self._agents.get(agent_name)
-        
-        if not legacy_agent:
-            return self._create_response(
-                case_id, message,
-                "Unable to run analysis at this time.",
-                "DECIDE", dtp_stage
-            )
-        
-        case_context = {
-            "case_id": case_id,
-            "category_id": state.get("category_id"),
-            "supplier_id": state.get("supplier_id"),
-            "contract_id": state.get("contract_id"),
-            "dtp_stage": dtp_stage
-        }
-        
-        agent_result = legacy_agent.execute(case_context, message)
-        
-        # Update state
-        if agent_result:
-            state["latest_agent_output"] = agent_result.get("output")
-            state["latest_agent_name"] = agent_result.get("agent_name")
-            state["waiting_for_human"] = True
-            state["status"] = CaseStatus.WAITING_HUMAN.value
-            self.case_service.save_case_state(state)
-        
-        # Format response
-        response = self._format_agent_response(agent_result)
-        
-        return self._create_response(
-            case_id, message, response, "DECIDE", dtp_stage,
-            agents_called=[agent_name],
-            tokens=agent_result.get("tokens_used", 0) if agent_result else 0,
-            waiting=True,
-            retrieval=agent_result.get("retrieval_context") if agent_result else None
-        )
     
-    def _run_official_agent(
+    def process_message(
         self,
         case_id: str,
-        message: str,
-        state: SupervisorState,
-        agent,
-        action_plan,
-        intent_result,
-        conversation_history: Optional[List[Dict[str, str]]] = None,
+        user_message: str,
         use_tier_2: bool = False
     ) -> ChatResponse:
-        """Run an official agent that returns ArtifactPack."""
-        dtp_stage = state["dtp_stage"]
+        """
+        Process a user message using the unified LangGraph workflow.
         
-        case_context = {
-            "case_id": case_id,
-            "category_id": state.get("category_id"),
-            "supplier_id": state.get("supplier_id"),
-            "contract_id": state.get("contract_id"),
-            "dtp_stage": dtp_stage,
-            # Add estimated values for implementation agent
-            "new_contract_value": state.get("latest_agent_output", {}).get("annual_value", 450000) if state.get("latest_agent_output") else 450000,
-            "old_contract_value": 500000,
-            "term_years": 3,
-        }
+        Args:
+            case_id: The ID of the case context
+            user_message: The raw natural language message from the user
+            use_tier_2: Whether to use more powerful (expensive) models
+            
+        Returns:
+            ChatResponse: Structured response including natural language, artifacts, and metadata
+        """
+        # 1. Get or create case state
+        state = self.case_service.get_case_state(case_id)
+        if not state:
+            # Create new case if it doesn't exist (e.g. from a new conversation)
+            # This is a safety fallback; usually case exists before chat
+            success = self.case_service.create_case(case_id, "New Strategic Sourcing Case")
+            if not success:
+                return self._create_error_response(case_id, user_message, "Failed to initialize case context.")
+            state = self.case_service.get_case_state(case_id)
+
+        # 2. Check for manual override / basic intents that don't need full workflow (optional optimization)
+        # For now, we route EVERYTHING through LangGraph for consistency, 
+        # unless it's a simple "ping" which the graph handles anyway.
+
+        # 3. Prepare initial state for workflow
+        # We need to map the stored case state to the PipelineState expected by LangGraph
+        from utils.state import PipelineState
+        from utils.schemas import BudgetState
         
-        # NEW: Add conversation history if available (optional)
-        if conversation_history:
-            case_context["conversation_history"] = conversation_history
+        # Initialize budget if missing
+        if "budget_state" not in state:
+             # Create default budget state
+             state["budget_state"] = BudgetState(
+                 total_budget_usd=10.0,
+                 total_cost_usd=0.0,
+                 tokens_used=0,
+                 model_usage={}
+             )
         
-        # NEW: Estimate cost before execution (if conversation memory enabled)
-        if self.conversation_manager and self.enable_conversation_memory:
-            try:
-                estimated_tokens, estimated_cost = self.conversation_manager.estimate_execution_cost(
-                    conversation_history=conversation_history or [],
-                    user_message=message,
-                    agent_name=action_plan.agent_name,
-                    use_tier_2=use_tier_2
-                )
-                
-                # Check budget (configurable threshold)
-                max_cost_per_message = float(os.getenv("MAX_COST_PER_MESSAGE", "1.0"))  # $1 default
-                if estimated_cost > max_cost_per_message:
-                    # Suggest more specific question or return cost warning
-                    intent_for_response = self._map_user_goal_to_intent(intent_result.user_goal)
-                    return self._create_response(
-                        case_id, message,
-                        f"⚠️ Estimated cost (${estimated_cost:.2f}) exceeds limit (${max_cost_per_message:.2f}). "
-                        f"Please try a more specific question.",
-                        intent_for_response, dtp_stage
-                    )
-            except Exception as e:
-                logger.warning(f"Cost estimation failed: {e}")
-                # Continue without cost check (backward compatible)
+        # Map DB state to PipelineState 
+        # Note: In a real prod env, we might need a more robust mapper. 
+        # Here we assume state keys mostly match PipelineState.
+        workflow_state = dict(state)
+        workflow_state["user_intent"] = user_message
+        workflow_state["use_tier_2"] = use_tier_2
         
-        # Execute agent
-        agent_result = agent.execute(case_context, message)
-        
-        if not agent_result.get("success"):
-            # Map user_goal to old intent format for _create_response
-            intent_for_response = self._map_user_goal_to_intent(intent_result.user_goal)
-            return self._create_response(
-                case_id, message,
-                "Analysis could not be completed. Please try again.",
-                intent_for_response, dtp_stage
-            )
-        
-        # Get artifact pack
-        artifact_pack = agent_result.get("artifact_pack")
-        
-        # Persist artifact pack
-        if artifact_pack:
-            try:
-                success = self.case_service.save_artifact_pack(case_id, artifact_pack)
-                if not success:
-                    logger.warning(f"Failed to save artifact pack {artifact_pack.pack_id} for case {case_id}")
-            except Exception as e:
-                logger.error(f"Error saving artifact pack: {e}", exc_info=True)
-        
-        # Update state
-        state["latest_agent_output"] = agent_result.get("output", {})
-        state["latest_agent_name"] = agent_result.get("agent_name")
-        state["waiting_for_human"] = action_plan.approval_required
-        if action_plan.approval_required:
-            state["status"] = CaseStatus.WAITING_HUMAN.value
-        # Update latest_artifact_pack_id in state (save_artifact_pack already updated the case in DB)
-        if artifact_pack:
-            state["latest_artifact_pack_id"] = artifact_pack.pack_id
-        self.case_service.save_case_state(state)
-        
-        # Format response from artifact pack
-        response = self._format_artifact_pack_response(artifact_pack)
-        
-        # Map user_goal to old intent format for _create_response
-        intent_for_response = self._map_user_goal_to_intent(intent_result.user_goal)
-        
-        return self._create_response(
-            case_id, message, response,
-            intent_for_response, dtp_stage,
-            agents_called=[action_plan.agent_name],
-            tokens=agent_result.get("tokens_used", 0),
-            waiting=action_plan.approval_required,
-            retrieval=agent_result.get("retrieval_context") if agent_result else None,
-            workflow_summary={
-                "artifact_pack_id": artifact_pack.pack_id if artifact_pack else None,
-                "artifacts_created": len(artifact_pack.artifacts) if artifact_pack else 0,
-                "next_actions": len(artifact_pack.next_actions) if artifact_pack else 0,
+        # Ensure critical fields exist
+        if "visited_agents" not in workflow_state:
+            workflow_state["visited_agents"] = []
+        if "iteration_count" not in workflow_state:
+            workflow_state["iteration_count"] = 0
+            
+        # 4. Run the Workflow
+        try:
+            final_state = self._run_workflow(workflow_state)
+            
+            # 5. Persist updated state
+            # The workflow returns the final state; we save it back to valid persistence
+            self.case_service.save_case_state(final_state)
+            
+            # 6. Generate Response using ResponseAdapter
+            # This decouples the "what happened" (state) from "what we say" (chat)
+            from utils.response_adapter import get_response_adapter
+            adapter = get_response_adapter()
+            
+            # Extract necessary context for the adapter
+            latest_output = final_state.get("latest_agent_output")
+            case_memory = final_state.get("case_memory")
+            waiting_for_human = final_state.get("waiting_for_human", False)
+            contradictions = final_state.get("detected_contradictions", [])
+            constraint_reflection = final_state.get("constraint_reflection")
+            constraint_violations = final_state.get("constraint_violations")
+            
+            # Helper to convert state dict to what adapter expects (if needed)
+            case_context_dict = {
+                "case_id": case_id,
+                "dtp_stage": final_state.get("dtp_stage"),
+                "status": final_state.get("status"),
+                "category_id": final_state.get("category_id")
             }
-        )
-    
-    def _format_artifact_pack_response(self, pack: Optional[ArtifactPack]) -> str:
-        """Format artifact pack as conversational response."""
-        if not pack:
-            return "Analysis complete."
-        
-        response_parts = []
-        agent_name = pack.agent_name if pack else ""
-        
-        # Agent-specific introduction
-        if "SOURCING_SIGNAL" in agent_name or "Signal" in agent_name:
-            response_parts.append("**Sourcing Signal Analysis Complete**")
-            response_parts.append("")
-            if pack.artifacts:
-                response_parts.append(f"I've analyzed {len(pack.artifacts)} signal(s) for this category:")
-        elif "SUPPLIER_SCORING" in agent_name or "Supplier" in agent_name:
-            response_parts.append("**Supplier Evaluation Complete**")
-            response_parts.append("")
-            if pack.artifacts:
-                response_parts.append(f"I've scored and evaluated suppliers. Here are the results:")
-        elif "RFX_DRAFT" in agent_name or "RFx" in agent_name or "Rfx" in agent_name:
-            response_parts.append("**RFx Draft Complete**")
-            response_parts.append("")
-            if pack.artifacts:
-                response_parts.append(f"I've prepared the RFx documentation:")
-        elif "NEGOTIATION" in agent_name or "Negotiation" in agent_name:
-            response_parts.append("**Negotiation Plan Ready**")
-            response_parts.append("")
-            if pack.artifacts:
-                response_parts.append(f"I've created a negotiation strategy:")
-        elif "CONTRACT" in agent_name or "Contract" in agent_name:
-            response_parts.append("**Contract Analysis Complete**")
-            response_parts.append("")
-            if pack.artifacts:
-                response_parts.append(f"I've reviewed the contract terms:")
-        elif "IMPLEMENTATION" in agent_name or "Implementation" in agent_name:
-            response_parts.append("**Implementation Plan Ready**")
-            response_parts.append("")
-            if pack.artifacts:
-                response_parts.append(f"I've created an implementation roadmap:")
-        else:
-            # Generic fallback
-            response_parts.append("**Analysis Complete**")
-            response_parts.append("")
-        
-        # Add main artifacts
-        if pack.artifacts:
-            for artifact in pack.artifacts[:3]:
-                response_parts.append(f"**{artifact.title}**")
-                if artifact.content_text:
-                    # Truncate long content but keep more context
-                    content = artifact.content_text[:500] if len(artifact.content_text) > 500 else artifact.content_text
-                    response_parts.append(content)
-                elif artifact.content:
-                    # Fallback to content dict if content_text is empty
-                    content_str = str(artifact.content)[:500]
-                    response_parts.append(content_str)
-                response_parts.append("")
-        else:
-            # No artifacts - indicate this
-            response_parts.append("Analysis completed successfully.")
-            response_parts.append("")
-        
-        # Add next actions with agent-specific framing
-        if pack.next_actions:
-            if "SOURCING_SIGNAL" in agent_name:
-                response_parts.append("**Recommended Actions:**")
-            elif "SUPPLIER_SCORING" in agent_name:
-                response_parts.append("**Next Steps in Supplier Selection:**")
-            elif "RFX_DRAFT" in agent_name:
-                response_parts.append("**Before Sending the RFx:**")
-            elif "NEGOTIATION" in agent_name:
-                response_parts.append("**Negotiation Preparation:**")
-            elif "CONTRACT" in agent_name:
-                response_parts.append("**Contract Review Actions:**")
-            elif "IMPLEMENTATION" in agent_name:
-                response_parts.append("**Implementation Steps:**")
-            else:
-                response_parts.append("**Recommended Next Steps:**")
             
-            for action in pack.next_actions[:3]:
-                response_parts.append(f"- {action.label}")
-            response_parts.append("")
-        
-        # Add risks if any
-        if pack.risks:
-            response_parts.append("**Risks Identified:**")
-            for risk in pack.risks[:2]:
-                response_parts.append(f"- [{risk.severity.upper()}] {risk.description}")
-            response_parts.append("")
-        
-        # Add notes
-        if pack.notes:
-            for note in pack.notes:
-                response_parts.append(f"*{note}*")
-        
-        # Agent-specific closing message
-        if pack.artifacts or pack.next_actions or pack.risks:
-            response_parts.append("---")
-            if "SOURCING_SIGNAL" in agent_name:
-                response_parts.append("Review the signal analysis above. Would you like me to proceed with supplier evaluation?")
-            elif "SUPPLIER_SCORING" in agent_name:
-                response_parts.append("Review the supplier scores above. Ready to move forward with the shortlist?")
-            elif "RFX_DRAFT" in agent_name:
-                response_parts.append("Review the RFx draft above. Ready to send it to suppliers?")
-            elif "NEGOTIATION" in agent_name:
-                response_parts.append("Review the negotiation plan above. Ready to proceed with negotiations?")
-            elif "CONTRACT" in agent_name:
-                response_parts.append("Review the contract analysis above. Ready to finalize the agreement?")
-            elif "IMPLEMENTATION" in agent_name:
-                response_parts.append("Review the implementation plan above. Ready to begin rollout?")
-            else:
-                response_parts.append("Review the analysis above and let me know if you'd like to proceed or make changes.")
-        else:
-            response_parts.append("---")
-            response_parts.append("Analysis complete. What would you like to do next?")
-        
-        return "\n".join(response_parts)
-    
-    def _format_agent_response(self, agent_result: Optional[Dict]) -> str:
-        """Format agent output as conversational response."""
-        if not agent_result:
-            return "Analysis could not be completed. Please try again."
-        
-        output = agent_result.get("output", {})
-        agent_name = agent_result.get("agent_name", "")
-        
-        if agent_name == "Strategy":
-            strategy = output.get("recommended_strategy", "Monitor")
-            confidence = output.get("confidence", 0)
-            rationale = output.get("rationale", [])
+            assistant_message = adapter.generate_response(
+                output=latest_output,
+                case_state=case_context_dict,
+                memory=case_memory,
+                user_intent=user_message,
+                waiting_for_human=waiting_for_human,
+                contradictions=contradictions,
+                constraint_reflection=constraint_reflection,
+                constraint_violations=constraint_violations
+            )
             
-            response = f"**Strategy Recommendation: {strategy}**\n\n"
-            response += f"Confidence: {confidence:.0%}\n\n"
+            # 7. Construct and return structured ChatResponse
+            return self._create_response(
+                case_id=case_id,
+                user_message=user_message,
+                assistant_message=assistant_message,
+                intent=final_state.get("intent_classification", "UNKNOWN"), # Graph should set this
+                dtp_stage=final_state.get("dtp_stage", "DTP-01"),
+                agents_called=self._extract_agents_called(final_state),
+                tokens=final_state.get("budget_state", {}).get("tokens_used", 0),
+                waiting=waiting_for_human,
+                retrieval=final_state.get("retrieval_context"),
+                workflow_summary=self._build_workflow_summary(final_state)
+            )
             
-            if rationale:
-                response += "**Rationale:**\n"
-                for r in rationale:
-                    response += f"- {r}\n"
-            
-            response += "\n---\nAwaiting your approval to proceed. Please review and approve or reject."
+        except Exception as e:
+            logger.error(f"Workflow execution failed: {e}", exc_info=True)
+            return self._create_error_response(case_id, user_message, str(e))
+
+    def _run_workflow(self, initial_state: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Execute the LangGraph workflow.
+        """
+        from graphs.workflow import get_workflow_graph
         
-        elif agent_name == "SupplierEvaluation":
-            suppliers = output.get("shortlisted_suppliers", [])
-            response = f"**Supplier Evaluation Complete**\n\n"
-            if suppliers:
-                response += f"Shortlisted {len(suppliers)} suppliers:\n"
-                for s in suppliers[:5]:
-                    name = s.get('name', s.get('supplier_id', 'Unknown'))
-                    score = s.get('score', 'N/A')
-                    response += f"- {name}: {score}/10\n"
-            response += "\n---\nAwaiting your approval."
+        # Get the compiled graph
+        app = get_workflow_graph()
         
-        elif agent_name == "NegotiationSupport":
-            objectives = output.get("negotiation_objectives", [])
-            response = f"**Negotiation Plan Created**\n\n"
-            if objectives:
-                response += "**Objectives:**\n"
-                for obj in objectives:
-                    response += f"- {obj}\n"
-            response += "\n---\nAwaiting your approval."
+        # Invoke the graph
+        # config can include thread_id for checkpointer if we use it
+        config = {"recursion_limit": 50} 
         
-        else:
-            response = json.dumps(output, indent=2)
-        
-        return response
-    
-    def _select_agent(
-        self,
-        message: str,
-        allowed_agents: List[str],
-        dtp_stage: str
-    ) -> Optional[str]:
-        """Select appropriate agent based on message."""
-        message_lower = message.lower()
-        
-        if "strategy" in message_lower or "recommend" in message_lower:
-            if "Strategy" in allowed_agents:
-                return "Strategy"
-        
-        if "supplier" in message_lower or "evaluate" in message_lower:
-            if "SupplierEvaluation" in allowed_agents:
-                return "SupplierEvaluation"
-        
-        if "negotiat" in message_lower:
-            if "NegotiationSupport" in allowed_agents:
-                return "NegotiationSupport"
-        
-        return allowed_agents[0] if allowed_agents else None
-    
-    def _map_user_goal_to_intent(self, user_goal: str) -> str:
-        """Map new UserGoal enum to old UserIntent format for ChatResponse."""
-        mapping = {
-            UserGoal.TRACK.value: UserIntent.STATUS.value,
-            UserGoal.UNDERSTAND.value: UserIntent.EXPLAIN.value,
-            UserGoal.CREATE.value: UserIntent.DECIDE.value,
-            UserGoal.CHECK.value: UserIntent.DECIDE.value,
-            UserGoal.DECIDE.value: UserIntent.DECIDE.value,
+        final_state = app.invoke(initial_state, config)
+        return final_state
+
+    def _extract_agents_called(self, state: Dict[str, Any]) -> List[str]:
+        """Extract list of unique agents called from activity log."""
+        log = state.get("activity_log", [])
+        return list(set(entry.get("agent_name") for entry in log if isinstance(entry, dict) or hasattr(entry, "agent_name")))
+
+    def _build_workflow_summary(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Build summary metadata for the frontend."""
+        log = state.get("activity_log", [])
+        return {
+            "total_steps": len(log),
+            "agents_visited": self._extract_agents_called(state),
+            "final_agent": state.get("latest_agent_name"),
+            "trace_id": state.get("trace_id", str(uuid.uuid4()))
         }
-        return mapping.get(user_goal, UserIntent.DECIDE.value)
-    
+
+    def _create_error_response(self, case_id: str, user_message: str, error_msg: str) -> ChatResponse:
+        """Create a standardized error response."""
+        return ChatResponse(
+            case_id=case_id,
+            user_message=user_message,
+            assistant_message=f"I encountered an error while processing your request: {error_msg}. Please try again.",
+            intent_classified="ERROR",
+            agents_called=[],
+            tokens_used=0,
+            dtp_stage="UNKNOWN",
+            waiting_for_human=False,
+            workflow_summary={"error": True},
+            retrieval_context=None,
+            timestamp=datetime.now().isoformat()
+        )
+
+    # ... keep existing _create_response for compatibility or updated usage ...
     def _create_response(
         self,
         case_id: str,
@@ -1393,7 +1207,7 @@ class ChatService:
             retrieval_context=retrieval,
             timestamp=datetime.now().isoformat()
         )
-    
+
     def process_decision(
         self,
         case_id: str,
@@ -1401,48 +1215,43 @@ class ChatService:
         reason: Optional[str] = None,
         edited_fields: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Process human decision (approve/reject)."""
+        """
+        Process human decision (approve/reject).
+        Crucially, this NOW also goes through the workflow to ensure state consistency.
+        """
         state = self.case_service.get_case_state(case_id)
         if not state:
             return {"success": False, "message": "Case not found"}
         
-        if not state.get("waiting_for_human"):
-            return {"success": False, "message": "Case not waiting for decision"}
+        # We need to inject the decision into the state and then run the graph
+        # The Supervisor node handles 'human_decision' present in state
         
-        # Update state with decision
         state["human_decision"] = {
             "decision": decision,
             "reason": reason,
             "edited_fields": edited_fields or {},
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
+            # "user_id": ... # could add if we had auth context
         }
         
-        if decision.lower() == "approve":
-            can_advance, _ = StateManager.can_advance_stage(state, True)
-            if can_advance:
-                state, _ = StateManager.advance_stage(state)
-            state["status"] = CaseStatus.IN_PROGRESS.value
-        else:
-            state["status"] = CaseStatus.IN_PROGRESS.value
-        
-        state["waiting_for_human"] = False
-        self.case_service.save_case_state(state)
-        
-        # Get updated state to return correct stage (in case it advanced)
-        updated_state = self.case_service.get_case_state(case_id)
-        final_stage = updated_state["dtp_stage"] if updated_state else state["dtp_stage"]
-        
-        return {
-            "success": True,
-            "decision": decision,
-            "new_dtp_stage": final_stage,
-            "message": f"Decision '{decision}' processed successfully"
-        }
-
+        # Run workflow to let Supervisor process the decision
+        # The Supervisor logic will see 'human_decision', apply it, update status, and potentially route to next agent
+        try:
+            final_state = self._run_workflow(state)
+            self.case_service.save_case_state(final_state)
+            
+            return {
+                "success": True,
+                "decision": decision,
+                "new_dtp_stage": final_state.get("dtp_stage"),
+                "message": f"Decision '{decision}' processed successfully via workflow."
+            }
+        except Exception as e:
+            logger.error(f"Error processing decision via workflow: {e}")
+            return {"success": False, "message": f"Error processing decision: {e}"}
 
 # Singleton
 _chat_service = None
-
 
 def get_chat_service() -> ChatService:
     global _chat_service
