@@ -217,19 +217,40 @@ streamlit run frontend/app.py
 - **API Docs**: http://localhost:8000/docs
 - **Frontend**: http://localhost:8501
 
-### Seed Synthetic Data (Happy Path Demo)
+### Seed Synthetic Data (Comprehensive Demo)
 
 ```bash
-# Seed CASE-0001 and sample data
-python backend/scripts/seed_synthetic_data.py
+# Seed 5 complete cases with full data
+python backend/scripts/seed_comprehensive_data.py
 ```
 
-This creates:
-- **CASE-0001** — IT Services Contract Renewal
-- Supplier performance data (3 suppliers)
-- Spend data with anomalies
-- SLA events
-- Sample documents in ChromaDB
+This creates **5 comprehensive test cases** with full end-to-end data:
+
+| Case ID | Name | Category | DTP Stage | Description |
+|---------|------|----------|-----------|-------------|
+| CASE-0001 | IT Services Contract Renewal | IT_SERVICES | DTP-01 | Contract expiring in 35 days |
+| CASE-0002 | Office Supplies Cost Reduction | OFFICE_SUPPLIES | DTP-01 | Spend anomaly (+20% over budget) |
+| CASE-0003 | Cloud Infrastructure Migration | CLOUD_SERVICES | DTP-02 | AWS/Azure/GCP evaluation |
+| CASE-0004 | Marketing Agency Selection | MARKETING_SERVICES | DTP-03 | 4 agency proposals to evaluate |
+| CASE-0005 | Facilities Management Negotiation | FACILITIES_MANAGEMENT | DTP-04 | Incumbent requesting 8% increase |
+
+**Data Seeded**:
+- **16 suppliers** across 5 categories with differentiated performance
+- **12 months of spend data** per category with anomalies
+- **SLA events** (breaches, warnings, compliance) for supplier differentiation
+- **11 documents** (71 chunks) in ChromaDB:
+  - RFP templates, market benchmarks, policy docs
+  - Cloud provider comparisons, migration guides
+  - Contract templates, evaluation rubrics
+
+**Sample Chatbot Interactions**:
+```
+CASE-0001: "What's the renewal strategy for this case?"
+CASE-0002: "Why are costs increasing?"
+CASE-0003: "Compare the cloud providers"
+CASE-0004: "Evaluate the marketing proposals"
+CASE-0005: "What's our negotiation position?"
+```
 
 ---
 
@@ -343,14 +364,48 @@ For detailed information about all 7 agents, their sub-tasks, execution flow, an
 
 ## 📁 Data
 
-Synthetic test data:
-- **CASE-0001** — IT Services contract renewal scenario
-- **3 Suppliers** — Performance data with differentiation
-- **12 months spend** — With anomaly detection
-- **SLA events** — Supplier performance issues
-- **Sample documents** — RFP template, benchmarks, policy, contract terms
+Comprehensive synthetic test data:
 
-Seed via: `python backend/scripts/seed_synthetic_data.py`
+### Test Cases (5 cases)
+| Case | Category | Stage | Key Features |
+|------|----------|-------|--------------|
+| CASE-0001 | IT_SERVICES | DTP-01 | Contract renewal, 3 suppliers, stable performance |
+| CASE-0002 | OFFICE_SUPPLIES | DTP-01 | Cost anomaly trigger, spend trending up |
+| CASE-0003 | CLOUD_SERVICES | DTP-02 | AWS/Azure/GCP comparison, migration planning |
+| CASE-0004 | MARKETING_SERVICES | DTP-03 | 4 agencies, evaluation rubric, creative scoring |
+| CASE-0005 | FACILITIES_MANAGEMENT | DTP-04 | Incumbent negotiation, market benchmarks |
+
+### Suppliers (16 suppliers across 5 categories)
+- **IT Services**: TechCorp Solutions, Global IT Partners, CloudFirst Systems
+- **Office Supplies**: OfficeMax Pro, Corporate Supply Co, BulkOffice Direct
+- **Cloud Services**: AWS, Azure, Google Cloud Platform
+- **Marketing**: Creative Minds Agency, Digital First, B2B Marketing Pros, Integrated Brand
+- **Facilities**: FacilityPro Services, BuildingCare Plus, Integrated Facilities Group
+
+### Documents in ChromaDB (11 documents, 71 chunks)
+- RFP templates (IT, Marketing)
+- Market benchmarks (IT, Office, Facilities)
+- Cloud provider comparison \u0026 migration guides
+- Contract templates \u0026 SOW
+- Procurement policy \u0026 DTP gates
+
+Seed via: `python backend/scripts/seed_comprehensive_data.py`
+
+---
+
+## 🔧 Recent Changes (January 2026)
+
+### Bug Fixes
+- Fixed duplicate `process_message` method in ChatService
+- Fixed Pydantic/dict handling for AgentActionLog and BudgetState
+- Fixed Windows encoding issues (emojis → ASCII)
+
+### Data Enhancements
+- New comprehensive seed script with 5 cases
+- 16 suppliers with differentiated performance
+- 11 documents for RAG retrieval
+
+For detailed change log, see [SYSTEM_DOCUMENTATION.md](SYSTEM_DOCUMENTATION.md#recent-changes-january-2026).
 
 ---
 

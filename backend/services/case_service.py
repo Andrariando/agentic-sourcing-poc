@@ -181,7 +181,21 @@ class CaseService:
         for key, value in updates.items():
             if hasattr(case, key):
                 if key in ["key_findings", "activity_log", "latest_agent_output", "human_decision"]:
-                    # JSON fields
+                    # JSON fields - handle Pydantic models
+                    if value is not None:
+                        # Convert Pydantic models to dict before serialization
+                        if hasattr(value, "model_dump"):
+                            value = value.model_dump()
+                        elif hasattr(value, "dict"):
+                            value = value.dict()
+                        # Handle lists of Pydantic models
+                        elif isinstance(value, list):
+                            value = [
+                                (item.model_dump() if hasattr(item, "model_dump") 
+                                 else item.dict() if hasattr(item, "dict") 
+                                 else item)
+                                for item in value
+                            ]
                     setattr(case, key, json.dumps(value) if value else None)
                 else:
                     setattr(case, key, value)

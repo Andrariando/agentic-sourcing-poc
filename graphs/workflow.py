@@ -144,11 +144,11 @@ def _check_constraint_compliance(
     
     # Log compliance result
     if result.status == ComplianceStatus.NON_COMPLIANT:
-        print(f"⚠️ COMPLIANCE VIOLATION [{agent_name}]: {len(result.violations)} constraint(s) not addressed")
+        print(f"[WARNING] COMPLIANCE VIOLATION [{agent_name}]: {len(result.violations)} constraint(s) not addressed")
         for v in result.violations:
             print(f"   - {v.constraint_name}: {v.expected_behavior}")
     elif result.status == ComplianceStatus.COMPLIANT:
-        print(f"✅ COMPLIANT [{agent_name}]: All {len(result.addressed_constraints)} constraint(s) addressed")
+        print(f"[OK] COMPLIANT [{agent_name}]: All {len(result.addressed_constraints)} constraint(s) addressed")
     
     return result, reflection
 
@@ -681,7 +681,7 @@ def supplier_evaluation_node(state: PipelineState) -> PipelineState:
     
     # Check budget
     if budget_state.tokens_used >= 3000:
-        print(f"⚠️ SupplierEvaluation budget exceeded: {budget_state.tokens_used} tokens used")
+        print(f"[WARNING] SupplierEvaluation budget exceeded: {budget_state.tokens_used} tokens used")
         fallback = supplier_agent.create_fallback_output(
             SupplierShortlist,
             case_summary.case_id,
@@ -750,7 +750,7 @@ def supplier_evaluation_node(state: PipelineState) -> PipelineState:
         state["constraint_reflection"] = reflection
 
     except Exception as e:
-        print(f"⚠️ SupplierEvaluation workflow node exception: {type(e).__name__}: {str(e)}")
+        print(f"[WARNING] SupplierEvaluation workflow node exception: {type(e).__name__}: {str(e)}")
         fallback = supplier_agent.create_fallback_output(
             SupplierShortlist,
             case_summary.case_id,
@@ -1596,7 +1596,7 @@ def create_workflow_graph():
             # If error output detected, END the workflow immediately
             # The error will be shown in UI - user can fix issue and use "Reset Case State" to retry
             if is_error_output:
-                print(f"⚠️ Error output detected from {latest_agent_name} - ending workflow to show error to user")
+                print(f"[WARNING] Error output detected from {latest_agent_name} - ending workflow to show error to user")
                 return "end"
             
             if agent_key in visited_agents:

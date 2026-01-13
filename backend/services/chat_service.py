@@ -1006,11 +1006,12 @@ class ChatService:
         
         # Fall back to legacy agents
     
-    def process_message(
+    def process_message_langgraph(
         self,
         case_id: str,
         user_message: str,
-        use_tier_2: bool = False
+        use_tier_2: bool = False,
+        case_state: Optional[Dict[str, Any]] = None
     ) -> ChatResponse:
         """
         Process a user message using the unified LangGraph workflow.
@@ -1024,14 +1025,29 @@ class ChatService:
             ChatResponse: Structured response including natural language, artifacts, and metadata
         """
         # 1. Get or create case state
-        state = self.case_service.get_case_state(case_id)
-        if not state:
-            # Create new case if it doesn't exist (e.g. from a new conversation)
-            # This is a safety fallback; usually case exists before chat
-            success = self.case_service.create_case(case_id, "New Strategic Sourcing Case")
-            if not success:
-                return self._create_error_response(case_id, user_message, "Failed to initialize case context.")
+        # If case_state is provided (from frontend session), use it directly
+        if case_state is not None:
+            # Convert Case object to dict if needed
+            if hasattr(case_state, "model_dump"):
+                state = case_state.model_dump()
+            elif hasattr(case_state, "__dict__"):
+                state = vars(case_state)
+            else:
+                state = dict(case_state) if case_state else {}
+        else:
             state = self.case_service.get_case_state(case_id)
+            
+        if not state:
+            # Create minimal state for new conversations
+            state = {
+                "case_id": case_id,
+                "dtp_stage": "DTP-01",
+                "category_id": "General",
+                "trigger_source": "User",
+                "status": "In Progress",
+                "activity_log": [],
+                "chat_history": []
+            }
 
         # 2. Check for manual override / basic intents that don't need full workflow (optional optimization)
         # For now, we route EVERYTHING through LangGraph for consistency, 
@@ -1172,6 +1188,17 @@ class ChatService:
             self.case_service.save_case_state(final_state)
             
             # 7. Construct and return structured ChatResponse
+            # Handle budget_state as either dict or Pydantic object
+            budget_state = final_state.get("budget_state")
+            if budget_state is None:
+                tokens_used = 0
+            elif isinstance(budget_state, dict):
+                tokens_used = budget_state.get("tokens_used", 0)
+            elif hasattr(budget_state, "tokens_used"):
+                tokens_used = budget_state.tokens_used
+            else:
+                tokens_used = 0
+                
             return self._create_response(
                 case_id=case_id,
                 user_message=user_message,
@@ -1179,7 +1206,7 @@ class ChatService:
                 intent=final_state.get("intent_classification", "UNKNOWN"), # Graph should set this
                 dtp_stage=final_state.get("dtp_stage", "DTP-01"),
                 agents_called=self._extract_agents_called(final_state),
-                tokens=final_state.get("budget_state", {}).get("tokens_used", 0),
+                tokens=tokens_used,
                 waiting=waiting_for_human,
                 retrieval=final_state.get("retrieval_context"),
                 workflow_summary=self._build_workflow_summary(final_state)
@@ -1208,7 +1235,17 @@ class ChatService:
     def _extract_agents_called(self, state: Dict[str, Any]) -> List[str]:
         """Extract list of unique agents called from activity log."""
         log = state.get("activity_log", [])
-        return list(set(entry.get("agent_name") for entry in log if isinstance(entry, dict) or hasattr(entry, "agent_name")))
+        agents = []
+        for entry in log:
+            if isinstance(entry, dict):
+                agent = entry.get("agent_name")
+            elif hasattr(entry, "agent_name"):
+                agent = entry.agent_name
+            else:
+                agent = None
+            if agent:
+                agents.append(agent)
+        return list(set(agents))
 
     def _build_workflow_summary(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Build summary metadata for the frontend."""

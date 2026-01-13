@@ -10,6 +10,10 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 from dotenv import load_dotenv
 from pathlib import Path
+import logging
+
+# Setup logger for app
+logger = logging.getLogger(__name__)
 
 # Load environment variables - explicitly specify path to ensure .env is found
 # Get the directory where app.py is located
@@ -1267,11 +1271,12 @@ def run_copilot(case_id: str, user_intent: str, use_tier_2: bool = False):
     chat_service = get_chat_service()
     
     try:
-        # Delegate to ChatService
+        # Delegate to ChatService, passing case state from session
         response = chat_service.process_message(
             case_id=case_id,
             user_message=user_intent,
-            use_tier_2=use_tier_2
+            use_tier_2=use_tier_2,
+            case_state=case  # Pass the case from session state
         )
         
         # Update case object in session state from the service's persistence
@@ -1307,7 +1312,10 @@ def run_copilot(case_id: str, user_intent: str, use_tier_2: bool = False):
                 "pending": False,
                 "workflow_summary": response.workflow_summary
             })
-            st.exception(e)
+            
+    except Exception as e:
+        logger.error(f"Error in run_copilot: {e}", exc_info=True)
+        st.error(f"I encountered an error while processing your request: {e}. Please try again.")
 
 
 def inject_human_decision(case_id: str, decision: str, reason: Optional[str] = None, edited_fields: Dict[str, Any] = None):

@@ -7,7 +7,7 @@
 ' Purpose: Visual representation of the human-in-the-loop, multi-agent 
 '          decision-support system for procurement sourcing.
 '
-' Version: Current (2025) - Reflects actual implementation
+' Version: January 2026 - Reflects current implementation with comprehensive data
 '
 ' Key Features:
 '   • LLM-First Intent Classification with Structured Output
@@ -297,6 +297,32 @@ note top of human
     ❌ Reject → Stay at stage
     
     AI advises, Human decides
+end note
+
+note bottom of sqlite
+    **DTP Stage Data Requirements**
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    **DTP-01 Strategy**:
+    • SupplierPerformance, SpendMetric
+    • SLAEvent, Market Benchmarks
+    
+    **DTP-02 Planning**:
+    • Evaluation criteria, RFP templates
+    • Supplier longlist
+    
+    **DTP-03 Sourcing**:
+    • Proposals, Evaluation rubrics
+    • Comparison templates
+    
+    **DTP-04 Negotiation**:
+    • Market rates, BATNA info
+    • Alternative quotes
+    
+    **DTP-05 Contracting**:
+    • Contract templates, Legal terms
+    
+    **DTP-06 Implementation**:
+    • Migration guides, KPI defs
 end note
 
 ' ============== LEGEND ==============
