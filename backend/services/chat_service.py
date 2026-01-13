@@ -1156,6 +1156,19 @@ class ChatService:
             final_state["chat_history"].append(new_ai_msg.model_dump())
             
             # 6. Persist updated state (WITH HISTORY)
+            # CRITICAL: Map PipelineState back to SupervisorState format
+            # CaseService.save_case_state expects top-level 'status', 'dtp_stage', etc.
+            # PipelineState has these in 'case_summary' object
+            case_summary = final_state.get("case_summary")
+            if case_summary:
+                if hasattr(case_summary, "status"):
+                    final_state["status"] = case_summary.status
+                if hasattr(case_summary, "dtp_stage"):
+                    final_state["dtp_stage"] = case_summary.dtp_stage
+            # Ensure status exists (fallback)
+            if "status" not in final_state:
+                final_state["status"] = "In Progress"
+            
             self.case_service.save_case_state(final_state)
             
             # 7. Construct and return structured ChatResponse
