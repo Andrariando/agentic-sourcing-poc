@@ -149,12 +149,38 @@ class SupervisorAgent:
         
         return next_stage, None
     
-    def determine_next_agent(self, dtp_stage: str, latest_output: Any, policy_context: Optional[Union[Dict[str, Any], BaseModel]] = None) -> Optional[str]:
+    def determine_next_agent(
+        self, 
+        dtp_stage: str, 
+        latest_output: Any, 
+        policy_context: Optional[Union[Dict[str, Any], BaseModel]] = None,
+        user_intent: str = ""
+    ) -> Optional[str]:
         """
-        Determine which agent should run next based on DTP stage and agent outputs.
+        Determine which agent should run next based on DTP stage, agent outputs, AND user intent.
         This is the core allocation logic - Supervisor decides task allocation.
         """
         allowed_actions = _policy_list(policy_context, "allowed_actions")
+
+        # Intent-driven routing (overrides sequential logic if explicit)
+        intent_lower = user_intent.lower()
+        
+        # 1. Status / Unclear -> CaseClarifier (handling StatusReportAgent fallback)
+        if any(w in intent_lower for w in ["status", "progress", "update", "happening", "where are we"]):
+            return "CaseClarifier"
+            
+        # 2. Risk / Compliance -> SignalInterpretation (or ContractSupport)
+        if any(w in intent_lower for w in ["risk", "compliance", "flag", "regulatory", "audit"]):
+            # If we have contract data, maybe ContractSupport? Defaulting to SignalInterpretation for general risk
+            return "SignalInterpretation"
+            
+        # 3. Strategy / Recommendation -> Strategy
+        if any(w in intent_lower for w in ["strategy", "recommend", "plan", "option", "path"]):
+            return "Strategy"
+            
+        # 4. Compare / Suppliers -> SupplierEvaluation
+        if any(w in intent_lower for w in ["compare", "supplier", "scorecard", "rank", "shortlist"]):
+            return "SupplierEvaluation"
 
         # Table 3 routing logic: Route based on DTP stage and agent outputs
         
@@ -298,7 +324,8 @@ class SupervisorAgent:
         dtp_stage: str,
         latest_output: Any,
         policy_context: Optional[Union[Dict[str, Any], BaseModel]] = None,
-        trigger_type: Optional[str] = None
+        trigger_type: Optional[str] = None,
+        user_intent: str = ""
     ) -> Tuple[Optional[str], Optional[str], Optional[ClarificationRequest]]:
         """
         Enhanced routing with confidence-aware logic.
@@ -338,7 +365,7 @@ class SupervisorAgent:
                     return None, "medium_confidence_policy_requires_human", None
         
         # High confidence or no confidence score - proceed with normal routing
-        next_agent = self.determine_next_agent(dtp_stage, latest_output, policy_context)
+        next_agent = self.determine_next_agent(dtp_stage, latest_output, policy_context, user_intent=user_intent)
         return next_agent, "normal_routing", None
     
     def should_request_clarification(

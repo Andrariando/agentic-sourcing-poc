@@ -50,6 +50,8 @@ from utils.case_memory import CaseMemory, create_case_memory, update_memory_from
 from utils.intent_classifier import classify_intent, is_mid_stage_interruption, IntentClassification
 from utils.collaboration_engine import get_collaboration_engine
 from utils.execution_constraints import ExecutionConstraints, create_execution_constraints
+from backend.services.response_envelope import ResponseEnvelope, wrap_response
+from backend.artifacts.placement import get_artifact_placement, validate_artifact_placement
 
 # Simple parser for HIL decisions issued via chat
 def parse_hil_decision(user_intent: str) -> Optional[str]:
@@ -1214,7 +1216,8 @@ def run_copilot(case_id: str, user_intent: str, use_tier_2: bool = False):
         st.session_state.execution_constraints[case_id] = create_execution_constraints()
     execution_constraints = st.session_state.execution_constraints[case_id]
     
-    # Check for mid-stage interruption (user pausing execution)
+    
+    # Check for mid-stage interruption (user pausing execution) - KEEP THIS AS UI INTERACTION
     if is_mid_stage_interruption(user_intent):
         # User is interrupting - enter Collaboration Mode
         collab_engine = get_collaboration_engine()
@@ -1234,133 +1237,30 @@ def run_copilot(case_id: str, user_intent: str, use_tier_2: bool = False):
         
         # Update chat response
         if st.session_state.chat_responses[case_id] and st.session_state.chat_responses[case_id][-1].get("pending"):
+            env = ResponseEnvelope(
+                message=response,
+                intent="INTERRUPTION",
+                agent_id="CollaborationEngine",
+                fallback_used=False
+            )
             st.session_state.chat_responses[case_id][-1] = {
                 "user": user_intent,
-                "assistant": response,
+                "assistant": env.message,
                 "timestamp": datetime.now().isoformat(),
                 "intent_mode": "COLLABORATIVE",
-                "interrupted": True
+                "interrupted": True,
+                "envelope": env.model_dump()
             }
         
         st.session_state.cases[case_id] = case
         st.rerun()
         return
-    
-    # COLLABORATION MODE: Sense-making, discussion, clarification
-    # Does NOT advance DTP stage, invoke LangGraph, or call decision agents
-    # PHASE 3: Now extracts and stores binding constraints from user input
-    if intent_classification.intent == "COLLABORATIVE":
-        collab_engine = get_collaboration_engine()
-        
-        # Generate collaborative response (bypasses Supervisor and LangGraph entirely)
-        # PHASE 3: Now returns (response, updated_constraints, extraction_result)
-        response, updated_constraints, extraction_result = collab_engine.generate_response(
-            user_input=user_intent,
-            case_id=case_id,
-            dtp_stage=case.dtp_stage,
-            case_memory=case_memory,
-            case_context={
-                "category_id": case.category_id,
-                "status": case.status,
-                "trigger_source": case.trigger_source
-            },
-            latest_agent_output=case.latest_agent_output,
-            execution_constraints=execution_constraints
-        )
-        
-        # PHASE 3: Store updated constraints (binding user preferences)
-        if updated_constraints:
-            st.session_state.execution_constraints[case_id] = updated_constraints
-        
-        # Record collaboration turn in memory (use hasattr for backwards compatibility)
-        if hasattr(case_memory, 'record_collaboration_turn'):
-            # Include constraint extraction info in the insight
-            insight = f"Collaborative discussion at {case.dtp_stage}"
-            if extraction_result and extraction_result.constraints_extracted > 0:
-                insight += f" - extracted {extraction_result.constraints_extracted} constraint(s)"
-            case_memory.record_collaboration_turn(
-                user_input=user_intent,
-                topic=case.dtp_stage,
-                insight=insight
-            )
-        
-        # Update chat response (no workflow executed)
-        if st.session_state.chat_responses[case_id] and st.session_state.chat_responses[case_id][-1].get("pending"):
-            chat_entry = {
-                "user": user_intent,
-                "assistant": response,
-                "timestamp": datetime.now().isoformat(),
-                "intent_mode": "COLLABORATIVE",
-                "classification_confidence": intent_classification.confidence,
-                "matched_patterns": intent_classification.matched_patterns[:3]
-            }
-            # PHASE 3: Include constraint extraction metadata
-            if extraction_result and extraction_result.constraints_extracted > 0:
-                chat_entry["constraints_extracted"] = extraction_result.constraints_extracted
-                chat_entry["constraint_details"] = [
-                    {"field": d[0], "value": d[1]} for d in extraction_result.constraint_details
-                ]
-            st.session_state.chat_responses[case_id][-1] = chat_entry
-        
-        case.user_intent = user_intent
-        st.session_state.cases[case_id] = case
-        st.rerun()
-        return
-    
+
     # =========================================================================
-    # EXECUTION MODE: Run workflow, produce recommendations
+    # UNIFIED WORKFLOW EXECUTION (GOAL A.3)
+    # Always pass user intent to the Supervisor/Workflow.
+    # The Supervisor determines if we need Strategy, Status, Clarification, etc.
     # =========================================================================
-    # If we get here, intent is EXECUTION - proceed with existing workflow logic
-    # Record intent shift for audit trail (use getattr for backwards compatibility)
-    if getattr(case_memory, 'total_collaboration_turns', 0) > 0:
-        if hasattr(case_memory, 'record_intent_shift'):
-            case_memory.record_intent_shift(
-                from_intent="COLLABORATIVE",
-                to_intent="EXECUTION",
-                trigger=user_intent
-            )
-    
-    # Check if this is a status/progress query (not action/recommendation)
-    intent_lower = user_intent.lower()
-    is_recommendation_query = any(keyword in intent_lower for keyword in [
-        "what should", "what do", "what are you", "recommend", "suggest", 
-        "next step", "next action", "what to do", "how to proceed",
-        "should we", "can we", "what are you recommending"
-    ])
-    
-    if is_status_query(user_intent) and not is_recommendation_query:
-        # Generate status response without running workflow
-        status_response = generate_status_response(case)
-        case.user_intent = user_intent
-        
-        # Update the pending message with the actual response
-        if st.session_state.chat_responses[case_id] and st.session_state.chat_responses[case_id][-1].get("pending"):
-            st.session_state.chat_responses[case_id][-1] = {
-                "user": user_intent,
-                "assistant": status_response,
-                "timestamp": datetime.now().isoformat()
-            }
-        
-        st.session_state.cases[case_id] = case
-        st.rerun()
-        return
-    
-    # Handle recommendation queries - provide actionable response
-    if is_recommendation_query:
-        recommendation_response = generate_recommendation_response(case)
-        case.user_intent = user_intent
-        
-        # Update the pending message with the actual response
-        if st.session_state.chat_responses[case_id] and st.session_state.chat_responses[case_id][-1].get("pending"):
-            st.session_state.chat_responses[case_id][-1] = {
-                "user": user_intent,
-                "assistant": recommendation_response,
-                "timestamp": datetime.now().isoformat()
-            }
-        
-        st.session_state.cases[case_id] = case
-        st.rerun()
-        return
     
     # Initialize workflow state
     # Use existing agent output if available (for context)
@@ -1371,7 +1271,7 @@ def run_copilot(case_id: str, user_intent: str, use_tier_2: bool = False):
         "case_id": case.case_id,
         "dtp_stage": case.dtp_stage,
         "trigger_source": case.trigger_source,
-        "user_intent": user_intent,
+        "user_intent": user_intent, # Pass intent to workflow
         "case_summary": case.summary,
         "latest_agent_output": latest_agent_output,  # Preserve existing output for context
         "latest_agent_name": latest_agent_name,
@@ -1396,28 +1296,68 @@ def run_copilot(case_id: str, user_intent: str, use_tier_2: bool = False):
     # Mark workflow as started in chat response
     if st.session_state.chat_responses[case_id] and st.session_state.chat_responses[case_id][-1].get("pending"):
         st.session_state.chat_responses[case_id][-1]["workflow_started"] = True
-        st.session_state.chat_responses[case_id][-1]["assistant"] = "🔄 **Workflow Started**\n\nInitializing agents and analyzing case..."
+        st.session_state.chat_responses[case_id][-1]["assistant"] = "🔄 **Processing...**"
     
     try:
         # Run workflow
         graph = get_workflow_graph()
         # Increased recursion limit to handle Supervisor → Agent → Supervisor cycles
         # With loop detection, this should be sufficient
-        config = {"recursion_limit": 30}  # Reduced from 50 since we have loop detection
-        
-        # Update chat with workflow progress
-        if st.session_state.chat_responses[case_id] and st.session_state.chat_responses[case_id][-1].get("pending"):
-            st.session_state.chat_responses[case_id][-1]["assistant"] = "🔄 **Executing Workflow**\n\n• Supervisor analyzing case state\n• Determining next agent to run\n• Processing..."
+        config = {"recursion_limit": 30}
         
         # Invoke workflow
         final_state = graph.invoke(workflow_state, config)
         
         # Update chat with completion status
+        last_action = final_state.get("activity_log", [])[-1] if final_state.get("activity_log") else None
+        
+        # Construct Response Envelope
+        # If the workflow produced a routed response (e.g. from an agent), use it.
+        # Otherwise, fallback to a geneated summary.
+        
+        response_message = "I've processed your request." # Default
+        agent_id = final_state.get("latest_agent_name", "Supervisor")
+        artifacts = []
+        
+        # Check if the latest agent returned a ResponseEnvelope-compatible dict or object
+        if final_state.get("latest_agent_output"):
+            output = final_state["latest_agent_output"]
+            if hasattr(output, "message"): # Assuming standard response format
+                 response_message = output.message
+            elif isinstance(output, dict) and "message" in output:
+                 response_message = output["message"]
+            elif hasattr(output, "summary_text"): # CaseSummary-like
+                 response_message = output.summary_text
+            else:
+                 # If it's a domain object (Strategy, etc), wrap it
+                 response_message = f"Generatd {type(output).__name__}."
+
+            # Extract artifacts if present
+            if hasattr(output, "artifacts"):
+                 artifacts = output.artifacts
+            elif isinstance(output, dict) and "artifacts" in output:
+                 artifacts = output["artifacts"]
+            # Auto-wrap domain objects as artifacts if they are important
+            # (Logic for Goal C.10 would be in Supervisor, but we can double check here)
+
+        # Standard Response Envelope
+        envelope = ResponseEnvelope(
+            message=response_message,
+            intent=intent_classification.intent,
+            agent_id=agent_id,
+            artifacts=artifacts,
+            fallback_used=False
+        )
+        
         if st.session_state.chat_responses[case_id] and st.session_state.chat_responses[case_id][-1].get("pending"):
             agents_called = [log.agent_name for log in final_state.get("activity_log", [])]
             unique_agents = list(set(agents_called))
-            agent_summary = ", ".join(unique_agents) if unique_agents else "No agents"
-            st.session_state.chat_responses[case_id][-1]["assistant"] = f"✅ **Workflow Completed**\n\n• Agents called: {agent_summary}\n• Total actions: {len(final_state.get('activity_log', []))}\n• Processing results..."
+            
+            # Use the message from the envelope for display
+            display_msg = envelope.to_display_message()
+            
+            st.session_state.chat_responses[case_id][-1]["assistant"] = display_msg
+            st.session_state.chat_responses[case_id][-1]["envelope"] = envelope.model_dump()
         
         # Update case with results
         case.latest_agent_output = final_state.get("latest_agent_output")
@@ -1433,7 +1373,6 @@ def run_copilot(case_id: str, user_intent: str, use_tier_2: bool = False):
         if final_state.get("waiting_for_human"):
             case.status = "Waiting for Human Decision"
         
-        # Generate conversational response for chat.
         # UX PRINCIPLE:
         # - SupervisorAgent is the conceptual narrator of the workflow.
         # - The chat never decides what happens next; it explains
@@ -2304,140 +2243,208 @@ else:
             st.markdown(f"**Spend estimated:** {spend_display}")
         st.markdown("</div>", unsafe_allow_html=True)
 
-        # AI Insights – storytelling layout (card)
-        st.markdown(
-            """
-            <div class="card">
-                <div class="card-header"><span>AI Insights</span></div>
-            """,
-            unsafe_allow_html=True,
-        )
-        col_ai_suppliers, col_ai_cost, col_ai_risk = st.columns(3)
-        if selected_case.latest_agent_output and isinstance(selected_case.latest_agent_output, SupplierShortlist):
-            suppliers = [
-                s.get("name", s.get("supplier_id", "N/A"))
-                for s in selected_case.latest_agent_output.shortlisted_suppliers[:3]
-            ]
-            supplier_list = ", ".join(suppliers) if suppliers else "RedPixel, XYZ Marketing"
-        else:
-            supplier_list = "Analysis pending"
-
-        with col_ai_suppliers:
-            st.markdown("**Suppliers**")
-            st.markdown(f"{supplier_list}")
-        with col_ai_cost:
-            st.markdown("**Cost & benchmarks**")
-            if supplier_list != "Analysis pending":
-                st.markdown("$120K–$140K (3 suppliers)")
-            else:
-                st.markdown("Benchmarks pending")
-        with col_ai_risk:
-            st.markdown("**Risk & compliance**")
-            if supplier_list != "Analysis pending":
-                st.markdown("Moderate (no critical flags identified)")
-            else:
-                st.markdown("Not assessed")
-        st.markdown("</div>", unsafe_allow_html=True)
         
-        # DTP Stage stepper + Recommended Actions Section (card)
-        dtp_stages = ["DTP-01", "DTP-02", "DTP-03", "DTP-04", "DTP-05", "DTP-06"]
-        dtp_html = '<div class="dtp-stepper">'
-        for stage in dtp_stages:
-            is_active = stage == selected_case.dtp_stage
-            cls = "dtp-step dtp-step-active" if is_active else "dtp-step"
-            label = get_dtp_stage_display(stage)
-            dtp_html += f'<span class="{cls}">{stage} &ndash; {label}</span>'
-        dtp_html += "</div>"
+        # =====================================================================
+        # DYNAMIC ARTIFACT RENDERING (GOAL C)
+        # Render artifacts based on placement map (Decision Console, Risk Panel, etc.)
+        # =====================================================================
+        
+        # 1. Collect active artifacts
+        active_artifacts = []
+        
+        # From latest output
+        latest_out = selected_case.latest_agent_output
+        if latest_out:
+            # Check for envelope artifacts
+            if isinstance(latest_out, dict) and "artifacts" in latest_out:
+                active_artifacts.extend(latest_out["artifacts"])
+            elif hasattr(latest_out, "artifacts") and latest_out.artifacts:
+                active_artifacts.extend(latest_out.artifacts)
+            
+            # Check for domain objects (legacy support / direct output)
+            # Map domain objects to artifacts if they aren't already wrapped
+            if isinstance(latest_out, StrategyRecommendation):
+                active_artifacts.append({"type": "STRATEGY_RECOMMENDATION", "payload": latest_out, "title": "Strategy Recommendation"})
+            elif isinstance(latest_out, SupplierShortlist):
+                active_artifacts.append({"type": "SUPPLIER_SHORTLIST", "payload": latest_out, "title": "Supplier Shortlist"})
+            elif isinstance(latest_out, NegotiationPlan):
+                active_artifacts.append({"type": "NEGOTIATION_PLAN", "payload": latest_out, "title": "Negotiation Plan"})
+            elif isinstance(latest_out, RFxDraft):
+                active_artifacts.append({"type": "RFX_DRAFT_PACK", "payload": latest_out, "title": "RFx Draft"})
+            elif isinstance(latest_out, ContractExtraction):
+                active_artifacts.append({"type": "CONTRACT_HANDOFF_PACKET", "payload": latest_out, "title": "Contract Terms"})
+            elif isinstance(latest_out, ImplementationPlan):
+                active_artifacts.append({"type": "IMPLEMENTATION_CHECKLIST", "payload": latest_out, "title": "Implementation Plan"})
+            elif isinstance(latest_out, SignalAssessment):
+                active_artifacts.append({"type": "SIGNAL_REPORT", "payload": latest_out, "title": "Signal Assessment"})
 
-        # Recommended Actions Section - Sequential based on DTP stage
+        # Group by placement
+        metrics_artifacts = []
+        decision_artifacts = []
+        risk_artifacts = []
+        compare_artifacts = []
+        
+        for art in active_artifacts:
+            # Normalize type
+            a_type = art.get("type") if isinstance(art, dict) else getattr(art, "type", "")
+            if not a_type: continue
+            
+            placement = get_artifact_placement(a_type)
+            
+            if placement == "decision_console":
+                decision_artifacts.append(art)
+            elif placement == "risk_panel":
+                risk_artifacts.append(art)
+            elif placement == "supplier_compare":
+                compare_artifacts.append(art)
+            elif placement == "case_summary":
+                metrics_artifacts.append(art)
+
+        # 2. Render Sections
+        
+        # A) Decision Console (Priority)
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown('<div class="card-header"><span>Recommended Actions</span></div>', unsafe_allow_html=True)
-        st.markdown(dtp_html, unsafe_allow_html=True)
+        st.markdown('<div class="card-header"><span>Decision Console</span></div>', unsafe_allow_html=True)
         
-        # Show current stage context
-        stage_display = get_dtp_stage_display(selected_case.dtp_stage)
-        st.caption(f"Current Stage: {selected_case.dtp_stage} - {stage_display}")
-        
-        # Determine available actions based on DTP stage and case state
-        action_buttons = []
-        dtp_stage = selected_case.dtp_stage
-        has_strategy = (selected_case.latest_agent_output and 
-                       isinstance(selected_case.latest_agent_output, StrategyRecommendation))
-        has_supplier_shortlist = (selected_case.latest_agent_output and 
-                                 isinstance(selected_case.latest_agent_output, SupplierShortlist))
-        waiting_for_decision = selected_case.status == "Waiting for Human Decision"
-        
-        # DTP-01: Strategy stage - can only run strategy analysis
-        if dtp_stage == "DTP-01":
-            if not has_strategy:
-                action_buttons.append(("Run Strategy Analysis", "Analyze sourcing strategy for this case", True))
-            elif waiting_for_decision:
-                # Show approval buttons separately (not as copilot action)
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("✅ Approve Strategy", key=f"approve_strategy_{selected_case.case_id}", use_container_width=True, type="primary"):
-                        inject_human_decision(selected_case.case_id, "Approve")
-                with col2:
-                    if st.button("❌ Reject Strategy", key=f"reject_strategy_{selected_case.case_id}", use_container_width=True):
-                        reason = st.text_input("Rejection reason", key=f"reject_reason_{selected_case.case_id}")
-                        if reason:
-                            inject_human_decision(selected_case.case_id, "Reject", reason=reason)
-            else:
-                st.info("✅ Strategy analysis complete. Ready to proceed to planning stage.")
-        
-        # DTP-02: Planning stage - can draft RFP/requirements after strategy approved
-        elif dtp_stage == "DTP-02":
-            if has_strategy:
-                action_buttons.append(("Draft RFP", "Generate RFP draft for this case", True))
-                action_buttons.append(("Market Intelligence", "Provide market intelligence update", True))
-            else:
-                action_buttons.append(("Run Strategy Analysis", "Analyze sourcing strategy first", False))
-        
-        # DTP-03: Sourcing stage - can evaluate suppliers after planning
-        elif dtp_stage == "DTP-03":
-            if has_strategy:
-                if not has_supplier_shortlist:
-                    action_buttons.append(("Evaluate Suppliers", "Identify and evaluate suppliers for this category", True))
-                else:
-                    action_buttons.append(("Review Supplier Shortlist", "Show me the supplier shortlist details", True))
-            else:
-                action_buttons.append(("Complete Strategy First", "Strategy must be approved before supplier evaluation", False))
-        
-        # DTP-04: Negotiation stage - can negotiate after suppliers shortlisted
-        elif dtp_stage == "DTP-04":
-            if has_supplier_shortlist:
-                action_buttons.append(("Create Negotiation Plan", "Launch negotiation workflow", True))
-                if selected_case.latest_agent_output and isinstance(selected_case.latest_agent_output, NegotiationPlan):
-                    action_buttons.append(("Review Negotiation Plan", "Show me the negotiation plan", True))
-            else:
-                action_buttons.append(("Complete Supplier Evaluation First", "Suppliers must be shortlisted before negotiation", False))
-        
-        # DTP-05: Contracting stage
-        elif dtp_stage == "DTP-05":
-            action_buttons.append(("Finalize Contract", "Review and finalize contract terms", True))
-        
-        # DTP-06: Execution stage
-        elif dtp_stage == "DTP-06":
-            st.info("Case is in execution stage. Contract management in progress.")
-        
-        # Display actions with enabled/disabled states
-        if action_buttons:
-            for button_label, action_query, enabled in action_buttons:
-                label_clean = button_label.replace(" ", "_")
-                if enabled:
-                    if st.button(f"▶ {button_label}", key=f"action_btn_{label_clean}_{selected_case.case_id}", use_container_width=True):
-                        run_copilot(selected_case.case_id, action_query, use_tier_2=False)
-                else:
-                    st.button(
-                        f"⏸ {button_label}",
-                        key=f"action_btn_{label_clean}_{selected_case.case_id}",
-                        use_container_width=True,
-                        disabled=True,
-                    )
-                    st.caption("⚠️ Complete previous stage first")
+        if decision_artifacts:
+            for art in decision_artifacts:
+                payload = art.get("payload") if isinstance(art, dict) else art
+                title = art.get("title", "Recommendation")
+                st.markdown(f"#### {title}")
+                
+                if isinstance(payload, StrategyRecommendation):
+                    st.success(f"**Recommended Strategy:** {payload.recommended_strategy}")
+                    if payload.rationale:
+                        for r in payload.rationale:
+                            st.write(f"• {r}")
+                elif isinstance(payload, NegotiationPlan):
+                    st.info(f"**Objectives:**")
+                    for obj in payload.negotiation_objectives:
+                        st.write(f"• {obj}")
+                # Add other renderers as needed
         else:
-            st.caption("No immediate actions available at this stage.")
+            # Fallback for DTP stage actions if no artifacts
+            st.caption("No specific decision artifacts available. Please use the recommended actions below.")
+            
+            # --- KEEP EXISTING DTP ACTIONS LOGIC AS FALLBACK ---
+            dtp_html = '<div class="dtp-stepper">'
+            for stage in ["DTP-01", "DTP-02", "DTP-03", "DTP-04", "DTP-05", "DTP-06"]:
+                is_active = stage == selected_case.dtp_stage
+                cls = "dtp-step dtp-step-active" if is_active else "dtp-step"
+                label = get_dtp_stage_display(stage)
+                dtp_html += f'<span class="{cls}">{stage} &ndash; {label}</span>'
+            dtp_html += "</div>"
+            st.markdown(dtp_html, unsafe_allow_html=True)
 
+            # Determine available actions based on DTP stage and case state
+            action_buttons = []
+            dtp_stage = selected_case.dtp_stage
+            has_strategy = (selected_case.latest_agent_output and 
+                           isinstance(selected_case.latest_agent_output, StrategyRecommendation))
+            has_supplier_shortlist = (selected_case.latest_agent_output and 
+                                     isinstance(selected_case.latest_agent_output, SupplierShortlist))
+            waiting_for_decision = selected_case.status == "Waiting for Human Decision"
+            
+            # DTP-01: Strategy stage - can only run strategy analysis
+            if dtp_stage == "DTP-01":
+                if not has_strategy:
+                    action_buttons.append(("Run Strategy Analysis", "Analyze sourcing strategy for this case", True))
+                elif waiting_for_decision:
+                    # Show approval buttons separately (not as copilot action)
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("✅ Approve Strategy", key=f"approve_strategy_{selected_case.case_id}", use_container_width=True, type="primary"):
+                            inject_human_decision(selected_case.case_id, "Approve")
+                    with col2:
+                        if st.button("❌ Reject Strategy", key=f"reject_strategy_{selected_case.case_id}", use_container_width=True):
+                            reason = st.text_input("Rejection reason", key=f"reject_reason_{selected_case.case_id}")
+                            if reason:
+                                inject_human_decision(selected_case.case_id, "Reject", reason=reason)
+                else:
+                    st.info("✅ Strategy analysis complete. Ready to proceed to planning stage.")
+            
+            # DTP-02: Planning stage - can draft RFP/requirements after strategy approved
+            elif dtp_stage == "DTP-02":
+                if has_strategy:
+                    action_buttons.append(("Draft RFP", "Generate RFP draft for this case", True))
+                    action_buttons.append(("Market Intelligence", "Provide market intelligence update", True))
+                else:
+                    action_buttons.append(("Run Strategy Analysis", "Analyze sourcing strategy first", False))
+            
+            # DTP-03: Sourcing stage - can evaluate suppliers after planning
+            elif dtp_stage == "DTP-03":
+                if has_strategy:
+                    if not has_supplier_shortlist:
+                        action_buttons.append(("Evaluate Suppliers", "Identify and evaluate suppliers for this category", True))
+                    else:
+                        action_buttons.append(("Review Supplier Shortlist", "Show me the supplier shortlist details", True))
+                else:
+                    action_buttons.append(("Complete Strategy First", "Strategy must be approved before supplier evaluation", False))
+            
+            # DTP-04: Negotiation stage - can negotiate after suppliers shortlisted
+            elif dtp_stage == "DTP-04":
+                if has_supplier_shortlist:
+                    action_buttons.append(("Create Negotiation Plan", "Launch negotiation workflow", True))
+                    if selected_case.latest_agent_output and isinstance(selected_case.latest_agent_output, NegotiationPlan):
+                        action_buttons.append(("Review Negotiation Plan", "Show me the negotiation plan", True))
+                else:
+                    action_buttons.append(("Complete Supplier Evaluation First", "Suppliers must be shortlisted before negotiation", False))
+            
+            # DTP-05: Contracting stage
+            elif dtp_stage == "DTP-05":
+                action_buttons.append(("Finalize Contract", "Review and finalize contract terms", True))
+            
+            # DTP-06: Execution stage
+            elif dtp_stage == "DTP-06":
+                st.info("Case is in execution stage. Contract management in progress.")
+            
+            # Display actions with enabled/disabled states
+            if action_buttons:
+                for button_label, action_query, enabled in action_buttons:
+                    label_clean = button_label.replace(" ", "_")
+                    if enabled:
+                        if st.button(f"▶ {button_label}", key=f"action_btn_{label_clean}_{selected_case.case_id}", use_container_width=True):
+                            run_copilot(selected_case.case_id, action_query, use_tier_2=False)
+                    else:
+                        st.button(
+                            f"⏸ {button_label}",
+                            key=f"action_btn_{label_clean}_{selected_case.case_id}",
+                            use_container_width=True,
+                            disabled=True,
+                        )
+                        st.caption("⚠️ Complete previous stage first")
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        # B) Risk & Compliance Panel (if artifacts present or general summary)
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown('<div class="card-header"><span>Risk Panel</span></div>', unsafe_allow_html=True)
+        if risk_artifacts:
+            for art in risk_artifacts:
+                payload = art.get("payload") if isinstance(art, dict) else art
+                title = art.get("title", "Risk Report")
+                st.markdown(f"**{title}**")
+                # Basic render
+                st.json(payload) # Fallback
+        else:
+             # Default risk view
+             st.markdown("**Compliance Status:** ✅ Monitoring")
+             st.caption("No critical flags detected in current stage.")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        # C) Supplier Compare (if artifacts present)
+        if compare_artifacts:
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            st.markdown('<div class="card-header"><span>Supplier Comparison</span></div>', unsafe_allow_html=True)
+            for art in compare_artifacts:
+                payload = art.get("payload") if isinstance(art, dict) else art
+                if isinstance(payload, SupplierShortlist):
+                    st.write(f"**Recommendation:** {payload.recommendation}")
+                    st.write("**In Shortlist:**")
+                    for s in payload.shortlisted_suppliers:
+                        st.write(f"- {s}")
+            st.markdown("</div>", unsafe_allow_html=True)
+        
         st.markdown("</div>", unsafe_allow_html=True)
     
     with col_right:

@@ -58,7 +58,16 @@ ARTIFACT_PLACEMENT_MAP: Dict[ArtifactType, ArtifactPlacement] = {
     # Supervisor outputs
     ArtifactType.STATUS_SUMMARY: ArtifactPlacement.CASE_SUMMARY,
     ArtifactType.NEXT_BEST_ACTIONS: ArtifactPlacement.DECISION_CONSOLE,
-}
+    
+    # Missing types from goal B/C
+    ArtifactType.STRATEGY_RECOMMENDATION: ArtifactPlacement.DECISION_CONSOLE,
+    ArtifactType.STRATEGY_RATIONALE: ArtifactPlacement.DECISION_CONSOLE,
+    ArtifactType.RISK_FLAGS: ArtifactPlacement.RISK_PANEL,
+    ArtifactType.COMPLIANCE_BLOCKERS: ArtifactPlacement.RISK_PANEL,
+    ArtifactType.SUPPLIER_COMPARISON_TABLE: ArtifactPlacement.SUPPLIER_COMPARE,
+    ArtifactType.CASE_SUMMARY_BRIEF: ArtifactPlacement.CASE_SUMMARY,
+    ArtifactType.APPROVAL_CHECKLIST: ArtifactPlacement.TIMELINE,
+    ArtifactType.AUDIT_LOG_EVENT: ArtifactPlacement.ACTIVITY_LOG,
 
 
 def get_artifact_placement(artifact_type: str) -> ArtifactPlacement:

@@ -469,7 +469,8 @@ def supervisor_node(state: PipelineState) -> PipelineState:
         state["dtp_stage"],
         latest_output,
         policy_context,
-        trigger_type
+        trigger_type,
+        user_intent=user_intent
     )
     
     # Check if clarification is needed
