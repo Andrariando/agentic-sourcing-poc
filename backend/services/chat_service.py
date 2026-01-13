@@ -219,18 +219,22 @@ class ChatService:
                 logger.warning(f"[{trace_id}] Failed to save user message: {e}")
                 # Continue processing - message saving is non-critical
         
-        # Handle different intents appropriately
-        if intent == UserIntent.STATUS:
-            response = self._handle_status_intent(case_id, user_message, state, trace_id)
-        elif intent == UserIntent.EXPLAIN:
-            response = self._handle_explain_intent(case_id, user_message, state, trace_id)
-        elif intent == UserIntent.EXPLORE:
-            response = self._handle_explore_intent(case_id, user_message, state, trace_id)
-        elif intent == UserIntent.DECIDE:
-            response = self._handle_decide_intent(case_id, user_message, state, conversation_history, use_tier_2, trace_id)
-        else:
-            # Default: provide helpful context
-            response = self._handle_general_intent(case_id, user_message, state, trace_id)
+        # UNIFIED PATH: Delegate all decision making to the LangGraph Supervisor
+        # This replaces the legacy hard-coded routing, allowing the LLM to decide
+        # when to answer directly vs when to call an agent.
+        
+        # Check for simple greetings to save tokens, otherwise use full graph
+        greeting_patterns = [r'^hi\b', r'^hello\b', r'^hey\b']
+        if any(re.search(p, user_message.lower()) for p in greeting_patterns) and len(user_message.split()) < 3:
+             response_text = f"Hello! I'm here to help with case {case_id}. What would you like to do?"
+             return self._create_response(case_id, user_message, response_text, "GREETING", state["dtp_stage"])
+
+        return self.process_message_langgraph(
+            case_id=case_id,
+            user_message=user_message,
+            use_tier_2=use_tier_2,
+            case_state=state
+        )
         
         # NEW: Save assistant response (if enabled)
         if self.conversation_manager and self.enable_conversation_memory:

@@ -37,6 +37,10 @@ from utils.constraint_compliance import (
 )
 from datetime import datetime
 import json
+import os
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI
+from langchain_core.output_parsers import JsonOutputParser
 
 
 # Lazy agent initialization - agents created on demand to avoid API key check at import time
@@ -151,6 +155,88 @@ def _check_constraint_compliance(
         print(f"[OK] COMPLIANT [{agent_name}]: All {len(result.addressed_constraints)} constraint(s) addressed")
     
     return result, reflection
+
+
+def decide_next_agent_llm(
+    state: PipelineState,
+    user_intent: str
+) -> Tuple[Optional[str], str]:
+    """
+    Decide next agent using LLM reasoning (Autonomy Layer).
+    Used when deterministic rules have no prior output to guide them.
+    """
+    try:
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            return None, "no_api_key_fallback"
+
+        llm = ChatOpenAI(
+            model="gpt-4o-mini", # Fast model for routing
+            temperature=0,
+            api_key=api_key
+        )
+        
+        dtp_stage = state.get("dtp_stage", "DTP-01")
+        
+        system_prompt = f"""You are the Sourcing Supervisor. Your job is to route user requests to the correct specialist agent.
+        
+Current Stage: {dtp_stage}
+        
+Available Agents & Capabilities:
+- SignalInterpretation: Analyze spend, risks, market signals, costs, anomalies. (Use for: "Why are costs up?", "Check risks", "Scan signals")
+- Strategy: Plan sourcing events, recommend renewal vs market test. (Use for: "Recommend strategy", "What should we do?")
+- SupplierEvaluation: Score, rank, or compare suppliers. (Use for: "Compare suppliers", "Who is best?")
+- RFxDraft: Create/Draft RFP, RFQ, RFI documents. (Use for: "Draft RFP", "Create requirements")
+- NegotiationSupport: Plan negotiations, BATNA, leverage. (Use for: "Plan negotiation", "How to negotiate?")
+- ContractSupport: Extract or review contract terms. (Use for: "Check contract", "Extract terms")
+- Implementation: Plan rollout, KPIs, savings tracking. (Use for: "Implementation plan")
+
+Routing Rules:
+1. If the user asks a question that requires NEW data/analysis, call the relevant agent.
+2. If the user asks "Why", "What", "How" about domain topics (spend, risk, strategy), CALL AN AGENT to get the answer. Do NOT assume we have it.
+3. If the user just says "Hi" or checks status without asking for work, return "next_agent": null.
+
+Return JSON ONLY:
+{{
+    "next_agent": "AgentName" or null,
+    "reason": "Why you chose this agent"
+}}
+"""
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=f"User Request: {user_intent}")
+        ]
+        
+        response = llm.invoke(messages)
+        content = response.content.strip()
+        if "```json" in content:
+            content = content.replace("```json", "").replace("```", "")
+        
+        result = json.loads(content)
+        agent = result.get("next_agent")
+        reason = result.get("reason", "LLM reasoning")
+        
+        # Map simple names to class/internal names if needed
+        name_map = {
+            "SignalInterpretation": "SignalInterpretation",
+            "Strategy": "Strategy",
+            "SupplierEvaluation": "SupplierEvaluation",
+            "RFxDraft": "RFxDraft",
+            "NegotiationSupport": "NegotiationSupport",
+            "ContractSupport": "ContractSupport",
+            "Implementation": "Implementation"
+        }
+        
+        if agent in name_map:
+            return name_map[agent], f"llm_route: {reason}"
+            
+        return None, "llm_no_route"
+        
+    except Exception as e:
+        print(f"[WARNING] LLM Routing failed: {e}")
+        return None, "llm_error_fallback"
+
+
 
 
 # Import Tuple for type hint
@@ -465,6 +551,11 @@ def supervisor_node(state: PipelineState) -> PipelineState:
     
     # Enhanced routing with confidence and capability checks
     user_intent = state.get("user_intent", "")
+    
+    # HYBRID ROUTING STRATEGY (Rules > LLM)
+    routing_source = "DETERMINISTIC_RULES" # Default
+    
+    # 1. Always try Deterministic Rules first (Maintains DTP Sequence & Guardrails)
     next_agent, routing_reason, clarification_request = supervisor.determine_next_agent_with_confidence(
         state["dtp_stage"],
         latest_output,
@@ -472,6 +563,18 @@ def supervisor_node(state: PipelineState) -> PipelineState:
         trigger_type,
         user_intent=user_intent
     )
+    
+    # 2. If Rules provided no direction (e.g. unhandled question or empty state), use LLM Autonomy
+    if not next_agent and user_intent and not clarification_request:
+        # Check rule-based overrides first (e.g., explicit status check)
+        agent_llm, reason_llm = decide_next_agent_llm(state, user_intent)
+        if agent_llm:
+            next_agent = agent_llm
+            routing_reason = reason_llm
+            routing_source = "LLM_REASONING_AUTONOMY"
+            # Verify capability again for safety (Guardian Check)
+            if latest_output: # Only relevant if we are acting on output, but here we are routing
+                 pass 
     
     # Check if clarification is needed
     needs_clarification = False
@@ -515,8 +618,10 @@ def supervisor_node(state: PipelineState) -> PipelineState:
         output_summary += f"\n• Decision: Waiting for human approval (HIL governance) - {wait_reason}"
     elif next_agent == "CaseClarifier":
         output_summary += f"\n• Decision: Requesting clarification ({routing_reason})"
+        output_summary += f"\n• Routing Source: {routing_source}"
     elif next_agent:
         output_summary += f"\n• Decision: Routing to {next_agent} agent ({routing_reason})"
+        output_summary += f"\n• Routing Source: {routing_source}"
     else:
         output_summary += f"\n• Decision: No further agent action needed for DTP-{state['dtp_stage']}"
         if user_intent:
@@ -531,8 +636,8 @@ def supervisor_node(state: PipelineState) -> PipelineState:
         trigger_source=state["trigger_source"],
         agent_name="Supervisor",
         task_name=task_description,
-        model_used="N/A (Supervisor Logic)",
-        token_input=0,
+        model_used="N/A (Supervisor Logic)" if routing_source != "LLM_REASONING_AUTONOMY" else "gpt-4o-mini",
+        token_input=0, # Minimal for routing
         token_output=0,
         estimated_cost_usd=0.0,
         cache_hit=False,
@@ -541,14 +646,20 @@ def supervisor_node(state: PipelineState) -> PipelineState:
         llm_input_payload={
             "latest_agent_output_type": type(latest_output).__name__ if latest_output else None,
             "latest_agent_name": latest_agent_name,
-            "dtp_stage": state["dtp_stage"]
+            "dtp_stage": state["dtp_stage"],
+            "user_intent": user_intent
         },
         output_payload={
             "case_summary_updated": True,
             "status": updated_summary.status,
             "waiting_for_human": waiting_for_human,
             "key_findings_count": len(key_findings),
-            "recommended_action": recommended_action
+            "recommended_action": recommended_action,
+            "routing_decision": {
+                "source": routing_source,
+                "next_agent": next_agent,
+                "reason": routing_reason
+            }
         },
         output_summary=output_summary,
         guardrail_events=[]

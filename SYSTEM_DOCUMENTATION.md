@@ -47,38 +47,23 @@ The user types a message and clicks send. The Streamlit frontend (`frontend/page
 2. **Context Retrieval**: Loads the current case state (DTP stage, status, metadata) from the database.
 3. **Conversation Memory**: If enabled, fetches recent chat history to provide context to the LLM.
 
-### Step 3: Intent Classification (The Supervisor's First Job)
-The system doesn't immediately run a heavy agent for every simple "Hello" or "Explain this". Instead, it uses the `IntentRouter` to classify the message into one of five categories:
-- **STATUS**: Inquiries about progress (e.g., "Where are we?").
-- **EXPLAIN**: Requests for clarification on existing data (e.g., "Why did you suggest this?").
-- **EXPLORE**: Hypothetical comparisons (e.g., "What if we switched to Supplier X?").
-- **DECIDE**: Explicit requests for analysis or action (e.g., "Scan for signals" or "Draft RFx").
-- **GENERAL**: Greetings or off-topic conversation.
+### Step 3: Hybrid Routing (Autonomy Layer)
+Instead of rigid hard-coded rules, the system now uses a **Hybrid Routing Strategy** (`graphs/workflow.py`) to decide "Who does the work":
 
-**Logic Chain for Classification**:
-1. **Pattern Matching**: Quick regex check for greetings or simple status keywords.
-2. **LLM Classification**: If patterns don't match, an LLM analyzes the message + case context to determine the goal and work type.
-3. **Approval Detection**: If the system is currently "Waiting for Human", it checks if the message is an approval or rejection of a pending recommendation.
+1.  **Status/Greeting Check**: Simple greetings or status checks are handled quickly.
+2.  **Deterministic Rules (Guardrails)**: First, the `SupervisorAgent` checks if strict DTP rules mandate a specific path (e.g., "After RFx Draft, MUST go to Negotiation"). This ensures process integrity and prevents out-of-order execution.
+3.  **LLM Autonomy (Reasoning)**: If the rules provide no specific direction (e.g., the user asks a random question like "Why are costs up?"), the Supervisor asks an **LLM Router** (`decide_next_agent_llm`).
+    *   The LLM analyzes the user's intent and context.
+    *   It selects the best specialist agent (e.g., `SignalInterpretation` for cost analysis) regardless of the current stage.
+    *   This enables a seamless "Happy Path" where the user can ask anything at any time.
 
-### Step 4: Routing & Execution
-Based on the intent, the `ChatService` routes to a specific handler:
-
-#### A. Read-Only Intents (STATUS, EXPLAIN)
-The system generates a conversational response using the existing case data *without* invoking a specialized worker agent. This saves cost and provides instant feedback.
-
-#### B. Execution Intents (DECIDE, EXPLORE)
-If the user wants new work done, the Supervisor determines which specialist agent to call based on the current **DTP Stage**:
-- **DTP-01/02** → `StrategyAgent` / `SignalAgent`: Market analysis and sourcing signals.
-- **DTP-03** → `SupplierEvaluationAgent`: Evaluates and scores suppliers.
-- **DTP-04** → `NegotiationAgent`: Prepares leverage points and target terms.
-- **DTP-05** → `ContractSupportAgent`: Analyzes legal terms and compliance.
-- **DTP-06** → `ImplementationAgent`: Rollout planning and value capture.
-
-### Step 5: Agent Processing (The Specialist's Job)
-When a specialist agent is invoked:
-1. **RAG Retrieval**: The agent queries the `Retriever` to find relevant documents.
-2. **Reasoning**: The LLM processes the retrieved documents + user prompt + case data.
-3. **Artifact Generation**: The agent produces structured outputs (e.g., Strategy Recommendations, Supplier Scorecards).
+### Step 4: Agent Execution (LangGraph)
+Once the path is chosen, the system executes the workflow:
+1.  **Specialist Agent Node**: The selected agent (e.g., `StrategyAgent`) runs.
+    *   It retrieves necessary data (SQL + RAG).
+    *   It generates a structured artifact (e.g., `StrategyRecommendation`).
+    *   It is **deterministic** in its calculations (e.g. scoring) but uses LLM for synthesis.
+2.  **Loop**: The output is fed back to the Supervisor to determine if more work is needed or if it should return to the user.
 
 ### Step 6: Persistence & State Update
 The output and conversation history are saved:
