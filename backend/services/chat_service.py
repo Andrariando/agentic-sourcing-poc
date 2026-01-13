@@ -1040,7 +1040,7 @@ class ChatService:
         # 3. Prepare initial state for workflow
         # We need to map the stored case state to the PipelineState expected by LangGraph
         from utils.state import PipelineState
-        from utils.schemas import BudgetState
+        from utils.schemas import BudgetState, ChatMessage
         
         # Initialize budget if missing
         if "budget_state" not in state:
@@ -1052,6 +1052,17 @@ class ChatService:
                  model_usage={}
              )
         
+        # UPDATE CHAT HISTORY (USER)
+        # Ensure chat_history exists (handles legacy cases)
+        if "chat_history" not in state:
+            state["chat_history"] = []
+        
+        # Add User message
+        new_user_msg = ChatMessage(role="user", content=user_message)
+        # We append as dict to state because CaseService.get_case_state returns dict
+        # and we want to serialize it easily later
+        state["chat_history"].append(new_user_msg.model_dump())
+        
         # Map DB state to PipelineState 
         # Note: In a real prod env, we might need a more robust mapper. 
         # Here we assume state keys mostly match PipelineState.
@@ -1062,8 +1073,24 @@ class ChatService:
         if "summary" in workflow_state and "case_summary" not in workflow_state:
             workflow_state["case_summary"] = workflow_state["summary"]
             
+        # Map chat history to simplified format for Agents if needed
+        # PipelineState expects List[Dict[str, str]]
+        if "chat_history" in workflow_state:
+            workflow_state["conversation_history"] = [
+                {"role": m.get("role"), "content": m.get("content")} 
+                for m in workflow_state["chat_history"]
+            ]
+            
         workflow_state["user_intent"] = user_message
         workflow_state["use_tier_2"] = use_tier_2
+
+        # CRITICAL FIX: Clear transient state if not waiting for human
+        # This prevents the Supervisor from seeing "stale" output from the previous turn
+        # and thinking the task is already done, which leads to repetitive or generic responses.
+        if not workflow_state.get("waiting_for_human"):
+            workflow_state["latest_agent_output"] = None
+            workflow_state["latest_agent_name"] = None
+            workflow_state["visited_agents"] = []
         
         # Ensure critical fields exist
         if "visited_agents" not in workflow_state:
@@ -1075,11 +1102,7 @@ class ChatService:
         try:
             final_state = self._run_workflow(workflow_state)
             
-            # 5. Persist updated state
-            # The workflow returns the final state; we save it back to valid persistence
-            self.case_service.save_case_state(final_state)
-            
-            # 6. Generate Response using ResponseAdapter
+            # 5. Generate Response using ResponseAdapter (MOVED BEFORE SAVE)
             # This decouples the "what happened" (state) from "what we say" (chat)
             from utils.response_adapter import get_response_adapter
             adapter = get_response_adapter()
@@ -1110,6 +1133,16 @@ class ChatService:
                 constraint_reflection=constraint_reflection,
                 constraint_violations=constraint_violations
             )
+            
+            # UPDATE CHAT HISTORY (ASSISTANT)
+            # Add Assistant response to history before saving
+            new_ai_msg = ChatMessage(role="assistant", content=assistant_message)
+            if "chat_history" not in final_state:
+                final_state["chat_history"] = []
+            final_state["chat_history"].append(new_ai_msg.model_dump())
+            
+            # 6. Persist updated state (WITH HISTORY)
+            self.case_service.save_case_state(final_state)
             
             # 7. Construct and return structured ChatResponse
             return self._create_response(

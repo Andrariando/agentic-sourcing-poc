@@ -269,6 +269,13 @@ class OutOfScopeNotice(BaseModel):
     external_action_required: bool = False
 
 
+class ChatMessage(BaseModel):
+    """A single message in the conversation history"""
+    role: Literal["user", "assistant", "system"]
+    content: str
+    timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
 class Case(BaseModel):
     """Full case model"""
     case_id: str
@@ -292,6 +299,7 @@ class Case(BaseModel):
     ]] = None
     latest_agent_name: Optional[str] = None
     activity_log: List[AgentActionLog] = Field(default_factory=list)
+    chat_history: List[ChatMessage] = Field(default_factory=list)  # Stored conversation history
     human_decision: Optional[HumanDecision] = None
 
 

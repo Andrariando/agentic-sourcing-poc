@@ -8,7 +8,8 @@ from utils.schemas import (
     AgentActionLog, SignalAssessment, StrategyRecommendation,
     SupplierShortlist, NegotiationPlan, DTPPolicyContext,
     SignalRegisterEntry, ClarificationRequest, OutOfScopeNotice,
-    RFxDraft, ContractExtraction, ImplementationPlan
+    RFxDraft, ContractExtraction, ImplementationPlan,
+    ChatMessage
 )
 
 if TYPE_CHECKING:
@@ -36,6 +37,7 @@ class PipelineState(TypedDict):
     ]]
     latest_agent_name: Optional[str]
     activity_log: List[AgentActionLog]  # Current run
+    conversation_history: List[Dict[str, str]]  # Serialized ChatMessages (role, content)
     human_decision: Optional[HumanDecision]
     budget_state: BudgetState
     cache_meta: CacheMeta

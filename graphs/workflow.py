@@ -596,13 +596,15 @@ def strategy_node(state: PipelineState) -> PipelineState:
         execution_constraints = state.get("execution_constraints")
         
         # Call agent with policy constraints AND execution constraints
+        conversation_history = state.get("conversation_history")
         recommendation, llm_input, output_dict, input_tokens, output_tokens = strategy_agent.recommend_strategy(
             case_summary,
             user_intent,
             use_cache=True,
             allowed_strategies=allowed_strategies,
             trigger_type=trigger_type,
-            execution_constraints=execution_constraints
+            execution_constraints=execution_constraints,
+            conversation_history=conversation_history
         )
         
         # Update budget

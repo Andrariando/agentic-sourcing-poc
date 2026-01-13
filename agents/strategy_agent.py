@@ -45,7 +45,8 @@ class StrategyAgent(BaseAgent):
         use_cache: bool = True,
         allowed_strategies: Optional[list[str]] = None,
         trigger_type: Optional[str] = None,
-        execution_constraints: Optional["ExecutionConstraints"] = None
+        execution_constraints: Optional["ExecutionConstraints"] = None,
+        conversation_history: Optional[list[dict]] = None
     ) -> tuple[StrategyRecommendation, Dict[str, Any], Dict[str, Any], int, int]:
         """
         Recommend sourcing strategy following Rules > Retrieval > LLM pattern.
@@ -134,7 +135,8 @@ class StrategyAgent(BaseAgent):
             case_summary, user_intent, contract, performance, market, category, requirements,
             allowed_strategies=allowed_strategies, trigger_type=trigger_type,
             category_strategy_context=category_strategy_context,
-            execution_constraints=execution_constraints
+            execution_constraints=execution_constraints,
+            conversation_history=conversation_history
         )
         
         llm_input_payload = {
@@ -225,7 +227,8 @@ class StrategyAgent(BaseAgent):
         allowed_strategies: Optional[list[str]] = None,
         trigger_type: Optional[str] = None,
         category_strategy_context: Optional[Dict[str, Any]] = None,
-        execution_constraints: Optional["ExecutionConstraints"] = None
+        execution_constraints: Optional["ExecutionConstraints"] = None,
+        conversation_history: Optional[list[dict]] = None
     ) -> str:
         """Build prompt for LLM summarization (NOT decision-making)."""
         # Build strategy constraint text
@@ -286,6 +289,9 @@ Market Context:
 
 Category Information:
 {json.dumps(category, indent=2) if category else "No category data"}
+
+Conversation History:
+{json.dumps(conversation_history, indent=2) if conversation_history else "No previous conversation"}
 
 Your task: Provide a clear, grounded summary explaining:
 1. What the retrieved data shows
