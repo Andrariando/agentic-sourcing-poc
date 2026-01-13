@@ -500,6 +500,12 @@ class IntentRouter:
         elif any(kw in message_lower for kw in ['implement', 'rollout', 'checklist', 'kpi']):
             user_goal = UserGoal.CREATE
             goal_confidence = 0.9
+        
+        # Domain questions that imply analysis (if no output exists)
+        # e.g., "Why are costs increasing?" -> should trigger analysis, not explanation
+        elif not has_existing_output and '?' in user_message and any(kw in message_lower for kw in ['cost', 'spend', 'budget', 'increasing', 'rising', 'performance', 'score', 'signal', 'risk', 'trend']):
+            user_goal = UserGoal.CREATE
+            goal_confidence = 0.9
         else:
             # Check action verbs (before question words)
             action_keywords = ['scan', 'score', 'draft', 'support', 'extract', 'generate', 
@@ -741,7 +747,10 @@ Examples:
 9. "Recommend a strategy" (has_output=False or True)
    → {{"user_goal": "CREATE", "work_type": "DATA", "confidence": 0.95, "rationale": "Command to analyze and generate strategy recommendation - action request, not a question"}}
 
-10. "Recommend a strategy for this case" (has_output=False or True)
+10. "Why are costs increasing?" (has_output=False)
+   → {{"user_goal": "CREATE", "work_type": "DATA", "confidence": 0.95, "rationale": "Question about domain metrics with no existing analysis - implies request for analysis"}}
+
+11. "Recommend a strategy for this case" (has_output=False or True)
    → {{"user_goal": "CREATE", "work_type": "DATA", "confidence": 0.95, "rationale": "Command to analyze and generate strategy recommendation - action request, not a question"}}
 
 Classification Guidelines:

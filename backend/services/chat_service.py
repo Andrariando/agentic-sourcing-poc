@@ -414,6 +414,14 @@ class ChatService:
                     logger.warning(f"Failed to retrieve conversation context: {e}")
             return self._run_agent_analysis(case_id, message, state, conversation_history, False)
         
+        # Safety Net: If user asks "Why" about domain topics but we have no output, treat as analysis request
+        # e.g., "Why are costs increasing?" -> Run SourcingSignalAgent
+        domain_keywords = ['cost', 'spend', 'budget', 'increasing', 'rising', 'performance', 'score', 'signal', 'risk', 'trend', 'why']
+        is_domain_question = any(kw in message_lower for kw in domain_keywords)
+        
+        if not state.get("latest_agent_output") and is_domain_question and ('?' in message or 'why' in message_lower):
+             return self._run_agent_analysis(case_id, message, state)
+        
         if not state.get("latest_agent_output"):
             # Check if user is giving an affirmative response (e.g., "yes", "tell me everything")
             # This means they want us to actually run analysis
