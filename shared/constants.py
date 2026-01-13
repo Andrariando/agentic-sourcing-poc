@@ -66,6 +66,22 @@ class ArtifactType(str, Enum):
     # Supervisor outputs
     STATUS_SUMMARY = "STATUS_SUMMARY"
     NEXT_BEST_ACTIONS = "NEXT_BEST_ACTIONS"
+    
+    # Strategy & Decision Logic
+    STRATEGY_RECOMMENDATION = "STRATEGY_RECOMMENDATION"
+    STRATEGY_RATIONALE = "STRATEGY_RATIONALE"
+    
+    # Risk & Compliance
+    RISK_FLAGS = "RISK_FLAGS"
+    COMPLIANCE_BLOCKERS = "COMPLIANCE_BLOCKERS"
+    
+    # Comparison & Analysis
+    SUPPLIER_COMPARISON_TABLE = "SUPPLIER_COMPARISON_TABLE"
+    CASE_SUMMARY_BRIEF = "CASE_SUMMARY_BRIEF"
+    
+    # Process & Audit
+    APPROVAL_CHECKLIST = "APPROVAL_CHECKLIST"
+    AUDIT_LOG_EVENT = "AUDIT_LOG_EVENT"
 
 
 # =============================================================================
