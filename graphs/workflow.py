@@ -177,10 +177,12 @@ def decide_next_agent_llm(
         )
         
         dtp_stage = state.get("dtp_stage", "DTP-01")
+        has_output = state.get("latest_agent_output") is not None
         
         system_prompt = f"""You are the Sourcing Supervisor. Your job is to route user requests to the correct specialist agent.
         
 Current Stage: {dtp_stage}
+Has Prior Output: {has_output}
         
 Available Agents & Capabilities:
 - SignalInterpretation: Analyze spend, risks, market signals, costs, anomalies. (Use for: "Why are costs up?", "Check risks", "Scan signals")
@@ -194,7 +196,8 @@ Available Agents & Capabilities:
 Routing Rules:
 1. If the user asks a question that requires NEW data/analysis, call the relevant agent.
 2. If the user asks "Why", "What", "How" about domain topics (spend, risk, strategy), CALL AN AGENT to get the answer. Do NOT assume we have it.
-3. If the user just says "Hi" or checks status without asking for work, return "next_agent": null.
+3. EXCEPTION: If 'Has Prior Output' is True AND the user asks to EXPLAIN/JUSTIFY that output (e.g. "Why did you say that?", "How did you calculate confidence?"), return "next_agent": null. The system will handle the explanation.
+4. If the user just says "Hi" or checks status without asking for work, return "next_agent": null.
 
 Return JSON ONLY:
 {{
@@ -604,6 +607,9 @@ def supervisor_node(state: PipelineState) -> PipelineState:
     state["waiting_for_human"] = waiting_for_human
     if waiting_for_human:
         state["wait_reason"] = wait_reason
+        # CRITICAL FIX: Persist this status so ChatService doesn't clear output on reload
+        updated_summary.status = "Waiting for Human Decision"
+        state["case_summary"] = updated_summary
     
     # Create log entry for supervisor action
     output_summary = f"Supervisor reviewed case. Updated case summary. Status: {updated_summary.status}"

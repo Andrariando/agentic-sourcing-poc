@@ -83,6 +83,53 @@ class StrategyAgent(BaseAgent):
             category = get_category(case_summary.category_id)
             requirements = get_requirements(case_summary.category_id)
         
+        # STEP 2.5: Check for User Override (Collaboration Priority)
+        # If user explicitly requests a strategy, respect it (if allowed).
+        # This fixes the "One-Shot" flaw where rules ignore user feedback.
+        user_strategy = self._extract_strategy_from_intent(user_intent)
+        
+        if user_strategy:
+            # Check policy constraint
+            is_allowed = not allowed_strategies or user_strategy in allowed_strategies
+            
+            if is_allowed:
+                # Create recommendation based on User's Choice
+                recommendation = self._create_rule_based_recommendation(
+                    case_summary, user_strategy, contract, performance, market
+                )
+                
+                # Tag it as User Override
+                recommendation.rationale.insert(0, f"User explicitly requested '{user_strategy}' strategy")
+                recommendation.risk_assessment += " (User Decision)"
+                
+                llm_input_payload = {
+                    "case_summary": case_summary.model_dump() if hasattr(case_summary, "model_dump") else dict(case_summary),
+                    "user_intent": user_intent,
+                    "contract": contract,
+                    "performance": performance,
+                    "market": market,
+                    "category": category,
+                    "requirements": requirements,
+                    "rule_applied": True,
+                    "rule_based_strategy": user_strategy,
+                    "override": True
+                }
+                
+                output_dict = recommendation.model_dump() if hasattr(recommendation, "model_dump") else dict(recommendation)
+                
+                # Cache result
+                if use_cache:
+                    cache_meta, _ = self.check_cache(
+                        case_summary.case_id,
+                        user_intent.lower().strip(),
+                        case_summary,
+                        question_text=user_intent
+                    )
+                    from utils.caching import set_cache
+                    set_cache(cache_meta.cache_key, (recommendation, llm_input_payload, output_dict))
+                
+                return recommendation, llm_input_payload, output_dict, 0, 0
+
         # STEP 3: Apply deterministic rules FIRST (Priority 1)
         rule_based_strategy = self.rule_engine.apply_strategy_rules(
             contract, performance, market, case_summary
@@ -329,5 +376,20 @@ Provide ONLY valid JSON, no markdown formatting."""
             risk_assessment="Unable to assess risk",
             timeline_recommendation="Review required"
         )
+
+    def _extract_strategy_from_intent(self, intent: str) -> Optional[str]:
+        """Extract explicit strategy request from user intent."""
+        intent_lower = intent.lower()
+        if any(w in intent_lower for w in ["renegotiate", "negotiate", "adjustment"]):
+            return "Renegotiate"
+        if any(w in intent_lower for w in ["rfx", "rfp", "rfq", "tender", "bid", "market test"]):
+            return "RFx"
+        if any(w in intent_lower for w in ["renew", "extend", "continuation"]):
+            return "Renew"
+        if any(w in intent_lower for w in ["terminate", "cancel", "end", "exit"]):
+            return "Terminate"
+        if any(w in intent_lower for w in ["monitor", "watch", "track"]):
+            return "Monitor"
+        return None
 
 

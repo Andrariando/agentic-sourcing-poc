@@ -55,6 +55,7 @@ Instead of rigid hard-coded rules, the system now uses a **Hybrid Routing Strate
 3.  **LLM Autonomy (Reasoning)**: If the rules provide no specific direction (e.g., the user asks a random question like "Why are costs up?"), the Supervisor asks an **LLM Router** (`decide_next_agent_llm`).
     *   The LLM analyzes the user's intent and context.
     *   It selects the best specialist agent (e.g., `SignalInterpretation` for cost analysis) regardless of the current stage.
+    *   **Explanation Logic**: If the user asks for explanation of an existing output (e.g., "How did you calculate this?"), the Router skips agent execution to prevent re-work, allowing the system to simply explain the prior result.
     *   This enables a seamless "Happy Path" where the user can ask anything at any time.
 
 ### Step 4: Agent Execution (LangGraph)
@@ -94,6 +95,7 @@ Each DTP (Draft to Procurement) stage uses specific data sources and produces sp
 | **Market Documents** | ChromaDB | `Market_Benchmark`, `Policy` documents |
 
 **Agent**: `StrategyAgent` (`agents/strategy_agent.py`)
+**Collaboration**: Supports dynamic user overrides (e.g. "Change strategy to X") to prioritize user intent over default rules.
 
 **Output**: `StrategyRecommendation`
 ```python
