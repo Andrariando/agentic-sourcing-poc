@@ -1056,6 +1056,12 @@ class ChatService:
         # Note: In a real prod env, we might need a more robust mapper. 
         # Here we assume state keys mostly match PipelineState.
         workflow_state = dict(state)
+        
+        # MAPPING FIXES:
+        # Case object uses "summary" but PipelineState expects "case_summary"
+        if "summary" in workflow_state and "case_summary" not in workflow_state:
+            workflow_state["case_summary"] = workflow_state["summary"]
+            
         workflow_state["user_intent"] = user_message
         workflow_state["use_tier_2"] = use_tier_2
         
