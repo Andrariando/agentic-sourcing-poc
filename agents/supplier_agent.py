@@ -46,7 +46,8 @@ class SupplierEvaluationAgent(BaseAgent):
         self,
         case_summary: CaseSummary,
         use_cache: bool = True,
-        execution_constraints: Optional["ExecutionConstraints"] = None
+        execution_constraints: Optional["ExecutionConstraints"] = None,
+        user_intent: str = ""
     ) -> tuple[SupplierShortlist, Dict[str, Any], Dict[str, Any], int, int]:
         """
         Evaluate and shortlist suppliers for a category.
@@ -63,7 +64,8 @@ class SupplierEvaluationAgent(BaseAgent):
             cache_meta, cached_value = self.check_cache(
                 case_summary.case_id,
                 "supplier_evaluation",
-                case_summary
+                case_summary,
+                question_text=user_intent # Add intent to cache key
             )
             if cache_meta.cache_hit and cached_value:
                 try:
@@ -112,6 +114,14 @@ class SupplierEvaluationAgent(BaseAgent):
         
         # STEP 1: Apply deterministic eligibility checks (Table 3: rule-based eligibility checks)
         # Filter suppliers using RuleEngine eligibility rules (must-haves only)
+        
+        # User Override Logic: Check if user wants to bypass filtering (e.g. "Show all", "Include rejected")
+        force_include_all = False
+        if user_intent:
+            intent_lower = user_intent.lower()
+            if any(w in intent_lower for w in ["allow all", "show all", "include all", "no filter", "ignore rules"]):
+                force_include_all = True
+        
         eligible_suppliers = []
         for supplier_data in suppliers_with_perf:
             supplier = supplier_data["supplier"]
@@ -122,7 +132,7 @@ class SupplierEvaluationAgent(BaseAgent):
                 supplier, performance, requirements
             )
             
-            if rule_score is not None and rule_score == 0.0:
+            if not force_include_all and rule_score is not None and rule_score == 0.0:
                 # Failed eligibility check (below threshold or missing must-haves) - exclude
                 continue
             else:

@@ -816,7 +816,8 @@ def supplier_evaluation_node(state: PipelineState) -> PipelineState:
         shortlist, llm_input, output_dict, input_tokens, output_tokens = supplier_agent.evaluate_suppliers(
             case_summary,
             use_cache=True,
-            execution_constraints=execution_constraints
+            execution_constraints=execution_constraints,
+            user_intent=state.get("user_intent", "")
         )
         
         tier = 2 if state.get("use_tier_2") else 1
@@ -915,7 +916,9 @@ def negotiation_node(state: PipelineState) -> PipelineState:
         plan, llm_input, output_dict, input_tokens, output_tokens = negotiation_agent.create_negotiation_plan(
             case_summary,
             supplier_id,
-            use_cache=True
+            use_cache=True,
+            user_intent=state.get("user_intent", ""),
+            conversation_history=state.get("conversation_history")
         )
         
         tier = 2 if state.get("use_tier_2") else 1
@@ -1200,7 +1203,9 @@ def contract_support_node(state: PipelineState) -> PipelineState:
         extraction, llm_input, output_dict, input_tokens, output_tokens = contract_agent.extract_contract_terms(
             case_summary,
             supplier_id,
-            use_cache=True
+            use_cache=True,
+            user_intent=state.get("user_intent", ""),
+            conversation_history=state.get("conversation_history")
         )
         
         tier = 2 if state.get("use_tier_2") else 1
@@ -1301,7 +1306,9 @@ def implementation_node(state: PipelineState) -> PipelineState:
         implementation_plan, llm_input, output_dict, input_tokens, output_tokens = implementation_agent.create_implementation_plan(
             case_summary,
             supplier_id,
-            use_cache=True
+            use_cache=True,
+            user_intent=state.get("user_intent", ""),
+            conversation_history=state.get("conversation_history")
         )
         
         tier = 2 if state.get("use_tier_2") else 1
@@ -1576,18 +1583,28 @@ def process_human_decision(state: PipelineState) -> PipelineState:
         )
         state = add_log_to_state(state, log)
     else:
-        # Rejected - stay at current stage, clear latest output
-        state["waiting_for_human"] = False
-        state["case_summary"].status = "Rejected"
-        # Don't clear latest_agent_output so user can see what was rejected
+        # Rejected - Treat as "Revision Request" (Feedback Loop)
+        # Instead of terminating with "Rejected" status, we feed the reason back as intent.
         
-        # Log the rejection
+        reason = human_decision.reason or "Rejected without reason"
+        # Prefix with explicit instruction so Agent sees it as an override/instruction
+        state["user_intent"] = f"User rejected previous output. Feedback: {reason}. Please revise."
+        
+        # Reset wait flag so workflow continues (Back to Supervisor -> Agent)
+        state["waiting_for_human"] = False
+        
+        # Keep status active (do NOT set to "Rejected" which terminates workflow)
+        state["case_summary"].status = "In Progress"
+        
+        # Don't clear latest_agent_output so user can see what was rejected (it will be overwritten by next agent run)
+        
+        # Log the rejection/feedback request
         log = create_agent_log(
             case_id=case_summary.case_id,
             dtp_stage=state["dtp_stage"],
             trigger_source=state["trigger_source"],
             agent_name="Human",
-            task_name="Reject Decision",
+            task_name="Request Revision (Reject)",
             model_used="N/A (Human Decision)",
             token_input=0,
             token_output=0,

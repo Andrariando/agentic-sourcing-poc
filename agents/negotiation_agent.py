@@ -33,7 +33,9 @@ class NegotiationSupportAgent(BaseAgent):
         self,
         case_summary: CaseSummary,
         supplier_id: str,
-        use_cache: bool = True
+        use_cache: bool = True,
+        user_intent: str = "",
+        conversation_history: Optional[list[dict]] = None
     ) -> tuple[NegotiationPlan, Dict[str, Any], Dict[str, Any], int, int]:
         """
         Create negotiation plan for a supplier.
@@ -45,7 +47,8 @@ class NegotiationSupportAgent(BaseAgent):
                 case_summary.case_id,
                 "negotiation_plan",
                 case_summary,
-                additional_inputs={"supplier_id": supplier_id}
+                additional_inputs={"supplier_id": supplier_id},
+                question_text=user_intent # Add intent to cache key
             )
             if cache_meta.cache_hit and cached_value:
                 return cached_value, {}, {}
@@ -91,6 +94,12 @@ Case Summary:
 
 Target Supplier ID: {supplier_id}
 
+User Intent / Instructions:
+{user_intent if user_intent else "No specific instructions provided"}
+
+Conversation History:
+{json.dumps(conversation_history, indent=2) if conversation_history else "No previous conversation"}
+
 Current Contract:
 {json.dumps(contract, indent=2) if contract else "No existing contract"}
 
@@ -106,6 +115,7 @@ Create a negotiation plan (comparative and advisory). Consider:
 3. Market benchmarks (from playbook - for grounding only)
 4. Leverage points (identify gaps and opportunities)
 5. Negotiation scenarios (suggest approaches, do not decide)
+6. Specific user instructions (prioritize mentioned terms or levers)
 
 Negotiation Playbook Context (for grounding only):
 {json.dumps(negotiation_playbook, indent=2) if negotiation_playbook else "None"}
@@ -140,7 +150,8 @@ Provide ONLY valid JSON, no markdown formatting."""
             "performance": performance,
             "market": market,
             "category": category,
-            "requirements": requirements
+            "requirements": requirements,
+            "user_intent": user_intent
         }
         
         try:
@@ -161,6 +172,9 @@ Provide ONLY valid JSON, no markdown formatting."""
             
             return plan, llm_input_payload, output_dict, input_tokens, output_tokens
         except Exception as e:
+            print(f"DEBUG EXCEPTION IN NEGOTIATION AGENT: {e}")
+            import traceback
+            traceback.print_exc()
             # Fallback
             return self.create_fallback_output(NegotiationPlan, case_summary.case_id, case_summary.category_id, supplier_id), llm_input_payload, {}, 0, 0
     

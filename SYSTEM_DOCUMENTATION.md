@@ -55,6 +55,7 @@ Instead of rigid hard-coded rules, the system now uses a **Hybrid Routing Strate
 3.  **LLM Autonomy (Reasoning)**: If the rules provide no specific direction (e.g., the user asks a random question like "Why are costs up?"), the Supervisor asks an **LLM Router** (`decide_next_agent_llm`).
     *   The LLM analyzes the user's intent and context.
     *   It selects the best specialist agent (e.g., `SignalInterpretation` for cost analysis) regardless of the current stage.
+    *   **User Intent Override**: The system now prioritizes explicit user instructions over default rules (e.g., "Ignore the budget warning").
     *   **Explanation Logic**: If the user asks for explanation of an existing output (e.g., "How did you calculate this?"), the Router skips agent execution to prevent re-work, allowing the system to simply explain the prior result.
     *   This enables a seamless "Happy Path" where the user can ask anything at any time.
 
@@ -125,6 +126,7 @@ class StrategyRecommendation:
 | **Market Benchmarks** | ChromaDB | Pricing benchmarks, typical SLAs |
 
 **Agent**: `SupplierEvaluationAgent` (`agents/supplier_eval.py`)
+**Collaboration**: Accepts user overrides for eligibility (e.g., "Include all suppliers", "Add Supplier X").
 
 **Output**: `SupplierShortlist`
 ```python
@@ -166,6 +168,7 @@ class SupplierShortlist:
 | **BATNA Info** | ChromaDB | Best alternative options |
 
 **Agent**: `NegotiationAgent` (`agents/negotiation.py`)
+**Collaboration**: User can specify terms (e.g., "Net 60", "Focus on Price") which override default playbook strategies.
 
 **Output**: `NegotiationPlan`
 ```python
@@ -194,6 +197,7 @@ class NegotiationPlan:
 | **Policy Requirements** | ChromaDB | Compliance checklist, approval gates |
 
 **Agent**: `ContractSupportAgent`
+**Collaboration**: Prioritizes user-requested clauses over standard templates.
 
 **Output**: `ContractExtraction` with key terms and compliance status
 
@@ -211,6 +215,7 @@ class NegotiationPlan:
 | **Transition Plans** | ChromaDB | Change management docs |
 
 **Agent**: `ImplementationAgent`
+**Collaboration**: Allows modification of rollout steps (e.g. "Add Legal Review") via user intent.
 
 **Output**: `ImplementationPlan` with milestones and KPIs
 
@@ -321,6 +326,12 @@ Agents follow a structured **Task-Based** execution model:
 ---
 
 ## 🔧 7. Recent Changes (January 2026)
+
+### Collaborative Architecture Refactor
+1.  **User Intent Injection**: All agents now accept `user_intent` to override deterministic rules/templates.
+2.  **Refinement Loops**: The "Reject" decision in the workflow now triggers a **Feedback Loop** (Refinement) instead of termination. Users can provide a reason, and the agent re-runs with that context.
+3.  **Platform Stability**: Fixed Windows-specific Unicode logging crashes.
+
 
 ### Bug Fixes
 1. **Duplicate `process_message` method**: Renamed legacy method to `process_message_langgraph()` to prevent API issues.

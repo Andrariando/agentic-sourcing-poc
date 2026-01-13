@@ -123,7 +123,7 @@ class BaseAgent:
         Converts objects to strings where string lists are expected.
         """
         # Debug: Print what we're normalizing
-        print(f"🔧 Normalizing LLM output for {schema.__name__}")
+        print(f"[INFO] Normalizing LLM output for {schema.__name__}")
         
         # Fields that should be List[str] but LLM sometimes returns List[Dict]
         string_list_fields = [
@@ -166,7 +166,7 @@ class BaseAgent:
                             normalized.append(str(item))
                     data[field] = normalized
                     if original != normalized:
-                        print(f"  📝 Normalized {field}: {type(original[0]).__name__ if original else 'empty'} → strings")
+                        print(f"  [FIXED] Normalized {field}: {type(original[0]).__name__ if original else 'empty'} -> strings")
                 elif original is None:
                     data[field] = []  # Convert None to empty list
                 elif isinstance(original, str):

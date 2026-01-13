@@ -29,7 +29,9 @@ class ContractSupportAgent(BaseAgent):
         self,
         case_summary: CaseSummary,
         supplier_id: str,
-        use_cache: bool = True
+        use_cache: bool = True,
+        user_intent: str = "",
+        conversation_history: Optional[list[dict]] = None
     ) -> tuple[ContractExtraction, Dict[str, Any], Dict[str, Any], int, int]:
         """
         Extract contract terms using template-guided extraction (Table 3).
@@ -41,7 +43,8 @@ class ContractSupportAgent(BaseAgent):
                 case_summary.case_id,
                 "contract_extraction",
                 case_summary,
-                additional_inputs={"supplier_id": supplier_id}
+                additional_inputs={"supplier_id": supplier_id},
+                question_text=user_intent # Add intent to cache key
             )
             if cache_meta.cache_hit and cached_value:
                 return cached_value, {}, {}
@@ -59,9 +62,6 @@ class ContractSupportAgent(BaseAgent):
         supplier = get_supplier(supplier_id)
         performance = get_performance(supplier_id)
         
-        # Get negotiation plan or supplier shortlist if available (for award terms)
-        # This would come from latest_agent_output in practice
-        
         # Build prompt for template-guided extraction
         prompt = f"""You are a Contract Support Agent for dynamic sourcing pipelines (DTP-04/05).
 
@@ -76,6 +76,12 @@ Contract Clause Library (from Vector Knowledge Layer - for grounding only):
 
 Case Summary:
 {case_summary.model_dump_json() if hasattr(case_summary, 'model_dump_json') else json.dumps(dict(case_summary))}
+
+User Intent / Instructions:
+{user_intent if user_intent else "No specific instructions provided"}
+
+Conversation History:
+{json.dumps(conversation_history, indent=2) if conversation_history else "No previous conversation"}
 
 Category Information:
 {json.dumps(category, indent=2) if category else "No category data"}
@@ -97,14 +103,14 @@ Your task:
    - Compliance Requirements
 2. Map terms to contract clause library (explain mappings)
 3. Flag any inconsistencies or missing required fields
-4. Prepare structured extraction for contracting system
+4. Check User Intent for specific term overrides (if user specifies a term, prioritize it but flag deviation from template)
 
 IMPORTANT CONSTRAINTS:
 - Use clause library as reference only (not binding)
 - Rule-based validation: check for required fields
 - Explain mappings clearly
-- Flag inconsistencies for human review
-- Do NOT create new clauses or modify terms
+- Flag inconsistencies for human review (including User vs Template diffs)
+- Do NOT create new clauses or modify terms unsolicited
 
 Respond with a JSON object matching this EXACT schema:
 {{
@@ -124,7 +130,8 @@ Respond with a JSON object matching this EXACT schema:
   }},
   "mapping_explanations": {{
     "Service Levels": "Terms align with standard enterprise SLA template",
-    "Payment Terms": "Matches approved payment terms for this category"
+    "Payment Terms": "Matches approved payment terms for this category",
+    "User Override": "Applied user request for 90-day termination instead of standard 60-day"
   }},
   "inconsistencies": ["Termination notice period differs from standard 60-day policy", "Missing liability cap clause"],
   "template_guidance": "contract_clauses from Vector Knowledge Layer"
@@ -141,7 +148,8 @@ Provide ONLY valid JSON, no markdown formatting."""
             "category": category,
             "contract": contract,
             "supplier": supplier,
-            "performance": performance
+            "performance": performance,
+            "user_intent": user_intent
         }
         
         try:

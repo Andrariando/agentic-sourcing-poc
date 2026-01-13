@@ -88,12 +88,12 @@ package "**BACKEND** - FastAPI Server" <<backend>> {
     }
     
     package "**7 OFFICIAL AGENTS**" <<agent>> {
-        rectangle "📡 **Sourcing Signal**\n(DTP-01)\nSignal detection,\nurgency scoring" as signal_agent
-        rectangle "⭐ **Supplier Scoring**\n(DTP-02)\nEvaluation, ranking,\neligibility checks" as supplier_agent
-        rectangle "📝 **RFx Draft**\n(DTP-03)\nRFI/RFP/RFQ assembly" as rfx_agent
-        rectangle "🤝 **Negotiation Support**\n(DTP-04)\nLeverage analysis,\ntargets, playbook" as negotiation_agent
-        rectangle "📄 **Contract Support**\n(DTP-05)\nTerm extraction,\nvalidation, handoff" as contract_agent
-        rectangle "🚀 **Implementation**\n(DTP-06)\nRollout planning,\nvalue capture" as impl_agent
+        rectangle "📡 **Sourcing Signal**\n(DTP-01)\nSignal detection,\nurgency scoring\n----\n**Inputs:**\nCase: trigger_source, status\nPerf: overall_score, trend\nSpend: variance_percent\nSLA: severity" as signal_agent
+        rectangle "⭐ **Supplier Scoring**\n(DTP-02)\nEvaluation, ranking,\neligibility checks\n----\n**Inputs:**\nPerf: quality_score, delivery\nRFP: eval_criteria\nMarket: benchmarks" as supplier_agent
+        rectangle "📝 **RFx Draft**\n(DTP-03)\nRFI/RFP/RFQ assembly\n----\n**Inputs:**\nDocs: proposals, quotes\nPolicy: eval_rubrics\nPast: comparisons" as rfx_agent
+        rectangle "🤝 **Negotiation Support**\n(DTP-04)\nLeverage analysis,\ntargets, playbook\n----\n**Inputs:**\nMarket: rates, trends\nHistory: relationship_score\nStrategy: batna_info" as negotiation_agent
+        rectangle "📄 **Contract Support**\n(DTP-05)\nTerm extraction,\nvalidation, handoff\n----\n**Inputs:**\nKB: contract_templates\nState: negotiated_terms\nPolicy: compliance_check" as contract_agent
+        rectangle "🚀 **Implementation**\n(DTP-06)\nRollout planning,\nvalue capture\n----\n**Inputs:**\nKB: rollout_guides\nContract: kpi_defs\nPlan: milestones" as impl_agent
     }
     
     package "**TASK EXECUTION LAYER**" <<task>> {

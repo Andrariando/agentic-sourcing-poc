@@ -30,7 +30,9 @@ class ImplementationAgent(BaseAgent):
         self,
         case_summary: CaseSummary,
         supplier_id: str,
-        use_cache: bool = True
+        use_cache: bool = True,
+        user_intent: str = "",
+        conversation_history: Optional[list[dict]] = None
     ) -> tuple[ImplementationPlan, Dict[str, Any], Dict[str, Any], int, int]:
         """
         Create implementation plan with deterministic calculations (Table 3).
@@ -42,7 +44,8 @@ class ImplementationAgent(BaseAgent):
                 case_summary.case_id,
                 "implementation_plan",
                 case_summary,
-                additional_inputs={"supplier_id": supplier_id}
+                additional_inputs={"supplier_id": supplier_id},
+                question_text=user_intent # Add intent to cache key
             )
             if cache_meta.cache_hit and cached_value:
                 return cached_value, {}, {}
@@ -68,13 +71,19 @@ class ImplementationAgent(BaseAgent):
 
 Your role (Table 3 alignment):
 - Explain impacts and summarize KPIs (structured reporting)
-- No strategic reasoning - only explanation of deterministic outputs
+- No strategic reasoning - only explanation of deterministic outputs (UNLESS overriding based on User Intent)
 
 Rollout Playbook (from Vector Knowledge Layer):
 {json.dumps(rollout_playbook, indent=2)}
 
 Case Summary:
 {case_summary.model_dump_json() if hasattr(case_summary, 'model_dump_json') else json.dumps(dict(case_summary))}
+
+User Intent / Instructions:
+{user_intent if user_intent else "No specific instructions provided"}
+
+Conversation History:
+{json.dumps(conversation_history, indent=2) if conversation_history else "No previous conversation"}
 
 Category Information:
 {json.dumps(category, indent=2) if category else "No category data"}
@@ -85,7 +94,7 @@ Supplier Information:
 Contract Information:
 {json.dumps(contract, indent=2) if contract else "No contract data"}
 
-Deterministic Calculations (already computed):
+Deterministic Calculations (Default Baseline):
 - Projected Savings: ${projected_savings:,.2f} (if applicable)
 - Rollout Steps: {json.dumps(rollout_steps, indent=2)}
 
@@ -93,12 +102,14 @@ Your task:
 1. Explain the impacts of this implementation (service levels, operational changes)
 2. Summarize KPIs in structured format (savings realization, service levels, compliance metrics)
 3. Structure the reporting based on rollout playbook template
+4. If User Intent requests specific steps or changes, MODIFY the default Rollout Steps to reflect this.
 
 IMPORTANT CONSTRAINTS:
 - Use rollout playbook structure
 - Explain deterministic calculations clearly
 - Do NOT perform strategic reasoning
 - Focus on structured reporting and impact explanation
+- Honor User Intent for customizing rollout steps
 
 Respond with a JSON object matching this EXACT schema:
 {{
@@ -138,7 +149,8 @@ Provide ONLY valid JSON, no markdown formatting."""
             },
             "category": category,
             "contract": contract,
-            "supplier": supplier
+            "supplier": supplier,
+            "user_intent": user_intent
         }
         
         try:
@@ -146,9 +158,11 @@ Provide ONLY valid JSON, no markdown formatting."""
                 prompt, ImplementationPlan, retry_on_invalid=True
             )
             
-            # Set deterministic values (LLM should match these, but we enforce them)
-            implementation_plan.projected_savings = projected_savings
-            implementation_plan.rollout_steps = rollout_steps
+            # Set deterministic values (LLM should match these, but we enforce them ONLY if no user intent to override)
+            if not user_intent:
+                implementation_plan.projected_savings = projected_savings
+                implementation_plan.rollout_steps = rollout_steps
+            # Else: Trust the LLM's plan which incorporated User Intent override
             
             # Cache result
             if use_cache:
