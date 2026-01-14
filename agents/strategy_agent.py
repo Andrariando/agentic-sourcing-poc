@@ -136,7 +136,10 @@ class StrategyAgent(BaseAgent):
         )
         
         # STEP 4: If rule matched, create deterministic output (NO LLM CALL)
-        if rule_based_strategy:
+        # Check for refinement request (e.g. "explore alternatives") which should bypass rules
+        is_refinement = self._is_refinement_request(user_intent)
+        
+        if rule_based_strategy and not is_refinement:
             recommendation = self._create_rule_based_recommendation(
                 case_summary, rule_based_strategy, contract, performance, market
             )
@@ -391,5 +394,14 @@ Provide ONLY valid JSON, no markdown formatting."""
         if any(w in intent_lower for w in ["monitor", "watch", "track"]):
             return "Monitor"
         return None
+
+    def _is_refinement_request(self, intent: str) -> bool:
+        """Check if user is asking for alternatives or refinement."""
+        intent_lower = intent.lower()
+        refinement_keywords = [
+            "alternative", "else", "different", "change", "other option",
+            "explore", "pivot", "instead", "modify"
+        ]
+        return any(kw in intent_lower for kw in refinement_keywords)
 
 

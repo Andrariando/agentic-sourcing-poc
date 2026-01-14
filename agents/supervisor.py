@@ -76,8 +76,24 @@ class SupervisorAgent:
         self.policy_loader = PolicyLoader()
         self.confidence_threshold_low = 0.6
         self.confidence_threshold_medium = 0.8
-    
-    def validate_state(self, state: PipelineState) -> tuple[bool, Optional[str]]:
+        self.confidence_threshold_low = 0.6
+        self.confidence_threshold_medium = 0.8
+        
+    def _check_output_type(self, output: Any, expected_type_name: str, key_field: str = None) -> bool:
+        """Helper to check if output matches type (object or dict)."""
+        if not output:
+             return False
+        # Check if object
+        if type(output).__name__ == expected_type_name:
+            return True
+        # Check if dict
+        if isinstance(output, dict):
+            # Check for specific fields that identify the type
+            if key_field and key_field in output:
+                return True
+            # Fallback (weak check)
+            pass
+        return False
         """
         Validate state completeness and correctness.
         Returns (is_valid, error_message)
@@ -188,24 +204,31 @@ class SupervisorAgent:
         # Table 3 routing logic: Route based on DTP stage and agent outputs
         
         # If we just received strategy recommendation (DTP-01 output), determine next step
-        if latest_output and isinstance(latest_output, StrategyRecommendation):
-            if latest_output.recommended_strategy in ["RFx", "Renegotiate"]:
+        is_strategy = self._check_output_type(latest_output, "StrategyRecommendation", "recommended_strategy")
+        if latest_output and is_strategy:
+            strategy = getattr(latest_output, "recommended_strategy", None) or latest_output.get("recommended_strategy")
+            if strategy in ["RFx", "Renegotiate"]:
                 # DTP-02: Supplier Scoring Agent (Table 3: DTP-02/03)
                 return "SupplierEvaluation"
-            elif latest_output.recommended_strategy == "Renew":
+            elif strategy == "Renew":
                 return None  # Renewal path may not need supplier evaluation
         
         # If we just received supplier shortlist (DTP-02/03 output), route to RFx or Negotiation
-        if latest_output and isinstance(latest_output, SupplierShortlist):
+        is_shortlist = self._check_output_type(latest_output, "SupplierShortlist", "shortlisted_suppliers")
+        if latest_output and is_shortlist:
             if dtp_stage == "DTP-03":
                 # DTP-03: RFx Draft Agent (Table 3: DTP-03)
                 return "RFxDraft"
-            elif dtp_stage == "DTP-04" and latest_output.top_choice_supplier_id:
-                # DTP-04: Negotiation Support Agent (Table 3: DTP-04)
-                return "NegotiationSupport"
+            elif dtp_stage == "DTP-04":
+                # Only check top choice if we have it
+                top_choice = getattr(latest_output, "top_choice_supplier_id", None) or latest_output.get("top_choice_supplier_id")
+                if top_choice:
+                    # DTP-04: Negotiation Support Agent (Table 3: DTP-04)
+                    return "NegotiationSupport"
         
         # If we just received RFx draft (DTP-03 output), route to Negotiation
-        if latest_output and isinstance(latest_output, RFxDraft):
+        is_rfx = self._check_output_type(latest_output, "RFxDraft", "rfx_sections")
+        if latest_output and is_rfx:
             if dtp_stage == "DTP-03":
                 # After RFx draft, proceed to supplier evaluation or negotiation
                 return "SupplierEvaluation"  # Or could route to Negotiation if supplier already selected
@@ -354,12 +377,13 @@ class SupervisorAgent:
                     return None, "out_of_scope", None
         
         # Check if output is AgentDialogue (Talking Back)
-        if latest_output and isinstance(latest_output, AgentDialogue):
-            if latest_output.status == "NeedClarification":
+        if latest_output and (isinstance(latest_output, AgentDialogue) or (isinstance(latest_output, dict) and "status" in latest_output and "reasoning" in latest_output)):
+            status = latest_output.status if hasattr(latest_output, "status") else latest_output.get("status")
+            if status == "NeedClarification":
                 return "CaseClarifier", "agent_requested_clarification", None
-            elif latest_output.status == "ConcernRaised":
+            elif status == "ConcernRaised":
                 return "wait_for_human", "agent_raised_concern", None
-            elif latest_output.status == "SuggestAlternative":
+            elif status == "SuggestAlternative":
                 # For now, route to human to decide on alternative
                 return "wait_for_human", "agent_suggested_alternative", None
             return None, "agent_dialogue_handled", None
