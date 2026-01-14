@@ -745,6 +745,23 @@ def strategy_node(state: PipelineState) -> PipelineState:
         
         tier = 2 if state.get("use_tier_2") else 1
         cost = calculate_cost(tier, input_tokens, output_tokens)
+        
+        # Build detailed reasoning log for transparency
+        reasoning_log = {
+            "thinking": f"Analyzed case {case_summary.case_id} for procurement strategy",
+            "data_used": [
+                f"Category: {case_summary.category_id}",
+                f"DTP Stage: {state['dtp_stage']}",
+                f"User Intent: {user_intent[:100] if user_intent else 'None'}",
+            ],
+            "decision_factors": [
+                f"Strategy: {recommendation.recommended_strategy}",
+                f"Confidence: {int(recommendation.confidence * 100)}%",
+            ],
+            "rationale": recommendation.rationale if hasattr(recommendation, 'rationale') else [],
+            "risk_assessment": recommendation.risk_assessment if hasattr(recommendation, 'risk_assessment') else "Unknown"
+        }
+        
         log = create_agent_log(
             case_id=case_summary.case_id,
             dtp_stage=state["dtp_stage"],
@@ -759,8 +776,8 @@ def strategy_node(state: PipelineState) -> PipelineState:
             cache_key=cache_meta.cache_key,
             input_hash=cache_meta.input_hash,
             llm_input_payload=llm_input,
-            output_payload=output_dict,
-            output_summary=f"Recommended: {recommendation.recommended_strategy}",
+            output_payload={**output_dict, "reasoning_log": reasoning_log},  # Include reasoning
+            output_summary=f"Recommended: {recommendation.recommended_strategy} ({int(recommendation.confidence * 100)}% confidence)",
             guardrail_events=["Budget exceeded"] if budget_exceeded else []
         )
         state = add_log_to_state(state, log)
@@ -1540,7 +1557,11 @@ def process_human_decision(state: PipelineState) -> PipelineState:
     not a Pydantic object. Must use dict access (get()) not attribute access (.decision).
     """
     human_decision = state.get("human_decision")
+    print(f"[DEBUG process_human_decision] Called with human_decision: {human_decision}")
+    print(f"[DEBUG process_human_decision] human_decision type: {type(human_decision)}")
+    
     if not human_decision:
+        print("[DEBUG process_human_decision] No human_decision found, returning state unchanged")
         return state
     
     case_summary = state["case_summary"]
@@ -1549,6 +1570,9 @@ def process_human_decision(state: PipelineState) -> PipelineState:
     decision = human_decision.get("decision") if isinstance(human_decision, dict) else getattr(human_decision, "decision", None)
     edited_fields = human_decision.get("edited_fields") if isinstance(human_decision, dict) else getattr(human_decision, "edited_fields", None)
     reason = human_decision.get("reason") if isinstance(human_decision, dict) else getattr(human_decision, "reason", None)
+    
+    print(f"[DEBUG process_human_decision] Extracted decision: {decision}")
+    print(f"[DEBUG process_human_decision] Current dtp_stage: {state.get('dtp_stage')}")
     
     if decision == "Approve":
         # Apply any edits from human

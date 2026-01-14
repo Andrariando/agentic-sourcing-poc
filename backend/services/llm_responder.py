@@ -1,0 +1,294 @@
+"""
+LLM Responder Service - Generates natural responses using LLM.
+
+This service is the core of the GPT-like experience. It:
+1. Analyzes user intent using LLM (not regex/rules)
+2. Generates natural responses (not templates)
+3. Decides when to call agents vs answer directly
+4. Asks for more data when needed
+5. Maintains conversation context
+"""
+import json
+import logging
+from typing import Any, Dict, List, Optional, Union
+from datetime import datetime
+
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage
+
+logger = logging.getLogger(__name__)
+
+
+class LLMResponder:
+    """
+    Generates natural, ChatGPT-like responses using LLM.
+    
+    This replaces the template-based ResponseAdapter with dynamic LLM generation.
+    """
+    
+    def __init__(self, model: str = "gpt-4o-mini", temperature: float = 0.7):
+        self.llm = ChatOpenAI(model=model, temperature=temperature)
+        self.analysis_llm = ChatOpenAI(model=model, temperature=0)  # Deterministic for analysis
+    
+    def analyze_intent(
+        self,
+        user_message: str,
+        case_context: Dict[str, Any],
+        conversation_history: List[Dict[str, str]] = None
+    ) -> Dict[str, Any]:
+        """
+        Use LLM to understand what the user wants.
+        
+        Returns:
+            {
+                "needs_agent": bool,  # Should we run a specialist agent?
+                "agent_hint": str,    # Which agent might be needed
+                "is_approval": bool,  # Is user approving something?
+                "is_rejection": bool, # Is user rejecting something?
+                "needs_data": bool,   # Do we need more info from user?
+                "missing_info": str,  # What info is missing
+                "can_answer_directly": bool,  # Can LLM answer without agent?
+                "intent_summary": str  # Brief summary of user intent
+            }
+        """
+        history_text = self._format_history(conversation_history) if conversation_history else "No prior conversation."
+        
+        prompt = f"""You are analyzing a user message in a procurement copilot system.
+
+CASE CONTEXT:
+- Case ID: {case_context.get('case_id', 'Unknown')}
+- DTP Stage: {case_context.get('dtp_stage', 'DTP-01')}
+- Category: {case_context.get('category_id', 'Unknown')}
+- Status: {case_context.get('status', 'Unknown')}
+- Has Agent Output: {bool(case_context.get('latest_agent_output'))}
+- Waiting for Human: {case_context.get('waiting_for_human', False)}
+
+CONVERSATION HISTORY:
+{history_text}
+
+USER MESSAGE: "{user_message}"
+
+Analyze the user's intent and respond with JSON only:
+{{
+    "needs_agent": true/false,  // Does this require running a specialist agent (strategy, supplier eval, etc)?
+    "agent_hint": "string",     // If needs_agent, which one? (Strategy, SupplierEval, RFx, Negotiation, Contract, Implementation)
+    "is_approval": true/false,  // Is user approving/confirming/agreeing to proceed?
+    "is_rejection": true/false, // Is user rejecting/declining/asking for changes?
+    "needs_data": true/false,   // Do we need more information from user to help them?
+    "missing_info": "string",   // If needs_data, what's missing?
+    "can_answer_directly": true/false,  // Can we answer from context without running an agent?
+    "intent_summary": "string"  // One sentence summary of what user wants
+}}
+
+Respond with valid JSON only, no explanation."""
+
+        try:
+            response = self.analysis_llm.invoke([HumanMessage(content=prompt)])
+            result = json.loads(response.content)
+            logger.info(f"[LLMResponder] Intent analysis: {result}")
+            return result
+        except Exception as e:
+            logger.error(f"[LLMResponder] Intent analysis failed: {e}")
+            # Fallback: assume needs agent for safety
+            return {
+                "needs_agent": True,
+                "agent_hint": "Strategy",
+                "is_approval": False,
+                "is_rejection": False,
+                "needs_data": False,
+                "missing_info": "",
+                "can_answer_directly": False,
+                "intent_summary": "Could not parse intent, defaulting to agent call"
+            }
+    
+    def generate_response(
+        self,
+        user_message: str,
+        case_context: Dict[str, Any],
+        agent_output: Any = None,
+        conversation_history: List[Dict[str, str]] = None,
+        action_taken: str = None
+    ) -> str:
+        """
+        Generate a natural, ChatGPT-like response.
+        
+        Args:
+            user_message: What the user said
+            case_context: Current case state
+            agent_output: Output from specialist agent (if any)
+            conversation_history: Prior messages
+            action_taken: What action was taken (e.g., "approved", "ran_strategy")
+        """
+        history_text = self._format_history(conversation_history) if conversation_history else ""
+        output_text = self._format_agent_output(agent_output) if agent_output else "No agent analysis available yet."
+        
+        system_prompt = """You are a friendly, professional procurement copilot assistant. 
+You help users with sourcing decisions, supplier evaluation, negotiations, and contracts.
+
+PERSONALITY:
+- Be conversational and natural, like ChatGPT
+- Be concise but informative
+- Never use templated or robotic language
+- If something went wrong, acknowledge it honestly
+- Proactively offer helpful next steps
+- If you don't have enough information, ask for it
+
+RULES:
+- Use the agent output to inform your response, but express it naturally
+- If the user approved something, acknowledge it warmly and explain next steps
+- If you need more data, ask specific questions
+- Always be helpful and action-oriented"""
+
+        user_prompt = f"""CASE CONTEXT:
+- Case ID: {case_context.get('case_id', 'Unknown')}
+- DTP Stage: {case_context.get('dtp_stage', 'DTP-01')}
+- Category: {case_context.get('category_id', 'Unknown')}
+- Status: {case_context.get('status', 'Unknown')}
+
+{f"CONVERSATION HISTORY:{chr(10)}{history_text}" if history_text else ""}
+
+{f"ACTION TAKEN: {action_taken}" if action_taken else ""}
+
+AGENT OUTPUT/ANALYSIS:
+{output_text}
+
+USER MESSAGE: "{user_message}"
+
+Generate a natural, helpful response:"""
+
+        try:
+            response = self.llm.invoke([
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=user_prompt)
+            ])
+            return response.content
+        except Exception as e:
+            logger.error(f"[LLMResponder] Response generation failed: {e}")
+            return f"I apologize, but I encountered an issue processing your request. Could you please try rephrasing or let me know more about what you'd like to do?"
+    
+    def generate_approval_response(
+        self,
+        result: Dict[str, Any],
+        case_context: Dict[str, Any]
+    ) -> str:
+        """Generate a natural response for approval actions."""
+        success = result.get("success", False)
+        new_stage = result.get("new_dtp_stage", case_context.get("dtp_stage"))
+        
+        if success:
+            return self.generate_response(
+                user_message="I approve",
+                case_context={**case_context, "dtp_stage": new_stage},
+                action_taken=f"User approved. Case advanced from {case_context.get('dtp_stage')} to {new_stage}."
+            )
+        else:
+            error = result.get("message", "Unknown error")
+            return self.generate_response(
+                user_message="I approve",
+                case_context=case_context,
+                action_taken=f"Approval failed: {error}"
+            )
+    
+    def generate_rejection_response(
+        self,
+        case_context: Dict[str, Any],
+        reason: str = None
+    ) -> str:
+        """Generate a natural response for rejection/revision requests."""
+        return self.generate_response(
+            user_message="I reject this",
+            case_context=case_context,
+            action_taken=f"User rejected with feedback: {reason or 'No specific feedback provided'}"
+        )
+    
+    def generate_data_request(
+        self,
+        missing_info: str,
+        case_context: Dict[str, Any]
+    ) -> str:
+        """Generate a natural request for missing data."""
+        prompt = f"""The user asked for help but we need more information.
+
+Missing: {missing_info}
+Case Context: {case_context.get('category_id', 'General')} procurement
+
+Generate a friendly, specific request for the missing information. Be conversational."""
+
+        try:
+            response = self.llm.invoke([HumanMessage(content=prompt)])
+            return response.content
+        except Exception as e:
+            logger.error(f"[LLMResponder] Data request failed: {e}")
+            return f"I'd love to help! Could you please provide more details about {missing_info}?"
+    
+    def _format_history(self, history: List[Dict[str, str]]) -> str:
+        """Format conversation history for prompt."""
+        if not history:
+            return ""
+        
+        formatted = []
+        for msg in history[-5:]:  # Last 5 messages for context
+            role = msg.get("role", "unknown").upper()
+            content = msg.get("content", "")[:500]  # Truncate long messages
+            formatted.append(f"{role}: {content}")
+        
+        return "\n".join(formatted)
+    
+    def _format_agent_output(self, output: Any) -> str:
+        """Format agent output for prompt."""
+        if output is None:
+            return "No analysis available."
+        
+        if isinstance(output, dict):
+            # Extract key fields for common output types
+            formatted = []
+            
+            if "recommended_strategy" in output:
+                formatted.append(f"Recommended Strategy: {output['recommended_strategy']}")
+                if "confidence" in output:
+                    formatted.append(f"Confidence: {int(output['confidence'] * 100)}%")
+                if "rationale" in output:
+                    rationale = output["rationale"]
+                    if isinstance(rationale, list):
+                        formatted.append("Rationale: " + ", ".join(rationale[:3]))
+                    else:
+                        formatted.append(f"Rationale: {rationale}")
+                if "risk_assessment" in output:
+                    formatted.append(f"Risk: {output['risk_assessment']}")
+            
+            elif "shortlisted_suppliers" in output:
+                suppliers = output["shortlisted_suppliers"]
+                formatted.append(f"Found {len(suppliers)} suppliers")
+                if output.get("top_choice_supplier_id"):
+                    formatted.append(f"Top choice: {output['top_choice_supplier_id']}")
+            
+            elif "rfx_type" in output:
+                formatted.append(f"RFx Type: {output['rfx_type']}")
+                if "completeness" in output:
+                    formatted.append(f"Completeness: {output['completeness']}%")
+            
+            else:
+                # Generic formatting
+                for key, value in list(output.items())[:5]:
+                    if value and not key.startswith("_"):
+                        formatted.append(f"{key}: {str(value)[:100]}")
+            
+            return "\n".join(formatted) if formatted else str(output)[:500]
+        
+        elif hasattr(output, "model_dump"):
+            # Pydantic model
+            return self._format_agent_output(output.model_dump())
+        
+        else:
+            return str(output)[:500]
+
+
+# Singleton instance
+_llm_responder = None
+
+def get_llm_responder() -> LLMResponder:
+    """Get or create LLM responder instance."""
+    global _llm_responder
+    if _llm_responder is None:
+        _llm_responder = LLMResponder()
+    return _llm_responder

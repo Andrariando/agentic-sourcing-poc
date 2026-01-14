@@ -125,11 +125,17 @@ class ChatService:
         use_tier_2: bool = False
     ) -> ChatResponse:
         """
-        Process user message conversationally.
+        Process user message using LLM-first conversational approach.
         
-        NEW: If conversation memory enabled, retrieve context and save messages.
-        NEW: Generate trace_id for request tracking and logging.
+        This is the GPT-like experience where:
+        1. LLM analyzes what user wants
+        2. Decides if agent is needed or can answer directly
+        3. Generates natural, non-templated responses
+        4. Asks for more data if needed
+        5. Preserves conversation memory
         """
+        from backend.services.llm_responder import get_llm_responder
+        
         # Generate trace_id for this request
         trace_id = str(uuid.uuid4())
         
@@ -137,7 +143,7 @@ class ChatService:
         if ENABLE_ROUTING_LOGS:
             logger.info(f"[{trace_id}] CHAT_INPUT case={case_id} message={user_message[:100]}...")
         
-        # Load case state
+        # 1. Load case state
         state = self.case_service.get_case_state(case_id)
         if not state:
             logger.warning(f"[{trace_id}] Case not found: {case_id}")
@@ -145,95 +151,133 @@ class ChatService:
                 case_id, user_message, "Case not found.", "UNKNOWN", "", trace_id=trace_id
             )
         
-        # NEW: Get conversation context (if enabled)
+        # 2. Get conversation history for memory
         conversation_history = []
         if self.conversation_manager and self.enable_conversation_memory:
             try:
                 conversation_history = self.conversation_manager.get_relevant_context(
                     case_id=case_id,
                     current_message=user_message,
-                    max_tokens=1500  # Configurable
+                    max_tokens=1500
                 )
             except Exception as e:
-                # Graceful degradation: log error, continue without context
                 logger.warning(f"Failed to retrieve conversation context: {e}")
                 conversation_history = []
         
-        # Check for approval/rejection in natural language
-        if state.get("waiting_for_human"):
-            approval_response = self._check_for_approval(user_message, case_id, state)
-            if approval_response:
-                # Save user message if conversation memory enabled
-                if self.conversation_manager and self.enable_conversation_memory:
-                    try:
-                        self.conversation_manager.save_message(
-                            case_id=case_id,
-                            role="user",
-                            content=user_message,
-                            metadata={"intent": "APPROVAL_REJECTION"}
-                        )
-                    except Exception as e:
-                        logger.warning(f"Failed to save user message: {e}")
-                return approval_response
-        
-        # Enhanced classification context with conversation history
-        classification_context = {
-            "dtp_stage": state["dtp_stage"],
-            "has_existing_output": bool(state.get("latest_agent_output")),
-            "category_id": state.get("category_id"),
-            "status": state.get("status"),
-            "waiting_for_human": state.get("waiting_for_human", False),
-            # NEW: Enhanced context for better intent classification
-            "latest_agent_name": state.get("latest_agent_name"),
-            "conversation_history": conversation_history[:3] if conversation_history else [],  # Last 3 messages
-            "conversation_length": len(conversation_history) if conversation_history else 0
-        }
-        
-        # Classify intent with fallback handling
-        fallback_used = False
-        try:
-            intent = IntentRouter.classify_intent(user_message, classification_context)
-        except Exception as e:
-            logger.error(f"[{trace_id}] Intent classification failed: {e}", exc_info=True)
-            intent = UserIntent.EXPLAIN  # Safe fallback
-            fallback_used = True
-        
-        # Log routing decision
-        if ENABLE_ROUTING_LOGS:
-            logger.info(f"[{trace_id}] ROUTING intent={intent.value} fallback_used={fallback_used}")
-        
-        # NEW: Save user message to database (if enabled)
+        # 3. Save user message to memory
         if self.conversation_manager and self.enable_conversation_memory:
             try:
                 self.conversation_manager.save_message(
                     case_id=case_id,
                     role="user",
                     content=user_message,
-                    metadata={
-                        "intent": intent.value if hasattr(intent, 'value') else str(intent),
-                        "use_tier_2": use_tier_2,
-                        "trace_id": trace_id
-                    }
+                    metadata={"trace_id": trace_id}
                 )
             except Exception as e:
                 logger.warning(f"[{trace_id}] Failed to save user message: {e}")
-                # Continue processing - message saving is non-critical
         
-        # UNIFIED PATH: Delegate all decision making to the LangGraph Supervisor
-        # This replaces the legacy hard-coded routing, allowing the LLM to decide
-        # when to answer directly vs when to call an agent.
+        # 4. Build case context for LLM
+        case_context = {
+            "case_id": case_id,
+            "dtp_stage": state.get("dtp_stage", "DTP-01"),
+            "category_id": state.get("category_id", "Unknown"),
+            "status": state.get("status", "In Progress"),
+            "latest_agent_output": state.get("latest_agent_output"),
+            "latest_agent_name": state.get("latest_agent_name"),
+            "waiting_for_human": state.get("waiting_for_human", False)
+        }
         
-        # Check for simple greetings to save tokens, otherwise use full graph
-        greeting_patterns = [r'^hi\b', r'^hello\b', r'^hey\b']
-        if any(re.search(p, user_message.lower()) for p in greeting_patterns) and len(user_message.split()) < 3:
-             response_text = f"Hello! I'm here to help with case {case_id}. What would you like to do?"
-             return self._create_response(case_id, user_message, response_text, "GREETING", state["dtp_stage"])
-
-        return self.process_message_langgraph(
+        # 5. Use LLM to analyze intent
+        responder = get_llm_responder()
+        intent = responder.analyze_intent(user_message, case_context, conversation_history)
+        
+        logger.info(f"[{trace_id}] LLM Intent Analysis: {intent}")
+        
+        # 6. Execute based on intent
+        assistant_message = ""
+        agents_called = []
+        action_taken = None
+        
+        if intent.get("is_approval") and state.get("waiting_for_human"):
+            # User is approving - process the decision
+            print(f"[DEBUG LLM-FIRST] Detected approval via LLM")
+            result = self.process_decision(case_id, "Approve")
+            print(f"[DEBUG LLM-FIRST] process_decision result: {result}")
+            assistant_message = responder.generate_approval_response(result, case_context)
+            action_taken = f"Approved. Result: {result}"
+            
+        elif intent.get("is_rejection") and state.get("waiting_for_human"):
+            # User is rejecting
+            result = self.process_decision(case_id, "Reject", reason=user_message)
+            assistant_message = responder.generate_rejection_response(case_context, user_message)
+            action_taken = "Rejected"
+            
+        elif intent.get("needs_data"):
+            # We need more info from user
+            assistant_message = responder.generate_data_request(
+                intent.get("missing_info", "more details"),
+                case_context
+            )
+            action_taken = "Requested more data"
+            
+        elif intent.get("needs_agent"):
+            # Run the multi-agent workflow
+            print(f"[DEBUG LLM-FIRST] Running agent workflow, hint: {intent.get('agent_hint')}")
+            result = self.process_message_langgraph(
+                case_id=case_id,
+                user_message=user_message,
+                use_tier_2=use_tier_2,
+                case_state=state
+            )
+            # Get the response from the workflow result
+            assistant_message = result.assistant_message
+            agents_called = result.agents_called or []
+            
+        elif intent.get("can_answer_directly"):
+            # LLM can answer without running an agent
+            assistant_message = responder.generate_response(
+                user_message=user_message,
+                case_context=case_context,
+                agent_output=state.get("latest_agent_output"),
+                conversation_history=conversation_history
+            )
+            action_taken = "Direct LLM response"
+            
+        else:
+            # Default: generate a helpful response
+            assistant_message = responder.generate_response(
+                user_message=user_message,
+                case_context=case_context,
+                agent_output=state.get("latest_agent_output"),
+                conversation_history=conversation_history
+            )
+        
+        # 7. Save assistant response to memory
+        if self.conversation_manager and self.enable_conversation_memory:
+            try:
+                self.conversation_manager.save_message(
+                    case_id=case_id,
+                    role="assistant",
+                    content=assistant_message,
+                    metadata={
+                        "trace_id": trace_id,
+                        "intent": intent.get("intent_summary"),
+                        "action_taken": action_taken
+                    }
+                )
+            except Exception as e:
+                logger.warning(f"[{trace_id}] Failed to save assistant message: {e}")
+        
+        # 8. Return response
+        return self._create_response(
             case_id=case_id,
             user_message=user_message,
-            use_tier_2=use_tier_2,
-            case_state=state
+            assistant_message=assistant_message,
+            intent=intent.get("intent_summary", "UNKNOWN"),
+            dtp_stage=state.get("dtp_stage", "DTP-01"),
+            waiting=state.get("waiting_for_human", False),
+            trace_id=trace_id,
+            agents_called=agents_called
         )
         
         # NEW: Save assistant response (if enabled)
@@ -282,9 +326,12 @@ class ChatService:
         
         if is_approval and not is_rejection:
             # Process approval
+            print(f"[DEBUG APPROVE] Detected approval for case {case_id}")
             result = self.process_decision(case_id, "Approve")
+            print(f"[DEBUG APPROVE] process_decision result: {result}")
             if result["success"]:
                 new_stage = result.get("new_dtp_stage", state["dtp_stage"])
+                print(f"[DEBUG APPROVE] New DTP stage: {new_stage}")
                 stage_name = DTP_STAGE_NAMES.get(new_stage, new_stage)
                 
                 response = f"Decision approved. The case has advanced to **{new_stage} - {stage_name}**.\n\n"
@@ -1364,13 +1411,15 @@ class ChatService:
             "reason": reason,
             "edited_fields": edited_fields or {},
             "timestamp": datetime.now().isoformat(),
-            # "user_id": ... # could add if we had auth context
         }
+        print(f"[DEBUG process_decision] Created human_decision: {state['human_decision']}")
+        print(f"[DEBUG process_decision] State dtp_stage BEFORE workflow: {state.get('dtp_stage')}")
         
         # Run workflow to let Supervisor process the decision
-        # The Supervisor logic will see 'human_decision', apply it, update status, and potentially route to next agent
         try:
             final_state = self._run_workflow(state)
+            print(f"[DEBUG process_decision] State dtp_stage AFTER workflow: {final_state.get('dtp_stage')}")
+            print(f"[DEBUG process_decision] State status AFTER workflow: {final_state.get('status')}")
             self.case_service.save_case_state(final_state)
             
             return {
