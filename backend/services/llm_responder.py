@@ -83,13 +83,30 @@ Analyze the user's intent and respond with JSON only:
 Respond with valid JSON only, no explanation."""
 
         try:
-            response = self.analysis_llm.invoke([HumanMessage(content=prompt)])
+            # ERHANCEMENT: Use specific structure or json_mode if available
+            # For now, we enforce JSON in prompt and use reliable parsing
+            response = self.analysis_llm.invoke(
+                [HumanMessage(content=prompt)],
+                config={"response_format": {"type": "json_object"}}
+            )
             result = json.loads(response.content)
             logger.info(f"[LLMResponder] Intent analysis: {result}")
             return result
         except Exception as e:
             logger.error(f"[LLMResponder] Intent analysis failed: {e}")
-            # Fallback: assume needs agent for safety
+            # Fallback: DO NOT default to agent if it's likely a question
+            # Check for question marks or question words
+            if "?" in user_message or any(w in user_message.lower() for w in ["what", "how", "why", "when"]):
+                return {
+                    "needs_agent": False,
+                    "agent_hint": "",
+                    "is_approval": False,
+                    "is_rejection": False,
+                    "needs_data": False,
+                    "missing_info": "",
+                    "can_answer_directly": True,
+                    "intent_summary": "Fallback: Question detected"
+                }
             return {
                 "needs_agent": True,
                 "agent_hint": "Strategy",
@@ -98,7 +115,7 @@ Respond with valid JSON only, no explanation."""
                 "needs_data": False,
                 "missing_info": "",
                 "can_answer_directly": False,
-                "intent_summary": "Could not parse intent, defaulting to agent call"
+                "intent_summary": "Fallback: Default to agent"
             }
     
     def generate_response(
@@ -111,13 +128,7 @@ Respond with valid JSON only, no explanation."""
     ) -> str:
         """
         Generate a natural, ChatGPT-like response.
-        
-        Args:
-            user_message: What the user said
-            case_context: Current case state
-            agent_output: Output from specialist agent (if any)
-            conversation_history: Prior messages
-            action_taken: What action was taken (e.g., "approved", "ran_strategy")
+        ...
         """
         history_text = self._format_history(conversation_history) if conversation_history else ""
         output_text = self._format_agent_output(agent_output) if agent_output else "No agent analysis available yet."
@@ -136,10 +147,12 @@ PERSONALITY:
 - Answer questions directly.
 
 RULES:
-- Use the agent output to inform your response, but express it naturally
-- If the user approved something, acknowledge it warmly and explain next steps
-- If you need more data, ask specific questions
-- Always be helpful and action-oriented"""
+- Use the agent output to inform your response, but express it naturally.
+- DO NOT just repeat or summarize the agent output if the user requested something specific that isn't in the output. 
+- If the user asks a specific question (e.g., "What are savings?") and the data isn't in the Agent Output, say "I don't have specific savings data in the current analysis." then offer to find it.
+- If the user approved something, acknowledge it warmly and explain next steps.
+- If you need more data, ask specific questions.
+- Always be helpful and action-oriented."""
 
         user_prompt = f"""CASE CONTEXT:
 - Case ID: {case_context.get('case_id', 'Unknown')}

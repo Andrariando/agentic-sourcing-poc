@@ -254,6 +254,31 @@ class ChatService:
                 assistant_message += "\n\n(By the way, I'm still waiting for your decision on the recommendation above. Let me know if you'd like to proceed!)"
             
             action_taken = "Direct LLM response"
+            
+            # LOGGING FIX: Add explicit log entry for Direct LLM response so user sees it in UI
+            if "activity_log" not in state:
+                state["activity_log"] = []
+                
+            from datetime import datetime
+            import uuid
+            
+            # Create a simplified log entry for the Copilot's direct action
+            direct_log = {
+                "log_id": str(uuid.uuid4()),
+                "timestamp": datetime.now().isoformat(),
+                "case_id": case_id,
+                "dtp_stage": state.get("dtp_stage", "Unknown"),
+                "agent_name": "Copilot",
+                "task_name": "Direct Response",
+                "model_used": "gpt-4o-mini",
+                "output_summary": assistant_message[:100] + "..." if len(assistant_message) > 100 else assistant_message,
+                "reasoning_log": {
+                    "thinking": "User asked a question that could be answered directly from context.",
+                    "intent_detected": intent.get("intent_summary", "Question"),
+                    "action": "Answered directly without specialist agent"
+                }
+            }
+            state["activity_log"].append(direct_log)
         
         # 7. Save assistant response to memory
         if self.conversation_manager and self.enable_conversation_memory:
