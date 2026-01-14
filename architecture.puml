@@ -75,7 +75,8 @@ package "**BACKEND** - FastAPI Server" <<backend>> {
     rectangle "🌐 **REST API**\n/cases, /chat, /decisions,\n/ingest, /health" as api
     
     package "**Services Layer**" {
-        rectangle "💬 **Chat Service**\nMessage processing,\nintent handling,\nresponse formatting\n+ Conversation memory\n+ Cost estimation" as chat_svc
+        rectangle "💬 **Chat Service**\nOrchestrator,\nState management" as chat_svc
+        rectangle "🤖 **LLMResponder**\nIntent Analysis,\nNatural Response Gen,\nData Sufficiency Check" as llm_resp
         rectangle "💾 **Conversation Context\nManager**\nContext retrieval,\nmessage storage,\ncost-aware selection" as conv_mgr
         rectangle "📋 **Case Service**\nCase CRUD,\nartifact management,\nstate persistence" as case_svc
         rectangle "📥 **Ingestion Service**\nUpload orchestration,\nvalidation" as ingest_svc
@@ -147,9 +148,13 @@ api --> chat_svc : "Chat messages"
 api --> ingest_svc : "File uploads"
 
 ' Chat Service to Supervisor
-chat_svc --> router : "User message\n+ context"
+chat_svc --> llm_resp : "1. User Message"
+llm_resp --> llm : "Analysis"
+
+' Conditional Flow
+chat_svc --> router : "2. Execute Agent\n(if intent=needs_agent)"
 router --> state_mgr : "Validates\nDTP stage"
-router --> planner : "Two-level intent\n→ Action Plan"
+router --> planner : "Action Plan"
 planner --> chat_svc : "Agent + Tasks"
 
 ' Supervisor to Agents

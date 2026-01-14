@@ -395,9 +395,16 @@ Seed via: `python backend/scripts/seed_comprehensive_data.py`
 
 ## 🔧 Recent Changes (January 2026)
 
+### Architecture Overhaul
+- **LLM-First Conversational Architecture**: Replaced regex/rule-based intent routing with `LLMResponder` for natural, dynamic understanding.
+- **Enhanced Agent Logs**: Added detailed `reasoning_log` to activity logs, exposing agent thinking process (confidence, data used, risk factors).
+- **Conversation Memory**: Integrated context-aware memory for "ChatGPT-like" follow-up questions.
+
 ### Bug Fixes
 - Fixed duplicate `process_message` method in ChatService
 - Fixed Pydantic/dict handling for AgentActionLog and BudgetState
+- Fixed "Approve Loop" where new commands were blocked by pending approval state
+- Fixed unrequested email template generation in LLM responses
 - Fixed Windows encoding issues (emojis → ASCII)
 
 ### Data Enhancements
