@@ -394,40 +394,52 @@ def render_case_dashboard():
     
     # Stats Bar
     total_cases = len(cases)
-    waiting_cases = len([c for c in cases if c.status == "Waiting for Human Decision"])
-    signal_cases = len([c for c in cases if c.trigger_source == "Signal"])
+    
+    # New Logic:
+    # 1. AI Signals (trigger_source == Signal)
+    ai_triggered = len([c for c in cases if c.trigger_source == "Signal"])
+    
+    # 2. User Requested (trigger_source == User or None/Other)
+    user_requested = len([c for c in cases if c.trigger_source != "Signal"])
+    
+    # 3. Needs Approval (status == Waiting for Human Decision)
+    needs_approval = len([c for c in cases if c.status == "Waiting for Human Decision"])
+    
+    # 4. In Progress (status == In Progress)
+    in_progress = len([c for c in cases if c.status == "In Progress"])
     
     col_s1, col_s2, col_s3, col_s4 = st.columns(4)
     
     with col_s1:
         st.markdown(f"""
         <div class="stat-item">
-            <div class="stat-value">{total_cases}</div>
-            <div class="stat-label">Total Cases</div>
+            <div class="stat-value">{ai_triggered}</div>
+            <div class="stat-label">AI Triggered</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col_s2:
         st.markdown(f"""
         <div class="stat-item">
-            <div class="stat-value" style="color: {MIT_CARDINAL};">{waiting_cases}</div>
-            <div class="stat-label">Awaiting Decision</div>
+            <div class="stat-value">{user_requested}</div>
+            <div class="stat-label">User Requested</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col_s3:
+        # Highlight if there are pending approvals
+        color = MIT_CARDINAL if needs_approval > 0 else MIT_NAVY
         st.markdown(f"""
         <div class="stat-item">
-            <div class="stat-value">{signal_cases}</div>
-            <div class="stat-label">Signal Triggered</div>
+            <div class="stat-value" style="color: {color};">{needs_approval}</div>
+            <div class="stat-label">Needs Approval</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col_s4:
-        active_cases = len([c for c in cases if c.status == "In Progress"])
         st.markdown(f"""
         <div class="stat-item">
-            <div class="stat-value">{active_cases}</div>
+            <div class="stat-value">{in_progress}</div>
             <div class="stat-label">In Progress</div>
         </div>
         """, unsafe_allow_html=True)
