@@ -247,6 +247,15 @@ def inject_styles():
             font-size: 0.85rem;
             color: {NEAR_BLACK};
         }}
+        
+        /* Chat Message Styling */
+        div[data-testid="stChatMessage"] {{
+            background-color: #F8F9FA;
+            border: 1px solid #E0E0E0;
+            border-radius: 12px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -998,6 +1007,14 @@ def render_case_copilot(case_id: str):
     
     # Inject enterprise styles
     inject_styles()
+    
+    # Welcome Title
+    st.markdown(f"""
+    <div style="text-align: center; margin-bottom: 30px; padding: 20px 0;">
+        <h1 style="color: {MIT_CARDINAL}; font-size: 2.2rem; margin-bottom: 8px; font-weight: 700;">Welcome to MIT SCALE Expo</h1>
+        <h3 style="color: {MIT_NAVY}; font-size: 1.4rem; font-weight: 400; margin-top: 0;">Dynamic Sourcing Pipelines Using Agentic AI</h3>
+    </div>
+    """, unsafe_allow_html=True)
     
     # Back navigation
     col_back, col_spacer = st.columns([1, 5])
