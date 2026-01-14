@@ -199,7 +199,7 @@ class ChatService:
         action_taken = None
         
         if intent.get("is_approval") and state.get("waiting_for_human"):
-            # User is approving - process the decision
+            # ... (approval logic remains same) ...
             print(f"[DEBUG LLM-FIRST] Detected approval via LLM")
             result = self.process_decision(case_id, "Approve")
             print(f"[DEBUG LLM-FIRST] process_decision result: {result}")
@@ -207,13 +207,13 @@ class ChatService:
             action_taken = f"Approved. Result: {result}"
             
         elif intent.get("is_rejection") and state.get("waiting_for_human"):
-            # User is rejecting
+            # ... (rejection logic remains same) ...
             result = self.process_decision(case_id, "Reject", reason=user_message)
             assistant_message = responder.generate_rejection_response(case_context, user_message)
             action_taken = "Rejected"
             
         elif intent.get("needs_data"):
-            # We need more info from user
+            # ... (data request logic remains same) ...
             assistant_message = responder.generate_data_request(
                 intent.get("missing_info", "more details"),
                 case_context
@@ -221,36 +221,39 @@ class ChatService:
             action_taken = "Requested more data"
             
         elif intent.get("needs_agent"):
-            # Run the multi-agent workflow
+            # ... (agent logic remains same) ...
             print(f"[DEBUG LLM-FIRST] Running agent workflow, hint: {intent.get('agent_hint')}")
+            
+            # Explicitly clear waiting state for NEW work
+            state["waiting_for_human"] = False
+            state["human_decision"] = None
+            state["latest_agent_output"] = None
+            state["latest_agent_name"] = None
+            
             result = self.process_message_langgraph(
                 case_id=case_id,
                 user_message=user_message,
                 use_tier_2=use_tier_2,
                 case_state=state
             )
-            # Get the response from the workflow result
             assistant_message = result.assistant_message
             agents_called = result.agents_called or []
             
-        elif intent.get("can_answer_directly"):
-            # LLM can answer without running an agent
-            assistant_message = responder.generate_response(
-                user_message=user_message,
-                case_context=case_context,
-                agent_output=state.get("latest_agent_output"),
-                conversation_history=conversation_history
-            )
-            action_taken = "Direct LLM response"
-            
         else:
-            # Default: generate a helpful response
+            # Direct LLM response (Question/Chat)
             assistant_message = responder.generate_response(
                 user_message=user_message,
                 case_context=case_context,
                 agent_output=state.get("latest_agent_output"),
                 conversation_history=conversation_history
             )
+            
+            # CRITICAL ENHANCEMENT: If waiting for human compliance/approval, 
+            # and user just asked a question, gently remind them.
+            if state.get("waiting_for_human"):
+                assistant_message += "\n\n(By the way, I'm still waiting for your decision on the recommendation above. Let me know if you'd like to proceed!)"
+            
+            action_taken = "Direct LLM response"
         
         # 7. Save assistant response to memory
         if self.conversation_manager and self.enable_conversation_memory:
