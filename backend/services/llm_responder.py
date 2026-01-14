@@ -68,17 +68,38 @@ CONVERSATION HISTORY:
 
 USER MESSAGE: "{user_message}"
 
-Analyze the user's intent and respond with JSON only:
+CLASSIFICATION RULES:
+1. QUESTION (can_answer_directly=true, needs_agent=false): User is ASKING about something. Examples:
+   - "What are the signals?" -> QUESTION (explain existing data)
+   - "What contract expiry do we have?" -> QUESTION (explain existing data)
+   - "Why did you recommend this?" -> QUESTION (explain previous output)
+   - "What are the risks?" -> QUESTION (explain/discuss)
+
+2. ACTION REQUEST (needs_agent=true, can_answer_directly=false): User wants NEW WORK done. Examples:
+   - "Recommend a strategy" -> ACTION (run Strategy Agent)
+   - "Score the suppliers" -> ACTION (run Supplier Evaluation)
+   - "Draft an RFP" -> ACTION (run RFx Agent)
+   - "Analyze the case" -> ACTION (run analysis)
+
+3. APPROVAL (is_approval=true): User is confirming/agreeing. Examples:
+   - "Approve", "Yes", "Proceed", "Looks good", "Let's do it"
+
+4. REJECTION (is_rejection=true): User is declining. Examples:
+   - "Reject", "No", "I don't agree", "Change it"
+
+Respond with JSON only:
 {{
-    "needs_agent": true/false,  // Does this require running a specialist agent (strategy, supplier eval, etc)?
-    "agent_hint": "string",     // If needs_agent, which one? (Strategy, SupplierEval, RFx, Negotiation, Contract, Implementation)
-    "is_approval": true/false,  // Is user approving/confirming/agreeing to proceed?
-    "is_rejection": true/false, // Is user rejecting/declining/asking for changes?
-    "needs_data": true/false,   // Do we need more information from user to help them?
+    "needs_agent": true/false,  // TRUE ONLY if user requests NEW WORK (not questions)
+    "agent_hint": "string",     // If needs_agent, which one?
+    "is_approval": true/false,  // Is user approving?
+    "is_rejection": true/false, // Is user rejecting?
+    "needs_data": true/false,   // Do we need more info from user?
     "missing_info": "string",   // If needs_data, what's missing?
-    "can_answer_directly": true/false,  // Can we answer from context without running an agent?
-    "intent_summary": "string"  // One sentence summary of what user wants
+    "can_answer_directly": true/false,  // TRUE if this is a QUESTION we can answer
+    "intent_summary": "string"  // One sentence summary
 }}
+
+IMPORTANT: If the user is ASKING a question (what, why, how, which, etc.), set can_answer_directly=true and needs_agent=false.
 
 Respond with valid JSON only, no explanation."""
 
