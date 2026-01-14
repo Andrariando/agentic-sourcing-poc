@@ -1533,19 +1533,29 @@ def check_human_decision(state: PipelineState) -> Literal["approved", "rejected"
 
 
 def process_human_decision(state: PipelineState) -> PipelineState:
-    """Process human decision and continue workflow"""
+    """
+    Process human decision and continue workflow.
+    
+    CRITICAL FIX: human_decision is a DICT created by process_decision in chat_service.py,
+    not a Pydantic object. Must use dict access (get()) not attribute access (.decision).
+    """
     human_decision = state.get("human_decision")
     if not human_decision:
         return state
     
     case_summary = state["case_summary"]
     
-    if human_decision.decision == "Approve":
+    # CRITICAL FIX: Use dict access, not attribute access
+    decision = human_decision.get("decision") if isinstance(human_decision, dict) else getattr(human_decision, "decision", None)
+    edited_fields = human_decision.get("edited_fields") if isinstance(human_decision, dict) else getattr(human_decision, "edited_fields", None)
+    reason = human_decision.get("reason") if isinstance(human_decision, dict) else getattr(human_decision, "reason", None)
+    
+    if decision == "Approve":
         # Apply any edits from human
-        if human_decision.edited_fields and state.get("latest_agent_output"):
+        if edited_fields and state.get("latest_agent_output"):
             # Update output with edits (simplified)
             output = state["latest_agent_output"]
-            for key, value in human_decision.edited_fields.items():
+            for key, value in edited_fields.items():
                 if hasattr(output, key):
                     setattr(output, key, value)
         
@@ -1591,9 +1601,9 @@ def process_human_decision(state: PipelineState) -> PipelineState:
             cache_key=None,
             input_hash=None,
             llm_input_payload={
-                "decision": human_decision.decision,
-                "reason": human_decision.reason,
-                "edited_fields": human_decision.edited_fields or {}
+                "decision": decision,
+                "reason": reason,
+                "edited_fields": edited_fields or {}
             },
             output_payload={
                 "status": "Approved",
@@ -1609,9 +1619,9 @@ def process_human_decision(state: PipelineState) -> PipelineState:
         # Rejected - Treat as "Revision Request" (Feedback Loop)
         # Instead of terminating with "Rejected" status, we feed the reason back as intent.
         
-        reason = human_decision.reason or "Rejected without reason"
+        feedback_reason = reason or "Rejected without reason"
         # Prefix with explicit instruction so Agent sees it as an override/instruction
-        state["user_intent"] = f"User rejected previous output. Feedback: {reason}. Please revise."
+        state["user_intent"] = f"User rejected previous output. Feedback: {feedback_reason}. Please revise."
         
         # Reset wait flag so workflow continues (Back to Supervisor -> Agent)
         state["waiting_for_human"] = False
@@ -1636,14 +1646,14 @@ def process_human_decision(state: PipelineState) -> PipelineState:
             cache_key=None,
             input_hash=None,
             llm_input_payload={
-                "decision": human_decision.decision,
-                "reason": human_decision.reason
+                "decision": decision,
+                "reason": reason
             },
             output_payload={
                 "status": "Rejected",
                 "workflow_terminated": True
             },
-            output_summary=f"Human rejected decision. Reason: {human_decision.reason or 'No reason provided'}",
+            output_summary=f"Human rejected decision. Reason: {reason or 'No reason provided'}",
             guardrail_events=["Workflow Terminated"]
         )
         state = add_log_to_state(state, log)
