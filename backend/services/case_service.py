@@ -208,6 +208,53 @@ class CaseService:
         
         return True
     
+    def _rehydrate_agent_output(self, output_dict: dict, agent_name: str):
+        """
+        ISSUE #2 FIX: Convert dict back to proper Pydantic model for isinstance checks.
+        
+        When loading from DB, agent output is a dict (from JSON parsing).
+        Supervisor routing uses isinstance() checks which fail for dicts.
+        This rehydrates the dict back to the proper Pydantic model.
+        """
+        if not output_dict or not agent_name:
+            return output_dict
+        
+        # Import inside method to avoid circular imports
+        from utils.schemas import (
+            StrategyRecommendation, SupplierShortlist, NegotiationPlan,
+            RFxDraft, ContractExtraction, ImplementationPlan, ClarificationRequest
+        )
+        
+        MODEL_MAP = {
+            "Strategy": StrategyRecommendation,
+            "SupplierEvaluation": SupplierShortlist,
+            "NegotiationSupport": NegotiationPlan,
+            "RFxDraft": RFxDraft,
+            "ContractSupport": ContractExtraction,
+            "Implementation": ImplementationPlan,
+            "CaseClarifier": ClarificationRequest,
+            # Support enum-style names too
+            "SOURCING_SIGNAL": StrategyRecommendation,
+            "SUPPLIER_SCORING": SupplierShortlist,
+            "NEGOTIATION_SUPPORT": NegotiationPlan,
+            "RFX_DRAFT": RFxDraft,
+            "CONTRACT_SUPPORT": ContractExtraction,
+            "IMPLEMENTATION": ImplementationPlan,
+        }
+        
+        model_class = MODEL_MAP.get(agent_name)
+        if model_class:
+            try:
+                return model_class(**output_dict)
+            except Exception as e:
+                # Log but don't fail - fallback to dict
+                import logging
+                logging.getLogger(__name__).warning(
+                    f"Failed to rehydrate {agent_name} output: {e}"
+                )
+                return output_dict
+        return output_dict
+    
     def get_case_state(self, case_id: str) -> Optional[SupervisorState]:
         """Get case state for Supervisor."""
         case = self.get_case(case_id)
@@ -216,6 +263,15 @@ class CaseService:
         
         # Get latest artifact pack ID if available
         latest_artifact_pack_id = case.latest_artifact_pack_id if hasattr(case, 'latest_artifact_pack_id') else None
+        
+        # ISSUE #2 FIX: Rehydrate agent output from dict to Pydantic model
+        latest_agent_output = case.latest_agent_output
+        latest_agent_name = case.latest_agent_name
+        
+        if isinstance(latest_agent_output, dict) and latest_agent_name:
+            latest_agent_output = self._rehydrate_agent_output(
+                latest_agent_output, latest_agent_name
+            )
         
         state = SupervisorState(
             case_id=case.case_id,
@@ -227,8 +283,8 @@ class CaseService:
             status=case.status,
             user_intent="",
             intent_classification="UNKNOWN",
-            latest_agent_output=case.latest_agent_output,
-            latest_agent_name=case.latest_agent_name,
+            latest_agent_output=latest_agent_output,  # Now Pydantic object, not dict
+            latest_agent_name=latest_agent_name,
             activity_log=case.activity_log or [],
             human_decision=case.human_decision,
             waiting_for_human=case.status == "Waiting for Human Decision",

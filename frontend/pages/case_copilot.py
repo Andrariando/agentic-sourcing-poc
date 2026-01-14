@@ -518,7 +518,17 @@ def render_chat_interface(case, client) -> None:
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = {}
     
-    if case.case_id not in st.session_state.chat_history:
+    # ISSUE #5 FIX: Force sync from backend when case changes
+    # Previously, frontend session_state could drift from backend activity_log
+    # Now we force reload when case ID changes to ensure consistency
+    if "_last_case_id" not in st.session_state:
+        st.session_state._last_case_id = None
+    
+    force_reload = st.session_state._last_case_id != case.case_id
+    
+    if case.case_id not in st.session_state.chat_history or force_reload:
+        st.session_state._last_case_id = case.case_id
+        
         # Try to load chat history from activity log
         chat_history = []
         
@@ -543,7 +553,7 @@ def render_chat_interface(case, client) -> None:
         if not chat_history:
             chat_history = [{
                 "role": "assistant",
-                "content": f"👋 Hello! I'm your Case Copilot for **{case.case_id}**.\n\nI can help you with:\n- Scanning for sourcing signals\n- Scoring and evaluating suppliers\n- Drafting RFx documents\n- Preparing for negotiations\n- Extracting contract terms\n- Creating implementation plans\n\nWhat would you like to do?",
+                "content": f"👋 Hello! I'm your Case Copilot for **{case.case_id}**.\\n\\nI can help you with:\\n- Scanning for sourcing signals\\n- Scoring and evaluating suppliers\\n- Drafting RFx documents\\n- Preparing for negotiations\\n- Extracting contract terms\\n- Creating implementation plans\\n\\nWhat would you like to do?",
                 "metadata": {"agent": "System", "intent": "Welcome"}
             }]
         

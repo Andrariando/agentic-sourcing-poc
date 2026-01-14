@@ -1126,10 +1126,28 @@ class ChatService:
         workflow_state["user_intent"] = user_message
         workflow_state["use_tier_2"] = use_tier_2
 
-        # CRITICAL FIX: Clear transient state if not waiting for human
-        # This prevents the Supervisor from seeing "stale" output from the previous turn
-        # and thinking the task is already done, which leads to repetitive or generic responses.
-        if not workflow_state.get("waiting_for_human"):
+        # ISSUE #1 FIX: Only clear transient state for explicit NEW WORK requests
+        # Previously, this cleared output on EVERY message where waiting_for_human=False,
+        # which caused the loop after approval (output was cleared, Supervisor re-ran agent)
+        # Now we only clear for explicit new analysis requests, NOT status/explain/follow-up
+        intent_lower = user_message.lower()
+        
+        # Keywords that indicate user wants NEW analysis (should clear old output)
+        is_new_work_request = any(kw in intent_lower for kw in [
+            "analyze", "run", "create", "generate", "start", "begin", "new", 
+            "scan", "evaluate", "assess", "check signals", "find suppliers"
+        ])
+        
+        # Keywords that indicate status/explain/follow-up (should preserve output)
+        is_status_or_question = any(kw in intent_lower for kw in [
+            "what", "why", "how", "status", "explain", "tell me about", 
+            "show", "summary", "details", "next", "?"
+        ])
+        
+        # Only clear if it's a new work request AND NOT a question/status check
+        should_clear_state = is_new_work_request and not is_status_or_question
+        
+        if not workflow_state.get("waiting_for_human") and should_clear_state:
             workflow_state["latest_agent_output"] = None
             workflow_state["latest_agent_name"] = None
             workflow_state["visited_agents"] = []

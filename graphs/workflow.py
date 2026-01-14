@@ -1556,9 +1556,18 @@ def process_human_decision(state: PipelineState) -> PipelineState:
         new_stage, error_msg = supervisor.advance_dtp_stage(old_stage, policy_context)
         
         if error_msg:
-            # Transition validation failed - log error but don't advance
-            state["error_state"] = {"error": "DTP transition validation failed", "reason": error_msg}
-            state["case_summary"].status = "In Progress"  # Stay at current stage
+            # ISSUE #3 FIX: Make transition failures VISIBLE instead of silent
+            state["error_state"] = {
+                "error": "DTP transition validation failed",
+                "reason": error_msg,
+                "action_required": "Check policy configuration or contact admin"
+            }
+            # Keep waiting_for_human True so user knows something is wrong
+            state["waiting_for_human"] = True
+            state["case_summary"].status = "Error - Stage Transition Failed"
+            print(f"[CRITICAL] DTP stage transition BLOCKED: {error_msg}")
+            # Return early - don't proceed with broken state
+            return state
         else:
             state["dtp_stage"] = new_stage
             state["case_summary"].dtp_stage = new_stage
@@ -1638,6 +1647,9 @@ def process_human_decision(state: PipelineState) -> PipelineState:
             guardrail_events=["Workflow Terminated"]
         )
         state = add_log_to_state(state, log)
+    
+    # ISSUE #6 FIX: Clear human_decision after processing to prevent re-processing
+    state["human_decision"] = None
     
     return state
 
@@ -1787,18 +1799,27 @@ def create_workflow_graph():
                 return "supplier_evaluation"
         
         # Priority 2: Route based on DTP stage and case state
+        # ISSUE #4 FIX: Trust the DTP stage over output presence
+        # Previously, DTP-02 would fall back to strategy if output was missing/dict
+        # Now we trust that if we're at DTP-02, strategy was already approved
         if dtp_stage == "DTP-01":
             return "strategy"
         elif dtp_stage == "DTP-02":
-            # DTP-02 (Planning) - check if we need to run strategy first
-            if not latest_output or not isinstance(latest_output, StrategyRecommendation):
-                return "strategy"
-            elif any(keyword in user_intent for keyword in ["proceed", "next", "continue", "supplier", "evaluate"]):
-                return "supplier_evaluation"
-            else:
-                return "end"
-        elif dtp_stage in ["DTP-03", "DTP-04"]:
+            # DTP-02: Strategy was already approved to get here
+            # Run supplier evaluation (the appropriate agent for DTP-02)
             return "supplier_evaluation"
+        elif dtp_stage == "DTP-03":
+            # DTP-03: Run RFx Draft if supplier evaluation is done
+            return "rfx_draft"
+        elif dtp_stage == "DTP-04":
+            # DTP-04: Run negotiation
+            return "negotiation"
+        elif dtp_stage == "DTP-05":
+            # DTP-05: Run contract support
+            return "contract_support"
+        elif dtp_stage == "DTP-06":
+            # DTP-06: Run implementation
+            return "implementation"
         else:
             return "end"
     
