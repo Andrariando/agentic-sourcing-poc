@@ -350,12 +350,20 @@ Agents follow a structured **Task-Based** execution model:
 2.  **Refinement Loops**: The "Reject" decision in the workflow now triggers a **Feedback Loop** (Refinement) instead of termination. Users can provide a reason, and the agent re-runs with that context.
 3.  **Platform Stability**: Fixed Windows-specific Unicode logging crashes.
 
+### LLM-First Conversational Architecture
+1.  **New `LLMResponder` Service** (`backend/services/llm_responder.py`): Replaces templated responses with dynamic LLM generation.
+2.  **Smart Intent Classification**: Distinguishes QUESTIONS (answered directly) from ACTION REQUESTS (trigger agents).
+3.  **Conversation Memory**: Context-aware responses using prior chat history.
+4.  **Activity Logging**: All interactions (including direct responses) now logged for transparency.
 
 ### Bug Fixes
 1. **Duplicate `process_message` method**: Renamed legacy method to `process_message_langgraph()` to prevent API issues.
 2. **Pydantic/dict handling**: Fixed attribute access for `AgentActionLog` and `BudgetState` objects.
 3. **Windows encoding**: Replaced emojis with ASCII-safe text in print statements.
 4. **Backend emojis**: Fixed encoding issues in `backend/main.py` and `graphs/workflow.py`.
+5. **Missing `_create_response`**: Added helper method for ChatResponse construction.
+6. **UnboundLocalError**: Removed redundant local imports causing variable shadowing.
+7. **Welcome message**: Fixed literal `\n` display using proper multiline strings.
 
 ### Data Enhancements
 1. Created comprehensive seed script (`backend/scripts/seed_comprehensive_data.py`).
