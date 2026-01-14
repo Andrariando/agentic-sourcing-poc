@@ -307,24 +307,35 @@ class ChatService:
             trace_id=trace_id,
             agents_called=agents_called
         )
-        
-        # NEW: Save assistant response (if enabled)
-        if self.conversation_manager and self.enable_conversation_memory:
-            try:
-                self.conversation_manager.save_message(
-                    case_id=case_id,
-                    role="assistant",
-                    content=response.assistant_message,
-                    metadata={
-                        "intent": response.intent_classified,
-                        "agents_called": response.agents_called,
-                        "tokens_used": response.tokens_used
-                    }
-                )
-            except Exception as e:
-                logger.warning(f"Failed to save assistant message: {e}")
-        
         return response
+    
+    def _create_response(
+        self,
+        case_id: str,
+        user_message: str,
+        assistant_message: str,
+        intent: str,
+        dtp_stage: str,
+        waiting: bool = False,
+        trace_id: str = None,
+        agents_called: List[str] = None,
+        **kwargs
+    ) -> ChatResponse:
+        """
+        Create a ChatResponse object from the processing results.
+        """
+        return ChatResponse(
+            case_id=case_id,
+            user_message=user_message,
+            assistant_message=assistant_message,
+            intent_classified=intent,
+            dtp_stage=dtp_stage,
+            agents_called=agents_called or [],
+            tokens_used=0,  # TODO: Track actual tokens
+            waiting_for_human=waiting,
+            timestamp=datetime.now().isoformat(),
+            trace_id=trace_id
+        )
     
     def _check_for_approval(
         self,
