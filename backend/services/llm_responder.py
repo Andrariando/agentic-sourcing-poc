@@ -83,13 +83,18 @@ Analyze the user's intent and respond with JSON only:
 Respond with valid JSON only, no explanation."""
 
         try:
-            # ERHANCEMENT: Use specific structure or json_mode if available
-            # For now, we enforce JSON in prompt and use reliable parsing
-            response = self.analysis_llm.invoke(
-                [HumanMessage(content=prompt)],
-                config={"response_format": {"type": "json_object"}}
-            )
-            result = json.loads(response.content)
+            # Revert to standard invoke to avoid potential config issues
+            # We enforce JSON in prompt which is usually sufficient for gpt-4o-mini
+            response = self.analysis_llm.invoke([HumanMessage(content=prompt)])
+            
+            # Clean up response content in case of markdown fences
+            content = response.content.strip()
+            if content.startswith("```json"):
+                content = content[7:]
+            if content.endswith("```"):
+                content = content[:-3]
+                
+            result = json.loads(content.strip())
             logger.info(f"[LLMResponder] Intent analysis: {result}")
             return result
         except Exception as e:

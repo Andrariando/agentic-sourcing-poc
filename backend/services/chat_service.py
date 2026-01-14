@@ -256,7 +256,7 @@ class ChatService:
             action_taken = "Direct LLM response"
             
             # LOGGING FIX: Add explicit log entry for Direct LLM response so user sees it in UI
-            if "activity_log" not in state:
+            if "activity_log" not in state or state["activity_log"] is None:
                 state["activity_log"] = []
                 
             from datetime import datetime
