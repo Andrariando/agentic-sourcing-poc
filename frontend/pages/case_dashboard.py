@@ -207,7 +207,16 @@ def render_case_dashboard():
     inject_dashboard_styles()
     
     # Page Header
-    st.markdown('<div class="page-header">Case Dashboard</div>', unsafe_allow_html=True)
+    # st.markdown('<div class="page-header">Case Dashboard</div>', unsafe_allow_html=True)
+    
+    # Welcome Title
+    st.markdown(f"""
+    <div style="text-align: center; margin-bottom: 30px; padding-top: 20px;">
+        <h1 style="color: {MIT_CARDINAL}; font-size: 2.2rem; margin-bottom: 8px; font-weight: 700;">Welcome to MIT SCALE Expo</h1>
+        <h3 style="color: {MIT_NAVY}; font-size: 1.4rem; font-weight: 400; margin-top: 0;">Dynamic Sourcing Pipelines Using Agentic AI</h3>
+    </div>
+    <div class="page-header">Case Dashboard</div>
+    """, unsafe_allow_html=True)
     
     # Demo Data Section (collapsed by default)
     with st.expander("🎯 Demo Data & Quick Access", expanded=False):

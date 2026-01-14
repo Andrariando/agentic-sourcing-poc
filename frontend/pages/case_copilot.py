@@ -696,10 +696,11 @@ def process_chat_message(case_id: str, message: str, client, chat_history: list)
     })
     
     try:
-        response = client.send_message(
-            case_id=case_id,
-            message=message
-        )
+        with st.spinner("Thinking..."):
+            response = client.send_message(
+                case_id=case_id,
+                message=message
+            )
         
         chat_history.append({
             "role": "assistant",
