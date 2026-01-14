@@ -258,9 +258,6 @@ class ChatService:
             # LOGGING FIX: Add explicit log entry for Direct LLM response so user sees it in UI
             if "activity_log" not in state or state["activity_log"] is None:
                 state["activity_log"] = []
-                
-            from datetime import datetime
-            import uuid
             
             # Create a simplified log entry for the Copilot's direct action
             direct_log = {

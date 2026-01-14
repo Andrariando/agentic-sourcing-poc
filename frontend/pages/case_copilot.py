@@ -551,9 +551,20 @@ def render_chat_interface(case, client) -> None:
         
         # If no chat history found, add welcome message
         if not chat_history:
+            welcome_content = f"""👋 Hello! I'm your Case Copilot for **{case.case_id}**.
+
+I can help you with:
+- Scanning for sourcing signals
+- Scoring and evaluating suppliers
+- Drafting RFx documents
+- Preparing for negotiations
+- Extracting contract terms
+- Creating implementation plans
+
+What would you like to do?"""
             chat_history = [{
                 "role": "assistant",
-                "content": f"👋 Hello! I'm your Case Copilot for **{case.case_id}**.\\n\\nI can help you with:\\n- Scanning for sourcing signals\\n- Scoring and evaluating suppliers\\n- Drafting RFx documents\\n- Preparing for negotiations\\n- Extracting contract terms\\n- Creating implementation plans\\n\\nWhat would you like to do?",
+                "content": welcome_content,
                 "metadata": {"agent": "System", "intent": "Welcome"}
             }]
         
