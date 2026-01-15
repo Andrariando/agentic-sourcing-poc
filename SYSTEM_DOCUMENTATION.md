@@ -380,3 +380,66 @@ Agents follow a structured **Task-Based** execution model:
     *   `NeedClarification`: Routes to user for more info.
     *   `ConcernRaised`: Routes to human for safety check.
 2.  **Separate Agent Logs**: Internal agent reasoning and dialogues are now displayed in a dedicated "🔍 Agent Logs" panel in the frontend, keeping the main chat clean.
+
+---
+
+## 🔐 8. Decision Core (January 2026)
+
+The **Decision Core** is a new capability that enables structured, semantically validated human decisions at every DTP stage.
+
+### Key Features
+
+1.  **Structured Decision Definitions** (`shared/decision_definitions.py`): Defines stage-specific questions, answer types, dependencies, and critical path actions.
+
+2.  **Dynamic Decision Console** (UI): Replaces the simple Approve/Reject buttons with a dynamic form rendered from `DTP_DECISIONS`. Supports:
+    - Choice (radio buttons) and Text input types
+    - Conditional questions (dependencies)
+    - Pre-filled answers from chat history (bidirectional sync)
+
+3.  **Conversational Decision Flow** (Chat): The copilot proactively asks decision questions when a case enters "Waiting for Human Decision" status. It:
+    - Identifies the first unanswered required question
+    - Uses strict scaffolding (expects "1" or "2" or exact text)
+    - Rejects ambiguous answers and re-prompts
+    - Presents a summary and confirmation before advancing
+
+4.  **Semantic Validation** (Backend): The `ChatService.process_decision()` method validates all required questions are answered before allowing approval. Critical path decisions (e.g., `sourcing_required = No`) trigger special actions like case termination.
+
+5.  **Rich Decision Data**: Each answer is stored with metadata:
+    ```python
+    {
+        "answer": "Yes",
+        "decided_by_role": "User",
+        "timestamp": "2026-01-15T10:00:00Z",
+        "status": "final",
+        "confidence": "high"
+    }
+    ```
+
+6.  **Stage-Based Locking**: Decisions for previous DTP stages are read-only in the backend validation.
+
+### Decision Questions by Stage
+
+| Stage | Question ID | Question Text | Type | Required |
+|-------|-------------|---------------|------|----------|
+| DTP-01 | `sourcing_required` | Is new sourcing required? | Choice (Yes/No/Cancel) | ✓ |
+| DTP-01 | `sourcing_route` | Recommended sourcing route? | Choice (Strategic/Tactical/Spot) | ✓ (if Yes) |
+| DTP-02 | `supplier_list_confirmed` | Is supplier shortlist complete? | Choice (Yes/No) | ✓ |
+| DTP-03 | `evaluation_complete` | Has evaluation been completed? | Choice (Yes/No) | ✓ |
+| DTP-04 | `award_supplier_id` | Which supplier are we awarding to? | Text | ✓ |
+| DTP-04 | `final_savings_confirmed` | Savings validated by Finance? | Choice (Yes/No) | ✓ |
+| DTP-04 | `legal_approval` | Legal approved contract terms? | Choice (Yes/No) | ✓ |
+| DTP-05 | `stakeholder_signoff` | Stakeholders signed approval memo? | Choice (Yes) | ✓ |
+| DTP-06 | `contract_signed` | Contract signed and stored in CLM? | Choice (Yes) | ✓ |
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `shared/decision_definitions.py` | **[NEW]** Stage-specific decision maps |
+| `shared/schemas.py` | Added `decision_data` to `DecisionRequest` |
+| `backend/services/chat_service.py` | Proactive questioning, answer parsing, validation, rich storage |
+| `backend/main.py` | Passes `decision_data` to `process_decision` |
+| `frontend/api_client.py` | Added `decision_data` param to `approve_decision` |
+| `frontend/pages/case_copilot.py` | Dynamic `render_decision_console()` function |
+| `backend/seed_data.py` | Enriched test cases with `human_decision` and `latest_agent_output` |
+
