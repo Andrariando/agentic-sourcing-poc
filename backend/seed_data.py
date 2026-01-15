@@ -24,7 +24,7 @@ def generate_case_id() -> str:
 
 def seed_all():
     """Seed all test data."""
-    print("🌱 Seeding database with test data...")
+    print("Seeding database with test data...")
     
     init_db()
     session = get_db_session()
@@ -36,30 +36,30 @@ def seed_all():
         session.query(SpendMetric).delete()
         session.query(SLAEvent).delete()
         session.commit()
-        print("  ✓ Cleared existing data")
+        print("  - Cleared existing data")
         
         # Seed suppliers first
         seed_suppliers(session)
-        print("  ✓ Seeded supplier performance data")
+        print("  - Seeded supplier performance data")
         
         # Seed spend data
         seed_spend_data(session)
-        print("  ✓ Seeded spend data")
+        print("  - Seeded spend data")
         
         # Seed SLA events
         seed_sla_events(session)
-        print("  ✓ Seeded SLA events")
+        print("  - Seeded SLA events")
         
         # Seed cases at various stages
         seed_manual_cases(session)
-        print("  ✓ Seeded manual cases at various DTP stages")
+        print("  - Seeded manual cases at various DTP stages")
         
         # Seed signal-triggered cases
         seed_signal_cases(session)
-        print("  ✓ Seeded signal-triggered cases")
+        print("  - Seeded signal-triggered cases")
         
         session.commit()
-        print("\n✅ Database seeded successfully!")
+        print("\nDatabase seeded successfully!")
         print("\nCreated cases:")
         
         cases = session.query(CaseState).all()
@@ -285,6 +285,9 @@ def seed_manual_cases(session):
                     "Cost overruns suggest renegotiation leverage is limited",
                     "Multiple qualified vendors available in market"
                 ]
+            }),
+            "human_decision": json.dumps({
+                # No decision yet for DTP-01, that's why it's waiting
             })
         },
         
@@ -304,10 +307,16 @@ def seed_manual_cases(session):
                 "Budget allocated: $200,000",
                 "Timeline: 60 days to award"
             ]),
-            "recommended_action": "Define RFx requirements"
+            "recommended_action": "Define RFx requirements",
+            "human_decision": json.dumps({
+                "DTP-01": {
+                    "sourcing_required": {"answer": "Yes", "decided_by_role": "User", "timestamp": "2024-01-01T10:00:00", "status": "final"},
+                    "sourcing_route": {"answer": "Strategic", "decided_by_role": "User", "timestamp": "2024-01-01T10:00:00", "status": "final"}
+                }
+            })
         },
         
-        # DTP-03: Sourcing
+        # DTP-03: Sourcing (Waiting)
         {
             "case_id": "CASE-DTP03A",
             "name": "Infrastructure Services Supplier Evaluation",
@@ -315,7 +324,7 @@ def seed_manual_cases(session):
             "supplier_id": None,  # Multiple suppliers being evaluated
             "contract_id": None,
             "dtp_stage": "DTP-03",
-            "status": "In Progress",
+            "status": "Waiting for Human Decision",
             "trigger_source": "User",
             "summary_text": "Evaluating 4 suppliers for infrastructure services contract. RFx responses received.",
             "key_findings": json.dumps([
@@ -323,10 +332,27 @@ def seed_manual_cases(session):
                 "Price range: $450K - $620K",
                 "Technical evaluation in progress"
             ]),
-            "recommended_action": "Complete supplier evaluation"
+            "recommended_action": "Confirm evaluation completion",
+            "latest_agent_name": "Sourcing",
+            "latest_agent_output": json.dumps({
+                "ranked_suppliers": [
+                    {"name": "InfraTech", "score": 92, "price": 450000},
+                    {"name": "GlobalNet", "score": 88, "price": 480000}
+                ],
+                "recommendation": "Advance InfraTech to negotiation"
+            }),
+            "human_decision": json.dumps({
+                "DTP-01": {
+                    "sourcing_required": {"answer": "Yes"},
+                    "sourcing_route": {"answer": "Strategic"}
+                },
+                "DTP-02": {
+                    "supplier_list_confirmed": {"answer": "Yes"}
+                }
+            })
         },
         
-        # DTP-04: Negotiation
+        # DTP-04: Negotiation (Waiting)
         {
             "case_id": "CASE-DTP04A",
             "name": "Facilities Contract Negotiation",
@@ -334,7 +360,7 @@ def seed_manual_cases(session):
             "supplier_id": "SUP-005",
             "contract_id": "CON-FAC-2024-003",
             "dtp_stage": "DTP-04",
-            "status": "In Progress",
+            "status": "Waiting for Human Decision",
             "trigger_source": "User",
             "summary_text": "Negotiating renewal terms with Office Supplies Plus. Target: 5% cost reduction.",
             "key_findings": json.dumps([
@@ -342,7 +368,18 @@ def seed_manual_cases(session):
                 "Target savings: 5%",
                 "Key terms under negotiation"
             ]),
-            "recommended_action": "Review negotiation plan"
+            "recommended_action": "Approve final award",
+            "latest_agent_name": "Negotiation",
+            "latest_agent_output": json.dumps({
+                "negotiation_status": "Complete",
+                "final_savings": "5.2%",
+                "agreed_terms": ["Net 60 Payment", "3 Year Term"]
+            }),
+            "human_decision": json.dumps({
+                "DTP-01": {"sourcing_required": {"answer": "Yes"}, "sourcing_route": {"answer": "Strategic"}},
+                "DTP-02": {"supplier_list_confirmed": {"answer": "Yes"}},
+                "DTP-03": {"evaluation_complete": {"answer": "Yes"}}
+            })
         },
         
         # DTP-05: Contracting
@@ -401,7 +438,7 @@ def seed_signal_cases(session):
         # Contract Renewal Signal - Urgent
         {
             "case_id": "CASE-SIG-REN01",
-            "name": "🔔 URGENT: Software License Renewal Due",
+            "name": "URGENT: Software License Renewal Due",
             "category_id": "IT-SOFTWARE",
             "supplier_id": "SUP-001",
             "contract_id": "CON-SW-2024-RENEW",
@@ -410,7 +447,7 @@ def seed_signal_cases(session):
             "trigger_source": "Signal",
             "summary_text": "AUTOMATED ALERT: Contract CON-SW-2024-RENEW expires in 45 days. Immediate action required.",
             "key_findings": json.dumps([
-                "⚠️ Contract expires in 45 days",
+                "Contract expires in 45 days",
                 "Annual value: $450,000",
                 "Supplier performance: Strong (8.5/10)",
                 "Auto-renewal clause: No"
@@ -421,7 +458,7 @@ def seed_signal_cases(session):
         # Declining Performance Signal
         {
             "case_id": "CASE-SIG-PERF01",
-            "name": "🔔 Performance Alert: DataStore Corp",
+            "name": "Performance Alert: DataStore Corp",
             "category_id": "IT-INFRASTRUCTURE",
             "supplier_id": "SUP-004",
             "contract_id": "CON-INF-2023-005",
@@ -430,7 +467,7 @@ def seed_signal_cases(session):
             "trigger_source": "Signal",
             "summary_text": "AUTOMATED ALERT: Supplier performance has declined below threshold. Multiple SLA breaches detected.",
             "key_findings": json.dumps([
-                "⚠️ Performance score dropped to 5.8/10",
+                "Performance score dropped to 5.8/10",
                 "2 active SLA breaches",
                 "Cost variance: +12% over budget",
                 "Risk level: HIGH"
@@ -441,7 +478,7 @@ def seed_signal_cases(session):
         # SLA Breach Signal
         {
             "case_id": "CASE-SIG-SLA01",
-            "name": "🔔 SLA Breach: CloudFirst Response Time",
+            "name": "SLA Breach: CloudFirst Response Time",
             "category_id": "IT-CLOUD",
             "supplier_id": "SUP-002",
             "contract_id": "CON-CLD-2023-015",
@@ -450,7 +487,7 @@ def seed_signal_cases(session):
             "trigger_source": "Signal",
             "summary_text": "AUTOMATED ALERT: SLA breach detected. Response time exceeded 24-hour target.",
             "key_findings": json.dumps([
-                "⚠️ SLA breach: Response time",
+                "SLA breach: Response time",
                 "Target: 24 hours, Actual: 48 hours",
                 "Pattern: 2nd breach this quarter",
                 "Financial impact: Potential penalty clause"
@@ -461,7 +498,7 @@ def seed_signal_cases(session):
         # Spend Anomaly Signal
         {
             "case_id": "CASE-SIG-SPEND01",
-            "name": "🔔 Spend Alert: Cloud Services Overage",
+            "name": "Spend Alert: Cloud Services Overage",
             "category_id": "IT-CLOUD",
             "supplier_id": "SUP-002",
             "contract_id": "CON-CLD-2023-015",
@@ -470,7 +507,7 @@ def seed_signal_cases(session):
             "trigger_source": "Signal",
             "summary_text": "AUTOMATED ALERT: Q2 spend exceeded forecast by 15%. Cost optimization review recommended.",
             "key_findings": json.dumps([
-                "⚠️ Q2 spend: $310,000 (forecast: $270,000)",
+                "Q2 spend: $310,000 (forecast: $270,000)",
                 "Variance: +15%",
                 "Primary driver: Usage growth",
                 "Optimization potential identified"
@@ -481,7 +518,7 @@ def seed_signal_cases(session):
         # Market Opportunity Signal
         {
             "case_id": "CASE-SIG-MKT01",
-            "name": "🔔 Market Alert: New Security Vendors",
+            "name": "Market Alert: New Security Vendors",
             "category_id": "IT-SECURITY",
             "supplier_id": None,
             "contract_id": None,
@@ -490,7 +527,7 @@ def seed_signal_cases(session):
             "trigger_source": "Signal",
             "summary_text": "MARKET INTELLIGENCE: 3 new vendors entered the enterprise security market with competitive pricing.",
             "key_findings": json.dumps([
-                "📊 3 new market entrants identified",
+                "3 new market entrants identified",
                 "Average pricing 20% below current contract",
                 "Current contract renewal in 6 months",
                 "Opportunity for competitive evaluation"

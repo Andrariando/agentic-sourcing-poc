@@ -348,7 +348,8 @@ class APIClient:
         self,
         case_id: str,
         reason: Optional[str] = None,
-        edited_fields: Optional[Dict[str, Any]] = None
+        edited_fields: Optional[Dict[str, Any]] = None,
+        decision_data: Optional[Dict[str, Any]] = None
     ) -> DecisionResponse:
         """Approve a pending decision."""
         if self._integrated_mode:
@@ -357,7 +358,8 @@ class APIClient:
                 case_id=case_id,
                 decision="Approve",
                 reason=reason,
-                edited_fields=edited_fields
+                edited_fields=edited_fields,
+                decision_data=decision_data
             )
             return DecisionResponse(
                 case_id=case_id,
@@ -371,7 +373,8 @@ class APIClient:
             case_id=case_id,
             decision="Approve",
             reason=reason,
-            edited_fields=edited_fields or {}
+            edited_fields=edited_fields or {},
+            decision_data=decision_data
         )
         
         response = requests.post(

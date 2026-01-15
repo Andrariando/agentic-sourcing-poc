@@ -186,7 +186,8 @@ async def approve_decision(request: DecisionRequest):
         case_id=request.case_id,
         decision="Approve",
         reason=request.reason,
-        edited_fields=request.edited_fields
+        edited_fields=request.edited_fields,
+        decision_data=request.decision_data
     )
     
     if not result["success"]:

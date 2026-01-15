@@ -114,6 +114,7 @@ class DecisionRequest(BaseModel):
     decision: str  # "Approve" or "Reject"
     reason: Optional[str] = None
     edited_fields: Dict[str, Any] = Field(default_factory=dict)
+    decision_data: Optional[Dict[str, Any]] = None  # Structured answers to decision questions
 
 
 class DecisionResponse(BaseModel):

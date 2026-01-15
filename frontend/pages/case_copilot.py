@@ -23,6 +23,7 @@ from datetime import datetime
 from frontend.api_client import get_api_client, APIError
 from shared.constants import DTP_STAGES, DTP_STAGE_NAMES, ArtifactType
 from backend.artifacts.placement import get_artifact_placement, ArtifactPlacement, get_artifacts_by_placement
+from shared.decision_definitions import DTP_DECISIONS
 
 
 # MIT Color Constants
@@ -423,51 +424,9 @@ def render_case_details_panel(case, client) -> None:
     
     st.markdown("</div></div>", unsafe_allow_html=True)
     
-    # ===== Section 4: Governance Status =====
-    is_waiting = case.status == "Waiting for Human Decision"
-    dtp_name = DTP_STAGE_NAMES.get(case.dtp_stage, case.dtp_stage)
-    
-    governance_class = "governance-inline waiting" if is_waiting else "governance-inline"
-    
-    st.markdown(f"""
-    <div class="{governance_class}">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div>
-                <strong>🔐 Governance Status</strong>
-                <div style="margin-top: 4px; font-size: 0.8rem;">
-                    Stage: {case.dtp_stage} - {dtp_name} | 
-                    Last Agent: {case.latest_agent_name or 'None'}
-                </div>
-            </div>
-            <div style="text-align: right;">
-                <div style="font-weight: 600; color: {MIT_CARDINAL if is_waiting else SUCCESS_GREEN};">
-                    {'⚠️ Approval Required' if is_waiting else '✓ In Progress'}
-                </div>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Show approval buttons if waiting
-    if is_waiting:
-        st.markdown("<br>", unsafe_allow_html=True)
-        col1, col2, col3 = st.columns([1, 1, 2])
-        with col1:
-            if st.button("✅ APPROVE", key="details_approve", use_container_width=True):
-                try:
-                    result = client.approve_decision(case.case_id)
-                    st.success(f"Approved! Advanced to {result.new_dtp_stage}")
-                    st.rerun()
-                except APIError as e:
-                    st.error(f"Error: {e.message}")
-        with col2:
-            if st.button("↩️ REVISE", key="details_reject", use_container_width=True):
-                try:
-                    client.reject_decision(case.case_id)
-                    st.info("Revision requested")
-                    st.rerun()
-                except APIError as e:
-                    st.error(f"Error: {e.message}")
+    # ===== Section 4: Governance & Decision Console =====
+    render_decision_console(case, client)
+
     
     # ===== Section 5: Documents & Timeline =====
     with st.expander("📁 Documents & Activity Timeline", expanded=False):
@@ -510,6 +469,149 @@ def render_case_details_panel(case, client) -> None:
                 """, unsafe_allow_html=True)
         else:
             st.markdown(f'<div style="color: {CHARCOAL}; font-size: 0.85rem;">No activity yet. Start by asking the copilot a question.</div>', unsafe_allow_html=True)
+
+
+def render_decision_console(case, client) -> None:
+    """
+    Render Dynamic Decision Console based on DTP Definitions.
+    Replaces static Approve/Reject buttons with structured form.
+    """
+    dtp_stage = case.dtp_stage
+    stage_def = DTP_DECISIONS.get(dtp_stage)
+    
+    is_waiting = case.status == "Waiting for Human Decision"
+    governance_class = "governance-inline waiting" if is_waiting else "governance-inline"
+    
+    # 1. Header with Synced Indicator
+    st.markdown(f"""
+    <div class="{governance_class}">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <strong>🔐 Decision Console</strong>
+                <div style="margin-top: 4px; font-size: 0.8rem;">
+                    {dtp_stage} - {stage_def['title'] if stage_def else 'Unknown'}
+                </div>
+            </div>
+            <div style="text-align: right;">
+                 <div style="font-size: 0.7rem; color: {CHARCOAL}; display: flex; align-items: center; gap: 4px;">
+                    <span style="width: 6px; height: 6px; background-color: {SUCCESS_GREEN}; border-radius: 50%;"></span>
+                    Synced with Chat
+                </div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    if not stage_def or not is_waiting:
+        if not is_waiting:
+             st.info("No active decision required.")
+        return
+
+    st.markdown(f"<div style='font-size: 0.85rem; color: {CHARCOAL}; margin: 8px 0 16px 0;'>{stage_def['description']}</div>", unsafe_allow_html=True)
+    
+    # 2. Dynamic Form
+    with st.form(key=f"decision_form_{dtp_stage}"):
+        
+        answers = {}
+        # Pre-fill from existing state if available (Chat sync)
+        existing_decisions = {}
+        if case.human_decision and isinstance(case.human_decision, dict):
+            existing_decisions = case.human_decision.get(dtp_stage, {})
+            # Handle if it's the old format (just string) or new (dict)
+            # Normalize to simple dict for pre-filling
+            normalized_existing = {}
+            for k, v in existing_decisions.items():
+                if isinstance(v, dict) and "answer" in v:
+                    normalized_existing[k] = v["answer"]
+                else:
+                    normalized_existing[k] = v
+            existing_decisions = normalized_existing
+
+        all_required_met = True
+        
+        for q in stage_def["questions"]:
+            # Dependency Check
+            if "dependency" in q:
+                dep_key, dep_val = list(q["dependency"].items())[0]
+                # Check current form value (simulated via existing state as Streamlit doesn't support real-time dependency in form without rerun)
+                # We use existing_decisions as proxy
+                if existing_decisions.get(dep_key) != dep_val:
+                    continue 
+
+            label = q["text"]
+            if q.get("required"):
+                label += " *"
+            
+            initial_value = existing_decisions.get(q["id"])
+            
+            if q["type"] == "choice":
+                # Map options to list
+                opts = [o["value"] for o in q["options"]]
+                fmt_func = lambda x, q=q: next((o['label'] for o in q['options'] if o['value'] == x), x)
+                
+                # Determine index - default to 0 if no prior selection
+                idx = 0
+                if initial_value in opts:
+                    idx = opts.index(initial_value)
+                
+                selected = st.radio(
+                    label=label,
+                    options=opts,
+                    format_func=fmt_func,
+                    index=idx,
+                    key=f"q_{q['id']}"
+                )
+                answers[q["id"]] = selected
+                
+                if q.get("required") and not selected:
+                    all_required_met = False
+
+            elif q["type"] == "text":
+                val = st.text_input(
+                    label=label,
+                    value=initial_value or "",
+                    key=f"q_{q['id']}"
+                )
+                answers[q["id"]] = val
+                
+                if q.get("required") and not val:
+                    all_required_met = False
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        col1, col2 = st.columns([1, 1])
+        
+        submit_label = "✅ Confirm & Approve"
+        
+        with col1:
+            submitted = st.form_submit_button(submit_label, use_container_width=True)
+        with col2:
+            revised = st.form_submit_button("↩️ Request Revision", use_container_width=True)
+            
+        if submitted:
+            if not all_required_met:
+                st.error("Please answer all required questions.")
+            else:
+                try:
+                    result = client.approve_decision(
+                        case.case_id, 
+                        decision_data=answers
+                    )
+                    if result.success:
+                        st.success(f"Approved! Syncing...")
+                        st.rerun()
+                    else:
+                        st.error(result.message)
+                except APIError as e:
+                    st.error(f"Error: {e.message}")
+        
+        if revised:
+            # For revision, we might not need data, but could capture reason via chat
+            try:
+                client.reject_decision(case.case_id, reason="Manual revision request from console")
+                st.info("Revision requested. Agents will review.")
+                st.rerun()
+            except APIError as e:
+                st.error(f"Error: {e.message}")
 
 
 def render_chat_interface(case, client) -> None:

@@ -46,6 +46,7 @@ from shared.schemas import (
     ChatResponse, ArtifactPack, NextAction, CaseStatus, Artifact, RiskItem
 )
 from shared.constants import UserIntent, UserGoal
+from shared.decision_definitions import DTP_DECISIONS
 
 # Import new official agents
 from backend.agents import (
@@ -197,6 +198,167 @@ class ChatService:
         assistant_message = ""
         agents_called = []
         action_taken = None
+
+        # --- NEW: PROACTIVE DECISION LOGIC (Critique 3 & 7) ---
+        # If waiting for human, hijack the flow to drive the decision process
+        if state.get("waiting_for_human"):
+             current_stage = state.get("dtp_stage", "DTP-01")
+             stage_def = DTP_DECISIONS.get(current_stage)
+             
+             if stage_def:
+                # 1. Check if user answered a pending question
+                # We need to identify WHICH question was pending. 
+                # Ideally, we look at what's answered vs what's required.
+                current_answers = state.get("human_decision", {}).get(current_stage, {})
+                
+                # Find the first unanswered required question (in order)
+                pending_question = None
+                for q in stage_def.get("questions", []):
+                    # Check dependency
+                    if "dependency" in q:
+                         dep_key, dep_val = list(q["dependency"].items())[0]
+                         parent_ans_obj = current_answers.get(dep_key)
+                         if not parent_ans_obj or parent_ans_obj.get("answer") != dep_val:
+                             continue # Skip if dependency not met
+
+                    if q["id"] not in current_answers:
+                        pending_question = q
+                        break
+                
+                # If we found a pending question AND the user's message looks like an answer
+                if pending_question:
+                    # Parse Answer
+                    parsed_answer = None
+                    
+                    if pending_question["type"] == "choice":
+                        # Strict Scaffolding: Expect "1" or "2" or exact text match
+                        # Build mapping
+                        options = pending_question["options"]
+                        valid_map = {}
+                        for idx, opt in enumerate(options, 1):
+                            valid_map[str(idx)] = opt["value"] # "1" -> "Yes"
+                            valid_map[opt["value"].lower()] = opt["value"] # "yes" -> "Yes"
+                            valid_map[opt["label"].lower()] = opt["value"] # "yes, proceed..." -> "Yes"
+                        
+                        clean_input = user_message.strip().lower()
+                        # Remove trailing punctuation
+                        clean_input = clean_input.rstrip(".,!")
+                        
+                        if clean_input in valid_map:
+                            parsed_answer = valid_map[clean_input]
+                    else:
+                        # Free text (fallback for DTP-04 supplier name etc)
+                        parsed_answer = user_message.strip()
+                    
+                    if parsed_answer:
+                        # VALID ANSWER: Store it rich
+                        if "human_decision" not in state or not isinstance(state["human_decision"], dict):
+                            state["human_decision"] = {}
+                        if current_stage not in state["human_decision"]:
+                            state["human_decision"][current_stage] = {}
+                            
+                        state["human_decision"][current_stage][pending_question["id"]] = {
+                            "answer": parsed_answer,
+                            "decided_by_role": "User", # hardcoded for now
+                            "timestamp": datetime.now().isoformat(),
+                            "status": "final",
+                            "confidence": "high"
+                        }
+                        
+                        # Add activity log
+                        if "activity_log" not in state: state["activity_log"] = []
+                        state["activity_log"].append({
+                            "timestamp": datetime.now().isoformat(),
+                            "case_id": case_id,
+                            "agent_name": "User",
+                            "task_name": "Proactive Answer",
+                            "output_summary": f"User answered {pending_question['id']} = {parsed_answer}",
+                            "trigger_source": "Chat"
+                        })
+                        
+                        self.case_service.save_case_state(state)
+                        
+                        # Re-evaluate to get the *NEXT* question immediately
+                        # Refresh state copy
+                        current_answers = state["human_decision"][current_stage]
+                        
+                        next_question = None
+                        for q in stage_def.get("questions", []):
+                             if "dependency" in q:
+                                 dep_key, dep_val = list(q["dependency"].items())[0]
+                                 parent_ans_obj = current_answers.get(dep_key)
+                                 if not parent_ans_obj or parent_ans_obj.get("answer") != dep_val:
+                                     continue 
+                             if q["id"] not in current_answers:
+                                 next_question = q
+                                 break
+                        
+                        if next_question:
+                             # Ask the next question
+                             response = f"**Saved.**\n\nNext: {next_question['text']}\n"
+                             if next_question["type"] == "choice":
+                                 for i, opt in enumerate(next_question['options'], 1):
+                                     response += f"{i}. {opt['label']}\n"
+                                 response += "\n_(Please reply with the number)_"
+                             
+                             return self._create_response(case_id, user_message, response, "DECIDE", state.get("dtp_stage"), waiting=True)
+                        else:
+                             # All done! Ask for confirmation
+                             response = "**All questions answered.**\n\nSummary of your decisions:\n"
+                             for q in stage_def["questions"]:
+                                 # (Simplified summary generation)
+                                 ans_obj = current_answers.get(q["id"])
+                                 if ans_obj:
+                                    response += f"- {q['text']}: **{ans_obj['answer']}**\n"
+                             
+                             response += "\n**Do you want to confirm and proceed to the next stage?** (Yes/No)"
+                             return self._create_response(case_id, user_message, response, "DECIDE", state.get("dtp_stage"), waiting=True)
+
+                    else:
+                        # INVALID ANSWER: Scaffolding error
+                        if pending_question["type"] == "choice":
+                            options_text = ", ".join([f"'{opt['value']}'" for opt in pending_question["options"]])
+                            response = f"I didn't catch that. Please answer **{pending_question['text']}** by choosing one of the options:\n\n"
+                            for i, opt in enumerate(pending_question['options'], 1):
+                                response += f"{i}. {opt['label']}\n"
+                            return self._create_response(case_id, user_message, response, "DECIDE", state.get("dtp_stage"), waiting=True)
+
+                # 2. If no pending question found (or we just finished), handle "Confirm"
+                # If we are here, it means all required questions are likely answered (or none found)
+                # Check for "Confirm" / "Yes" to final approval
+                if any(kw in user_message.lower() for kw in ["yes", "confirm", "proceed", "approve"]):
+                     # Call process_decision
+                     result = self.process_decision(case_id, "Approve")
+                     if result["success"]:
+                        return self._create_response(case_id, user_message, f"Confirmed! moving to {result.get('new_dtp_stage')}", "DECIDE", result.get("new_dtp_stage"), waiting=False)
+                     else:
+                        return self._create_response(case_id, user_message, result["message"], "DECIDE", state.get("dtp_stage"), waiting=True)
+
+                # 3. Fallback: If just entering this state or lost context, ask the first pending question
+                # (Same logic as above for finding pending_question)
+                pending_question = None
+                current_answers = state.get("human_decision", {}).get(current_stage, {})
+                for q in stage_def.get("questions", []):
+                    if "dependency" in q:
+                         dep_key, dep_val = list(q["dependency"].items())[0]
+                         parent_ans_obj = current_answers.get(dep_key)
+                         if not parent_ans_obj or parent_ans_obj.get("answer") != dep_val:
+                             continue
+                    if q["id"] not in current_answers:
+                        pending_question = q
+                        break
+                
+                if pending_question:
+                     response = f"**Decision Required: {stage_def.get('title')}**\n\n{pending_question['text']}\n"
+                     if pending_question["type"] == "choice":
+                         for i, opt in enumerate(pending_question['options'], 1):
+                             response += f"{i}. {opt['label']}\n"
+                         response += "\n_(Please reply with the number)_"
+                     return self._create_response(case_id, user_message, response, "DECIDE", state.get("dtp_stage"), waiting=True)
+
+
+        # --- END NEW PROACTIVE LOGIC ---
+
         
         if intent.get("is_approval") and state.get("waiting_for_human"):
             # ... (approval logic remains same) ...
@@ -226,7 +388,7 @@ class ChatService:
             
             # Explicitly clear waiting state for NEW work
             state["waiting_for_human"] = False
-            state["human_decision"] = None
+            # state["human_decision"] = None # FIX: Do NOT clear historical decisions
             state["latest_agent_output"] = None
             state["latest_agent_name"] = None
             
@@ -1424,45 +1586,128 @@ class ChatService:
             timestamp=datetime.now().isoformat()
         )
 
+
     def process_decision(
         self,
         case_id: str,
         decision: str,
         reason: Optional[str] = None,
-        edited_fields: Optional[Dict[str, Any]] = None
+        edited_fields: Optional[Dict[str, Any]] = None,
+        decision_data: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        Process human decision (approve/reject).
-        Crucially, this NOW also goes through the workflow to ensure state consistency.
+        Process human decision (approve/reject) with semantic validation and rich object storage.
         """
         state = self.case_service.get_case_state(case_id)
         if not state:
             return {"success": False, "message": "Case not found"}
         
+        # 1. Update Decision Data (Merged from Console)
+        current_stage = state.get("dtp_stage", "DTP-01")
+        
+        # Initialize nested structure if needed
+        if "human_decision" not in state or not isinstance(state["human_decision"], dict):
+            state["human_decision"] = {}
+        if current_stage not in state["human_decision"]:
+            state["human_decision"][current_stage] = {}
+        
+        # Merge new data if provided
+        if decision_data:
+            # Enrich with metadata (Ownership & Completeness)
+            enriched_data = {}
+            for k, v in decision_data.items():
+                # Allow simple values or full objects, normalize to full object
+                if isinstance(v, dict) and "answer" in v:
+                    enriched_data[k] = v # Already rich
+                else:
+                    enriched_data[k] = {
+                        "answer": v,
+                        "decided_by_role": "User", # Placeholder for role-based auth
+                        "timestamp": datetime.now().isoformat(),
+                        "status": "final"
+                    }
+            
+            state["human_decision"][current_stage].update(enriched_data)
+        
+        # 2. Semantic Validation (CRITICAL: Block if incomplete)
+        if decision == "Approve":
+            stage_def = DTP_DECISIONS.get(current_stage)
+            if stage_def:
+                current_answers = state["human_decision"].get(current_stage, {})
+                missing_questions = []
+                
+                for q in stage_def.get("questions", []):
+                    if q.get("required", False):
+                        # check dependency
+                        if "dependency" in q:
+                            dep_key, dep_val = list(q["dependency"].items())[0]
+                            # Check if dependency matches answer
+                            parent_ans = current_answers.get(dep_key, {}).get("answer")
+                            if parent_ans != dep_val:
+                                continue # dependency not met, so not required
+                        
+                        if q["id"] not in current_answers:
+                            missing_questions.append(q["text"])
+                
+                if missing_questions:
+                    return {
+                        "success": False,
+                        "message": f"Cannot approve yet. Please answer the following: {', '.join(missing_questions)}"
+                    }
+
+        # 3. Path Enforcement (e.g. Terminate if sourcing not required)
+        # This checks "critical_path" in definitions
+        if decision == "Approve":
+             current_answers = state["human_decision"].get(current_stage, {})
+             stage_def = DTP_DECISIONS.get(current_stage)
+             if stage_def:
+                 for q in stage_def.get("questions", []):
+                     if "critical_path" in q:
+                         ans_obj = current_answers.get(q["id"])
+                         if ans_obj:
+                             ans_val = ans_obj.get("answer")
+                             action = q["critical_path"].get(ans_val)
+                             if action == "TERMINATE":
+                                 # Special termination logic
+                                  state["status"] = "Cancelled"
+                                  self.case_service.save_case_state(state)
+                                  return {
+                                      "success": True, 
+                                      "decision": "Terminated", 
+                                      "message": f"Case terminated based on decision: {q['text']} = {ans_val}"
+                                  }
+
+        # 4. Proceed with Standard Flow
         # We need to inject the decision into the state and then run the graph
         # The Supervisor node handles 'human_decision' present in state
         
-        state["human_decision"] = {
-            "decision": decision,
-            "reason": reason,
-            "edited_fields": edited_fields or {},
+        # Log the high-level decision
+        state["activity_log"].append({
             "timestamp": datetime.now().isoformat(),
-        }
-        print(f"[DEBUG process_decision] Created human_decision: {state['human_decision']}")
-        print(f"[DEBUG process_decision] State dtp_stage BEFORE workflow: {state.get('dtp_stage')}")
+            "case_id": case_id,
+            "agent_name": "User",
+            "task_name": "Decision",
+            "output_summary": f"User {decision}d stage {current_stage}",
+            "decision_details": decision_data 
+        })
         
+        self.case_service.save_case_state(state) # Save intermediate state
+
         # Run workflow to let Supervisor process the decision
         try:
+            # We pass a flag to tell the graph this is a decision event
+            state["last_human_action"] = "approve_decision" if decision == "Approve" else "reject_decision"
+            
             final_state = self._run_workflow(state)
             print(f"[DEBUG process_decision] State dtp_stage AFTER workflow: {final_state.get('dtp_stage')}")
-            print(f"[DEBUG process_decision] State status AFTER workflow: {final_state.get('status')}")
+            
             self.case_service.save_case_state(final_state)
             
             return {
                 "success": True,
                 "decision": decision,
                 "new_dtp_stage": final_state.get("dtp_stage"),
-                "message": f"Decision '{decision}' processed successfully via workflow."
+                "message": f"Decision '{decision}' processed successfully."
             }
         except Exception as e:
             logger.error(f"Error processing decision via workflow: {e}")
