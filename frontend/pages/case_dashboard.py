@@ -276,10 +276,10 @@ def render_case_dashboard():
         
         st.markdown("---")
         
-        # Legacy buttons
-        col_seed1, col_seed2, col_spacer = st.columns([1, 1, 2])
+        # Legacy buttons - compact layout
+        col_seed1, col_seed2, col_spacer = st.columns([1, 1, 3])
         with col_seed1:
-            if st.button("Load Demo Cases", help="Load sample cases at various DTP stages"):
+            if st.button("Load Demo Cases", help="Load sample cases at various DTP stages", use_container_width=True):
                 try:
                     from backend.seed_data import seed_all
                     seed_all()
@@ -288,7 +288,7 @@ def render_case_dashboard():
                 except Exception as e:
                     st.error(f"Failed to seed data: {e}")
         with col_seed2:
-            if st.button("Clear All Data", help="Remove all cases and data"):
+            if st.button("Clear All Data", help="Remove all cases and data", use_container_width=True):
                 try:
                     from backend.persistence.database import get_db_session
                     from backend.persistence.models import CaseState, SupplierPerformance, SpendMetric, SLAEvent
