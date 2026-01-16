@@ -443,3 +443,86 @@ The **Decision Core** is a new capability that enables structured, semantically 
 | `frontend/pages/case_copilot.py` | Dynamic `render_decision_console()` function |
 | `backend/seed_data.py` | Enriched test cases with `human_decision` and `latest_agent_output` |
 
+---
+
+## 📡 9. Sourcing Signal Layer (January 2026)
+
+The **Sourcing Signal Layer** enables proactive, automated scanning of the contracts database to identify sourcing opportunities *before* humans need to manually create cases.
+
+### Capability Overview
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **Contract Expiry Scanning** | ✅ Active | Detects contracts expiring within 90 days |
+| **Risk Signal Detection** | ✅ Active | Flags suppliers with declining performance or high risk |
+| **Savings Opportunity Detection** | ✅ Active | Identifies spend anomalies vs. market benchmarks |
+| **Case Creation from Signals** | ✅ Active | One-click case creation from detected signals |
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    📡 Signal Scanner                        │
+│  (utils/signal_aggregator.py - SignalAggregator class)      │
+└───────────────────────────┬─────────────────────────────────┘
+                            │ scan_for_renewals()
+                            │ scan_for_risk_signals()
+                            │ scan_for_savings_opportunities()
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 📂 Data Source                              │
+│  (utils/data_loader.py → data/contracts.json)               │
+│                                                             │
+│  🔌 INTEGRATION POINT: Replace load_json_data() with        │
+│     API calls to your Contract Management Platform.         │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 🖥️ Dashboard UI                             │
+│  (frontend/pages/case_dashboard.py)                         │
+│  - "📡 Sourcing Signal Scanner" expander                    │
+│  - "Scan for Signals" button                                │
+│  - Signal cards with "Create Case" action                   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `utils/signal_aggregator.py` | Core scanning logic (deterministic, no LLM) |
+| `frontend/api_client.py` | `scan_sourcing_signals()`, `create_case_from_signal()` |
+| `frontend/pages/case_dashboard.py` | UI component for scanning |
+| `utils/data_loader.py` | **Data source integration point** |
+
+### Connecting a Real Contract Platform
+
+To integrate with a live Contract Management System (CLM), modify `utils/data_loader.py`:
+
+```python
+# BEFORE (current mock implementation)
+def load_json_data(filename: str) -> list:
+    path = DATA_DIR / filename
+    return json.loads(path.read_text())
+
+# AFTER (example integration)
+def load_json_data(filename: str) -> list:
+    if filename == "contracts.json":
+        # Call your CLM API instead of reading a file
+        response = requests.get(
+            "https://your-clm-platform.com/api/contracts",
+            headers={"Authorization": f"Bearer {CLM_API_KEY}"}
+        )
+        return response.json()
+    # ... fallback for other files
+```
+
+### Signal Types
+
+| Signal Type | Trigger Condition | Urgency |
+|-------------|-------------------|---------|
+| **Renewal** | Contract expires within 90 days | High (≤30d), Medium (≤60d), Low (≤90d) |
+| **Risk** | Supplier score < 5.0 OR declining trend + score < 6.0 | High / Medium |
+| **Savings** | Spend variance > 15% from market benchmark | Medium / Low |
+

@@ -616,6 +616,72 @@ class APIClient:
         response = requests.get(self._url("/api/ingest/history"), params=params)
         data = self._handle_response(response)
         return data.get("history", [])
+    
+    # ==================== SOURCING SIGNALS ====================
+    
+    def scan_sourcing_signals(self) -> List[Dict[str, Any]]:
+        """
+        Scan contracts database for active sourcing signals.
+        Returns a list of CaseTrigger-like objects.
+        """
+        if self._integrated_mode:
+            self._init_services()
+            try:
+                from utils.signal_aggregator import SignalAggregator
+                aggregator = SignalAggregator()
+                triggers = aggregator.aggregate_all_signals()
+                # Convert CaseTrigger objects to dicts
+                return [
+                    {
+                        "trigger_type": t.trigger_type,
+                        "category_id": t.category_id,
+                        "supplier_id": t.supplier_id,
+                        "contract_id": t.contract_id,
+                        "urgency": t.urgency,
+                        "triggering_signals": t.triggering_signals,
+                        "recommended_entry_stage": t.recommended_entry_stage,
+                        "metadata": t.metadata
+                    }
+                    for t in triggers
+                ]
+            except Exception as e:
+                print(f"Error scanning signals: {e}")
+                return []
+        
+        # HTTP mode - call endpoint (not yet implemented on backend)
+        try:
+            response = requests.get(self._url("/api/signals/scan"))
+            data = self._handle_response(response)
+            return data if isinstance(data, list) else []
+        except:
+            return []
+    
+    def create_case_from_signal(
+        self,
+        trigger_type: str,
+        category_id: str,
+        contract_id: Optional[str] = None,
+        supplier_id: Optional[str] = None,
+        urgency: str = "Medium",
+        triggering_signals: Optional[List[str]] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> CreateCaseResponse:
+        """
+        Create a new case from a sourcing signal trigger.
+        """
+        # Build a descriptive name from the trigger
+        name = f"{trigger_type} - {category_id}"
+        if contract_id:
+            name = f"{trigger_type} - {contract_id}"
+        
+        # Use the standard create_case with signal as trigger source
+        return self.create_case(
+            category_id=category_id,
+            trigger_source="Signal",
+            contract_id=contract_id,
+            supplier_id=supplier_id,
+            name=name
+        )
 
 
 class APIError(Exception):

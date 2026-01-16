@@ -305,6 +305,83 @@ def render_case_dashboard():
                 except Exception as e:
                     st.error(f"Failed to clear data: {e}")
     
+    # ==================== SOURCING SIGNALS SECTION ====================
+    with st.expander("📡 Sourcing Signal Scanner", expanded=False):
+        st.markdown("**Scan contracts database for active sourcing signals (expiring contracts, risk alerts, savings opportunities).**")
+        
+        col_scan, col_info = st.columns([1, 3])
+        
+        with col_scan:
+            scan_button = st.button("🔍 Scan for Signals", use_container_width=True, help="Actively scan contracts.json for signals")
+        
+        with col_info:
+            st.caption("Signals are detected from: contract expiry dates, supplier performance, and spend anomalies.")
+        
+        # Show signals if scan button pressed or signals in session state
+        if scan_button:
+            with st.spinner("Scanning contracts database..."):
+                try:
+                    signals = client.scan_sourcing_signals()
+                    st.session_state.scanned_signals = signals
+                    if signals:
+                        st.success(f"Found {len(signals)} sourcing signal(s)")
+                    else:
+                        st.info("No active signals detected. All contracts are healthy.")
+                except Exception as e:
+                    st.error(f"Scan failed: {e}")
+                    st.session_state.scanned_signals = []
+        
+        # Display scanned signals
+        if st.session_state.get("scanned_signals"):
+            signals = st.session_state.scanned_signals
+            st.markdown(f"**{len(signals)} Signal(s) Detected:**")
+            
+            for idx, signal in enumerate(signals):
+                urgency = signal.get("urgency", "Medium")
+                urgency_color = {"High": MIT_CARDINAL, "Medium": "#E65100", "Low": "#2E7D32"}.get(urgency, CHARCOAL)
+                
+                with st.container():
+                    col_sig, col_act = st.columns([4, 1])
+                    
+                    with col_sig:
+                        st.markdown(f"""
+                        <div style="background: #FFF8F0; border-left: 4px solid {urgency_color}; padding: 10px; margin: 5px 0; border-radius: 4px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <strong>{signal.get('trigger_type', 'Signal')}</strong> - 
+                                    <span style="color: {CHARCOAL};">{signal.get('contract_id') or signal.get('category_id')}</span>
+                                    <span style="background: {urgency_color}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; margin-left: 8px;">{urgency}</span>
+                                </div>
+                            </div>
+                            <div style="font-size: 0.85rem; color: {CHARCOAL}; margin-top: 6px;">
+                                {'<br>'.join(signal.get('triggering_signals', [])[:3])}
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with col_act:
+                        # Button to create case from this signal
+                        if st.button("Create Case", key=f"create_signal_{idx}", use_container_width=True):
+                            try:
+                                result = client.create_case_from_signal(
+                                    trigger_type=signal.get("trigger_type", "Signal"),
+                                    category_id=signal.get("category_id", "UNKNOWN"),
+                                    contract_id=signal.get("contract_id"),
+                                    supplier_id=signal.get("supplier_id"),
+                                    urgency=urgency,
+                                    triggering_signals=signal.get("triggering_signals"),
+                                    metadata=signal.get("metadata")
+                                )
+                                st.success(f"Created {result.case_id}")
+                                # Remove from list
+                                st.session_state.scanned_signals = [s for i, s in enumerate(signals) if i != idx]
+                                st.rerun()
+                            except APIError as e:
+                                st.error(f"Failed: {e.message}")
+        
+        st.markdown("---")
+        st.caption("💡 **Integration Point**: Replace `contracts.json` in `utils/data_loader.py` to connect to a real Contract Platform.")
+    
     # Filters
     st.markdown('<div class="filter-section">', unsafe_allow_html=True)
     col1, col2, col3, col4 = st.columns([2, 2, 2, 1.5])
