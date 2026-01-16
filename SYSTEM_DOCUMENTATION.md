@@ -120,6 +120,12 @@ class StrategyRecommendation:
     risks: List[RiskItem]
 ```
 
+**Required Decisions**:
+| Decision | Type | Options | Critical Path |
+|----------|------|---------|---------------|
+| **Is new sourcing required?** | Choice | Yes / No / Cancel | No → Terminate, Cancel → Terminate |
+| **Sourcing route?** | Choice | Strategic / Tactical / Spot | (Only if Yes above) |
+
 **Sample Interaction**:
 - User: "What's the renewal strategy for this case?"
 - Agent: Queries supplier performance, spend trends, and SLA compliance to recommend action.
@@ -148,6 +154,11 @@ class SupplierShortlist:
     methodology: str
 ```
 
+**Required Decisions**:
+| Decision | Type | Options |
+|----------|------|---------|
+| **Is supplier shortlist complete?** | Choice | Yes / No |
+
 ---
 
 ### DTP-03: Sourcing (RFx & Selection)
@@ -164,6 +175,11 @@ class SupplierShortlist:
 **Agent**: `RfxDraftAgent` (in workflow)
 
 **Output**: `RFxDraft` with evaluation matrices
+
+**Required Decisions**:
+| Decision | Type | Options |
+|----------|------|---------|
+| **Has evaluation been completed?** | Choice | Yes / No |
 
 ---
 
@@ -191,6 +207,13 @@ class NegotiationPlan:
     recommended_tactics: List[str]
 ```
 
+**Required Decisions**:
+| Decision | Type | Options |
+|----------|------|---------|
+| **Which supplier to award?** | Text | Supplier ID |
+| **Savings validated by Finance?** | Choice | Yes / No (Provisional) |
+| **Legal approved contract terms?** | Choice | Yes / No |
+
 **Sample Interaction**:
 - User: "What's our negotiation position for this renewal?"
 - Agent: Analyzes market benchmarks, alternative quotes, and relationship history.
@@ -213,6 +236,11 @@ class NegotiationPlan:
 
 **Output**: `ContractExtraction` with key terms and compliance status
 
+**Required Decisions**:
+| Decision | Type | Options |
+|----------|------|---------|
+| **Stakeholders signed approval memo?** | Choice | Yes |
+
 ---
 
 ### DTP-06: Implementation
@@ -230,6 +258,11 @@ class NegotiationPlan:
 **Collaboration**: Allows modification of rollout steps (e.g. "Add Legal Review") via user intent.
 
 **Output**: `ImplementationPlan` with milestones and KPIs
+
+**Required Decisions**:
+| Decision | Type | Options |
+|----------|------|---------|
+| **Contract signed and stored in CLM?** | Choice | Yes |
 
 ---
 
