@@ -1153,9 +1153,15 @@ def _render_activity_history(case):
         st.info("Activity log will appear here as you work on the case.")
 
 
-def get_next_stage(current_stage: str) -> str:
-    """Get the next DTP stage."""
-    transitions = {
+def get_next_stage(current_stage: str, routing_path: list = None) -> str:
+    """Get the next DTP stage, respecting dynamic routing path.
+    
+    Args:
+        current_stage: Current DTP stage (e.g., "DTP-01")
+        routing_path: Optional list of active stages (from TriageResult)
+    """
+    # Default linear transitions
+    default_transitions = {
         "DTP-01": "DTP-02",
         "DTP-02": "DTP-03",
         "DTP-03": "DTP-04",
@@ -1163,7 +1169,15 @@ def get_next_stage(current_stage: str) -> str:
         "DTP-05": "DTP-06",
         "DTP-06": "DTP-06"
     }
-    return transitions.get(current_stage, "Next Stage")
+    
+    # If routing_path provided, find next in that path
+    if routing_path and current_stage in routing_path:
+        idx = routing_path.index(current_stage)
+        if idx + 1 < len(routing_path):
+            return routing_path[idx + 1]
+        return current_stage  # Already at end
+    
+    return default_transitions.get(current_stage, "Next Stage")
 
 
 def render_case_copilot(case_id: str):

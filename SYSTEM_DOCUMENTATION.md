@@ -102,38 +102,45 @@ DTP-01 has **two capabilities** that work together:
 
 ---
 
-#### DTP-01A: Triage (Coverage Check)
+#### DTP-01A: Smart Triage (Coverage + Classification)
 
-**Purpose**: Classify incoming requests and check for existing coverage before proceeding to strategy.
+**Purpose**: Classify requests into categories that determine the DTP routing path, and seek human confirmation.
 
 **Agent**: `TriageAgent` (`backend/agents/triage_agent.py`)
 
-**Logic (Deterministic, No LLM)**:
-1. **Request Classification**: Categorize as Demand-Based, Renewal, Ad-Hoc, or Fast-Pass.
-2. **Coverage Check**: Search `contracts.json` for matching `coverage_keywords`.
-3. **Decision**:
-   - **COVERED** → Redirect to Buying Channel (No sourcing needed).
-   - **NOT COVERED** → Proceed to Strategy Agent.
-4. **Load Category Strategy Card**: Apply global defaults ($1.5M threshold → 3 bids, Net 90 terms).
+**Logic (Deterministic + Confirmation)**:
+1. **Coverage Check**: Match `user_intent` against `contracts.json` keywords.
+2. **Smart Classification**: Infer category from contract data + user keywords.
+3. **Build Evidence**: Explain *why* a category was proposed (e.g., "Contract expires in 30 days").
+4. **Propose & Confirm**: Present proposal to human for confirmation before locking path.
 
-**Input Data Used**:
-| Data Type | Source | Fields Used |
-|-----------|--------|-------------|
-| **User Intent** | Chat message | Natural language request |
-| **Contracts** | `data/contracts.json` | `coverage_keywords`, `category_id`, `status` |
-| **Category Strategy** | `data/category_strategies.json` | `sourcing_rules`, `defaults` |
+**Request Categories & Routing**:
+| Category | Description | Routing Path |
+|----------|-------------|--------------|
+| **Demand-Based** | New requirement, no existing contract | Full: 01→02→03→04→05→06 |
+| **Renewal (No Change)** | Renewing as-is | Fast: 01→04→05→06 |
+| **Renewal (Scope Change)** | Renewing with modifications | Full: 01→02→03→04→05→06 |
+| **Ad-Hoc** | Urgent/emergency request | Full with alerts |
+| **Fast-Pass** | Pre-approved catalog item | Fast: 01→05→06 |
 
 **Output**: `TriageResult`
 ```python
 class TriageResult:
-    request_type: RequestType  # Demand-Based, Renewal, Ad-Hoc, Fast-Pass
-    status: TriageStatus  # Proceed to Strategy, Redirect to Catalog
-    matched_contract_id: Optional[str]
-    requires_3_bids: bool  # Based on $1.5M threshold
-    recommended_payment_terms: str  # Default: Net 90
+    proposed_request_type: RequestType  # System's proposal
+    confidence: float  # How sure (0.0-1.0)
+    evidence: List[str]  # Why this classification
+    routing_path: List[str]  # Active stages
+    skipped_stages: List[str]  # Stages to skip
+    status: TriageStatus  # AWAITING_CONFIRMATION → CONFIRMED
 ```
 
-**Frontend Display**: `render_triage_panel()` in `case_copilot.py` shows coverage status and strategy card defaults.
+**Human Confirmation Flow**:
+1. Agent: "I classified this as **Renewal (No Change)** (90% confidence)"
+2. Evidence: "Contract CTR-001 expires in 30 days"
+3. Impact: "⚠️ This will SKIP DTP-02/03. Jump to Negotiation."
+4. User: **[Confirm]** or **[Wrong - New Demand]**
+
+**Frontend Display**: `render_triage_panel()` shows proposal, evidence, and confirmation buttons.
 
 ---
 

@@ -465,6 +465,86 @@ def seed_manual_cases(session):
                 "No major issues reported"
             ]),
             "recommended_action": "Monitor implementation progress"
+        },
+        
+        # === DYNAMIC ROUTING DEMO CASES ===
+        
+        # RENEWAL (No Change) - Should skip DTP-02/03
+        {
+            "case_id": "CASE-RENEWAL-001",
+            "name": "✨ Demo: Marketing Agency Renewal",
+            "category_id": "MARKETING_SERVICES",
+            "supplier_id": "SUP-MKT-GLOBAL",
+            "contract_id": "CTR-MKT-001",
+            "dtp_stage": "DTP-01",
+            "status": "Open",
+            "trigger_source": "Signal",
+            "summary_text": "DEMO: Renewal scenario. Contract expires in 30 days. No scope change needed. Should SKIP DTP-02/03 and go to DTP-04.",
+            "key_findings": json.dumps([
+                "Contract expires in 30 days",
+                "Incumbent GlobalBrand - strong relationship",
+                "Proposed Category: Renewal (No Change)",
+                "Expected Path: DTP-01 → DTP-04 → DTP-05 → DTP-06"
+            ]),
+            "recommended_action": "Confirm renewal and skip to Negotiation",
+            "latest_agent_output": json.dumps({
+                "triage_result": {
+                    "proposed_request_type": "Renewal (No Change)",
+                    "confidence": 0.9,
+                    "evidence": ["Contract expires in 30 days", "Signal-triggered renewal"],
+                    "routing_path": ["DTP-01", "DTP-04", "DTP-05", "DTP-06"],
+                    "skipped_stages": ["DTP-02", "DTP-03"]
+                }
+            })
+        },
+        
+        # AD-HOC - Full path with alerts
+        {
+            "case_id": "CASE-ADHOC-001",
+            "name": "✨ Demo: Urgent Consulting Request",
+            "category_id": "PROFESSIONAL_SERVICES",
+            "supplier_id": None,
+            "contract_id": None,
+            "dtp_stage": "DTP-01",
+            "status": "Open",
+            "trigger_source": "User",
+            "summary_text": "DEMO: Ad-hoc urgent request. No pre-approved supplier. Full DTP path but with risk alerts at DTP-02/03.",
+            "key_findings": json.dumps([
+                "Urgent timeline: 2 weeks",
+                "No existing contract coverage",
+                "Proposed Category: Ad-Hoc",
+                "Expected Path: Full DTP with alerts"
+            ]),
+            "recommended_action": "Confirm Ad-Hoc classification. Expect alerts."
+        },
+        
+        # FAST-PASS - Skip to DTP-05
+        {
+            "case_id": "CASE-FASTPASS-001",
+            "name": "✨ Demo: Pre-Approved Laptop Purchase",
+            "category_id": "IT-HARDWARE",
+            "supplier_id": "SUP-HARDWARE-001",
+            "contract_id": "CTR-CATALOG-HARDWARE",
+            "dtp_stage": "DTP-01",
+            "status": "Open",
+            "trigger_source": "User",
+            "summary_text": "DEMO: Fast-Pass scenario. Pre-approved catalog item. Should SKIP DTP-02/03/04 and go straight to DTP-05.",
+            "key_findings": json.dumps([
+                "Pre-approved supplier in catalog",
+                "Standard pricing applies",
+                "Proposed Category: Fast-Pass",
+                "Expected Path: DTP-01 → DTP-05 → DTP-06"
+            ]),
+            "recommended_action": "Confirm fast-pass and skip to Contracting",
+            "latest_agent_output": json.dumps({
+                "triage_result": {
+                    "proposed_request_type": "Fast-Pass",
+                    "confidence": 0.85,
+                    "evidence": ["Pre-approved catalog match", "Standard pricing applies"],
+                    "routing_path": ["DTP-01", "DTP-05", "DTP-06"],
+                    "skipped_stages": ["DTP-02", "DTP-03", "DTP-04"]
+                }
+            })
         }
     ]
     

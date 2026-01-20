@@ -69,28 +69,80 @@ class TriageAgent:
         self.category_strategies = load_category_strategies()
         self.global_defaults = get_global_defaults()
     
-    def classify_request(self, user_intent: str, trigger_source: str = "User") -> RequestType:
+    def classify_request(
+        self, 
+        user_intent: str, 
+        trigger_source: str = "User",
+        matched_contract: Optional[Dict[str, Any]] = None
+    ) -> Tuple[RequestType, float, List[str]]:
         """
-        Classify the request type based on intent and trigger.
+        Classify the request type based on intent, trigger, and contract data.
         
-        Returns: RequestType enum value
+        Returns: (RequestType, confidence, evidence_list)
         """
         intent_lower = user_intent.lower()
+        evidence = []
+        confidence = 0.5
         
-        # Renewal keywords
-        if trigger_source == "Signal" or any(kw in intent_lower for kw in ["renew", "renewal", "expir", "contract ending"]):
-            return RequestType.RENEWAL
+        # Check contract expiry for Renewal detection
+        if matched_contract:
+            expiry_str = matched_contract.get("end_date", "")
+            if expiry_str:
+                try:
+                    from datetime import datetime
+                    expiry = datetime.strptime(expiry_str, "%Y-%m-%d")
+                    days_to_expiry = (expiry - datetime.now()).days
+                    
+                    if days_to_expiry <= 90:
+                        evidence.append(f"Contract expires in {days_to_expiry} days")
+                        evidence.append(f"Matched contract: {matched_contract.get('contract_id')}")
+                        
+                        # Check for scope change indicators
+                        if any(kw in intent_lower for kw in ["change", "expand", "modify", "different", "new scope"]):
+                            confidence = 0.85
+                            evidence.append("User indicated scope changes")
+                            return RequestType.RENEWAL_SCOPE_CHANGE, confidence, evidence
+                        else:
+                            confidence = 0.9
+                            evidence.append("No scope changes indicated")
+                            return RequestType.RENEWAL_NO_CHANGE, confidence, evidence
+                except:
+                    pass
         
-        # Fast-Pass keywords (pre-approved, quick buys)
+        # Signal-triggered = Renewal
+        if trigger_source == "Signal":
+            evidence.append("Triggered by system signal")
+            confidence = 0.85
+            return RequestType.RENEWAL_NO_CHANGE, confidence, evidence
+        
+        # Keyword-based classification
+        if any(kw in intent_lower for kw in ["renew", "renewal", "expir", "contract ending"]):
+            evidence.append("User mentioned renewal keywords")
+            
+            if any(kw in intent_lower for kw in ["change", "expand", "modify"]):
+                confidence = 0.75
+                evidence.append("Scope change keywords detected")
+                return RequestType.RENEWAL_SCOPE_CHANGE, confidence, evidence
+            else:
+                confidence = 0.8
+                return RequestType.RENEWAL_NO_CHANGE, confidence, evidence
+        
+        # Fast-Pass keywords
         if any(kw in intent_lower for kw in ["fast-pass", "quick buy", "pre-approved", "catalog order"]):
-            return RequestType.FAST_PASS
+            evidence.append("Pre-approved/catalog keywords detected")
+            confidence = 0.85
+            return RequestType.FAST_PASS, confidence, evidence
         
-        # Ad-hoc keywords (off-system, urgent)
+        # Ad-hoc keywords
         if any(kw in intent_lower for kw in ["urgent", "ad-hoc", "one-time", "emergency", "off-system"]):
-            return RequestType.AD_HOC
+            evidence.append("Urgency/ad-hoc keywords detected")
+            confidence = 0.8
+            return RequestType.AD_HOC, confidence, evidence
         
         # Default to Demand-Based
-        return RequestType.DEMAND_BASED
+        evidence.append("Standard procurement request")
+        confidence = 0.6
+        return RequestType.DEMAND_BASED, confidence, evidence
     
     def check_coverage(self, user_intent: str, category_id: Optional[str] = None) -> Tuple[bool, Optional[Dict[str, Any]]]:
         """
@@ -135,6 +187,29 @@ class TriageAgent:
                 )
         return None
     
+    def get_routing_path(self, request_type: RequestType) -> Tuple[List[str], List[str]]:
+        """
+        Get the DTP routing path based on request type.
+        
+        Returns: (active_stages, skipped_stages)
+        """
+        all_stages = ["DTP-01", "DTP-02", "DTP-03", "DTP-04", "DTP-05", "DTP-06"]
+        
+        if request_type == RequestType.RENEWAL_NO_CHANGE:
+            # Skip Supplier Eval and Sourcing
+            active = ["DTP-01", "DTP-04", "DTP-05", "DTP-06"]
+            skipped = ["DTP-02", "DTP-03"]
+        elif request_type == RequestType.FAST_PASS:
+            # Skip to Contracting
+            active = ["DTP-01", "DTP-05", "DTP-06"]
+            skipped = ["DTP-02", "DTP-03", "DTP-04"]
+        else:
+            # Full path for Demand-Based, Renewal with Scope Change, Ad-Hoc
+            active = all_stages
+            skipped = []
+        
+        return active, skipped
+    
     def triage(
         self,
         case_id: str,
@@ -144,62 +219,66 @@ class TriageAgent:
         estimated_spend_usd: Optional[float] = None
     ) -> TriageResult:
         """
-        Perform full triage on a sourcing request.
-        
-        This is the main entry point for DTP-01 Triage.
-        
-        Returns: TriageResult with classification, coverage status, and strategy card
+        Perform Smart Triage: propose category, provide evidence, await confirmation.
         """
-        # Step 1: Classify request type
-        request_type = self.classify_request(user_intent, trigger_source)
-        
-        # Step 2: Check for coverage
+        # Step 1: Check for coverage first (needed for classification)
         is_covered, matched_contract = self.check_coverage(user_intent, category_id)
         
-        # Step 3: Determine status and build rationale
-        if is_covered and matched_contract:
-            status = TriageStatus.REDIRECT_TO_CATALOG
-            coverage_rationale = (
-                f"Request is covered by existing contract {matched_contract.get('contract_id')} "
-                f"with supplier {matched_contract.get('supplier_id')}. "
-                f"Redirect to buying channel."
-            )
+        # Step 2: Classify with evidence
+        request_type, confidence, evidence = self.classify_request(
+            user_intent, trigger_source, matched_contract
+        )
+        
+        # Step 3: Get routing path
+        routing_path, skipped_stages = self.get_routing_path(request_type)
+        
+        # Step 4: Build coverage rationale
+        contract_expiry_days = None
+        if matched_contract:
             matched_contract_id = matched_contract.get("contract_id")
             matched_supplier_id = matched_contract.get("supplier_id")
-            # Use category from matched contract if not provided
+            
+            # Calculate expiry days
+            expiry_str = matched_contract.get("end_date", "")
+            if expiry_str:
+                try:
+                    from datetime import datetime
+                    expiry = datetime.strptime(expiry_str, "%Y-%m-%d")
+                    contract_expiry_days = (expiry - datetime.now()).days
+                except:
+                    pass
+            
+            coverage_rationale = (
+                f"Matched contract {matched_contract_id} with supplier {matched_supplier_id}."
+            )
             if not category_id:
                 category_id = matched_contract.get("category_id")
         else:
-            status = TriageStatus.PROCEED_TO_STRATEGY
-            coverage_rationale = (
-                f"No existing contract found covering this request. "
-                f"Proceeding to sourcing strategy determination."
-            )
             matched_contract_id = None
             matched_supplier_id = None
+            coverage_rationale = "No existing contract match found."
         
-        # Step 4: Apply global rules
+        # Step 5: Apply global rules
         global_rules = self.global_defaults.get("sourcing_rules", {})
         spend_threshold = global_rules.get("spend_threshold_3_bids_usd", 1500000)
-        requires_3_bids = False
-        if estimated_spend_usd and estimated_spend_usd >= spend_threshold:
-            requires_3_bids = True
+        requires_3_bids = bool(estimated_spend_usd and estimated_spend_usd >= spend_threshold)
         
-        # Step 5: Get payment terms default
         global_defaults = self.global_defaults.get("defaults", {})
         payment_terms = global_defaults.get("payment_terms", "Net 90")
         
-        # Step 6: Link strategy card
-        strategy_card_id = category_id if category_id else None
-        
         return TriageResult(
             case_id=case_id,
-            request_type=request_type,
-            status=status,
+            proposed_request_type=request_type,
+            confidence=confidence,
+            evidence=evidence,
+            routing_path=routing_path,
+            skipped_stages=skipped_stages,
             matched_contract_id=matched_contract_id,
             matched_supplier_id=matched_supplier_id,
+            contract_expiry_days=contract_expiry_days,
+            status=TriageStatus.AWAITING_CONFIRMATION,
             coverage_rationale=coverage_rationale,
-            category_strategy_card_id=strategy_card_id,
+            category_strategy_card_id=category_id,
             estimated_spend_usd=estimated_spend_usd,
             requires_3_bids=requires_3_bids,
             recommended_payment_terms=payment_terms

@@ -138,30 +138,47 @@ class AgentActionLog(BaseModel):
 
 class RequestType(str, Enum):
     """Classification of incoming sourcing requests"""
-    DEMAND_BASED = "Demand-Based"  # PO-driven, no existing contract
-    RENEWAL = "Renewal"  # Contract expiry triggered
-    AD_HOC = "Ad-Hoc"  # Off-system or manual request
-    FAST_PASS = "Fast-Pass"  # Low-risk, pre-approved supplier
+    DEMAND_BASED = "Demand-Based"  # PO-driven, no existing contract -> Full DTP
+    RENEWAL_NO_CHANGE = "Renewal (No Change)"  # Simple renewal -> Skip DTP-02/03
+    RENEWAL_SCOPE_CHANGE = "Renewal (Scope Change)"  # Renewal with changes -> Full DTP
+    AD_HOC = "Ad-Hoc"  # Off-system or urgent -> Alerts at DTP-02/03
+    FAST_PASS = "Fast-Pass"  # Low-risk, pre-approved -> Skip to DTP-05
 
 
 class TriageStatus(str, Enum):
     """Outcome of DTP-01 Triage"""
-    PROCEED_TO_STRATEGY = "Proceed to Strategy"  # No coverage, sourcing required
-    REDIRECT_TO_CATALOG = "Redirect to Catalog"  # Existing coverage found
-    REQUIRES_CLARIFICATION = "Requires Clarification"  # Ambiguous request
+    AWAITING_CONFIRMATION = "Awaiting Confirmation"  # Proposal needs human approval
+    CONFIRMED = "Confirmed"  # Human approved the category
+    PROCEED_TO_STRATEGY = "Proceed to Strategy"  # Legacy: No coverage
+    REDIRECT_TO_CATALOG = "Redirect to Catalog"  # Legacy: Existing coverage
 
 
 class TriageResult(BaseModel):
-    """DTP-01 Triage Agent output - Gatekeeper decision"""
+    """DTP-01 Triage Agent output - Smart Proposal with Evidence"""
     case_id: str
-    request_type: RequestType
-    status: TriageStatus
-    matched_contract_id: Optional[str] = None  # If coverage found
-    matched_supplier_id: Optional[str] = None  # If supplier already approved
-    coverage_rationale: str = ""  # Why request is/isn't covered
-    category_strategy_card_id: Optional[str] = None  # Linked strategy card
+    
+    # Proposal (System's guess)
+    proposed_request_type: RequestType
+    confidence: float = 0.5  # 0.0-1.0 confidence in proposal
+    evidence: List[str] = Field(default_factory=list)  # Why this classification
+    
+    # Routing Path (which DTP stages are active)
+    routing_path: List[str] = Field(default_factory=lambda: ["DTP-01", "DTP-02", "DTP-03", "DTP-04", "DTP-05", "DTP-06"])
+    skipped_stages: List[str] = Field(default_factory=list)  # Stages to skip
+    
+    # Contract Match
+    matched_contract_id: Optional[str] = None
+    matched_supplier_id: Optional[str] = None
+    contract_expiry_days: Optional[int] = None  # Days until contract expires
+    
+    # Status
+    status: TriageStatus = TriageStatus.AWAITING_CONFIRMATION
+    coverage_rationale: str = ""
+    
+    # Policy Defaults
+    category_strategy_card_id: Optional[str] = None
     estimated_spend_usd: Optional[float] = None
-    requires_3_bids: bool = False  # Based on $1.5M threshold
+    requires_3_bids: bool = False
     recommended_payment_terms: str = "Net 90"
 
 
