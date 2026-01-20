@@ -94,7 +94,15 @@ The `LLMResponder` takes the agent's raw output (or direct answer) and formats i
 
 Each DTP (Draft to Procurement) stage uses specific data sources and produces specific outputs.
 
-### DTP-01: Triage (Gatekeeper)
+### DTP-01: Strategy & Triage - "The Gatekeeper"
+
+**Mindset**: Sense-Making ("Do we even need sourcing?")
+
+DTP-01 has **two capabilities** that work together:
+
+---
+
+#### DTP-01A: Triage (Coverage Check)
 
 **Purpose**: Classify incoming requests and check for existing coverage before proceeding to strategy.
 
@@ -129,11 +137,9 @@ class TriageResult:
 
 ---
 
-### DTP-01: Strategy (Need Identification) - "The Gatekeeper"
+#### DTP-01B: Strategy (Need Identification)
 
-**Mindset**: Sense-Making ("Do we even need sourcing?")
 **Purpose**: Identify sourcing opportunities, frame the problem, and define initial strategy.
-
 
 **Input Data Used**:
 | Data Type | Source | Fields Used |
@@ -155,6 +161,7 @@ class StrategyRecommendation:
     justification: str
     key_factors: List[str]
     risks: List[RiskItem]
+    clarification_questions: List[str]  # Smart Intake: probes fuzzy intent
 ```
 
 **Required Decisions**:
@@ -190,6 +197,8 @@ class SupplierShortlist:
     shortlist: List[ShortlistEntry]  # Ranked suppliers with scores
     evaluation_criteria: Dict[str, float]  # Criteria weights
     methodology: str
+    clarification_needed: bool  # The Architect: needs requirement freeze?
+    clarification_questions: List[str]  # Questions to clarify vague requirements
 ```
 
 **Required Decisions**:
@@ -245,6 +254,7 @@ class NegotiationPlan:
     target_terms: Dict[str, str]
     walkaway_position: str
     recommended_tactics: List[str]
+    challenge_questions: List[str]  # The Challenger: pushback on assumptions
 ```
 
 **Required Decisions**:
