@@ -14,7 +14,7 @@ from uuid import uuid4
 from backend.persistence.database import init_db, get_db_session
 from backend.persistence.models import (
     CaseState, SupplierPerformance, SpendMetric, SLAEvent,
-    IngestionLog, DocumentRecord
+    IngestionLog, DocumentRecord, Artifact
 )
 
 
@@ -28,6 +28,19 @@ def seed_all():
     
     init_db()
     session = get_db_session()
+    
+    # Check if data already exists to avoid duplicates
+    existing_case = session.query(CaseState).first()
+    if existing_case:
+        print("Database already seeded. Skipping.")
+        # return  # Identify if we want to force re-seed or skip
+    
+    # Clear existing data for fresh seed (optional, but good for demo consistency)
+    session.query(CaseState).delete()
+    session.query(Artifact).delete()
+    session.query(DocumentRecord).delete()
+    session.commit()
+    print("  - Cleared existing cases and artifacts")
     
     try:
         # Clear existing data
@@ -477,7 +490,7 @@ def seed_manual_cases(session):
             "supplier_id": "SUP-MKT-GLOBAL",
             "contract_id": "CTR-MKT-001",
             "dtp_stage": "DTP-04",
-            "status": "Waiting for Human Decision",
+            "status": "In Progress",
             "trigger_source": "Signal",
             "summary_text": "DEMO: Renewal scenario. Contract expires in 30 days. No scope change needed. SKIPPED DTP-02/03 and jumped to DTP-04.",
             "key_findings": json.dumps([
