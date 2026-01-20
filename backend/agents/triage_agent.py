@@ -79,6 +79,16 @@ class TriageAgent:
         Classify the request type based on intent, trigger, and contract data.
         
         Returns: (RequestType, confidence, evidence_list)
+        
+        Confidence Scoring Logic (Rule-Based):
+        - 0.9: Contract expiry match + no scope change (strongest signal)
+        - 0.85: Signal-triggered OR scope change detected OR explicit keywords
+        - 0.8: User mentioned "renew" keyword
+        - 0.75: Mixed signals (e.g., "renew" + "change")
+        - 0.6: Default guess (Demand-Based)
+        
+        Confidence is NOT ML-based. It's a heuristic based on evidence strength:
+        - Contract data (expiry, keywords) > User keywords > Default guess
         """
         intent_lower = user_intent.lower()
         evidence = []

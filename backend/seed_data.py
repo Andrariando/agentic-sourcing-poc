@@ -476,26 +476,33 @@ def seed_manual_cases(session):
             "category_id": "MARKETING_SERVICES",
             "supplier_id": "SUP-MKT-GLOBAL",
             "contract_id": "CTR-MKT-001",
-            "dtp_stage": "DTP-01",
-            "status": "Open",
+            "dtp_stage": "DTP-04",
+            "status": "Waiting for Human Decision",
             "trigger_source": "Signal",
-            "summary_text": "DEMO: Renewal scenario. Contract expires in 30 days. No scope change needed. Should SKIP DTP-02/03 and go to DTP-04.",
+            "summary_text": "DEMO: Renewal scenario. Contract expires in 30 days. No scope change needed. SKIPPED DTP-02/03 and jumped to DTP-04.",
             "key_findings": json.dumps([
                 "Contract expires in 30 days",
                 "Incumbent GlobalBrand - strong relationship",
-                "Proposed Category: Renewal (No Change)",
-                "Expected Path: DTP-01 → DTP-04 → DTP-05 → DTP-06"
+                "Category: Renewal (No Change) - 90% confidence",
+                "Path: DTP-01 → DTP-04 (SKIPPED 02/03)"
             ]),
-            "recommended_action": "Confirm renewal and skip to Negotiation",
+            "recommended_action": "Approve renewal terms",
             "latest_agent_output": json.dumps({
-                "triage_result": {
-                    "proposed_request_type": "Renewal (No Change)",
-                    "confidence": 0.9,
-                    "evidence": ["Contract expires in 30 days", "Signal-triggered renewal"],
-                    "routing_path": ["DTP-01", "DTP-04", "DTP-05", "DTP-06"],
-                    "skipped_stages": ["DTP-02", "DTP-03"]
+                "negotiation_plan": {
+                    "strategy": "Renewal with minor price adjustment",
+                    "target_savings": "3-5%",
+                    "key_terms": ["Extend 12 months", "Net 60 payment", "Performance SLA"]
                 }
-            })
+            }),
+            "chat_history": json.dumps([
+                {"role": "assistant", "content": "🔔 **AUTOMATED SIGNAL DETECTED**\\n\\nContract CTR-MKT-001 with GlobalBrand expires in **30 days**.\\n\\n**Smart Triage Analysis:**\\n- **Proposed Category**: Renewal (No Change)\\n- **Confidence**: 90%\\n- **Evidence**: Contract expiry approaching, no scope change indicators\\n- **Routing Impact**: ⚠️ Will SKIP DTP-02 (Supplier Eval) and DTP-03 (Sourcing)\\n\\n**Next Step**: Jump directly to DTP-04 (Negotiation)?", "timestamp": (now - timedelta(hours=2)).isoformat()},
+                {"role": "user", "content": "Yes, confirm this is a simple renewal. No changes needed.", "timestamp": (now - timedelta(hours=1, minutes=55)).isoformat()},
+                {"role": "assistant", "content": "✅ **Category Confirmed: Renewal (No Change)**\\n\\n**Dynamic Routing Applied:**\\n- ✅ DTP-01: Triage Complete\\n- ⏭️ DTP-02: SKIPPED (No supplier evaluation needed)\\n- ⏭️ DTP-03: SKIPPED (No RFx needed)\\n- ➡️ DTP-04: Negotiation (CURRENT)\\n\\n**Negotiation Strategy:**\\n- Incumbent: GlobalBrand (performance: 8.5/10)\\n- Current price: $450K/year\\n- Target: 3-5% savings ($13.5K-$22.5K)\\n- Leverage: Long relationship + market alternatives\\n\\n**Recommended Approach**: Request price hold or minor reduction in exchange for 12-month extension.", "timestamp": (now - timedelta(hours=1, minutes=50)).isoformat()},
+                {"role": "user", "content": "What's our negotiation leverage?", "timestamp": (now - timedelta(hours=1, minutes=30)).isoformat()},
+                {"role": "assistant", "content": "⚔️ **Negotiation Leverage Analysis:**\\n\\n**Our Strengths:**\\n1. ✅ Long-term relationship (3 years)\\n2. ✅ Consistent payment history\\n3. ✅ Market alternatives available (2 competitors at $430K)\\n\\n**Their Motivations:**\\n1. 💰 Renewal revenue ($450K/year)\\n2. 📊 Performance score is strong (8.5/10) - they want to keep you\\n3. ⚠️ Losing you = reference loss\\n\\n**Recommended Counter-Offer:**\\n- Price: $437K/year (-3% = $13K savings)\\n- Term: 12 months (shorter = more leverage next year)\\n- SLA: Add 95% on-time delivery guarantee\\n\\n**BATNA**: Walk to competitor at $430K (only $7K more savings but relationship risk)", "timestamp": (now - timedelta(hours=1, minutes=25)).isoformat()},
+                {"role": "user", "content": "Proceed with the $437K counter-offer", "timestamp": (now - timedelta(hours=1)).isoformat()},
+                {"role": "assistant", "content": "✅ **Negotiation Complete**\\n\\n**Outcome:**\\n- GlobalBrand accepted $437K/year ✅\\n- Savings: $13K/year (3%)\\n- Term: 12 months\\n- SLA: 95% on-time delivery added\\n\\n**Fast-Track Benefit**: By skipping DTP-02/03, we saved ~2 weeks of sourcing time and completed renewal in **3 days** vs typical 15-20 days.\\n\\n📋 **Next Step**: Contract finalization (DTP-05)?", "timestamp": (now - timedelta(minutes=55)).isoformat()}
+            ])
         },
         
         # AD-HOC - Full path with alerts
@@ -505,17 +512,25 @@ def seed_manual_cases(session):
             "category_id": "PROFESSIONAL_SERVICES",
             "supplier_id": None,
             "contract_id": None,
-            "dtp_stage": "DTP-01",
-            "status": "Open",
+            "dtp_stage": "DTP-02",
+            "status": "In Progress",
             "trigger_source": "User",
-            "summary_text": "DEMO: Ad-hoc urgent request. No pre-approved supplier. Full DTP path but with risk alerts at DTP-02/03.",
+            "summary_text": "DEMO: Ad-hoc urgent request. No pre-approved supplier. Full DTP path with risk alerts.",
             "key_findings": json.dumps([
                 "Urgent timeline: 2 weeks",
                 "No existing contract coverage",
-                "Proposed Category: Ad-Hoc",
-                "Expected Path: Full DTP with alerts"
+                "Category: Ad-Hoc - 80% confidence",
+                "Path: Full DTP with alerts"
             ]),
-            "recommended_action": "Confirm Ad-Hoc classification. Expect alerts."
+            "recommended_action": "Proceed with caution - compressed timeline",
+            "chat_history": json.dumps([
+                {"role": "user", "content": "I need urgent consulting support for a compliance audit. We have 2 weeks to prepare.", "timestamp": (now - timedelta(hours=3)).isoformat()},
+                {"role": "assistant", "content": "🧠 **Smart Triage Analysis:**\\n\\n**Detected Keywords**: 'urgent', 'compliance'\\n- **Proposed Category**: Ad-Hoc\\n- **Confidence**: 80%\\n- **Evidence**: Urgency keywords, no contract match found\\n- **Routing Impact**: ⚠️ Full DTP path required, but with ALERTS at each stage\\n\\n**Risk Flags:**\\n- 🚨 Compressed timeline (2 weeks)\\n- 🚨 No pre-approved supplier\\n- 🚨 Compliance-critical (high risk)\\n\\n**Recommendation**: Proceed with full sourcing but expect expedited timelines. Confirm Ad-Hoc classification?", "timestamp": (now - timedelta(hours=2, minutes=55)).isoformat()},
+                {"role": "user", "content": "Yes, this is urgent. Proceed with Ad-Hoc.", "timestamp": (now - timedelta(hours=2, minutes=50)).isoformat()},
+                {"role": "assistant", "content": "✅ **Category Confirmed: Ad-Hoc**\\n\\n**Dynamic Routing Applied:**\\n- ✅ DTP-01: Triage Complete\\n- ➡️ DTP-02: Requirements (CURRENT) ⚠️ ALERT: Compressed timeline\\n- → DTP-03: Sourcing ⚠️ ALERT: Limited supplier pool\\n- → DTP-04-06: Standard flow\\n\\n🏗️ **The Architect - Requirements Freeze:**\\n\\nBefore I can shortlist suppliers, I need clarity:\\n1. What type of compliance audit? (SOX, ISO, GDPR, etc.)\\n2. Do you need audit execution OR just preparation support?\\n3. Budget ceiling for 2-week engagement?\\n\\n⚠️ **Timeline Alert**: Normal requirements phase = 5 days. We have 2 weeks total. Recommend 24-hour turnaround on answers.", "timestamp": (now - timedelta(hours=2, minutes=45)).isoformat()},
+                {"role": "user", "content": "SOX compliance audit. We need preparation support only - documentation review and gap analysis. Budget is $50K max.", "timestamp": (now - timedelta(hours=2, minutes=30)).isoformat()},
+                {"role": "assistant", "content": "✅ **Requirements Frozen**\\n\\n**Scope:**\\n- SOX compliance prep (documentation + gap analysis)\\n- 2-week delivery\\n- Budget: $50K\\n\\n**Supplier Search (Ad-Hoc Mode):**\\n⚠️ **ALERT**: Only 2 suppliers in our network have SOX expertise:\\n1. CompliancePro ($45K, 7-day delivery)\\n2. AuditExperts ($52K, 10-day delivery - OVER BUDGET)\\n\\n**Risk Assessment:**\\n- 🚨 Limited options due to specialized need\\n- 🚨 CompliancePro is only viable option\\n- ✅ CompliancePro has strong SOX track record (8.9/10)\\n\\n**Recommendation**: Sole-source to CompliancePro given timeline + budget constraints?", "timestamp": (now - timedelta(hours=2, minutes=25)).isoformat()}
+            ])
         },
         
         # FAST-PASS - Skip to DTP-05
@@ -525,26 +540,25 @@ def seed_manual_cases(session):
             "category_id": "IT-HARDWARE",
             "supplier_id": "SUP-HARDWARE-001",
             "contract_id": "CTR-CATALOG-HARDWARE",
-            "dtp_stage": "DTP-01",
-            "status": "Open",
+            "dtp_stage": "DTP-05",
+            "status": "In Progress",
             "trigger_source": "User",
-            "summary_text": "DEMO: Fast-Pass scenario. Pre-approved catalog item. Should SKIP DTP-02/03/04 and go straight to DTP-05.",
+            "summary_text": "DEMO: Fast-Pass scenario. Pre-approved catalog item. SKIPPED DTP-02/03/04 and jumped to DTP-05.",
             "key_findings": json.dumps([
                 "Pre-approved supplier in catalog",
                 "Standard pricing applies",
-                "Proposed Category: Fast-Pass",
-                "Expected Path: DTP-01 → DTP-05 → DTP-06"
+                "Category: Fast-Pass - 85% confidence",
+                "Path: DTP-01 → DTP-05 (SKIPPED 02/03/04)"
             ]),
-            "recommended_action": "Confirm fast-pass and skip to Contracting",
-            "latest_agent_output": json.dumps({
-                "triage_result": {
-                    "proposed_request_type": "Fast-Pass",
-                    "confidence": 0.85,
-                    "evidence": ["Pre-approved catalog match", "Standard pricing applies"],
-                    "routing_path": ["DTP-01", "DTP-05", "DTP-06"],
-                    "skipped_stages": ["DTP-02", "DTP-03", "DTP-04"]
-                }
-            })
+            "recommended_action": "Finalize PO and contract",
+            "chat_history": json.dumps([
+                {"role": "user", "content": "I need 10 laptops for new hires. Standard Dell models.", "timestamp": (now - timedelta(hours=1)).isoformat()},
+                {"role": "assistant", "content": "🧠 **Smart Triage Analysis:**\\n\\n**Detected**: Catalog item request\\n- **Proposed Category**: Fast-Pass\\n- **Confidence**: 85%\\n- **Evidence**: 'Standard Dell models' matches pre-approved catalog\\n- **Routing Impact**: ⚠️ Will SKIP DTP-02/03/04 (Supplier Eval, Sourcing, Negotiation)\\n\\n**Catalog Match Found:**\\n- Supplier: TechSupply Inc (pre-approved)\\n- Contract: CTR-CATALOG-HARDWARE\\n- Standard pricing: $1,200/laptop\\n- Total: $12,000 (10 units)\\n\\n**Fast-Pass Benefit**: Order fulfilled in 2 days vs 15-20 days for full sourcing.\\n\\nConfirm Fast-Pass?", "timestamp": (now - timedelta(minutes=58)).isoformat()},
+                {"role": "user", "content": "Yes, fast-pass this order", "timestamp": (now - timedelta(minutes=55)).isoformat()},
+                {"role": "assistant", "content": "✅ **Category Confirmed: Fast-Pass**\\n\\n**Dynamic Routing Applied:**\\n- ✅ DTP-01: Triage Complete\\n- ⏭️ DTP-02: SKIPPED (Pre-approved supplier)\\n- ⏭️ DTP-03: SKIPPED (Catalog pricing)\\n- ⏭️ DTP-04: SKIPPED (No negotiation needed)\\n- ➡️ DTP-05: Contracting (CURRENT)\\n\\n🔒 **The Closer - Contract Validation:**\\n\\n**Order Summary:**\\n- 10x Dell Latitude 5540\\n- Unit Price: $1,200\\n- Total: $12,000\\n- Delivery: 5 business days\\n- Payment: Net 30 (standard terms)\\n\\n**Contract Check:**\\n- ✅ Pricing matches catalog\\n- ✅ Supplier pre-approved\\n- ✅ Standard warranty (3 years)\\n- ✅ No custom terms needed\\n\\n**Status**: READY TO SIGN\\n\\n📋 **Next Step**: Generate PO and submit?", "timestamp": (now - timedelta(minutes=50)).isoformat()},
+                {"role": "user", "content": "Generate the PO", "timestamp": (now - timedelta(minutes=30)).isoformat()},
+                {"role": "assistant", "content": "✅ **PO Generated: PO-2026-00142**\\n\\n**Order Details:**\\n- Supplier: TechSupply Inc\\n- Items: 10x Dell Latitude 5540\\n- Amount: $12,000\\n- Delivery: 5 business days\\n- Ship To: Main Office\\n\\n**Fast-Track Summary:**\\n- ⏱️ Time to PO: **15 minutes** (vs 15-20 days for full sourcing)\\n- 💰 Savings: $0 (catalog pricing)\\n- ✅ Compliance: Pre-approved supplier\\n\\n**Case Status**: ✅ COMPLETED\\n\\nThis demonstrates the Fast-Pass routing: DTP-01 → DTP-05 in under 1 hour!", "timestamp": (now - timedelta(minutes=25)).isoformat()}
+            ])
         }
     ]
     
@@ -682,72 +696,206 @@ def seed_example_case(session):
     """
     Create a COMPLETED example case with full AI-Human conversation.
     
-    This is a static "Golden Thread" case that users can view to see
-    what a complete DTP-01 to DTP-06 workflow looks like.
+    Scenario: IT Infrastructure - Cloud Data Center Migration
+    Showcases all 6 DTP Mindsets in a complex technical category.
     """
     now = datetime.now()
     
     # Pre-built conversation history showing all 6 DTP Mindsets
     conversation = [
-        # === DTP-01: THE GATEKEEPER ===
-        {"role": "user", "content": "I need a marketing agency for our upcoming campaign", "timestamp": (now - timedelta(hours=8)).isoformat()},
-        {"role": "assistant", "content": "🧠 **Smart Intake**: Before I can recommend a strategy, I need to understand your intent better.\n\n**Clarifying Questions:**\n1. Is this a new agency requirement, or are you replacing an existing one?\n2. What's the primary focus - brand campaign, digital marketing, or creative production?\n3. Do you have a budget range in mind?\n\nThis helps me determine if we need a full RFx or can fast-track.", "timestamp": (now - timedelta(hours=7, minutes=55)).isoformat()},
-        {"role": "user", "content": "It's to replace our existing agency GlobalBrand Inc. They've been underperforming on deliverables.", "timestamp": (now - timedelta(hours=7, minutes=50)).isoformat()},
-        {"role": "assistant", "content": "✅ **Understood.** This is a replacement scenario for underperforming incumbent.\n\n**Strategy Recommendation: RFx**\n- Confidence: 85%\n- Rationale: GlobalBrand's declining performance (score: 6.5/10) justifies competitive evaluation\n- 3 suppliers in your approved list available for immediate RFx\n\n📋 **Next Step:** Proceed to supplier evaluation (DTP-02)?", "timestamp": (now - timedelta(hours=7, minutes=45)).isoformat()},
+        # === DTP-01: THE GATEKEEPER (Smart Intake) ===
+        {"role": "user", "content": "We need to migrate our Singapore data center to the cloud before the lease expires in 6 months.", "timestamp": (now - timedelta(days=45, hours=8)).isoformat()},
+        {"role": "assistant", "content": "🧠 **Smart Intake**: I see this is a critical infrastructure project with a hard deadline.\n\n**Clarifying Questions:**\n1. Are you looking for a **Lift & Shift** (IaaS) or **Refactoring** (PaaS/SaaS) strategy?\n2. What is the estimated compute/storage volume (e.g., 500+ VMs, 1PB+ data)?\n3. Do we have specific data sovereignty requirements for Singapore?\n\nThis helps me determine if we need a major strategic sourcing event.", "timestamp": (now - timedelta(days=45, hours=7, minutes=55)).isoformat()},
+        {"role": "user", "content": "Mostly Lift & Shift for 800 VMs. About 2PB of data. Yes, data must stay in SG region. Budget is ~$2M/year.", "timestamp": (now - timedelta(days=45, hours=7, minutes=50)).isoformat()},
+        {"role": "assistant", "content": "✅ **Understood.** Strategic Cloud Migration.\n\n**Strategy Recommendation: Strategic Sourcing (RFP)**\n- **Confidence**: 95%\n- **Rationale**: High spend ($2M/yr) + Complex Technical Requirements + Data Sovereignty Risk\n- **Impact**: Full DTP Flow required.\n\n📋 **Next Step**: Proceed to detailed requirements gathering (DTP-02)?", "timestamp": (now - timedelta(days=45, hours=7, minutes=45)).isoformat()},
         
-        # === DTP-02: THE ARCHITECT ===
-        {"role": "user", "content": "Yes, evaluate the available marketing suppliers", "timestamp": (now - timedelta(hours=7)).isoformat()},
-        {"role": "assistant", "content": "🏗️ **The Architect**: Before I build the evaluation, I need to freeze some requirements.\n\n**Clarifying Questions:**\n1. Are you looking for a **retainer** model (monthly fee) or **project-based** billing?\n2. Do you require **full IP ownership** of all creative assets, or is licensing acceptable?\n3. What's your annual budget ceiling?\n\nThese answers will shape the evaluation criteria.", "timestamp": (now - timedelta(hours=6, minutes=55)).isoformat()},
-        {"role": "user", "content": "We need creative work on a retainer basis, with full IP ownership. Budget is around $500K/year.", "timestamp": (now - timedelta(hours=6, minutes=50)).isoformat()},
-        {"role": "assistant", "content": "✅ **Requirements Frozen.**\n\n**Evaluation Criteria:**\n1. Creative Quality (40%)\n2. IP Ownership Terms (25%)\n3. Pricing vs Budget (20%)\n4. Delivery Track Record (15%)\n\n**Shortlist (3 suppliers):**\n| Supplier | Score | Strength | Flag |\n|----------|-------|----------|------|\n| CreativeJuice Agency | 8.2 | Cost-effective, improving trend | New vendor |\n| DigitalFirst Marketing | 7.8 | Strong delivery | Standard terms |\n| GlobalBrand Inc | 6.5 | Incumbent knowledge | ⚠️ Declining |\n\n📋 **Next Step:** Draft RFP (DTP-03)?", "timestamp": (now - timedelta(hours=6, minutes=45)).isoformat()},
+        # === DTP-02: THE ARCHITECT (Requirements) ===
+        {"role": "user", "content": "Yes, let's define requirements.", "timestamp": (now - timedelta(days=44)).isoformat()},
+        {"role": "assistant", "content": "🏗️ **The Architect**: I need to freeze the technical constraints before we go to market.\n\n**Critical Requirements Check:**\n1. **Uptime SLA**: Is 99.9% acceptable, or do we need 99.99% (High Availability)?\n2. **Compliance**: Do we need PCI-DSS or SOC2 Type II reports attached?\n3. **Connectivity**: Direct Connect/ExpressRoute required?\n\n*Suggestion: For critical banking apps, 99.99% HA is standard.*", "timestamp": (now - timedelta(days=44, hours=6)).isoformat()},
+        {"role": "user", "content": "Need 99.99% HA. Must be SOC2 compliant. Direct Connect 10Gbps is required.", "timestamp": (now - timedelta(days=44, hours=5)).isoformat()},
+        {"role": "assistant", "content": "✅ **Requirements Frozen.**\n\n**Evaluation Criteria:**\n1. Technical Capability & HA Architecture (35%)\n2. Security & Compliance (SOC2) (30%)\n3. Total Cost of Ownership (TCO) (25%)\n4. Migration Support Services (10%)\n\n**Shortlist (3 Hyper-scalers):**\n| Provider | Strength | Flag |\n|----------|----------|------|\n| AWS | Strongest SG presence | Market Leader |\n| Azure | Better hybrid integration | Good for .NET stats |\n| GCP | Best data analytics capability | Pricing aggressive |\n\n📋 **Next Step:** Draft RFP for Cloud Services (DTP-03)?", "timestamp": (now - timedelta(days=44, hours=4)).isoformat()},
         
-        # === DTP-03: THE CONTROLLER ===
-        {"role": "user", "content": "Yes, draft an RFP for marketing services", "timestamp": (now - timedelta(hours=5)).isoformat()},
-        {"role": "assistant", "content": "✈️ **RFP Drafted.**\n\n**RFP: Marketing Services - Creative Retainer**\n- Scope: Brand campaign development, creative production\n- Term: 24 months with annual renewal option\n- Budget: $500K/year\n- Key Requirements: Full IP ownership, monthly retainer, dedicated account team\n\n**Evaluation Timeline:**\n- RFP Issue: Today\n- Questions Due: +5 business days\n- Proposals Due: +15 business days\n- Award Target: +25 business days\n\n📩 RFP sent to 3 shortlisted suppliers.", "timestamp": (now - timedelta(hours=4, minutes=55)).isoformat()},
-        {"role": "user", "content": "We received 3 responses. CreativeJuice is cheapest at $450K but has IP ownership clause concerns. GlobalBrand quoted $550K.", "timestamp": (now - timedelta(hours=3)).isoformat()},
-        {"role": "assistant", "content": "📊 **Bid Analysis Complete.**\n\n| Supplier | Price | vs Budget | IP Terms | Recommendation |\n|----------|-------|-----------|----------|----------------|\n| CreativeJuice | $450K | -10% ✅ | ⚠️ Shared IP | Challenge IP clause |\n| DigitalFirst | $480K | -4% | ✅ Full IP | Strong alternative |\n| GlobalBrand | $550K | +10% ❌ | ✅ Full IP | Over budget |\n\n📋 **Next Step:** Negotiate with CreativeJuice (DTP-04)?", "timestamp": (now - timedelta(hours=2, minutes=55)).isoformat()},
+        # === DTP-03: THE CONTROLLER (Sourcing) ===
+        {"role": "user", "content": "Yes, send RFP to all three.", "timestamp": (now - timedelta(days=40)).isoformat()},
+        {"role": "assistant", "content": "✈️ **RFP Drafted & Sent.**\n\n**RFP: Singapore DC Migration**\n- **Scope**: 800 VMs, 2PB Storage, 10Gbps Direct Connect\n- **Term**: 3 Years Committed Use\n- **Timeline**: Proposals due in 10 days.\n\n*(...10 days later...)*\n\n📊 **Bid Analysis Complete:**\n\n| Provider | 3-Yr TCO | Technical Score | Compliance | Recommendation |\n|----------|----------|-----------------|------------|----------------|\n| **AWS** | $5.8M | 92/100 | ✅ Pass | **Strongest Tech** |\n| **Azure** | $6.2M | 88/100 | ✅ Pass | Expensive |\n| **GCP** | $5.1M | 85/100 | ✅ Pass | **Best Price** |\n\n📋 **Next Step:** Negotiate with AWS (Leader) and GCP (Challenger) (DTP-04)?", "timestamp": (now - timedelta(days=30)).isoformat()},
         
-        # === DTP-04: THE CHALLENGER ===
-        {"role": "user", "content": "Prepare negotiation strategy for CreativeJuice", "timestamp": (now - timedelta(hours=2)).isoformat()},
-        {"role": "assistant", "content": "⚔️ **The Challenger**: I need to push back on your approach.\n\n**Challenge Questions:**\n1. Why are we accepting a shared IP clause when our requirement was FULL ownership?\n2. CreativeJuice is new to our vendor list - have we validated their references?\n3. The $450K price is attractive, but is it sustainable or a loss-leader?\n\n**My Recommendation:**\n- **Do NOT accept the IP clause as-is.** This is a deal-breaker per your frozen requirements.\n- Leverage: Their eagerness to win your account + $50K price advantage\n- Counter-offer: Full IP ownership OR walk away to DigitalFirst\n\n**Negotiation Playbook:**\n1. Open with IP ownership as non-negotiable\n2. If they push back, ask \"What would it take to get full IP?\"\n3. BATNA: DigitalFirst at $480K with full IP (only $30K more)", "timestamp": (now - timedelta(hours=1, minutes=55)).isoformat()},
-        {"role": "user", "content": "Good point. Push back on CreativeJuice's IP clause. We need full ownership of all creative assets.", "timestamp": (now - timedelta(hours=1, minutes=50)).isoformat()},
-        {"role": "assistant", "content": "✅ **Negotiation Complete.**\n\n**Outcome:**\n- CreativeJuice agreed to **full IP ownership** (clause revised)\n- Final price: $460K/year (+$10K from original for IP change)\n- Still $40K under budget ✅\n\n📋 **Next Step:** Contract finalization (DTP-05)?", "timestamp": (now - timedelta(hours=1, minutes=45)).isoformat()},
+        # === DTP-04: THE CHALLENGER (Negotiation) ===
+        {"role": "user", "content": "We prefer AWS technicals but GCP price. Negotiate with AWS.", "timestamp": (now - timedelta(days=28)).isoformat()},
+        {"role": "assistant", "content": "⚔️ **The Challenger**: I need to challenge the AWS quote. They are 14% more expensive than GCP ($5.8M vs $5.1M).\n\n**Negotiation Strategy:**\n1. **Anchor**: Feature GCP's $5.1M TCO bid.\n2. **Leverage**: 'We want to go AWS, but Finance is pushing for GCP due to $700k delta.'\n3. **Request**: Ask for **Enterprise Discount Program (EDP)** tier upgrade + fully funded migration credits.\n\n**Script**: \"We have a technically viable offer from GCP at $5.1M. Can you match the TCO or offer Migration Acceleration Program (MAP) credits to offset the difference?\"", "timestamp": (now - timedelta(days=28, hours=2)).isoformat()},
+        {"role": "user", "content": "AWS came back. They offered $5.5M + $300k in migration credits.", "timestamp": (now - timedelta(days=25)).isoformat()},
+        {"role": "assistant", "content": "✅ **Negotiation Analysis**:\n- **New Net TCO**: $5.2M ($5.5M - $300k credits)\n- **Delta vs GCP**: Only $100k difference now (approx 2%)\n- **Value**: AWS has better SG presence (Lower Latency).\n\n**Recommendation**: **ACCEPT AWS offer.** The technical premium is worth the small 2% cost delta for 99.99% HA requirements.\n\n📋 **Next Step:** Finalize Contract (DTP-05)?", "timestamp": (now - timedelta(days=25, hours=4)).isoformat()},
         
-        # === DTP-05: THE CLOSER ===
-        {"role": "user", "content": "Extract and validate the contract terms for CreativeJuice", "timestamp": (now - timedelta(hours=1)).isoformat()},
-        {"role": "assistant", "content": "🔒 **The Closer**: Contract review in progress...\n\n**Key Terms Extracted:**\n- Annual Value: $460,000\n- Term: 24 months\n- IP Ownership: ✅ Full transfer to client\n- Payment Terms: Net 30\n- SLA: 48-hour response, 95% on-time delivery\n\n⚠️ **RISK ALERT - ACTION REQUIRED:**\n1. ❌ **Insurance Certificate**: Not attached - MISSING\n2. ❌ **Exhibit C (SOW)**: Referenced but not included\n3. ⚠️ **Liability Cap**: $500K (acceptable but low)\n\n**Recommendation: HOLD - Action Required**\nDo not sign until Insurance Certificate and Exhibit C are received.\n\n📋 **Next Action:** Request missing documents from CreativeJuice?", "timestamp": (now - timedelta(minutes=55)).isoformat()},
-        {"role": "user", "content": "Insurance certificate and Exhibit C received. Finalize the handoff packet.", "timestamp": (now - timedelta(minutes=30)).isoformat()},
-        {"role": "assistant", "content": "✅ **Contract READY TO SIGN.**\n\n**Final Checklist:**\n- [x] IP Ownership clause (revised)\n- [x] Insurance Certificate attached\n- [x] Exhibit C (SOW) attached\n- [x] Liability cap reviewed\n- [x] Payment terms validated\n\n**Handoff Packet Generated:**\n- Supplier: CreativeJuice Agency\n- Contract Value: $460K/year\n- Start Date: Upon execution\n- Key Contacts: Account Manager TBD\n- First Review: Day 30\n\n📋 **Next Step:** Implementation & Value Capture (DTP-06)?", "timestamp": (now - timedelta(minutes=25)).isoformat()},
+        # === DTP-05: THE CLOSER (Contracting) ===
+        {"role": "user", "content": "Proceed with AWS contract.", "timestamp": (now - timedelta(days=20)).isoformat()},
+        {"role": "assistant", "content": "🔒 **The Closer**: Scanning Enterprise Agreement (EA)...\n\n**Validation Checklist:**\n- [x] Pricing: EDP Discount applied (12% off list)\n- [x] Credits: $300k MAP credits included in Order Form\n- [x] SLA: 99.99% availability for Multi-AZ\n- [ ] **Data Residency**: Clause 8.2 says \"Data may be replicated globally for durability\".\n\n⚠️ **RISK ALERT**: Clause 8.2 violates your **Data Sovereignty Requirement** (Must stay in SG).\n\n**Action Required**: Request legal amendment to restrict data replication to `ap-southeast-1` (Singapore) region only.", "timestamp": (now - timedelta(days=20, hours=2)).isoformat()},
+        {"role": "user", "content": "AWS Legal agreed to the region restriction amendment. We signed.", "timestamp": (now - timedelta(days=15)).isoformat()},
+        {"role": "assistant", "content": "✅ **Contract Safe & Signed.**\n- **Data Sovereignty**: LOCKED to Singapore.\n- **Credits**: Activated.\n\n📋 **Next Step:** Implementation Tracking (DTP-06)?", "timestamp": (now - timedelta(days=15, hours=1)).isoformat()},
         
-        # === DTP-06: THE HISTORIAN ===
-        {"role": "user", "content": "Generate the implementation plan and value capture report", "timestamp": (now - timedelta(minutes=15)).isoformat()},
-        {"role": "assistant", "content": "📜 **The Historian**: Generating Value Story...\n\n**Implementation Checklist:**\n| Phase | Task | Owner | Target |\n|-------|------|-------|--------|\n| Prep | Contract execution | Legal | Day 0 |\n| Prep | Vendor system setup | Finance | Day 3 |\n| Kickoff | Kickoff meeting | Procurement | Day 7 |\n| Transition | Service transition | Operations | Day 14 |\n| Steady State | First monthly review | Procurement | Day 30 |\n\n**Value Story:**\n> We secured **$40K in annual savings** by switching from GlobalBrand to CreativeJuice, representing an **8% reduction** against our $500K budget. Beyond price, we successfully negotiated **full IP ownership** - a clause CreativeJuice initially resisted. Over the 24-month contract term, total savings are projected at **$80K** with reduced delivery risk due to CreativeJuice's improving performance trend (8.2 vs GlobalBrand's 6.5).\n\n**Sourcing ROI:** ~320% (cost of sourcing effort vs value captured)", "timestamp": (now - timedelta(minutes=10)).isoformat()},
-        {"role": "user", "content": "What was the total value delivered by this sourcing project?", "timestamp": (now - timedelta(minutes=5)).isoformat()},
-        {"role": "assistant", "content": "📊 **Final Value Summary**\n\n| Metric | Value |\n|--------|-------|\n| **Annual Savings** | $40,000 |\n| **Contract Term** | 24 months |\n| **Total Projected Savings** | $80,000 |\n| **Savings %** | 8% vs budget |\n| **Risk Reduction** | Replaced declining vendor (6.5) with improving vendor (8.2) |\n| **Strategic Win** | Full IP ownership secured |\n\n**Case Status: ✅ COMPLETED**\n\nThis case demonstrates the full DTP lifecycle from intake to value capture, showcasing all 6 mindsets:\n1. 🧠 Smart Intake (clarifying vague intent)\n2. 🏗️ The Architect (freezing requirements)\n3. ✈️ The Controller (RFx execution)\n4. ⚔️ The Challenger (pushing back on IP)\n5. 🔒 The Closer (catching missing documents)\n6. 📜 The Historian (defending value)", "timestamp": now.isoformat()},
+        # === DTP-06: THE HISTORIAN (Execution) ===
+        {"role": "user", "content": "Migration is complete. Generate value report.", "timestamp": (now).isoformat()},
+        {"role": "assistant", "content": "📜 **The Historian**: Generating Value Story...\n\n**Project Success Summary:**\n- **Timeline**: Completed 2 weeks ahead of data center lease expiry.\n- **Technical**: 100% Uptime during transition.\n\n**Value Captured:**\n1. **Hard Savings**: Negotiated $600k reduction from initial AWS quote ($5.8M → $5.2M net).\n2. **Cost Avoidance**: Avoided $2M capital refresh for on-prem hardware.\n3. **Risk Mitigation**: Caught Data Residency clause that would have violated SG banking regulations.\n\n**Final ROI**: 340%\n\n**Case Status: ✅ COMPLETED** (IT-INFRASTRUCTURE)", "timestamp": (now).isoformat()}
     ]
     
     example_case = CaseState(
         case_id="CASE-EXAMPLE-001",
-        name="✨ Marketing Agency Search (Completed Example)",
-        category_id="MARKETING_SERVICES",
-        contract_id="CTR-MKT-CREATIVE",
-        supplier_id="SUP-MKT-CREATIVE",
-        trigger_source="Example",
+        name="✨ Singapore DC Cloud Migration",
+        category_id="IT-INFRASTRUCTURE",
+        contract_id="CTR-AWS-2026-SG",
+        supplier_id="SUP-AWS-CLOUD",
+        trigger_source="User",
         dtp_stage="DTP-06",
         status="Completed",
-        summary_text="COMPLETED EXAMPLE: Full DTP lifecycle demonstrating all 6 mindsets - from vague 'I need a marketing agency' to $80K value capture.",
+        summary_text="End-to-end migration of 800 VMs to AWS Singapore. Achieved 99.99% HA and $600k negotiated savings.",
         key_findings=json.dumps([
-            "Replaced underperforming GlobalBrand with CreativeJuice",
-            "Negotiated full IP ownership (initially refused)",
-            "Caught missing Insurance Certificate before signing",
-            "Total savings: $80K over 24 months"
+            "Selected AWS over GCP/Azure for technical fit",
+            "Negotiated $300k migration credits",
+            "Fixed critical Data Sovereignty clause in contract",
+            "Net TCO: $5.2M (3-year term)"
         ]),
-        recommended_action="Case complete - view as reference",
+        recommended_action="Monitor cloud spend vs committed usage",
         chat_history=json.dumps(conversation),
-        created_at=(now - timedelta(hours=8)).isoformat(),
+        created_at=(now - timedelta(days=45)).isoformat(),
         updated_at=now.isoformat()
     )
     session.add(example_case)
+    
+
+    # Seed associated artifacts for richness
+    seed_example_artifacts(session, example_case.case_id, now)
+
+
+def seed_example_artifacts(session, case_id: str, now: datetime):
+    """Seed key artifacts for the example case as both Artifacts and Documents."""
+    
+    # 1. Strategy Artifact
+    strategy = Artifact(
+        artifact_id=f"ART-{case_id}-STRAT",
+        case_id=case_id,
+        type="strategy_recommendation",
+        title="Cloud Migration Strategy: Strategic Sourcing",
+        content_text="STRATEGY RECOMMENDATION\n\n1. SCOPE: Migration of SG Data Center (800 VMs)\n2. APPROACH: Competitive RFx with Big 3 CSPs\n3. RATIONALE: High spend ($2M+) and complex data sovereignty requirements justify full strategic sourcing.",
+        content_json=json.dumps({
+            "recommended_action": "Strategic Sourcing (RFx)",
+            "key_factors": ["High Spend", "Risk: Data Sovereignty", "Technical Complexity"],
+            "confidence": 0.95
+        }),
+        created_by_agent="StrategyAgent",
+        verification_status="VERIFIED",
+        created_at=(now - timedelta(days=45)).isoformat()
+    )
+    session.add(strategy)
+    
+    # Add as Document for UI visibility
+    doc_strat = DocumentRecord(
+        document_id=f"DOC-{case_id}-STRAT",
+        filename="Strategy_Recommendation_Brief.pdf",
+        file_type="pdf",
+        document_type="Strategy",
+        case_id=case_id,
+        supplier_id="SUP-AWS-CLOUD",
+        category_id="IT-INFRASTRUCTURE",
+        dtp_relevance=json.dumps(["DTP-01"]),
+        ingested_at=(now - timedelta(days=45)).isoformat()
+    )
+    session.add(doc_strat)
+    
+    # 2. RFP Analysis Artifact
+    rfp = Artifact(
+        artifact_id=f"ART-{case_id}-RFP",
+        case_id=case_id,
+        type="supplier_evaluation",
+        title="CSP Evaluation Matrix (AWS vs GCP vs Azure)",
+        content_text="RFP ANALYSIS SUMMARY\n\nWinner: AWS (Technical Leader)\nChallenger: GCP (Price Leader)\n\nAWS scored highest on Technical (92/100) and SG Presence. GCP offers 14% lower TCO. Recommendation: Negotiate with AWS to bridge price gap.",
+        content_json=json.dumps({
+            "scores": {"AWS": 92, "Azure": 88, "GCP": 85},
+            "pricing": {"AWS": 5800000, "Azure": 6200000, "GCP": 5100000},
+            "recommendation": "Negotiate with AWS"
+        }),
+        created_by_agent="SourcingAgent",
+        verification_status="VERIFIED",
+        created_at=(now - timedelta(days=30)).isoformat()
+    )
+    session.add(rfp)
+
+    # Add as Document
+    doc_rfp = DocumentRecord(
+        document_id=f"DOC-{case_id}-RFP",
+        filename="RFP_Analysis_Cloud_Migration.xlsx",
+        file_type="xlsx",
+        document_type="Scorecard",
+        case_id=case_id,
+        supplier_id="SUP-AWS-CLOUD",
+        category_id="IT-INFRASTRUCTURE",
+        dtp_relevance=json.dumps(["DTP-02", "DTP-03"]),
+        ingested_at=(now - timedelta(days=30)).isoformat()
+    )
+    session.add(doc_rfp)
+    
+    # 3. Contract Artifact
+    contract = Artifact(
+        artifact_id=f"ART-{case_id}-CONT",
+        case_id=case_id,
+        type="contract_review",
+        title="Annotated Contract: AWS Enterprise Agreement",
+        content_text="CONTRACT VALIDATION\n\nStatus: SIGNED\n\nKey Terms:\n- Term: 3 Years\n- Discount: 12% EDP\n- Credits: $300k MAP\n- Data Residency: Amended to SG-Only (Clause 8.2 overridden)",
+        content_json=json.dumps({
+            "status": "Signed",
+            "value": 5200000,
+            "term_months": 36,
+            "risk_flags_cleared": ["Data Residency", "Liability Cap"]
+        }),
+        created_by_agent="ContractingAgent",
+        verification_status="VERIFIED",
+        created_at=(now - timedelta(days=15)).isoformat()
+    )
+    session.add(contract)
+
+    # Add as Document
+    doc_cont = DocumentRecord(
+        document_id=f"DOC-{case_id}-CONT",
+        filename="AWS_Enterprise_Agreement_SIGNED.pdf",
+        file_type="pdf",
+        document_type="Contract",
+        case_id=case_id,
+        supplier_id="SUP-AWS-CLOUD",
+        contract_id="CTR-AWS-2026-SG",
+        category_id="IT-INFRASTRUCTURE",
+        dtp_relevance=json.dumps(["DTP-05"]),
+        ingested_at=(now - timedelta(days=15)).isoformat()
+    )
+    session.add(doc_cont)
+
+    # 4. Value Report Artifact
+    value = Artifact(
+        artifact_id=f"ART-{case_id}-VAL",
+        case_id=case_id,
+        type="implementation_plan",
+        title="Value Capture Report: SG Cloud Migration",
+        content_text="PROJECT SUCCESS REPORT\n\nFinal ROI: 340%\n\nHard Savings: $600,000 negotiated reduction\nSoft Savings: $2M capex avoidance\nRisk: 100% Data Sovereignty Compliance",
+        content_json=json.dumps({
+            "roi_percent": 340,
+            "hard_savings": 600000,
+            "soft_savings": 2000000
+        }),
+        created_by_agent="ExecutionAgent",
+        verification_status="VERIFIED",
+        created_at=now.isoformat()
+    )
+    session.add(value)
+    
+    # Add as Document
+    doc_val = DocumentRecord(
+        document_id=f"DOC-{case_id}-VAL",
+        filename="Value_Capture_Report_Final.pdf",
+        file_type="pdf",
+        document_type="Report",
+        case_id=case_id,
+        supplier_id="SUP-AWS-CLOUD",
+        category_id="IT-INFRASTRUCTURE",
+        dtp_relevance=json.dumps(["DTP-06"]),
+        ingested_at=now.isoformat()
+    )
+    session.add(doc_val)
 
 
 # Entry point for running directly

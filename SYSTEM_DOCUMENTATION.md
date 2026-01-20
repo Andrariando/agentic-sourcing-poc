@@ -140,6 +140,17 @@ class TriageResult:
 3. Impact: "⚠️ This will SKIP DTP-02/03. Jump to Negotiation."
 4. User: **[Confirm]** or **[Wrong - New Demand]**
 
+**Confidence Scoring** (Rule-Based Heuristic):
+| Score | Meaning | Example |
+|-------|---------|---------|
+| **0.9** | Very confident | Contract expiry match + no scope change |
+| **0.85** | Confident | Signal-triggered OR explicit keywords ("fast-pass") |
+| **0.8** | Moderate | User mentioned "renew" keyword |
+| **0.75** | Mixed signals | "renew" + "change" keywords together |
+| **0.6** | Low (default) | No strong evidence, guessing Demand-Based |
+
+*Note: Confidence is NOT ML-based. It's calculated from evidence strength: Contract data > User keywords > Default guess.*
+
 **Frontend Display**: `render_triage_panel()` shows proposal, evidence, and confirmation buttons.
 
 ---
