@@ -18,6 +18,7 @@ MIT Color System:
 """
 import streamlit as st
 from typing import Optional, List, Dict, Any
+import json
 from datetime import datetime
 
 from frontend.api_client import get_api_client, APIError
@@ -725,8 +726,20 @@ def render_chat_interface(case, client) -> None:
         # Try to load chat history from activity log
         chat_history = []
         
-        if case.activity_log:
-            # Extract chat messages from activity log
+        if case.chat_history:
+            # 1. First priority: Pre-seeded chat history (for demo cases)
+            try:
+                # Handle both string (JSON) and list formats
+                if isinstance(case.chat_history, str):
+                    chat_history = json.loads(case.chat_history)
+                elif isinstance(case.chat_history, list):
+                    chat_history = case.chat_history
+            except Exception as e:
+                st.error(f"Failed to load seeded chat history: {str(e)}")
+                chat_history = []
+
+        if not chat_history and case.activity_log:
+            # 2. Second priority: Extract from activity log
             for entry in case.activity_log:
                 if isinstance(entry, dict) and entry.get("action", "").startswith("Chat:"):
                     role = "user" if "user" in entry.get("action", "").lower() else "assistant"
