@@ -122,7 +122,8 @@ class CaseService:
             latest_agent_output=json.loads(case.latest_agent_output) if case.latest_agent_output else None,
             latest_agent_name=case.latest_agent_name,
             activity_log=json.loads(case.activity_log) if case.activity_log else [],
-            human_decision=json.loads(case.human_decision) if case.human_decision else None
+            human_decision=json.loads(case.human_decision) if case.human_decision else None,
+            chat_history=case.chat_history  # Pass through as-is (JSON string or None)
         )
     
     def create_case(

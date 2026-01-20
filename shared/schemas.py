@@ -53,6 +53,7 @@ class CaseDetail(BaseModel):
     latest_agent_name: Optional[str] = None
     activity_log: List[Dict[str, Any]] = Field(default_factory=list)
     human_decision: Optional[Dict[str, Any]] = None
+    chat_history: Optional[Any] = None  # Pre-seeded chat history (JSON string or list)
 
 
 class CaseListResponse(BaseModel):

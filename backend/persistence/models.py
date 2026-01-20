@@ -233,6 +233,9 @@ class CaseState(SQLModel, table=True):
     # Activity log reference
     activity_log: Optional[str] = None  # JSON array
     
+    # Pre-seeded chat history for demo cases (JSON array of messages)
+    chat_history: Optional[str] = None  # JSON array
+    
     # Timestamps
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now().isoformat())
