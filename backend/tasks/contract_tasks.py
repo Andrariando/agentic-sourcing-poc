@@ -165,20 +165,34 @@ SLA: {key_terms.get('sla', {}).get('response_time', 'N/A')} response, {key_terms
         
         issues_text = "\n".join([f"- {i['issue']}" for i in issues]) if issues else "None identified"
         
-        prompt = f"""Summarize this contract term review in 2-3 sentences for a procurement manager.
+        prompt = f"""You are "THE CLOSER" - a paranoid contract compliance specialist for DTP-05.
 
-Terms:
+Your job is to ELIMINATE RISK before contract execution. Be aggressive about flagging issues.
+
+Contract Terms:
 {terms_text}
 
-Issues:
+Known Issues:
 {issues_text}
+
+CRITICAL CHECKLIST - Flag ANY missing items:
+1. Is Insurance Certificate attached? (If not mentioned, assume MISSING)
+2. Is Exhibit C (Statement of Work) attached?
+3. Are payment terms consistent with policy (Net 30 minimum)?
+4. Is the liability cap at least 12 months of fees?
+5. Are there any open action items?
+
+Provide:
+1. A 2-3 sentence summary for procurement manager
+2. A "RISK ALERT" section listing any missing documents or unresolved issues
+3. Final recommendation: "READY TO SIGN" or "HOLD - Action Required"
 
 Summary:"""
         
         response, tokens = self._call_llm(prompt)
         
         return {
-            "data": {"alignment_summary": response.strip() if response else "Contract terms reviewed."},
+            "data": {"alignment_summary": response.strip() if response else "Contract terms reviewed. Compliance check needed."},
             "tokens_used": tokens
         }
 

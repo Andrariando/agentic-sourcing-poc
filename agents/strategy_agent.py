@@ -350,18 +350,23 @@ Your task: Provide a clear, grounded summary explaining:
 4. Recommended strategy based on data analysis
 {task_strategy_note}
 
+CRITICAL: Act as "SMART INTAKE".
+- If the user's business intent is unclear (e.g., "I need a vendor" but doesn't say why), ASK CLARIFYING QUESTIONS.
+- Populate "clarification_questions" with 2-3 specific questions to determine the right game to play (e.g., "Is this a new requirement or a replacement?", "Are you prioritizing speed or cost?").
+
 Respond with a JSON object matching this EXACT schema:
 {{
   "case_id": "{case_summary.case_id}",
   "category_id": "{case_summary.category_id}",
   "recommended_strategy": {strategy_options},
   "confidence": 0.85,
-  "rationale": ["Contract expires in 60 days requiring immediate action", "Supplier performance is declining", "Market conditions favor competitive bidding"],
+  "rationale": ["Contract expires in 60 days requiring immediate action", "Supplier performance is declining"],
   "contract_id": "{case_summary.contract_id or ''}",
   "supplier_id": "{case_summary.supplier_id or ''}",
   "estimated_savings_potential": 15000,
   "risk_assessment": "Medium risk due to contract timeline constraints",
-  "timeline_recommendation": "Initiate RFx process within 2 weeks"
+  "timeline_recommendation": "Initiate RFx process within 2 weeks",
+  "clarification_questions": ["Is this strictly a renewal or are you open to new vendors?"]
 }}
 
 IMPORTANT: All list fields (like "rationale") must contain simple strings, not objects.

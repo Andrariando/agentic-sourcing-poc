@@ -80,179 +80,111 @@ def verify_and_seed_data():
 # Demo case ID
 DEMO_CASE_ID = "CASE-DEMO-001"
 
-# Comprehensive Happy Path Messages covering all sub-tasks
-# Each message is designed to trigger different task combinations from the playbooks
+# =========================================================================
+# MARKETING SERVICES "GOLDEN THREAD" DEMO
+# Showcases all 6 DTP Mindsets with realistic procurement conversation
+# =========================================================================
 HAPPY_PATH_MESSAGES = [
     # =========================================================================
-    # DTP-01: SOURCING SIGNAL AGENT
-    # Tasks: detect_contract_expiry, detect_performance_degradation, 
-    #        detect_spend_anomalies, apply_relevance_filters,
-    #        semantic_grounded_summary, produce_autoprep_recommendations
+    # DTP-01: THE GATEKEEPER (Sense-Making)
+    # "What game are we playing?"
     # =========================================================================
     {
         "stage": "DTP-01",
-        "message": "Scan all sourcing signals for this category - check contracts, performance, and spend patterns",
-        "approve": True,
-        "description": "Full signal scan (all 6 tasks)"
-    },
-    {
-        "stage": "DTP-01",
-        "message": "What contract expiry signals do we have?",
+        "message": "I need a marketing agency for our upcoming campaign",
         "approve": False,
-        "description": "TRACK variant - contract expiry only"
+        "description": "🧠 SMART INTAKE: Vague intent - should trigger clarifying questions"
     },
     {
         "stage": "DTP-01",
-        "message": "Explain the urgency of the signals and what they mean for our sourcing strategy",
-        "approve": False,
-        "description": "UNDERSTAND variant - explanation with grounded summary"
-    },
-    {
-        "stage": "DTP-01",
-        "message": "Recommend a sourcing strategy based on the signals",
+        "message": "It's to replace our existing agency GlobalBrand Inc. They've been underperforming.",
         "approve": True,
-        "description": "Strategy recommendation (triggers stage advance)"
+        "description": "Clarified intent → Proceed with Strategy"
     },
     
     # =========================================================================
-    # DTP-02: SUPPLIER SCORING AGENT
-    # Tasks: build_evaluation_criteria, pull_supplier_performance, 
-    #        pull_risk_indicators, normalize_metrics, compute_scores_and_rank,
-    #        eligibility_checks, generate_explanations
+    # DTP-02: THE ARCHITECT (Structuring)
+    # "Turn fuzzy intent into clear requirements"
     # =========================================================================
     {
         "stage": "DTP-02",
-        "message": "Score all suppliers in this category using performance, risk, and eligibility criteria",
-        "approve": True,
-        "description": "Full scoring workflow (all 7 tasks)"
-    },
-    {
-        "stage": "DTP-02",
-        "message": "What are the supplier performance metrics?",
+        "message": "Evaluate the available marketing suppliers",
         "approve": False,
-        "description": "TRACK variant - performance only"
+        "description": "🏗️ ARCHITECT: Should ask about criteria ('retainer or project?')"
     },
     {
         "stage": "DTP-02",
-        "message": "Check supplier eligibility and any compliance issues",
-        "approve": False,
-        "description": "CHECK variant - eligibility checks"
-    },
-    {
-        "stage": "DTP-02",
-        "message": "Explain the scoring methodology and how the shortlist was determined",
+        "message": "We need creative work on a retainer basis, with IP ownership. Budget is around $500K/year.",
         "approve": True,
-        "description": "UNDERSTAND + approval for stage advance"
+        "description": "Requirements frozen → Proceed with Scoring"
     },
     
     # =========================================================================
-    # DTP-03: RFX DRAFT AGENT
-    # Tasks: determine_rfx_path, retrieve_templates_and_past_examples,
-    #        assemble_rfx_sections, completeness_checks,
-    #        draft_questions_and_requirements, create_qa_tracker
+    # DTP-03: THE CONTROLLER (Executing)
+    # "Let's see what the market says"
     # =========================================================================
     {
         "stage": "DTP-03",
-        "message": "Draft an RFP for the shortlisted suppliers including all required sections and questions",
+        "message": "Draft an RFP for marketing services with the requirements we discussed",
         "approve": True,
-        "description": "Full RFx draft (all 6 tasks)"
+        "description": "✈️ RFx Draft → Responses collected"
     },
     {
         "stage": "DTP-03",
-        "message": "Check the completeness of the RFx document",
-        "approve": False,
-        "description": "CHECK variant - completeness checks only"
-    },
-    {
-        "stage": "DTP-03",
-        "message": "Show me the Q&A tracker and evaluation criteria",
+        "message": "We received 3 responses. CreativeJuice is cheapest but GlobalBrand has the history.",
         "approve": True,
-        "description": "TRACK + approval for stage advance"
+        "description": "Evaluation complete → Proceed to Negotiation"
     },
     
     # =========================================================================
-    # DTP-04: NEGOTIATION SUPPORT AGENT
-    # Tasks: compare_bids, leverage_point_extraction, benchmark_retrieval,
-    #        price_anomaly_detection, propose_targets_and_fallbacks,
-    #        negotiation_playbook
+    # DTP-04: THE DECISION OWNER (Negotiating)
+    # "Challenge the safe choice"
     # =========================================================================
     {
         "stage": "DTP-04",
-        "message": "Prepare a complete negotiation plan with leverage points, targets, and fallback positions",
-        "approve": True,
-        "description": "Full negotiation support (all 6 tasks)"
-    },
-    {
-        "stage": "DTP-04",
-        "message": "Compare the bids and identify price anomalies",
+        "message": "Prepare negotiation strategy for CreativeJuice",
         "approve": False,
-        "description": "UNDERSTAND variant - bid comparison"
+        "description": "⚔️ CHALLENGER: Should question 'Why accept their IP clause?'"
     },
     {
         "stage": "DTP-04",
-        "message": "What benchmark data supports our negotiation position?",
-        "approve": False,
-        "description": "UNDERSTAND variant - benchmarks"
-    },
-    {
-        "stage": "DTP-04",
-        "message": "Finalize the negotiation playbook and target terms",
+        "message": "Push back on CreativeJuice's IP clause. We need full ownership of all creative assets.",
         "approve": True,
-        "description": "CREATE + approval for stage advance"
+        "description": "Negotiation complete → Proceed to Contracting"
     },
     
     # =========================================================================
-    # DTP-05: CONTRACT SUPPORT AGENT  
-    # Tasks: extract_key_terms, term_validation, term_alignment_summary,
-    #        implementation_handoff_packet
+    # DTP-05: THE CLOSER (Closing)
+    # "Lock it in - paranoid compliance checking"
     # =========================================================================
     {
         "stage": "DTP-05",
-        "message": "Extract key contract terms and validate against our requirements",
-        "approve": True,
-        "description": "Full contract support (all 4 tasks)"
-    },
-    {
-        "stage": "DTP-05",
-        "message": "Validate that all contract terms are compliant with policy",
+        "message": "Extract and validate the contract terms for CreativeJuice",
         "approve": False,
-        "description": "CHECK variant - term validation"
+        "description": "🔒 CLOSER: Should flag 'Insurance certificate missing'"
     },
     {
         "stage": "DTP-05",
-        "message": "Prepare the handoff packet for implementation team",
+        "message": "Insurance certificate received. Finalize the handoff packet.",
         "approve": True,
-        "description": "CREATE + approval for stage advance"
+        "description": "Contract ready → Proceed to Implementation"
     },
     
     # =========================================================================
-    # DTP-06: IMPLEMENTATION AGENT
-    # Tasks: build_rollout_checklist, compute_expected_savings,
-    #        define_early_indicators, reporting_templates
+    # DTP-06: THE HISTORIAN (Reporting)
+    # "Did this actually matter?"
     # =========================================================================
     {
         "stage": "DTP-06",
-        "message": "Generate a complete implementation plan with rollout checklist and success indicators",
+        "message": "Generate the implementation plan and value capture report",
         "approve": True,
-        "description": "Full implementation plan (all 4 tasks)"
+        "description": "📜 HISTORIAN: Value Story generated"
     },
     {
         "stage": "DTP-06",
-        "message": "What are the expected savings from this contract?",
-        "approve": False,
-        "description": "TRACK variant - savings calculation"
-    },
-    {
-        "stage": "DTP-06",
-        "message": "Define the KPIs and early warning indicators for monitoring",
-        "approve": False,
-        "description": "CREATE variant - indicators only"
-    },
-    {
-        "stage": "DTP-06",
-        "message": "Finalize the value capture template and reporting dashboards",
+        "message": "What was the total value delivered by this sourcing project?",
         "approve": True,
-        "description": "Final approval - case complete"
+        "description": "Final Value Defense - Case Complete"
     },
 ]
 
@@ -296,18 +228,18 @@ def setup_demo_case() -> str:
         now = datetime.now().isoformat()
         case = CaseState(
             case_id=DEMO_CASE_ID,
-            category_id="IT_SERVICES",
-            contract_id="CTR-001",
-            supplier_id="SUP-001",
+            category_id="MARKETING_SERVICES",
+            contract_id="CTR-MKT-001",
+            supplier_id="SUP-MKT-GLOBAL",
             trigger_source="Demo",
             dtp_stage="DTP-01",
             status="In Progress",
-            name="Happy Path Demo - IT Services Renewal",
-            summary_text="Complete happy path demonstration case running through all DTP stages from Strategy to Implementation.",
+            name="Marketing Agency Search - Golden Thread Demo",
+            summary_text="Complete happy path demonstration showcasing all 6 DTP Mindsets through a Marketing Services sourcing scenario.",
             key_findings=json.dumps([
-                "Contract expires in 35 days",
-                "Supplier performance trending stable",
-                "Spend within 5% of budget"
+                "Current agency GlobalBrand Inc underperforming",
+                "Budget: $500K/year for creative services",
+                "Requirement: Full IP ownership of all assets"
             ]),
             created_at=now,
             updated_at=now

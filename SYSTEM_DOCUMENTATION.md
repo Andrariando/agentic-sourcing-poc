@@ -129,9 +129,10 @@ class TriageResult:
 
 ---
 
-### DTP-01: Strategy (Need Identification)
+### DTP-01: Strategy (Need Identification) - "The Gatekeeper"
 
-**Purpose**: Identify sourcing opportunities and define initial strategy.
+**Mindset**: Sense-Making ("Do we even need sourcing?")
+**Purpose**: Identify sourcing opportunities, frame the problem, and define initial strategy.
 
 
 **Input Data Used**:
@@ -168,9 +169,10 @@ class StrategyRecommendation:
 
 ---
 
-### DTP-02: Planning (Supplier Evaluation Prep)
+### DTP-02: Planning (Supplier Evaluation Prep) - "The Architect"
 
-**Purpose**: Prepare evaluation criteria and supplier longlist.
+**Mindset**: Structuring ("Turn fuzzy intent into clear requirements")
+**Purpose**: Freeze assumptions, clarify requirements, and prepare evaluation criteria.
 
 **Input Data Used**:
 | Data Type | Source | Fields Used |
@@ -197,9 +199,10 @@ class SupplierShortlist:
 
 ---
 
-### DTP-03: Sourcing (RFx & Selection)
+### DTP-03: Sourcing (RFx & Selection) - "The Controller"
 
-**Purpose**: Issue RFx, collect responses, evaluate, and shortlist.
+**Mindset**: Executing ("Let's see what the market says")
+**Purpose**: Execute RFx process, manage timeline, and ensure procedural fairness.
 
 **Input Data Used**:
 | Data Type | Source | Fields Used |
@@ -219,9 +222,10 @@ class SupplierShortlist:
 
 ---
 
-### DTP-04: Negotiation
+### DTP-04: Negotiation - "The Decision Owner"
 
-**Purpose**: Negotiate best terms with selected supplier(s).
+**Mindset**: Negotiating ("Real value happens here")
+**Purpose**: Challenge safe choices, balance trade-offs (Price vs Risk), and select winner.
 
 **Input Data Used**:
 | Data Type | Source | Fields Used |
@@ -256,9 +260,10 @@ class NegotiationPlan:
 
 ---
 
-### DTP-05: Contracting
+### DTP-05: Contracting - "The Closer"
 
-**Purpose**: Finalize contract terms and prepare for signature.
+**Mindset**: Closing ("Lock it in")
+**Purpose**: Eliminate risk, validate compliance, and finalize contract terms.
 
 **Input Data Used**:
 | Data Type | Source | Fields Used |
@@ -279,9 +284,10 @@ class NegotiationPlan:
 
 ---
 
-### DTP-06: Implementation
+### DTP-06: Implementation - "The Historian"
 
-**Purpose**: Execute, monitor, and capture value.
+**Mindset**: Reporting ("Did this actually matter?")
+**Purpose**: Defend value, track savings/avoidance, and manage rollout.
 
 **Input Data Used**:
 | Data Type | Source | Fields Used |

@@ -136,6 +136,45 @@ def seed_suppliers(session):
             "responsiveness_score": 8.0,
             "trend": "stable",
             "risk_level": "low"
+        },
+        # ===========================================
+        # MARKETING SERVICES - Demo Golden Thread
+        # ===========================================
+        {
+            "supplier_id": "SUP-MKT-GLOBAL",
+            "supplier_name": "GlobalBrand Inc",
+            "category_id": "MARKETING_SERVICES",
+            "overall_score": 6.5,
+            "quality_score": 6.0,
+            "delivery_score": 6.5,
+            "cost_variance": 8.0,
+            "responsiveness_score": 6.0,
+            "trend": "declining",
+            "risk_level": "medium"
+        },
+        {
+            "supplier_id": "SUP-MKT-CREATIVE",
+            "supplier_name": "CreativeJuice Agency",
+            "category_id": "MARKETING_SERVICES",
+            "overall_score": 8.2,
+            "quality_score": 8.5,
+            "delivery_score": 8.0,
+            "cost_variance": -5.0,
+            "responsiveness_score": 8.0,
+            "trend": "improving",
+            "risk_level": "low"
+        },
+        {
+            "supplier_id": "SUP-MKT-DIGITAL",
+            "supplier_name": "DigitalFirst Marketing",
+            "category_id": "MARKETING_SERVICES",
+            "overall_score": 7.8,
+            "quality_score": 7.5,
+            "delivery_score": 8.0,
+            "cost_variance": 2.0,
+            "responsiveness_score": 8.5,
+            "trend": "stable",
+            "risk_level": "low"
         }
     ]
     
@@ -179,6 +218,10 @@ def seed_spend_data(session):
         {"supplier_id": "SUP-003", "category_id": "IT-SECURITY", "spend_amount": 180000, "period": "2024-Q1"},
         {"supplier_id": "SUP-004", "category_id": "IT-INFRASTRUCTURE", "spend_amount": 520000, "period": "2024-Q1"},
         {"supplier_id": "SUP-005", "category_id": "FACILITIES", "spend_amount": 95000, "period": "2024-Q1"},
+        # Marketing Services - Demo Golden Thread
+        {"supplier_id": "SUP-MKT-GLOBAL", "category_id": "MARKETING_SERVICES", "spend_amount": 520000, "period": "2024-Q1"},
+        {"supplier_id": "SUP-MKT-GLOBAL", "category_id": "MARKETING_SERVICES", "spend_amount": 550000, "period": "2024-Q2"},
+        {"supplier_id": "SUP-MKT-CREATIVE", "category_id": "MARKETING_SERVICES", "spend_amount": 0, "period": "2024-Q1"},
     ]
     
     for record in spend_records:

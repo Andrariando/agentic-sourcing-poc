@@ -76,6 +76,8 @@ class SupplierEvaluationAgent(BaseAgent):
                 "output": {
                     "case_id": case_id,
                     "category_id": category_id,
+                    "clarification_needed": response.get("clarification_needed", False),
+                    "clarification_questions": response.get("clarification_questions", []),
                     "shortlisted_suppliers": response.get("shortlisted_suppliers", []),
                     "evaluation_criteria": response.get("evaluation_criteria", []),
                     "recommendation": response.get("recommendation", ""),
@@ -146,25 +148,36 @@ INSTRUCTIONS:
 4. Ground all assessments in the retrieved data
 5. Do NOT make up supplier names or scores - only use data from context
 
-Respond with JSON:
-{{
-    "shortlisted_suppliers": [
-        {{
-            "supplier_id": "SUP-XXX",
-            "name": "Supplier Name",
-            "score": 0.0-10.0,
-            "strengths": ["strength 1", "strength 2"],
-            "concerns": ["concern 1"] or []
-        }}
-    ],
-    "evaluation_criteria": ["criterion 1", "criterion 2"],
-    "recommendation": "Brief recommendation text",
-    "top_choice_supplier_id": "SUP-XXX" or null,
-    "comparison_summary": "Brief comparison"
-}}
+RESPOND WITH JSON:
+    
+    CRITICAL: If the USER REQUEST is vague (e.g. "Find me good suppliers") and lacks specific criteria, act as THE ARCHITECT.
+    - Do NOT generate a shortlist yet.
+    - Return a JSON with "clarification_needed": true
+    - Populated "clarification_questions" with 2-3 specific questions to freeze assumptions (e.g. "Does 'good' mean lowest price or highest reliability?").
 
-If no supplier data is available, return empty shortlist with explanation.
-Provide ONLY valid JSON."""
+    If criteria are clear OR you have enough context, proceed with evaluation.
+
+    Expected JSON Structure:
+    {{
+        "clarification_needed": true/false,
+        "clarification_questions": ["Question 1?", "Question 2?"] (if needed),
+        "shortlisted_suppliers": [
+            {{
+                "supplier_id": "SUP-XXX",
+                "name": "Supplier Name",
+                "score": 0.0-10.0,
+                "strengths": ["strength 1", "strength 2"],
+                "concerns": ["concern 1"] or []
+            }}
+        ],
+        "evaluation_criteria": ["criterion 1", "criterion 2"],
+        "recommendation": "Brief recommendation text",
+        "top_choice_supplier_id": "SUP-XXX" or null,
+        "comparison_summary": "Brief comparison"
+    }}
+
+    If no supplier data is available, return empty shortlist with explanation.
+    Provide ONLY valid JSON."""
 
 
 

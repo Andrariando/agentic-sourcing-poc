@@ -289,6 +289,48 @@ class ReportingTemplatesTask(BaseTask):
             "data": {"reporting_templates": templates},
             "grounded_in": []
         }
+    
+    def needs_llm_narration(self, context: Dict[str, Any], analytics_result: Dict[str, Any]) -> bool:
+        """Enable LLM to generate Value Story."""
+        return True
+    
+    def run_llm(self, context: Dict[str, Any], rules_result: Dict[str, Any],
+                retrieval_result: Dict[str, Any], analytics_result: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate 'The Historian' Value Story."""
+        savings = context.get("savings_breakdown", {})
+        annual_savings = context.get("annual_savings", 0)
+        total_savings = context.get("total_savings", 0)
+        term_years = context.get("term_years", 3)
+        supplier_id = context.get("supplier_id", "the supplier")
+        category_id = context.get("category_id", "this category")
+        
+        prompt = f"""You are "THE HISTORIAN" - a value capture specialist for DTP-06.
+
+Your job is to DEFEND THE VALUE of this sourcing project. Write a compelling narrative.
+
+SOURCING OUTCOME:
+- Category: {category_id}
+- Supplier: {supplier_id}
+- Contract Term: {term_years} years
+- Annual Savings: ${annual_savings:,.0f}
+- Total Savings Over Term: ${total_savings:,.0f}
+- Hard Savings: ${savings.get('hard_savings', {}).get('annual', 0):,.0f}/year
+- Cost Avoidance: ${savings.get('cost_avoidance', {}).get('annual', 0):,.0f}/year
+
+Write a 3-4 sentence "Value Story" that:
+1. States the total value delivered ("We secured $X in savings over Y years")
+2. Highlights what was negotiated ("negotiated 5% below benchmark")
+3. Mentions risk mitigation ("locked in pricing to avoid market volatility")
+4. Ends with sourcing ROI if calculable ("Estimated sourcing ROI: Z%")
+
+Value Story:"""
+        
+        response, tokens = self._call_llm(prompt)
+        
+        return {
+            "data": {"value_story": response.strip() if response else f"Total value of ${total_savings:,.0f} secured over {term_years} years."},
+            "tokens_used": tokens
+        }
 
 
 

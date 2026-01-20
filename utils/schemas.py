@@ -208,6 +208,7 @@ class StrategyRecommendation(BaseModel):
     decision_impact: DecisionImpact = DecisionImpact.MEDIUM
     # PHASE 3: Constraint acknowledgments (mandatory when constraints exist)
     constraint_acknowledgments: List[str] = Field(default_factory=list, description="Explicit acknowledgments of user constraints that shaped this recommendation")
+    clarification_questions: List[str] = Field(default_factory=list, description="Questions probed by Smart Intake to clarify intent")
 
 
 class SupplierShortlist(BaseModel):
@@ -223,6 +224,8 @@ class SupplierShortlist(BaseModel):
     decision_impact: DecisionImpact = DecisionImpact.MEDIUM
     # PHASE 3: Constraint acknowledgments (mandatory when constraints exist)
     constraint_acknowledgments: List[str] = Field(default_factory=list, description="Explicit acknowledgments of user constraints that shaped this evaluation")
+    clarification_needed: bool = False
+    clarification_questions: List[str] = Field(default_factory=list, description="Questions from The Architect to freeze requirements")
 
 
 class NegotiationPlan(BaseModel):
@@ -239,6 +242,7 @@ class NegotiationPlan(BaseModel):
     decision_impact: DecisionImpact = DecisionImpact.HIGH
     # PHASE 3: Constraint acknowledgments
     constraint_acknowledgments: List[str] = Field(default_factory=list, description="Explicit acknowledgments of user constraints that shaped this plan")
+    challenge_questions: List[str] = Field(default_factory=list, description="Challenger questions to push back on user assumptions")
 
 
 class RFxDraft(BaseModel):

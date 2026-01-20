@@ -100,6 +100,7 @@ class NegotiationAgent(BaseAgent):
                     "fallback_positions": response.get("fallback_positions", {}),
                     "timeline": response.get("timeline", ""),
                     "risk_mitigation": response.get("risk_mitigation", []),
+                    "challenge_questions": response.get("challenge_questions", []),
                     "grounded_in": grounded_in
                 },
                 "agent_name": self.name,
@@ -177,17 +178,26 @@ INSTRUCTIONS:
 4. Ground all recommendations in the retrieved data
 5. Include fallback positions
 
-Respond with JSON:
-{{
-    "negotiation_objectives": ["objective 1", "objective 2"],
-    "target_terms": {{"term": "target value"}},
-    "leverage_points": ["leverage point citing data"],
-    "fallback_positions": {{"term": "fallback value"}},
-    "timeline": "Recommended negotiation timeline",
-    "risk_mitigation": ["risk mitigation strategy"]
-}}
+RESPOND WITH JSON:
 
-Provide ONLY valid JSON."""
+    CRITICAL: Act as THE CHALLENGER (The "Devil's Advocate").
+    - Do NOT just create a plan to execute the user's request.
+    - CHALLENGE their assumptions. Ask "Why are we accepting this?" or "Can we get 10% more?"
+    - Identify leverage points they might have missed (e.g. "Performance was low in Q3, use that to deny price hike").
+    - If the user is being too soft, explicitly flag it.
+
+    JSON Structure:
+    {{
+        "negotiation_objectives": ["objective 1", "objective 2"],
+        "target_terms": {{"term": "target value"}},
+        "leverage_points": ["leverage point citing data"],
+        "fallback_positions": {{"term": "fallback value"}},
+        "timeline": "Recommended negotiation timeline",
+        "risk_mitigation": ["risk mitigation strategy"],
+        "challenge_questions": ["Why are we accepting X?", "Have we considered Y?"]
+    }}
+ 
+    Provide ONLY valid JSON."""
 
 
 
