@@ -58,6 +58,10 @@ def seed_all():
         seed_signal_cases(session)
         print("  - Seeded signal-triggered cases")
         
+        # Seed example completed case with full conversation
+        seed_example_case(session)
+        print("  - Seeded example completed case (CASE-EXAMPLE-001)")
+        
         session.commit()
         print("\nDatabase seeded successfully!")
         print("\nCreated cases:")
@@ -592,6 +596,78 @@ def random_days(min_days: int, max_days: int) -> int:
     """Generate random number of days."""
     import random
     return random.randint(min_days, max_days)
+
+
+def seed_example_case(session):
+    """
+    Create a COMPLETED example case with full AI-Human conversation.
+    
+    This is a static "Golden Thread" case that users can view to see
+    what a complete DTP-01 to DTP-06 workflow looks like.
+    """
+    now = datetime.now()
+    
+    # Pre-built conversation history showing all 6 DTP Mindsets
+    conversation = [
+        # === DTP-01: THE GATEKEEPER ===
+        {"role": "user", "content": "I need a marketing agency for our upcoming campaign", "timestamp": (now - timedelta(hours=8)).isoformat()},
+        {"role": "assistant", "content": "🧠 **Smart Intake**: Before I can recommend a strategy, I need to understand your intent better.\n\n**Clarifying Questions:**\n1. Is this a new agency requirement, or are you replacing an existing one?\n2. What's the primary focus - brand campaign, digital marketing, or creative production?\n3. Do you have a budget range in mind?\n\nThis helps me determine if we need a full RFx or can fast-track.", "timestamp": (now - timedelta(hours=7, minutes=55)).isoformat()},
+        {"role": "user", "content": "It's to replace our existing agency GlobalBrand Inc. They've been underperforming on deliverables.", "timestamp": (now - timedelta(hours=7, minutes=50)).isoformat()},
+        {"role": "assistant", "content": "✅ **Understood.** This is a replacement scenario for underperforming incumbent.\n\n**Strategy Recommendation: RFx**\n- Confidence: 85%\n- Rationale: GlobalBrand's declining performance (score: 6.5/10) justifies competitive evaluation\n- 3 suppliers in your approved list available for immediate RFx\n\n📋 **Next Step:** Proceed to supplier evaluation (DTP-02)?", "timestamp": (now - timedelta(hours=7, minutes=45)).isoformat()},
+        
+        # === DTP-02: THE ARCHITECT ===
+        {"role": "user", "content": "Yes, evaluate the available marketing suppliers", "timestamp": (now - timedelta(hours=7)).isoformat()},
+        {"role": "assistant", "content": "🏗️ **The Architect**: Before I build the evaluation, I need to freeze some requirements.\n\n**Clarifying Questions:**\n1. Are you looking for a **retainer** model (monthly fee) or **project-based** billing?\n2. Do you require **full IP ownership** of all creative assets, or is licensing acceptable?\n3. What's your annual budget ceiling?\n\nThese answers will shape the evaluation criteria.", "timestamp": (now - timedelta(hours=6, minutes=55)).isoformat()},
+        {"role": "user", "content": "We need creative work on a retainer basis, with full IP ownership. Budget is around $500K/year.", "timestamp": (now - timedelta(hours=6, minutes=50)).isoformat()},
+        {"role": "assistant", "content": "✅ **Requirements Frozen.**\n\n**Evaluation Criteria:**\n1. Creative Quality (40%)\n2. IP Ownership Terms (25%)\n3. Pricing vs Budget (20%)\n4. Delivery Track Record (15%)\n\n**Shortlist (3 suppliers):**\n| Supplier | Score | Strength | Flag |\n|----------|-------|----------|------|\n| CreativeJuice Agency | 8.2 | Cost-effective, improving trend | New vendor |\n| DigitalFirst Marketing | 7.8 | Strong delivery | Standard terms |\n| GlobalBrand Inc | 6.5 | Incumbent knowledge | ⚠️ Declining |\n\n📋 **Next Step:** Draft RFP (DTP-03)?", "timestamp": (now - timedelta(hours=6, minutes=45)).isoformat()},
+        
+        # === DTP-03: THE CONTROLLER ===
+        {"role": "user", "content": "Yes, draft an RFP for marketing services", "timestamp": (now - timedelta(hours=5)).isoformat()},
+        {"role": "assistant", "content": "✈️ **RFP Drafted.**\n\n**RFP: Marketing Services - Creative Retainer**\n- Scope: Brand campaign development, creative production\n- Term: 24 months with annual renewal option\n- Budget: $500K/year\n- Key Requirements: Full IP ownership, monthly retainer, dedicated account team\n\n**Evaluation Timeline:**\n- RFP Issue: Today\n- Questions Due: +5 business days\n- Proposals Due: +15 business days\n- Award Target: +25 business days\n\n📩 RFP sent to 3 shortlisted suppliers.", "timestamp": (now - timedelta(hours=4, minutes=55)).isoformat()},
+        {"role": "user", "content": "We received 3 responses. CreativeJuice is cheapest at $450K but has IP ownership clause concerns. GlobalBrand quoted $550K.", "timestamp": (now - timedelta(hours=3)).isoformat()},
+        {"role": "assistant", "content": "📊 **Bid Analysis Complete.**\n\n| Supplier | Price | vs Budget | IP Terms | Recommendation |\n|----------|-------|-----------|----------|----------------|\n| CreativeJuice | $450K | -10% ✅ | ⚠️ Shared IP | Challenge IP clause |\n| DigitalFirst | $480K | -4% | ✅ Full IP | Strong alternative |\n| GlobalBrand | $550K | +10% ❌ | ✅ Full IP | Over budget |\n\n📋 **Next Step:** Negotiate with CreativeJuice (DTP-04)?", "timestamp": (now - timedelta(hours=2, minutes=55)).isoformat()},
+        
+        # === DTP-04: THE CHALLENGER ===
+        {"role": "user", "content": "Prepare negotiation strategy for CreativeJuice", "timestamp": (now - timedelta(hours=2)).isoformat()},
+        {"role": "assistant", "content": "⚔️ **The Challenger**: I need to push back on your approach.\n\n**Challenge Questions:**\n1. Why are we accepting a shared IP clause when our requirement was FULL ownership?\n2. CreativeJuice is new to our vendor list - have we validated their references?\n3. The $450K price is attractive, but is it sustainable or a loss-leader?\n\n**My Recommendation:**\n- **Do NOT accept the IP clause as-is.** This is a deal-breaker per your frozen requirements.\n- Leverage: Their eagerness to win your account + $50K price advantage\n- Counter-offer: Full IP ownership OR walk away to DigitalFirst\n\n**Negotiation Playbook:**\n1. Open with IP ownership as non-negotiable\n2. If they push back, ask \"What would it take to get full IP?\"\n3. BATNA: DigitalFirst at $480K with full IP (only $30K more)", "timestamp": (now - timedelta(hours=1, minutes=55)).isoformat()},
+        {"role": "user", "content": "Good point. Push back on CreativeJuice's IP clause. We need full ownership of all creative assets.", "timestamp": (now - timedelta(hours=1, minutes=50)).isoformat()},
+        {"role": "assistant", "content": "✅ **Negotiation Complete.**\n\n**Outcome:**\n- CreativeJuice agreed to **full IP ownership** (clause revised)\n- Final price: $460K/year (+$10K from original for IP change)\n- Still $40K under budget ✅\n\n📋 **Next Step:** Contract finalization (DTP-05)?", "timestamp": (now - timedelta(hours=1, minutes=45)).isoformat()},
+        
+        # === DTP-05: THE CLOSER ===
+        {"role": "user", "content": "Extract and validate the contract terms for CreativeJuice", "timestamp": (now - timedelta(hours=1)).isoformat()},
+        {"role": "assistant", "content": "🔒 **The Closer**: Contract review in progress...\n\n**Key Terms Extracted:**\n- Annual Value: $460,000\n- Term: 24 months\n- IP Ownership: ✅ Full transfer to client\n- Payment Terms: Net 30\n- SLA: 48-hour response, 95% on-time delivery\n\n⚠️ **RISK ALERT - ACTION REQUIRED:**\n1. ❌ **Insurance Certificate**: Not attached - MISSING\n2. ❌ **Exhibit C (SOW)**: Referenced but not included\n3. ⚠️ **Liability Cap**: $500K (acceptable but low)\n\n**Recommendation: HOLD - Action Required**\nDo not sign until Insurance Certificate and Exhibit C are received.\n\n📋 **Next Action:** Request missing documents from CreativeJuice?", "timestamp": (now - timedelta(minutes=55)).isoformat()},
+        {"role": "user", "content": "Insurance certificate and Exhibit C received. Finalize the handoff packet.", "timestamp": (now - timedelta(minutes=30)).isoformat()},
+        {"role": "assistant", "content": "✅ **Contract READY TO SIGN.**\n\n**Final Checklist:**\n- [x] IP Ownership clause (revised)\n- [x] Insurance Certificate attached\n- [x] Exhibit C (SOW) attached\n- [x] Liability cap reviewed\n- [x] Payment terms validated\n\n**Handoff Packet Generated:**\n- Supplier: CreativeJuice Agency\n- Contract Value: $460K/year\n- Start Date: Upon execution\n- Key Contacts: Account Manager TBD\n- First Review: Day 30\n\n📋 **Next Step:** Implementation & Value Capture (DTP-06)?", "timestamp": (now - timedelta(minutes=25)).isoformat()},
+        
+        # === DTP-06: THE HISTORIAN ===
+        {"role": "user", "content": "Generate the implementation plan and value capture report", "timestamp": (now - timedelta(minutes=15)).isoformat()},
+        {"role": "assistant", "content": "📜 **The Historian**: Generating Value Story...\n\n**Implementation Checklist:**\n| Phase | Task | Owner | Target |\n|-------|------|-------|--------|\n| Prep | Contract execution | Legal | Day 0 |\n| Prep | Vendor system setup | Finance | Day 3 |\n| Kickoff | Kickoff meeting | Procurement | Day 7 |\n| Transition | Service transition | Operations | Day 14 |\n| Steady State | First monthly review | Procurement | Day 30 |\n\n**Value Story:**\n> We secured **$40K in annual savings** by switching from GlobalBrand to CreativeJuice, representing an **8% reduction** against our $500K budget. Beyond price, we successfully negotiated **full IP ownership** - a clause CreativeJuice initially resisted. Over the 24-month contract term, total savings are projected at **$80K** with reduced delivery risk due to CreativeJuice's improving performance trend (8.2 vs GlobalBrand's 6.5).\n\n**Sourcing ROI:** ~320% (cost of sourcing effort vs value captured)", "timestamp": (now - timedelta(minutes=10)).isoformat()},
+        {"role": "user", "content": "What was the total value delivered by this sourcing project?", "timestamp": (now - timedelta(minutes=5)).isoformat()},
+        {"role": "assistant", "content": "📊 **Final Value Summary**\n\n| Metric | Value |\n|--------|-------|\n| **Annual Savings** | $40,000 |\n| **Contract Term** | 24 months |\n| **Total Projected Savings** | $80,000 |\n| **Savings %** | 8% vs budget |\n| **Risk Reduction** | Replaced declining vendor (6.5) with improving vendor (8.2) |\n| **Strategic Win** | Full IP ownership secured |\n\n**Case Status: ✅ COMPLETED**\n\nThis case demonstrates the full DTP lifecycle from intake to value capture, showcasing all 6 mindsets:\n1. 🧠 Smart Intake (clarifying vague intent)\n2. 🏗️ The Architect (freezing requirements)\n3. ✈️ The Controller (RFx execution)\n4. ⚔️ The Challenger (pushing back on IP)\n5. 🔒 The Closer (catching missing documents)\n6. 📜 The Historian (defending value)", "timestamp": now.isoformat()},
+    ]
+    
+    example_case = CaseState(
+        case_id="CASE-EXAMPLE-001",
+        name="✨ Marketing Agency Search (Completed Example)",
+        category_id="MARKETING_SERVICES",
+        contract_id="CTR-MKT-CREATIVE",
+        supplier_id="SUP-MKT-CREATIVE",
+        trigger_source="Example",
+        dtp_stage="DTP-06",
+        status="Completed",
+        summary_text="COMPLETED EXAMPLE: Full DTP lifecycle demonstrating all 6 mindsets - from vague 'I need a marketing agency' to $80K value capture.",
+        key_findings=json.dumps([
+            "Replaced underperforming GlobalBrand with CreativeJuice",
+            "Negotiated full IP ownership (initially refused)",
+            "Caught missing Insurance Certificate before signing",
+            "Total savings: $80K over 24 months"
+        ]),
+        recommended_action="Case complete - view as reference",
+        chat_history=json.dumps(conversation),
+        created_at=(now - timedelta(hours=8)).isoformat(),
+        updated_at=now.isoformat()
+    )
+    session.add(example_case)
 
 
 # Entry point for running directly
