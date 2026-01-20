@@ -134,6 +134,49 @@ class AgentActionLog(BaseModel):
     guardrail_events: List[str] = Field(default_factory=list)
 
 
+# DTP-01 Triage Schemas
+
+class RequestType(str, Enum):
+    """Classification of incoming sourcing requests"""
+    DEMAND_BASED = "Demand-Based"  # PO-driven, no existing contract
+    RENEWAL = "Renewal"  # Contract expiry triggered
+    AD_HOC = "Ad-Hoc"  # Off-system or manual request
+    FAST_PASS = "Fast-Pass"  # Low-risk, pre-approved supplier
+
+
+class TriageStatus(str, Enum):
+    """Outcome of DTP-01 Triage"""
+    PROCEED_TO_STRATEGY = "Proceed to Strategy"  # No coverage, sourcing required
+    REDIRECT_TO_CATALOG = "Redirect to Catalog"  # Existing coverage found
+    REQUIRES_CLARIFICATION = "Requires Clarification"  # Ambiguous request
+
+
+class TriageResult(BaseModel):
+    """DTP-01 Triage Agent output - Gatekeeper decision"""
+    case_id: str
+    request_type: RequestType
+    status: TriageStatus
+    matched_contract_id: Optional[str] = None  # If coverage found
+    matched_supplier_id: Optional[str] = None  # If supplier already approved
+    coverage_rationale: str = ""  # Why request is/isn't covered
+    category_strategy_card_id: Optional[str] = None  # Linked strategy card
+    estimated_spend_usd: Optional[float] = None
+    requires_3_bids: bool = False  # Based on $1.5M threshold
+    recommended_payment_terms: str = "Net 90"
+
+
+class CategoryStrategyCard(BaseModel):
+    """Pre-defined category strategy defaults loaded during DTP-01"""
+    category_id: str
+    category_name: str
+    sourcing_rules: Dict[str, Any] = Field(default_factory=dict)
+    # e.g., {"spend_threshold_3_bids_usd": 1500000, "min_suppliers_above_threshold": 3}
+    defaults: Dict[str, Any] = Field(default_factory=dict)
+    # e.g., {"payment_terms": "Net 90", "contract_type": "MSA"}
+    evaluation_criteria: List[str] = Field(default_factory=list)
+    preferred_route: str = "RFP"  # Default sourcing route
+
+
 # Agent Output Schemas
 
 class SignalAssessment(BaseModel):

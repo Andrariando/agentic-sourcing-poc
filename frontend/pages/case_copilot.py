@@ -292,6 +292,88 @@ def render_case_header_condensed(case) -> None:
     """, unsafe_allow_html=True)
 
 
+def render_triage_panel(case, triage_result=None) -> None:
+    """
+    Render DTP-01 Triage Panel showing coverage check and strategy card.
+    
+    This is the Gatekeeper visualization:
+    - Shows if request is covered (redirect) or needs sourcing (proceed)
+    - Displays loaded Category Strategy Card defaults
+    """
+    # For demo, we'll create a mock triage result based on case data
+    # In production, this would come from the backend
+    
+    is_covered = False
+    coverage_message = ""
+    strategy_card_applied = False
+    
+    # Check if DTP-01 stage
+    if case.dtp_stage != "DTP-01":
+        return  # Only show in DTP-01
+    
+    # Simulate triage based on case data
+    if case.contract_id:
+        is_covered = True
+        coverage_message = f"Existing contract {case.contract_id} covers this request. Consider using the Buying Channel."
+    else:
+        is_covered = False
+        coverage_message = "No existing contract found. Sourcing strategy required."
+        strategy_card_applied = True
+    
+    # Determine visual style
+    if is_covered:
+        panel_bg = "#E8F5E9"  # Light green
+        panel_border = SUCCESS_GREEN
+        status_icon = "✅"
+        status_text = "COVERED - Redirect to Catalog"
+    else:
+        panel_bg = "#FFF8E1"  # Light yellow
+        panel_border = WARNING_YELLOW
+        status_icon = "⚠️"
+        status_text = "NOT COVERED - Sourcing Required"
+    
+    st.markdown(f"""
+    <div style="background-color: {panel_bg}; border: 2px solid {panel_border}; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <div style="font-size: 1rem; font-weight: 600; color: {NEAR_BLACK};">
+                {status_icon} DTP-01 Triage: {status_text}
+            </div>
+            <div style="font-size: 0.75rem; color: {CHARCOAL};">
+                Request Type: {"Renewal" if case.trigger_source == "Signal" else "Demand-Based"}
+            </div>
+        </div>
+        <div style="font-size: 0.85rem; color: {CHARCOAL}; margin-bottom: 8px;">
+            {coverage_message}
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Strategy Card section (only if not covered)
+    if strategy_card_applied:
+        st.markdown(f"""
+        <div style="background-color: white; border: 1px solid {LIGHT_GRAY}; border-radius: 6px; padding: 12px; margin-top: 8px;">
+            <div style="font-size: 0.85rem; font-weight: 600; color: {MIT_NAVY}; margin-bottom: 8px;">
+                📋 Strategy Card Applied: {case.category_id}
+            </div>
+            <div style="display: flex; gap: 24px; font-size: 0.8rem;">
+                <div>
+                    <span style="color: {CHARCOAL};">Payment Terms:</span>
+                    <strong>Net 90</strong>
+                </div>
+                <div>
+                    <span style="color: {CHARCOAL};">Spend Threshold:</span>
+                    <strong>$1.5M → 3 Bids</strong>
+                </div>
+                <div>
+                    <span style="color: {CHARCOAL};">Preferred Route:</span>
+                    <strong>RFP</strong>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
 def render_case_details_panel(case, client) -> None:
     """
     Render unified Case Details Panel (left 60%).
@@ -1129,6 +1211,9 @@ def render_case_copilot(case_id: str):
     
     # Condensed Case Header (full width)
     render_case_header_condensed(case)
+    
+    # DTP-01 Triage Panel (only shown in DTP-01)
+    render_triage_panel(case)
     
     # Main layout: Case Details (60%) | Chat (40%)
     col_details, col_chat = st.columns([0.6, 0.4], gap="medium")

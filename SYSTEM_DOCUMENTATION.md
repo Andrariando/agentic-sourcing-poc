@@ -94,9 +94,45 @@ The `LLMResponder` takes the agent's raw output (or direct answer) and formats i
 
 Each DTP (Draft to Procurement) stage uses specific data sources and produces specific outputs.
 
+### DTP-01: Triage (Gatekeeper)
+
+**Purpose**: Classify incoming requests and check for existing coverage before proceeding to strategy.
+
+**Agent**: `TriageAgent` (`backend/agents/triage_agent.py`)
+
+**Logic (Deterministic, No LLM)**:
+1. **Request Classification**: Categorize as Demand-Based, Renewal, Ad-Hoc, or Fast-Pass.
+2. **Coverage Check**: Search `contracts.json` for matching `coverage_keywords`.
+3. **Decision**:
+   - **COVERED** → Redirect to Buying Channel (No sourcing needed).
+   - **NOT COVERED** → Proceed to Strategy Agent.
+4. **Load Category Strategy Card**: Apply global defaults ($1.5M threshold → 3 bids, Net 90 terms).
+
+**Input Data Used**:
+| Data Type | Source | Fields Used |
+|-----------|--------|-------------|
+| **User Intent** | Chat message | Natural language request |
+| **Contracts** | `data/contracts.json` | `coverage_keywords`, `category_id`, `status` |
+| **Category Strategy** | `data/category_strategies.json` | `sourcing_rules`, `defaults` |
+
+**Output**: `TriageResult`
+```python
+class TriageResult:
+    request_type: RequestType  # Demand-Based, Renewal, Ad-Hoc, Fast-Pass
+    status: TriageStatus  # Proceed to Strategy, Redirect to Catalog
+    matched_contract_id: Optional[str]
+    requires_3_bids: bool  # Based on $1.5M threshold
+    recommended_payment_terms: str  # Default: Net 90
+```
+
+**Frontend Display**: `render_triage_panel()` in `case_copilot.py` shows coverage status and strategy card defaults.
+
+---
+
 ### DTP-01: Strategy (Need Identification)
 
 **Purpose**: Identify sourcing opportunities and define initial strategy.
+
 
 **Input Data Used**:
 | Data Type | Source | Fields Used |

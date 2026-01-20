@@ -9,7 +9,21 @@
     "annual_value_usd": 2500000,
     "renewal_terms": "Auto-renew unless terminated 60 days prior",
     "status": "Active",
-    "renewal_options": ["Renew", "Renegotiate", "RFx", "Terminate"],
+    "coverage_keywords": [
+      "IT services",
+      "software",
+      "IT infrastructure",
+      "cloud",
+      "technical support",
+      "DevOps",
+      "managed IT"
+    ],
+    "renewal_options": [
+      "Renew",
+      "Renegotiate",
+      "RFx",
+      "Terminate"
+    ],
     "contract_terms": {
       "pricing_model": "Fixed monthly fee with usage-based components",
       "minimum_commitment": "$200K annually",
@@ -47,7 +61,20 @@
     "annual_value_usd": 1800000,
     "renewal_terms": "Fixed term, no auto-renewal",
     "status": "Active",
-    "renewal_options": ["Renew", "Renegotiate", "RFx", "Terminate"],
+    "coverage_keywords": [
+      "IT services",
+      "managed IT",
+      "infrastructure",
+      "network",
+      "security services",
+      "IaaS"
+    ],
+    "renewal_options": [
+      "Renew",
+      "Renegotiate",
+      "RFx",
+      "Terminate"
+    ],
     "contract_terms": {
       "pricing_model": "Time and materials with monthly retainer",
       "minimum_commitment": "$150K annually",
@@ -84,7 +111,21 @@
     "annual_value_usd": 450000,
     "renewal_terms": "Auto-renew for 2 years unless terminated",
     "status": "Active",
-    "renewal_options": ["Renew", "Renegotiate", "RFx", "Terminate"],
+    "coverage_keywords": [
+      "office supplies",
+      "stationery",
+      "paper",
+      "pens",
+      "desk supplies",
+      "consumables",
+      "bulk office"
+    ],
+    "renewal_options": [
+      "Renew",
+      "Renegotiate",
+      "RFx",
+      "Terminate"
+    ],
     "contract_terms": {
       "pricing_model": "Fixed annual pricing with quarterly adjustments",
       "minimum_commitment": "$400K annually",
@@ -119,7 +160,20 @@
     "annual_value_usd": 3200000,
     "renewal_terms": "Fixed term, renewal subject to performance review",
     "status": "Active",
-    "renewal_options": ["Renew", "Renegotiate", "RFx", "Terminate"],
+    "coverage_keywords": [
+      "consulting",
+      "strategy",
+      "advisory",
+      "digital transformation",
+      "change management",
+      "process optimization"
+    ],
+    "renewal_options": [
+      "Renew",
+      "Renegotiate",
+      "RFx",
+      "Terminate"
+    ],
     "contract_terms": {
       "pricing_model": "Project-based with retainers",
       "minimum_commitment": "$250K annually",
@@ -156,7 +210,20 @@
     "annual_value_usd": 850000,
     "renewal_terms": "Auto-renew unless terminated 90 days prior",
     "status": "Active",
-    "renewal_options": ["Renew", "Renegotiate", "RFx", "Terminate"],
+    "coverage_keywords": [
+      "facility management",
+      "facilities",
+      "maintenance",
+      "cleaning",
+      "landscaping",
+      "building services"
+    ],
+    "renewal_options": [
+      "Renew",
+      "Renegotiate",
+      "RFx",
+      "Terminate"
+    ],
     "contract_terms": {
       "pricing_model": "Fixed monthly fee per facility",
       "minimum_commitment": "$800K annually",
@@ -193,7 +260,20 @@
     "annual_value_usd": 1200000,
     "renewal_terms": "Fixed term, renewal subject to evaluation",
     "status": "Active",
-    "renewal_options": ["Renew", "Renegotiate", "RFx", "Terminate"],
+    "coverage_keywords": [
+      "IT services",
+      "cloud",
+      "SaaS",
+      "subscription",
+      "technology",
+      "software"
+    ],
+    "renewal_options": [
+      "Renew",
+      "Renegotiate",
+      "RFx",
+      "Terminate"
+    ],
     "contract_terms": {
       "pricing_model": "Subscription-based with per-user tiers",
       "minimum_commitment": "$1M annually",
@@ -228,7 +308,19 @@
     "annual_value_usd": 2100000,
     "renewal_terms": "Fixed term, no auto-renewal",
     "status": "Active",
-    "renewal_options": ["Renew", "Renegotiate", "RFx", "Terminate"],
+    "coverage_keywords": [
+      "IT services",
+      "enterprise IT",
+      "technical support",
+      "managed services",
+      "IT infrastructure"
+    ],
+    "renewal_options": [
+      "Renew",
+      "Renegotiate",
+      "RFx",
+      "Terminate"
+    ],
     "contract_terms": {
       "pricing_model": "Fixed annual fee with tiered service levels",
       "minimum_commitment": "$2M annually",
@@ -265,7 +357,19 @@
     "annual_value_usd": 1950000,
     "renewal_terms": "Fixed term, early renewal option available",
     "status": "Active",
-    "renewal_options": ["Renew", "Renegotiate", "RFx", "Terminate"],
+    "coverage_keywords": [
+      "IT services",
+      "hybrid IT",
+      "infrastructure",
+      "managed services",
+      "cloud"
+    ],
+    "renewal_options": [
+      "Renew",
+      "Renegotiate",
+      "RFx",
+      "Terminate"
+    ],
     "contract_terms": {
       "pricing_model": "Hybrid fixed and usage-based",
       "minimum_commitment": "$1.8M annually",
@@ -291,13 +395,3 @@
     "renewal_clauses": "Fixed term with early renewal option available 12 months before expiry. Renewal terms will be benchmarked against market rates."
   }
 ]
-
-
-
-
-
-
-
-
-
-

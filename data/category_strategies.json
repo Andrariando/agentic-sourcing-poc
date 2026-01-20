@@ -1,0 +1,82 @@
+[
+    {
+        "_comment": "Global Defaults - All categories inherit these unless overridden",
+        "category_id": "GLOBAL",
+        "sourcing_rules": {
+            "spend_threshold_3_bids_usd": 1500000,
+            "min_suppliers_above_threshold": 3
+        },
+        "defaults": {
+            "payment_terms": "Net 90",
+            "contract_type": "MSA",
+            "standard_duration_years": 2
+        }
+    },
+    {
+        "category_id": "CAT-01",
+        "category_name": "IT Services",
+        "sourcing_rules": {
+            "preferred_route": "RFP",
+            "evaluation_criteria": [
+                "Technical Fit",
+                "Cost",
+                "Innovation",
+                "Support SLA"
+            ]
+        },
+        "defaults": {
+            "warranty_years": 1,
+            "sla_response_hours": 4
+        }
+    },
+    {
+        "category_id": "CAT-02",
+        "category_name": "Office Supplies",
+        "sourcing_rules": {
+            "preferred_route": "Catalog",
+            "evaluation_criteria": [
+                "Price",
+                "Delivery Speed",
+                "Sustainability"
+            ]
+        },
+        "defaults": {
+            "payment_terms": "Net 30",
+            "delivery_days": 5
+        }
+    },
+    {
+        "category_id": "CAT-03",
+        "category_name": "Consulting",
+        "sourcing_rules": {
+            "preferred_route": "RFP",
+            "evaluation_criteria": [
+                "Expertise",
+                "Methodology",
+                "References",
+                "Cost"
+            ]
+        },
+        "defaults": {
+            "milestone_payments": true,
+            "retainer_optional": true
+        }
+    },
+    {
+        "category_id": "CAT-04",
+        "category_name": "Facilities Management",
+        "sourcing_rules": {
+            "preferred_route": "RFQ",
+            "evaluation_criteria": [
+                "Service Coverage",
+                "Safety Record",
+                "Pricing",
+                "Green Certifications"
+            ]
+        },
+        "defaults": {
+            "contract_duration_years": 3,
+            "sla_response_hours": 2
+        }
+    }
+]
