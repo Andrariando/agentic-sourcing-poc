@@ -301,8 +301,7 @@ class StrategyAgent(BaseAgent):
         trigger_type: Optional[str] = None,
         category_strategy_context: Optional[Dict[str, Any]] = None,
         execution_constraints: Optional["ExecutionConstraints"] = None,
-        category_strategy_context: Optional[Dict[str, Any]] = None,
-        execution_constraints: Optional["ExecutionConstraints"] = None,
+
         conversation_history: Optional[list[dict]] = None,
         retrieved_docs: Optional[list[str]] = None
     ) -> str:
