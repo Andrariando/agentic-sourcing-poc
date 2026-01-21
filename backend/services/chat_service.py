@@ -436,7 +436,7 @@ class ChatService:
                 "agent_name": "Copilot",
                 "task_name": "Direct Response",
                 "model_used": "gpt-4o-mini",
-                "output_summary": assistant_message[:100] + "..." if len(assistant_message) > 100 else assistant_message,
+                "output_summary": assistant_message,
                 "reasoning_log": {
                     "thinking": "User asked a question that could be answered directly from context.",
                     "intent_detected": intent.get("intent_summary", "Question"),
@@ -1503,11 +1503,11 @@ class ChatService:
                         # Create a synthetic log entry from available data
                         output_summary = ""
                         if hasattr(latest_output, "recommendation"):
-                            output_summary = str(latest_output.recommendation)[:200]
+                            output_summary = str(latest_output.recommendation)
                         elif hasattr(latest_output, "explanation"):
-                            output_summary = str(latest_output.explanation)[:200]
+                            output_summary = str(latest_output.explanation)
                         elif hasattr(latest_output, "assessment_summary"):
-                            output_summary = str(latest_output.assessment_summary)[:200]
+                            output_summary = str(latest_output.assessment_summary)
                         elif isinstance(latest_output, AgentDialogue):
                             output_summary = f"[Dialogue] {latest_output.message}"
                         else:
