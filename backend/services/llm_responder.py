@@ -57,6 +57,9 @@ class LLMResponder:
 
 CASE CONTEXT:
 - Case ID: {case_context.get('case_id', 'Unknown')}
+- Name: {case_context.get('case_name', '')}
+- Summary: {case_context.get('summary', '')[:500]}...
+- Key Findings: {str(case_context.get('key_findings', []))[:500]}...
 - DTP Stage: {case_context.get('dtp_stage', 'DTP-01')}
 - Category: {case_context.get('category_id', 'Unknown')}
 - Status: {case_context.get('status', 'Unknown')}
@@ -182,6 +185,9 @@ RULES:
 
         user_prompt = f"""CASE CONTEXT:
 - Case ID: {case_context.get('case_id', 'Unknown')}
+- Name: {case_context.get('case_name', 'Unknown')}
+- Summary: {case_context.get('summary', '')}
+- Key Findings: {str(case_context.get('key_findings', []))}
 - DTP Stage: {case_context.get('dtp_stage', 'DTP-01')}
 - Category: {case_context.get('category_id', 'Unknown')}
 - Status: {case_context.get('status', 'Unknown')}

@@ -180,6 +180,9 @@ class ChatService:
         # 4. Build case context for LLM
         case_context = {
             "case_id": case_id,
+            "case_name": state.get("name", "Unnamed Case"),
+            "summary": state.get("summary_text", ""),
+            "key_findings": state.get("key_findings", []),
             "dtp_stage": state.get("dtp_stage", "DTP-01"),
             "category_id": state.get("category_id", "Unknown"),
             "status": state.get("status", "In Progress"),

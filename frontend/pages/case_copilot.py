@@ -846,11 +846,12 @@ def _render_agent_logs(case):
     if not case.activity_log:
         return
 
-    # Filter for Agent Dialogue logs
+    # Filter for all meaningful Agent logs (excluding User/System chat noise if desired)
+    # broader filter: anything with an agent_name that isn't empty
     dialogue_logs = [
         entry for entry in case.activity_log 
-        if (isinstance(entry, dict) and entry.get("task_name") == "Agent Dialogue") or
-           (hasattr(entry, "task_name") and entry.task_name == "Agent Dialogue")
+        if (isinstance(entry, dict) and entry.get("agent_name") not in ["User", "System", None]) or
+           (hasattr(entry, "agent_name") and entry.agent_name not in ["User", "System", None])
     ]
     
     if not dialogue_logs:
@@ -1141,6 +1142,18 @@ def _render_audit_history_from_packs(packs):
                     st.markdown(f"**User Message:** {meta.get('user_message', 'N/A')}")
                     st.markdown(f"**Tokens:** {meta.get('total_tokens_used', 0)}")
                     st.markdown(f"**Tasks:** {meta.get('completed_tasks', 0)}/{meta.get('total_tasks', 0)}")
+
+            # Show Internal Reasoning / Plan (CRITICAL for transparency)
+            if meta:
+                if meta.get("reasoning_trace"):
+                    st.markdown("#### 🧠 Internal Reasoning")
+                    st.info(meta["reasoning_trace"])
+                elif meta.get("plan"):
+                    st.markdown("#### 🧠 Execution Plan")
+                    st.info(meta["plan"])
+                elif meta.get("rag_context"):
+                     st.markdown("#### 📚 Retrieved Context")
+                     st.markdown(f"Used {len(meta['rag_context'])} documents.")
             
             # Show tasks
             st.markdown("#### Tasks Executed")
