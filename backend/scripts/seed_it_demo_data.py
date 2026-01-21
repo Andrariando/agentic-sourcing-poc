@@ -24,6 +24,11 @@ def seed_cases(session: Session):
     """Seed 10 comprehensive IT cases."""
     print("Seeding 10 IT cases...")
     
+    # Clear existing cases
+    session.exec(delete(CaseState))
+    session.commit()
+    print("  [OK] Cleared existing cases.")
+    
     cases_data = [
         # DTP-01 Cases (Strategy)
         {
