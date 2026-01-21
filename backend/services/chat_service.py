@@ -444,6 +444,9 @@ class ChatService:
                 }
             }
             state["activity_log"].append(direct_log)
+            
+            # CRITICAL FIX: Save state to persist activity log to database
+            self.case_service.save_case_state(state)
         
         # 7. Save assistant response to memory
         if self.conversation_manager and self.enable_conversation_memory:

@@ -20,7 +20,7 @@ class SupervisorState(TypedDict):
     case_id: str
     name: Optional[str]
     summary_text: Optional[str]
-    key_findings: Optional[List[Dict[str, Any]]] 
+    key_findings: Optional[List[str]]
     dtp_stage: str  # DTP-01 to DTP-06
     
     # Case context
