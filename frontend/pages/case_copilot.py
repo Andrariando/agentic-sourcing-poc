@@ -1155,20 +1155,25 @@ def _render_audit_history_from_packs(packs, case=None):
     st.markdown("Full history of all agent calls, reasoning, and produced artifacts.")
     
     for i, pack in enumerate(reversed(packs)):
-        with st.expander(f"Execution {len(packs)-i}: {pack.get('agent_name')} ({pack.get('created_at', '')[:16]})"):
+        meta = pack.get("execution_metadata") or {}
+        
+        # Header with more info
+        agent_name = pack.get('agent_name', 'Unknown')
+        timestamp = pack.get('created_at', '')[:16]
+        with st.expander(f"Execution {len(packs)-i}: {agent_name} ({timestamp})"):
             col1, col2 = st.columns([1, 1])
             with col1:
-                st.markdown(f"**Agent:** {pack.get('agent_name')}")
+                st.markdown(f"**Agent:** {agent_name}")
                 st.markdown(f"**Timestamp:** {pack.get('created_at')}")
                 st.markdown(f"**Pack ID:** `{pack.get('pack_id')}`")
             
             with col2:
-                # Show execution metadata if available
-                meta = pack.get("execution_metadata")
-                if meta:
-                    st.markdown(f"**User Message:** {meta.get('user_message', 'N/A')}")
-                    st.markdown(f"**Tokens:** {meta.get('total_tokens_used', 0)}")
-                    st.markdown(f"**Tasks:** {meta.get('completed_tasks', 0)}/{meta.get('total_tasks', 0)}")
+                st.markdown(f"**User Message:** {meta.get('user_message', 'N/A')}")
+                st.markdown(f"**Tokens:** {meta.get('total_tokens_used', 0)}")
+                if meta.get('model_used'):
+                     st.markdown(f"**Model:** {meta.get('model_used')}")
+                if meta.get('estimated_cost_usd'):
+                     st.markdown(f"**Cost:** ${meta.get('estimated_cost_usd', 0):.4f}")
 
             # Show Internal Reasoning / Plan (CRITICAL for transparency)
             if meta:
@@ -1182,16 +1187,41 @@ def _render_audit_history_from_packs(packs, case=None):
                      st.markdown("#### 📚 Retrieved Context")
                      st.markdown(f"Used {len(meta['rag_context'])} documents.")
             
-            # Show tasks
+            # Show tasks - Enhanced
             st.markdown("#### Tasks Executed")
-            tasks = pack.get("tasks_executed", [])
-            for t in tasks:
-                st.markdown(f"- {t}")
+            task_details = meta.get("task_details", [])
+            tasks_executed = pack.get("tasks_executed", [])
+            
+            if task_details:
+                for t in task_details:
+                    # Handle dict or object (api_client ensures dict, but safe check)
+                    t_name = t.get("task_name", "Unknown") if isinstance(t, dict) else getattr(t, "task_name", "Unknown")
+                    t_summary = t.get("output_summary", "") if isinstance(t, dict) else getattr(t, "output_summary", "")
+                    
+                    st.markdown(f"- **{t_name}**")
+                    if t_summary:
+                        st.caption(t_summary)
+            elif tasks_executed:
+                for t in tasks_executed:
+                    st.markdown(f"- {t}")
+            else:
+                st.caption("No specific tasks recorded.")
                 
-            # Show artifacts
+            # Show artifacts - Enhanced
             st.markdown("#### Artifacts Produced")
-            for art in pack.get("artifacts", []):
-                st.info(f"📄 {art.get('title')} ({art.get('type')})")
+            artifacts = pack.get("artifacts", [])
+            if artifacts:
+                for art in artifacts:
+                    art_title = art.get('title', 'Untitled')
+                    art_type = art.get('type', 'Unknown')
+                    with st.expander(f"📄 {art_title} ({art_type})"):
+                         if art.get("content"):
+                            st.json(art.get("content"))
+                         if art.get("content_text"):
+                             st.markdown("**Summary:**")
+                             st.text(art.get("content_text"))
+            else:
+                st.caption("No artifacts produced in this step.")
 
 
 def _render_activity_history(case):

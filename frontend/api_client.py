@@ -250,6 +250,7 @@ class APIClient:
                             "artifact_id": a.artifact_id,
                             "type": a.type,
                             "title": a.title,
+                            "content": a.content,
                             "content_text": a.content_text,
                             "verification_status": a.verification_status
                         }
