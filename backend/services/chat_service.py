@@ -1489,9 +1489,37 @@ class ChatService:
                     elif isinstance(latest_output, SignalAssessment) or "SIGNAL" in latest_agent.upper():
                         art_type = ArtifactType.SIGNAL_REPORT
 
-                    # Get metadata from last activity log
+                    # Get metadata from last activity log (or create synthetic one)
                     act_log = final_state.get("activity_log", [])
                     last_log = act_log[-1] if act_log else None
+                    
+                    # FALLBACK: Create synthetic log if workflow didn't provide one
+                    if not last_log and latest_output:
+                        # Create a synthetic log entry from available data
+                        output_summary = ""
+                        if hasattr(latest_output, "recommendation"):
+                            output_summary = str(latest_output.recommendation)[:200]
+                        elif hasattr(latest_output, "explanation"):
+                            output_summary = str(latest_output.explanation)[:200]
+                        elif hasattr(latest_output, "assessment_summary"):
+                            output_summary = str(latest_output.assessment_summary)[:200]
+                        else:
+                            output_summary = f"Output from {latest_agent}"
+                        
+                        last_log = {
+                            "agent_name": latest_agent,
+                            "task_name": f"{latest_agent} Execution",
+                            "timestamp": datetime.now().isoformat(),
+                            "dtp_stage": final_state.get("dtp_stage", "Unknown"),
+                            "output_summary": output_summary,
+                            "token_total": 0,
+                            "documents_retrieved": [],
+                            "output_payload": {}
+                        }
+                        # Add to state so it persists
+                        if "activity_log" not in final_state:
+                            final_state["activity_log"] = []
+                        final_state["activity_log"].append(last_log)
                     
                     metadata = None
                     if last_log:
@@ -1571,7 +1599,7 @@ class ChatService:
                     )
                     
                     # Save pack
-                    self.case_service.save_artifact_pack(pack)
+                    self.case_service.save_artifact_pack(case_id, pack)
                     final_state["latest_artifact_pack_id"] = pack.pack_id
                     
                 except Exception as e:
