@@ -18,6 +18,9 @@ class SupervisorState(TypedDict):
     """
     # Case identification
     case_id: str
+    name: Optional[str]
+    summary_text: Optional[str]
+    key_findings: Optional[List[Dict[str, Any]]] 
     dtp_stage: str  # DTP-01 to DTP-06
     
     # Case context
@@ -91,6 +94,9 @@ class StateManager:
         """Create initial state for a new case."""
         return SupervisorState(
             case_id=case_id,
+            name=None,
+            summary_text=None,
+            key_findings=[],
             dtp_stage="DTP-01",
             category_id=category_id,
             contract_id=contract_id,

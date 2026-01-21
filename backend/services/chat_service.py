@@ -37,13 +37,15 @@ except ImportError:
 from backend.services.case_service import get_case_service
 from backend.supervisor.state import SupervisorState, StateManager
 from backend.supervisor.router import IntentRouter
-from shared.constants import DTP_STAGE_NAMES, AgentName
+from backend.supervisor.router import IntentRouter
+from shared.constants import DTP_STAGE_NAMES, AgentName, ArtifactType
 from utils.schemas import (
     StrategyRecommendation, SupplierShortlist, NegotiationPlan, 
     RFxDraft, ContractExtraction, ImplementationPlan, ClarificationRequest
 )
 from shared.schemas import (
-    ChatResponse, ArtifactPack, NextAction, CaseStatus, Artifact, RiskItem
+    ChatResponse, ArtifactPack, NextAction, CaseStatus, Artifact, RiskItem,
+    ExecutionMetadata, TaskExecutionDetail
 )
 from shared.constants import UserIntent, UserGoal
 from shared.decision_definitions import DTP_DECISIONS
@@ -1462,7 +1464,118 @@ class ChatService:
             # Ensure status exists (fallback)
             if "status" not in final_state:
                 final_state["status"] = "In Progress"
+
+            # 6.5 CRITICAL: Persist Agent Output as ArtifactPack (for Audit Trail)
+            latest_output = final_state.get("latest_agent_output")
+            latest_agent = final_state.get("latest_agent_name")
             
+            if latest_output and latest_agent and latest_agent != "Supervisor":
+                try:
+                    # Determine Artifact Type based on agent/output
+                    art_type = ArtifactType.AUDIT_LOG_EVENT # Default
+                    if isinstance(latest_output, StrategyRecommendation) or latest_agent.upper() == "STRATEGY":
+                        art_type = ArtifactType.STRATEGY_RECOMMENDATION
+                    elif isinstance(latest_output, SupplierShortlist) or latest_agent.upper() in ["SUPPLIER_SCORING", "SUPPLIEREVALUATION"]:
+                        art_type = ArtifactType.SUPPLIER_SHORTLIST
+                    elif isinstance(latest_output, RFxDraft) or latest_agent.upper() in ["RFX_DRAFT", "RFXDRAFT"]:
+                        art_type = ArtifactType.RFX_DRAFT_PACK
+                    elif isinstance(latest_output, NegotiationPlan) or "NEGOTIATION" in latest_agent.upper():
+                        art_type = ArtifactType.NEGOTIATION_PLAN
+                    elif isinstance(latest_output, ContractExtraction) or "CONTRACT" in latest_agent.upper():
+                        art_type = ArtifactType.KEY_TERMS_EXTRACT
+                    elif isinstance(latest_output, ImplementationPlan) or "IMPLEMENTATION" in latest_agent.upper():
+                        art_type = ArtifactType.IMPLEMENTATION_CHECKLIST
+                    elif isinstance(latest_output, SignalAssessment) or "SIGNAL" in latest_agent.upper():
+                        art_type = ArtifactType.SIGNAL_REPORT
+
+                    # Get metadata from last activity log
+                    act_log = final_state.get("activity_log", [])
+                    last_log = act_log[-1] if act_log else None
+                    
+                    metadata = None
+                    if last_log:
+                        # Handle both dict and object
+                        log_dict = last_log if isinstance(last_log, dict) else last_log.__dict__
+                        
+                        # Extract reasoning log if available
+                        out_payload = log_dict.get("output_payload", {})
+                        reasoning_log = out_payload.get("reasoning_log")
+                        
+                        summary_text = log_dict.get("output_summary", "")
+                        if reasoning_log:
+                            # Format reasoning log as markdown for better readability
+                            summary_text += "\n\n**Reasoning Trace:**\n"
+                            if isinstance(reasoning_log, dict):
+                                if "thinking" in reasoning_log:
+                                    summary_text += f"**Thinking:** {reasoning_log['thinking']}\n"
+                                if "decision_factors" in reasoning_log:
+                                    summary_text += f"\n**Decision Factors:**\n"
+                                    for factor in reasoning_log['decision_factors']:
+                                        summary_text += f"- {factor}\n"
+                                if "rationale" in reasoning_log:
+                                    summary_text += f"\n**Rationale:**\n"
+                                    for r in reasoning_log['rationale']:
+                                        if isinstance(r, str):
+                                            summary_text += f"- {r}\n"
+                            else:
+                                summary_text += str(reasoning_log)
+
+                        task_detail = TaskExecutionDetail(
+                            task_name=log_dict.get("task_name", "Execute"),
+                            execution_order=1,
+                            status="completed",
+                            started_at=log_dict.get("timestamp"),
+                            completed_at=log_dict.get("timestamp"),
+                            tokens_used=log_dict.get("token_total", 0),
+                            output_summary=summary_text,
+                            grounding_sources=log_dict.get("documents_retrieved", [])
+                        )
+                        
+                        metadata = ExecutionMetadata(
+                            agent_name=log_dict.get("agent_name", latest_agent),
+                            dtp_stage=log_dict.get("dtp_stage", final_state.get("dtp_stage", "Unknown")),
+                            execution_timestamp=log_dict.get("timestamp", datetime.now().isoformat()),
+                            total_tokens_used=log_dict.get("token_total", 0),
+                            estimated_cost_usd=log_dict.get("estimated_cost_usd", 0.0),
+                            documents_retrieved=log_dict.get("documents_retrieved", []),
+                            task_details=[task_detail],
+                            user_message=user_message,
+                            intent_classified=final_state.get("intent_classification", ""),
+                            model_used=log_dict.get("model_used", "Unknown")
+                        )
+
+                    # Create Artifact
+                    # Convert Pydantic output to dict if needed
+                    content_dict = latest_output
+                    if hasattr(latest_output, "model_dump"):
+                        content_dict = latest_output.model_dump()
+                    elif hasattr(latest_output, "__dict__"):
+                        content_dict = latest_output.__dict__
+
+                    artifact = Artifact(
+                        artifact_id=str(uuid.uuid4()),
+                        type=art_type.value if hasattr(art_type, "value") else str(art_type),
+                        title=f"{latest_agent} Output",
+                        content=content_dict if isinstance(content_dict, dict) else {"raw": str(content_dict)},
+                        created_at=datetime.now().isoformat(),
+                        created_by_agent=latest_agent
+                    )
+                    
+                    pack = ArtifactPack(
+                        pack_id=str(uuid.uuid4()),
+                        artifacts=[artifact],
+                        agent_name=latest_agent,
+                        created_at=datetime.now().isoformat(),
+                        execution_metadata=metadata
+                    )
+                    
+                    # Save pack
+                    self.case_service.save_artifact_pack(pack)
+                    final_state["latest_artifact_pack_id"] = pack.pack_id
+                    
+                except Exception as e:
+                    logger.error(f"Failed to create artifact pack: {e}")
+
             self.case_service.save_case_state(final_state)
             
             # 7. Construct and return structured ChatResponse

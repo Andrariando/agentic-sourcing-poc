@@ -78,11 +78,14 @@ CLASSIFICATION RULES:
    - "Why did you recommend this?" -> QUESTION (explain previous output)
    - "What are the risks?" -> QUESTION (explain/discuss)
 
-2. ACTION REQUEST (needs_agent=true, can_answer_directly=false): User wants NEW WORK done. Examples:
+2. ACTION REQUEST (needs_agent=true, can_answer_directly=false): User wants NEW WORK done, including SEARCHING or STRATEGY. Examples:
    - "Recommend a strategy" -> ACTION (run Strategy Agent)
    - "Score the suppliers" -> ACTION (run Supplier Evaluation)
    - "Draft an RFP" -> ACTION (run RFx Agent)
    - "Analyze the case" -> ACTION (run analysis)
+   - "What are my options?" -> ACTION (run Strategy Agent)
+   - "Find me cheap alternatives" -> ACTION (run Strategy/Sourcing Agent)
+   - "I want suppliers other than Microsoft" -> ACTION (run Strategy/Sourcing Agent)
 
 3. APPROVAL (is_approval=true): User is confirming/agreeing. Examples:
    - "Approve", "Yes", "Proceed", "Looks good", "Let's do it"
