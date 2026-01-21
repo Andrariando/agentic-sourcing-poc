@@ -446,6 +446,51 @@ class ChatService:
             state["activity_log"].append(direct_log)
             
             # CRITICAL FIX: Save state to persist activity log to database
+            
+            # UNIFIED AUDIT TRAIL: Also save as ArtifactPack to ensure it appears in detailed Audit Trail
+            try:
+                copilot_artifact = Artifact(
+                    artifact_id=str(uuid.uuid4()),
+                    type=ArtifactType.AUDIT_LOG_EVENT.value,
+                    title="Copilot Response",
+                    content={"message": assistant_message},
+                    content_text=assistant_message,
+                    created_at=datetime.now().isoformat(),
+                    created_by_agent="Copilot"
+                )
+                
+                copilot_pack = ArtifactPack(
+                    pack_id=str(uuid.uuid4()),
+                    artifacts=[copilot_artifact],
+                    agent_name="Copilot",
+                    created_at=datetime.now().isoformat(),
+                    execution_metadata=ExecutionMetadata(
+                        agent_name="Copilot",
+                        dtp_stage=state.get("dtp_stage", "Unknown"),
+                        execution_timestamp=datetime.now().isoformat(),
+                        total_tokens_used=len(assistant_message.split()) // 3, # Rough heuristic (1.3 tokens per word approx)
+                        estimated_cost_usd=(len(assistant_message.split()) // 3 / 1000) * 0.0006, # Approx cost for gpt-4o-mini output
+                        task_details=[
+                            TaskExecutionDetail(
+                                task_name="Direct Response",
+                                execution_order=1,
+                                status="completed",
+                                started_at=datetime.now().isoformat(),
+                                completed_at=datetime.now().isoformat(),
+                                output_summary=assistant_message,
+                                tokens_used=len(assistant_message.split()) // 3,
+                                grounding_sources=[]
+                            )
+                        ],
+                        user_message=user_message or "",
+                        intent_classified=intent.get("intent_summary", "Question"),
+                        model_used="gpt-4o-mini"
+                    )
+                )
+                self.case_service.save_artifact_pack(case_id, copilot_pack)
+            except Exception as e:
+                logger.error(f"Failed to save Copilot artifact pack: {e}")
+
             self.case_service.save_case_state(state)
         
         # 7. Save assistant response to memory
