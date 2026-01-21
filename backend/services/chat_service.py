@@ -42,7 +42,7 @@ from shared.constants import DTP_STAGE_NAMES, AgentName, ArtifactType
 from utils.schemas import (
     StrategyRecommendation, SupplierShortlist, NegotiationPlan, 
     RFxDraft, ContractExtraction, ImplementationPlan, ClarificationRequest,
-    SignalAssessment
+    SignalAssessment, AgentDialogue
 )
 from shared.schemas import (
     ChatResponse, ArtifactPack, NextAction, CaseStatus, Artifact, RiskItem,
@@ -1491,6 +1491,8 @@ class ChatService:
                         art_type = ArtifactType.IMPLEMENTATION_CHECKLIST
                     elif isinstance(latest_output, SignalAssessment) or "SIGNAL" in latest_agent.upper():
                         art_type = ArtifactType.SIGNAL_REPORT
+                    elif isinstance(latest_output, AgentDialogue):
+                        art_type = ArtifactType.AUDIT_LOG_EVENT
 
                     # Get metadata from last activity log (or create synthetic one)
                     act_log = final_state.get("activity_log", [])
@@ -1506,6 +1508,8 @@ class ChatService:
                             output_summary = str(latest_output.explanation)[:200]
                         elif hasattr(latest_output, "assessment_summary"):
                             output_summary = str(latest_output.assessment_summary)[:200]
+                        elif isinstance(latest_output, AgentDialogue):
+                            output_summary = f"[Dialogue] {latest_output.message}"
                         else:
                             output_summary = f"Output from {latest_agent}"
                         
@@ -1517,7 +1521,7 @@ class ChatService:
                             "output_summary": output_summary,
                             "token_total": 0,
                             "documents_retrieved": [],
-                            "output_payload": {}
+                            "output_payload": {"reasoning_log": latest_output.reasoning} if isinstance(latest_output, AgentDialogue) else {}
                         }
                         # Add to state so it persists
                         if "activity_log" not in final_state:
@@ -1607,6 +1611,59 @@ class ChatService:
                     
                 except Exception as e:
                     logger.error(f"Failed to create artifact pack: {e}")
+
+            # 6.6 NEW: Persist Supervisor Audit Log
+            # Ensure Supervisor actions (routing, state updates) are visible in Audit Trail
+            act_log = final_state.get("activity_log", [])
+            if act_log:
+                last_entry = act_log[-1]
+                # Handle both dict and object
+                entry_agent = last_entry.get("agent_name") if isinstance(last_entry, dict) else getattr(last_entry, "agent_name", "Unknown")
+                
+                if entry_agent == "Supervisor":
+                    try:
+                        entry_dict = last_entry if isinstance(last_entry, dict) else last_entry.__dict__
+                        
+                        sup_artifact = Artifact(
+                            artifact_id=str(uuid.uuid4()),
+                            type=ArtifactType.AUDIT_LOG_EVENT.value,
+                            title="Supervisor Action",
+                            content=entry_dict.get("output_payload", {}),
+                            content_text=entry_dict.get("output_summary", "Supervisor executed action"),
+                            created_at=datetime.now().isoformat(),
+                            created_by_agent="Supervisor"
+                        )
+                        
+                        # Create generic task detail for transparency
+                        task_detail = TaskExecutionDetail(
+                            task_name=entry_dict.get("task_name", "Coordinate Workflow"),
+                            execution_order=1,
+                            status="completed",
+                            started_at=entry_dict.get("timestamp", datetime.now().isoformat()),
+                            completed_at=entry_dict.get("timestamp", datetime.now().isoformat()),
+                            tokens_used=entry_dict.get("token_total", 0),
+                            output_summary=entry_dict.get("output_summary", ""),
+                            grounding_sources=[]
+                        )
+                        
+                        sup_pack = ArtifactPack(
+                            pack_id=str(uuid.uuid4()),
+                            artifacts=[sup_artifact],
+                            agent_name="Supervisor",
+                            created_at=datetime.now().isoformat(),
+                            execution_metadata=ExecutionMetadata(
+                                agent_name="Supervisor",
+                                dtp_stage=final_state.get("dtp_stage", "Unknown"),
+                                execution_timestamp=datetime.now().isoformat(),
+                                total_tokens_used=entry_dict.get("token_total", 0),
+                                task_details=[task_detail],
+                                user_message=user_message or "",
+                                intent_classified=final_state.get("intent_classification", "")
+                            )
+                        )
+                        self.case_service.save_artifact_pack(case_id, sup_pack)
+                    except Exception as e:
+                        logger.error(f"Failed to save Supervisor artifact: {e}")
 
             self.case_service.save_case_state(final_state)
             
