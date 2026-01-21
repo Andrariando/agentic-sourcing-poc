@@ -68,7 +68,7 @@ class CaseSummary(BaseModel):
     status: str
     created_date: str
     summary_text: str
-    key_findings: List[str] = Field(default_factory=list)
+    key_findings: List[Union[str, Dict[str, Any]]] = Field(default_factory=list)
     recommended_action: Optional[str] = None
 
 
