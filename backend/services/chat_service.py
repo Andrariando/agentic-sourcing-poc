@@ -41,7 +41,8 @@ from backend.supervisor.router import IntentRouter
 from shared.constants import DTP_STAGE_NAMES, AgentName, ArtifactType
 from utils.schemas import (
     StrategyRecommendation, SupplierShortlist, NegotiationPlan, 
-    RFxDraft, ContractExtraction, ImplementationPlan, ClarificationRequest
+    RFxDraft, ContractExtraction, ImplementationPlan, ClarificationRequest,
+    SignalAssessment
 )
 from shared.schemas import (
     ChatResponse, ArtifactPack, NextAction, CaseStatus, Artifact, RiskItem,

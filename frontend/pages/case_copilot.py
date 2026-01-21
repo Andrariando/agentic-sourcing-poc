@@ -994,7 +994,7 @@ def render_artifacts_panel_full_width(case, client) -> None:
         _render_activity_history(case)
     
     with tabs[7]:  # Audit Trail
-        _render_audit_history_from_packs(artifact_packs)
+        _render_audit_history_from_packs(artifact_packs, case)
 
 
 def _render_signals_artifacts(case, output, agent_name, all_artifacts):
@@ -1118,9 +1118,36 @@ def _render_implementation_artifacts(case, output, agent_name, all_artifacts):
         st.info("No implementation plan ready yet. Ask the copilot: \"Draft implementation plan\"")
 
 
-def _render_audit_history_from_packs(packs):
+def _render_audit_history_from_packs(packs, case=None):
     """Render the detailed audit trail of all agent executions."""
+    
+    # If no packs AND case has activity_log, show that as fallback
     if not packs:
+        if case and hasattr(case, 'activity_log') and case.activity_log:
+            st.warning("Showing Activity Log (detailed audit packs pending).")
+            for i, entry in enumerate(reversed(case.activity_log[-10:])):
+                if isinstance(entry, dict):
+                    agent = entry.get('agent_name', 'System')
+                    ts = entry.get('timestamp', '')[:16] if entry.get('timestamp') else ''
+                    summary = entry.get('output_summary', '')
+                    payload = entry.get('output_payload', {})
+                    reasoning = payload.get('reasoning_log') if isinstance(payload, dict) else None
+                else:
+                    agent = getattr(entry, 'agent_name', 'System')
+                    ts = str(getattr(entry, 'timestamp', ''))[:16]
+                    summary = getattr(entry, 'output_summary', '')
+                    reasoning = None
+                
+                with st.expander(f"📋 {agent} ({ts})"):
+                    if reasoning:
+                        st.markdown("**Reasoning Trace:**")
+                        st.json(reasoning)
+                    elif summary:
+                        st.markdown(summary)
+                    else:
+                        st.markdown("_No details available_")
+            return
+        
         st.info("No historical data available for this case.")
         return
         
