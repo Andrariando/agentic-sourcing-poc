@@ -469,10 +469,10 @@ Agents follow a structured **Task-Based** execution model:
 7. **Welcome message**: Fixed literal `\n` display using proper multiline strings.
 
 ### Data Enhancements
-1. Created comprehensive seed script (`backend/scripts/seed_comprehensive_data.py`).
-2. Added 5 realistic test cases across different categories and DTP stages.
-3. Seeded 16 suppliers with differentiated performance data.
-4. Added 11 category-specific documents to ChromaDB.
+1. Created IT-focused seed script (`backend/scripts/seed_it_demo_data.py`).
+2. Added 10 realistic IT/Corporate test cases across all DTP stages.
+3. Seeded 20+ suppliers with differentiated performance data.
+4. Added 15+ context-aware documents (Proposals, Templates, Reports) to ChromaDB.
 
 ### Architecture Clarifications
 - Frontend (`frontend/app.py`) communicates with backend API on port 8000.
@@ -628,4 +628,28 @@ def load_json_data(filename: str) -> list:
 | **Renewal** | Contract expires within 90 days | High (≤30d), Medium (≤60d), Low (≤90d) |
 | **Risk** | Supplier score < 5.0 OR declining trend + score < 6.0 | High / Medium |
 | **Savings** | Spend variance > 15% from market benchmark | Medium / Low |
+
+---
+
+## 🧠 10. Agent Context Awareness (RAG) (January 2026)
+
+To prevent generic outputs, all DTP Agents now possess **Context-Aware Retrieval Augmented Generation (RAG)** capabilities. They automatically retrieve and reference specific case documents from the Vector Store (ChromaDB) to ground their advice.
+
+### Mechanism
+1.  **Retrieval**: Agents perform targeted semantic searches in ChromaDB using the `case_id` or `category_id`.
+2.  **Injection**: Retrieved document content is injected directly into the LLM system prompt.
+3.  **Grounding**: The LLM uses this data to generate specific, evidence-based recommendations.
+
+### Agent-Document Mapping
+
+| Agent | DTP Stage | Retrieved Document Type | Example Use Case |
+|-------|-----------|-------------------------|------------------|
+| **StrategyAgent** | DTP-01 | Market Reports, Category Strategy | "Telecom Market Report 2025" for price benchmarking |
+| **RFxDraftAgent** | DTP-02/03 | RFP Templates, Requirements | "Cybersecurity SOC RFP Template" to structure requirements |
+| **NegotiationAgent** | DTP-04 | Proposals, Contracts | "Microsoft EA Renewal Proposal" for specific pricing ($32/user) |
+| **ContractSupportAgent** | DTP-05 | Contract Templates (MSA/SOW) | "Service Desk SOW Template" for SLA extraction |
+| **ImplementationAgent** | DTP-06 | Implementation Guides | "Cloud Migration Guide" for rollout step definition |
+
+### Data Seeding
+The seed script (`backend/scripts/seed_it_demo_data.py`) automatically populates the Vector Store with these documents for all 10 demo cases. This ensures that every demo case has high-quality, relevant documents for the agents to analyze.
 

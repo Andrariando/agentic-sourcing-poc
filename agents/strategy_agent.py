@@ -83,6 +83,28 @@ class StrategyAgent(BaseAgent):
             category = get_category(case_summary.category_id)
             requirements = get_requirements(case_summary.category_id)
         
+        # STEP 2.1: Retrieve Market Reports / Context via RAG
+        retrieved_docs = []
+        try:
+            from backend.rag.vector_store import get_vector_store
+            vector_store = get_vector_store()
+            # Search for market reports or category strategy
+            query = f"market report strategy trends for {case_summary.category_id}"
+            rag_results = vector_store.search(
+                query=query,
+                n_results=3,
+                where={"category_id": case_summary.category_id}
+            )
+            if rag_results and rag_results.get("documents"):
+                data = rag_results["documents"][0]
+                metas = rag_results["metadatas"][0]
+                for i, text in enumerate(data):
+                    fname = metas[i].get("filename", "Doc")
+                    dtype = metas[i].get("document_type", "Unknown")
+                    retrieved_docs.append(f"DOCUMENT [{dtype}] {fname}:\\n{text}")
+        except Exception as e:
+            print(f"StrategyAgent RAG Error: {e}")
+        
         # STEP 2.5: Check for User Override (Collaboration Priority)
         # If user explicitly requests a strategy, respect it (if allowed).
         # This fixes the "One-Shot" flaw where rules ignore user feedback.
@@ -186,7 +208,8 @@ class StrategyAgent(BaseAgent):
             allowed_strategies=allowed_strategies, trigger_type=trigger_type,
             category_strategy_context=category_strategy_context,
             execution_constraints=execution_constraints,
-            conversation_history=conversation_history
+            conversation_history=conversation_history,
+            retrieved_docs=retrieved_docs
         )
         
         llm_input_payload = {
@@ -278,7 +301,10 @@ class StrategyAgent(BaseAgent):
         trigger_type: Optional[str] = None,
         category_strategy_context: Optional[Dict[str, Any]] = None,
         execution_constraints: Optional["ExecutionConstraints"] = None,
-        conversation_history: Optional[list[dict]] = None
+        category_strategy_context: Optional[Dict[str, Any]] = None,
+        execution_constraints: Optional["ExecutionConstraints"] = None,
+        conversation_history: Optional[list[dict]] = None,
+        retrieved_docs: Optional[list[str]] = None
     ) -> str:
         """Build prompt for LLM summarization (NOT decision-making)."""
         # Build strategy constraint text
@@ -326,7 +352,10 @@ Case Summary:
 User Intent:
 {user_intent if user_intent else "No specific user intent provided"}
 
-Retrieved Data:
+Retrieval Data (Market Reports / Strategy):
+{"\\n".join(retrieved_docs) if retrieved_docs else "No specific documents found via RAG"}
+
+Retrieved Data (Structured):
 
 Contract Information:
 {json.dumps(contract, indent=2) if contract else "No contract information"}

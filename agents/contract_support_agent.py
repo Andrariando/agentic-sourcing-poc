@@ -56,6 +56,28 @@ class ContractSupportAgent(BaseAgent):
             topic="contract_clauses"
         )
         
+        # STEP 1.5: Retrieve Contract Templates / Clauses via RAG
+        retrieved_clauses = []
+        try:
+            from backend.rag.vector_store import get_vector_store
+            vector_store = get_vector_store()
+            # Broad search for templates/clauses relevant to category
+            query = f"contract template MSA clauses for {case_summary.category_id}"
+            rag_results = vector_store.search(
+                query=query,
+                n_results=3
+                # No strict category filter to allow finding generic LEGAL templates
+            )
+            if rag_results and rag_results.get("documents"):
+                data = rag_results["documents"][0]
+                metas = rag_results["metadatas"][0]
+                for i, text in enumerate(data):
+                    fname = metas[i].get("filename", "Doc")
+                    dtype = metas[i].get("document_type", "Unknown")
+                    retrieved_clauses.append(f"TEMPLATE DOC [{dtype}] {fname}:\\n{text}")
+        except Exception as e:
+            print(f"ContractSupportAgent RAG Error: {e}")
+        
         # STEP 2: Retrieve relevant data for extraction
         category = get_category(case_summary.category_id)
         contract = get_contract(case_summary.contract_id) if case_summary.contract_id else None
@@ -73,6 +95,9 @@ Your role (Table 3 alignment):
 
 Contract Clause Library (from Vector Knowledge Layer - for grounding only):
 {json.dumps(contract_clauses_context, indent=2)}
+
+Retrieved Templates / Clauses (RAG):
+{"\\n".join(retrieved_clauses) if retrieved_clauses else "No specific templates found."}
 
 Case Summary:
 {case_summary.model_dump_json() if hasattr(case_summary, 'model_dump_json') else json.dumps(dict(case_summary))}

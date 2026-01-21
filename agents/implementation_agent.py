@@ -57,6 +57,27 @@ class ImplementationAgent(BaseAgent):
             topic="rollout_playbook"
         )
         
+        # STEP 1.5: Retrieve Implementation Guides via RAG
+        retrieved_guides = []
+        try:
+            from backend.rag.vector_store import get_vector_store
+            vector_store = get_vector_store()
+            query = f"implementation guide rollout project plan for {case_summary.category_id}"
+            rag_results = vector_store.search(
+                query=query,
+                n_results=2,
+                where={"category_id": case_summary.category_id}
+            )
+            if rag_results and rag_results.get("documents"):
+                data = rag_results["documents"][0]
+                metas = rag_results["metadatas"][0]
+                for i, text in enumerate(data):
+                    fname = metas[i].get("filename", "Doc")
+                    dtype = metas[i].get("document_type", "Unknown")
+                    retrieved_guides.append(f"GUIDE DOC [{dtype}] {fname}:\\n{text}")
+        except Exception as e:
+            print(f"ImplementationAgent RAG Error: {e}")
+        
         # STEP 2: Retrieve context for calculations
         category = get_category(case_summary.category_id)
         contract = get_contract(case_summary.contract_id) if case_summary.contract_id else None
@@ -75,6 +96,9 @@ Your role (Table 3 alignment):
 
 Rollout Playbook (from Vector Knowledge Layer):
 {json.dumps(rollout_playbook, indent=2)}
+
+Retrieved Guides (RAG):
+{"\\n".join(retrieved_guides) if retrieved_guides else "No specific guides found."}
 
 Case Summary:
 {case_summary.model_dump_json() if hasattr(case_summary, 'model_dump_json') else json.dumps(dict(case_summary))}

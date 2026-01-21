@@ -511,6 +511,36 @@ def seed_documents(vector_store):
             """
         },
         
+        # --- PROPOSALS (DTP-04 Support for CASE-006 Microsoft EA) ---
+        {
+            "id": "DOC-PROP-CASE-006-MSFT",
+            "name": "Proposal - Microsoft EA Renewal (2025)",
+            "type": "Proposal",
+            "cat": "SOFTWARE",
+            "case_id": "CASE-006",
+            "content": """
+            PROPOSAL: MICROSOFT ENTERPRISE AGREEMENT RENEWAL
+            SUPPLIER: Microsoft
+            
+            EXECUTIVE SUMMARY:
+            Renewal of EA Enrollment #12345678 for 3-year term.
+            
+            BOM (Bill of Materials):
+            1. Microsoft 365 E3 - 5,000 Users (Step-up to E5 available)
+            2. Azure Monetary Commitment - $2.4M (Annual)
+            3. Github Enterprise - 500 Users
+            
+            PRICING:
+            - M365 E3: $32/user/month (Prior term was $30)
+            - M365 E5 Step-up: Add $25/user/month
+            - Azure P1: Standard consumption rates (No additional discount)
+            
+            TERMS:
+            - 3 Year Term, Annual Payments
+            - Price Protection: Yes for Year 1, 5% cap Y2/Y3
+            """
+        },
+        
         
         # --- MARKET REPORTS (DTP-01 Support) ---
         {
@@ -532,6 +562,29 @@ def seed_documents(vector_store):
             NEGOTIATION LEVERS:
             - Commit to 36-month term for 15-20% discount.
             - Waive NRCs (Non-Recurring Costs) is standard market practice for deals >$50k.
+            """
+        },
+        {
+            "id": "DOC-MKT-FLT-01",
+            "name": "Global Fleet Market Report 2025",
+            "type": "Market Report",
+            "cat": "LOGISTICS",
+            "content": """
+            2025 FLEET MANAGEMENT MARKET INTELLIGENCE
+            
+            KEY TRENDS:
+            1. EV Transition: Corporate fleets targeting 40% EV mix by 2027.
+            2. Lease vs Buy: Operating Leases remaining preferred for flexibility.
+            
+            BENCHMARK PRICING:
+            - Sedan (Mid-size): $450-550/month (36mo/45k miles)
+            - SUV (Compact): $550-650/month
+            - Maintenance Management: $30-50/vehicle/month
+            
+            MAJOR PLAYERS:
+            - Enterprise Fleet Management
+            - Wheels Donlen
+            - LeasePlan
             """
         },
         
@@ -557,6 +610,28 @@ def seed_documents(vector_store):
             4. TERM AND TERMINATION
             This Agreement shall commence on the Effective Date and continue for a period of 36 months.
             Client may terminate for convenience with 30 days prior written notice.
+            """
+        },
+        {
+            "id": "DOC-CTR-SOW-SD-01",
+            "name": "Template - Service Desk SOW",
+            "type": "Contract Template",
+            "cat": "IT_SERVICES",
+            "content": """
+            STATEMENT OF WORK (SOW): GLOBAL SERVICE DESK
+            
+            1. SCOPE OF SERVICES
+            - Tier 1 Support (24/7/365) via Phone, Chat, Email
+            - Tier 2 Support (Business Hours)
+            - Incident Management & Request Fulfillment
+            
+            2. SERVICE LEVEL AGREEMENTS (SLAs)
+            - Speed to Answer (Phone): 80% within 30 seconds
+            - First Contact Resolution (FCR): > 70%
+            - Abandonment Rate: < 5%
+            
+            3. PRICING MODEL
+            - Per Ticket Pricing or Per User Per Month
             """
         },
         

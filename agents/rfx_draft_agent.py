@@ -51,6 +51,27 @@ class RFxDraftAgent(BaseAgent):
             dtp_stage="DTP-03",
             topic="rfq_template"
         )
+
+        # STEP 1.5: Retrieve specific RFP Templates via RAG
+        retrieved_templates = []
+        try:
+            from backend.rag.vector_store import get_vector_store
+            vector_store = get_vector_store()
+            query = f"RFP template requirements scope for {case_summary.category_id}"
+            rag_results = vector_store.search(
+                query=query,
+                n_results=2,
+                where={"category_id": case_summary.category_id}
+            )
+            if rag_results and rag_results.get("documents"):
+                data = rag_results["documents"][0]
+                metas = rag_results["metadatas"][0]
+                for i, text in enumerate(data):
+                    fname = metas[i].get("filename", "Doc")
+                    dtype = metas[i].get("document_type", "Unknown")
+                    retrieved_templates.append(f"TEMPLATE DOC [{dtype}] {fname}:\\n{text}")
+        except Exception as e:
+            print(f"RFxDraftAgent RAG Error: {e}")
         
         # STEP 2: Retrieve category context for filling template
         category = get_category(case_summary.category_id)
@@ -68,6 +89,9 @@ Your role (Table 3 alignment):
 
 RFx Template Structure (from Vector Knowledge Layer):
 {json.dumps(rfx_template_context, indent=2)}
+
+Retrieved RAG Templates (Use these for specific section content):
+{"\\n".join(retrieved_templates) if retrieved_templates else "No specific templates found."}
 
 Case Summary:
 {case_summary.model_dump_json() if hasattr(case_summary, 'model_dump_json') else json.dumps(dict(case_summary))}

@@ -364,32 +364,34 @@ For detailed information about all 7 agents, their sub-tasks, execution flow, an
 
 ## 📁 Data
 
-Comprehensive synthetic test data:
+Comprehensive synthetic test data focused on IT & Corporate Services:
 
-### Test Cases (5 cases)
+### Test Cases (10 Cases covering DTP-01 to DTP-06)
 | Case | Category | Stage | Key Features |
 |------|----------|-------|--------------|
-| CASE-0001 | IT_SERVICES | DTP-01 | Contract renewal, 3 suppliers, stable performance |
-| CASE-0002 | OFFICE_SUPPLIES | DTP-01 | Cost anomaly trigger, spend trending up |
-| CASE-0003 | CLOUD_SERVICES | DTP-02 | AWS/Azure/GCP comparison, migration planning |
-| CASE-0004 | MARKETING_SERVICES | DTP-03 | 4 agencies, evaluation rubric, creative scoring |
-| CASE-0005 | FACILITIES_MANAGEMENT | DTP-04 | Incumbent negotiation, market benchmarks |
+| CASE-001 | TELECOM | DTP-01 | Global SD-WAN Renewal, Market Report available |
+| CASE-002 | HARDWARE | DTP-02 | End User Computing RFP, High volume |
+| CASE-003 | CLOUD | DTP-06 | Cloud Migration Implementation, Multi-cloud |
+| CASE-004 | SECURITY | DTP-03 | SOC Services RFP, Premium vs Budget proposals |
+| CASE-005 | DATACENTER | DTP-04 | Colocation Renewal, Incumbent negotiation |
+| CASE-006 | SOFTWARE | DTP-04 | Microsoft EA Renewal, Detailed Proposal |
+| CASE-007 | IT_SERVICES | DTP-05 | Service Desk Outsourcing, SOW Template |
+| CASE-008 | SAAS | DTP-03 | HRIS Platform Selection (Workday), Proposal |
+| CASE-009 | LOGISTICS | DTP-01 | Global Fleet Leasing, EV Transition Report |
+| CASE-010 | HARDWARE | DTP-02 | Global Laptop Refresh, Standardization |
 
-### Suppliers (16 suppliers across 5 categories)
-- **IT Services**: TechCorp Solutions, Global IT Partners, CloudFirst Systems
-- **Office Supplies**: OfficeMax Pro, Corporate Supply Co, BulkOffice Direct
-- **Cloud Services**: AWS, Azure, Google Cloud Platform
-- **Marketing**: Creative Minds Agency, Digital First, B2B Marketing Pros, Integrated Brand
-- **Facilities**: FacilityPro Services, BuildingCare Plus, Integrated Facilities Group
+### Documents in ChromaDB (Context-Aware RAG)
+Agents now dynamically retrieve these documents to provide specific advice:
 
-### Documents in ChromaDB (11 documents, 71 chunks)
-- RFP templates (IT, Marketing)
-- Market benchmarks (IT, Office, Facilities)
-- Cloud provider comparison \u0026 migration guides
-- Contract templates \u0026 SOW
-- Procurement policy \u0026 DTP gates
+| Document Type | Examples | Used By |
+|---------------|----------|---------|
+| **Market Reports** | Telecom 2025, Fleet 2025 | StrategyAgent (DTP-01) |
+| **RFP Templates** | Cybersecurity SOC, Hardware, Cloud | RFxDraftAgent (DTP-02/03) |
+| **Proposals** | Microsoft EA, AWS, Workday, SecureNet | NegotiationAgent (DTP-04) |
+| **Contracts** | MSA Template, Service Desk SOW | ContractSupportAgent (DTP-05) |
+| **Guides** | Cloud Migration Implementation Guide | ImplementationAgent (DTP-06) |
 
-Seed via: `python backend/scripts/seed_comprehensive_data.py`
+Seed via: `python backend/scripts/seed_it_demo_data.py`
 
 ---
 

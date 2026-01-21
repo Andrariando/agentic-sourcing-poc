@@ -88,6 +88,28 @@ class NegotiationSupportAgent(BaseAgent):
             topic="negotiation_playbook"
         )
         
+        
+        # Retrieve Case Documents via RAG
+        retrieved_docs = []
+        try:
+            from backend.rag.vector_store import get_vector_store
+            vector_store = get_vector_store()
+            if case_summary.case_id:
+                rag_results = vector_store.search(
+                    query=f"proposal contract terms pricing for {case_summary.case_id}",
+                    n_results=3,
+                    where={"case_id": case_summary.case_id}
+                )
+                if rag_results and rag_results.get("documents"):
+                    data = rag_results["documents"][0]
+                    metas = rag_results["metadatas"][0]
+                    for i, text in enumerate(data):
+                        fname = metas[i].get("filename", "Doc")
+                        dtype = metas[i].get("document_type", "Unknown")
+                        retrieved_docs.append(f"DOCUMENT [{dtype}] {fname}:\\n{text}")
+        except Exception as e:
+            print(f"RAG Error: {e}")
+
         # Step 1: Reasoning & Critique Loop
         # Agent decides whether to proceed or talk back
         reasoning_prompt = f"""You are a Negotiation Support Agent (DTP-04).
@@ -99,6 +121,7 @@ class NegotiationSupportAgent(BaseAgent):
         - Contract: {"Available" if contract else "Missing"}
         - Performance: {"Available" if performance else "Missing"}
         - Market Data: {"Available" if market else "Missing"}
+        - Retrieved Documents: {len(retrieved_docs)} found
         
         Review the request and available data.
         1. Do you have enough information to create a negotiation plan? (Missing contract/performance is critical)
@@ -136,6 +159,15 @@ class NegotiationSupportAgent(BaseAgent):
 
         # Step 2: Proceed to Plan Generation (if Proceed)
         # Build prompt aligned with Table 3: comparative and advisory only
+        
+        # Prepare Key Findings
+        key_findings_text = "None"
+        if hasattr(case_summary, "key_findings") and case_summary.key_findings:
+            key_findings_text = "\\n".join([
+                f"- {f.get('text', str(f)) if isinstance(f, dict) else str(f)}" 
+                for f in case_summary.key_findings
+            ])
+            
         prompt = f"""You are a Negotiation Support Agent for dynamic sourcing pipelines (DTP-04).
         REASONING CONTEXT: {reasoning_decision.reasoning}
 
@@ -149,6 +181,9 @@ Your role (Table 3 alignment):
 
 Case Summary:
 {case_summary.model_dump_json() if hasattr(case_summary, 'model_dump_json') else json.dumps(dict(case_summary))}
+
+Key Findings (CRITICAL LEVERAGE):
+{key_findings_text}
 
 Target Supplier ID: {supplier_id}
 
@@ -166,6 +201,9 @@ Supplier Performance:
 
 Market Context:
 {json.dumps(market, indent=2) if market else "No market data"}
+
+Retrieved Documents (Proposals / Contracts):
+{"\\n".join(retrieved_docs) if retrieved_docs else "No specific documents found."}
 
 Create a negotiation plan (comparative and advisory). Consider:
 1. Current contract terms and pricing (bid comparison)
