@@ -220,81 +220,48 @@ def render_case_dashboard():
     
     # Demo Data Section (collapsed by default)
     with st.expander("🎯 Demo Data & Quick Access", expanded=False):
-        st.markdown("**Load demo data or access the Happy Path demo case.**")
+        st.markdown("**Manage Demo Environment**")
+        st.info("ℹ️ This will reset the database and load the 10 IT-Infrastructure focused demo cases.")
         
-        col_demo1, col_demo2, col_demo3 = st.columns([1.5, 1, 1])
+        col_actions, col_clear = st.columns([1.5, 1])
         
-        with col_demo1:
-            if st.button("🚀 Run Happy Path Demo", help="Creates CASE-DEMO-001 with full DTP-01 to DTP-06 workflow", use_container_width=True):
+        with col_actions:
+             if st.button("🔄 Reset & Load 10 IT Cases", help="Wipes database and loads the 10 approved IT scenarios (DTP-01 to DTP-06)", use_container_width=True, type="primary"):
                 try:
                     import subprocess
                     import sys
                     from pathlib import Path
-                    project_root = Path(__file__).parent.parent.parent
-                    script_path = project_root / "backend" / "scripts" / "run_happy_path_demo.py"
                     
-                    result = subprocess.run(
-                        [sys.executable, str(script_path)],
-                        cwd=str(project_root),
-                        capture_output=True,
-                        text=True,
-                        timeout=300  # 5 minute timeout
-                    )
-                    
-                    if result.returncode == 0:
-                        st.success("✅ Happy Path demo completed! Look for CASE-DEMO-001 in the cases list below.")
-                        st.info("💡 Click 'Open Demo Case' below or search for CASE-DEMO-001 in the cases table.")
-                        st.rerun()
-                    else:
-                        st.error(f"Demo script failed:\n{result.stderr}")
-                except subprocess.TimeoutExpired:
-                    st.error("Demo script timed out. Check backend logs.")
-                except Exception as e:
-                    st.error(f"Failed to run demo: {e}")
-                    st.info("💡 Try running manually: `python backend/scripts/run_happy_path_demo.py`")
-        
-        with col_demo2:
-            # Check if demo case exists
-            demo_case_exists = False
-            try:
-                demo_case = client.get_case("CASE-DEMO-001")
-                demo_case_exists = demo_case is not None
-            except:
-                pass
-            
-            if demo_case_exists:
-                if st.button("📂 Open Demo Case", help="Open CASE-DEMO-001 with full workflow", use_container_width=True):
-                    st.session_state.selected_case_id = "CASE-DEMO-001"
-                    st.session_state.current_page = "copilot"
-                    st.rerun()
-            else:
-                st.button("📂 Open Demo Case", help="Run the demo script first", use_container_width=True, disabled=True)
-        
-        with col_demo3:
-            if st.button("🔄 Refresh Cases", help="Refresh the cases list", use_container_width=True):
-                st.rerun()
-        
-        st.markdown("---")
-        
-        # Legacy buttons - compact layout
-        col_seed1, col_seed2, col_spacer = st.columns([1, 1, 3])
-        with col_seed1:
-            if st.button("Load Demo Cases", help="Load sample cases at various DTP stages", use_container_width=True):
-                try:
-                    from backend.seed_data import seed_all
-                    seed_all()
-                    st.success("Demo data loaded successfully.")
-                    st.rerun()
+                    with st.spinner("Resetting database and generating 10 IT cases..."):
+                        project_root = Path(__file__).parent.parent.parent
+                        script_path = project_root / "backend" / "scripts" / "seed_it_demo_data.py"
+                        
+                        result = subprocess.run(
+                            [sys.executable, str(script_path)],
+                            cwd=str(project_root),
+                            capture_output=True,
+                            text=True,
+                            timeout=300
+                        )
+                        
+                        if result.returncode == 0:
+                            st.success("✅ Environment successfully reset with 10 IT Cases!")
+                            st.rerun()
+                        else:
+                            st.error(f"Seeding failed:\n{result.stderr}")
                 except Exception as e:
                     st.error(f"Failed to seed data: {e}")
-        with col_seed2:
-            if st.button("Clear All Data", help="Remove all cases and data", use_container_width=True):
+        
+        with col_clear:
+            if st.button("🗑️ Clear All Data", help="Remove all cases and data (Empty State)", use_container_width=True):
                 try:
                     from backend.persistence.database import get_db_session
                     from backend.persistence.models import CaseState, SupplierPerformance, SpendMetric, SLAEvent
                     from sqlmodel import select, delete
                     session = get_db_session()
                     session.exec(delete(CaseState))
+                    # We might want to keep suppliers/spend for empty text, but "Clear All" usually implies everything.
+                    # Given the new seed script wipes everything anyway, let's keep this as a full wipe.
                     session.exec(delete(SupplierPerformance))
                     session.exec(delete(SpendMetric))
                     session.exec(delete(SLAEvent))
