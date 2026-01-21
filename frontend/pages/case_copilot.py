@@ -490,16 +490,23 @@ def render_case_details_panel(case, client) -> None:
     # Parse key findings for signals
     if case.summary and case.summary.key_findings:
         for finding in case.summary.key_findings[:5]:
+            # Handle both string and dict formats
+            if isinstance(finding, dict):
+                finding_text = finding.get("text", str(finding))
+            else:
+                finding_text = str(finding)
+            
             indicator = "yellow"
-            if "high" in finding.lower() or "breach" in finding.lower() or "decline" in finding.lower():
+            finding_lower = finding_text.lower()
+            if "high" in finding_lower or "breach" in finding_lower or "decline" in finding_lower:
                 indicator = "red"
-            elif "strong" in finding.lower() or "improving" in finding.lower() or "good" in finding.lower():
+            elif "strong" in finding_lower or "improving" in finding_lower or "good" in finding_lower:
                 indicator = "green"
             
             st.markdown(f"""
             <div style="display: flex; align-items: flex-start; padding: 6px 0; font-size: 0.85rem;">
                 <span class="signal-indicator {indicator}"></span>
-                <span>{finding}</span>
+                <span>{finding_text}</span>
             </div>
             """, unsafe_allow_html=True)
     else:
