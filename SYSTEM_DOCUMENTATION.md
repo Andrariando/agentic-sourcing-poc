@@ -25,8 +25,8 @@ python -m uvicorn backend.main:app --port 8000
 # Terminal 2: Start Frontend
 python -m streamlit run frontend/app.py
 
-# Seed Demo Data
-python backend/scripts/seed_comprehensive_data.py
+# Seed Demo Data (IT Cases)
+python backend/scripts/seed_it_demo_data.py
 ```
 
 ---
@@ -341,64 +341,52 @@ class NegotiationPlan:
 The system comes with comprehensive synthetic data for testing. Run the seed script:
 
 ```bash
-python backend/scripts/seed_comprehensive_data.py
+python backend/scripts/seed_it_demo_data.py
 ```
 
-### Available Test Cases
+### Available Test Cases (10 Cases covering DTP-01 to DTP-06)
 
-| Case ID | Name | Category | DTP Stage | Key Data |
-|---------|------|----------|-----------|----------|
-| CASE-0001 | IT Services Contract Renewal | IT_SERVICES | DTP-01 | 3 suppliers, 12mo spend, SLA history |
-| CASE-0002 | Office Supplies Cost Reduction | OFFICE_SUPPLIES | DTP-01 | 3 suppliers, spend anomaly (+20%) |
-| CASE-0003 | Cloud Infrastructure Migration | CLOUD_SERVICES | DTP-02 | AWS/Azure/GCP comparison data |
-| CASE-0004 | Marketing Agency Selection | MARKETING_SERVICES | DTP-03 | 4 agency proposals, evaluation rubric |
-| CASE-0005 | Facilities Management Negotiation | FACILITIES_MANAGEMENT | DTP-04 | Incumbent vs. market benchmarks |
+| Case ID | Name | Category | DTP Stage | Description |
+|---------|------|----------|-----------|-------------|
+| CASE-001 | IT Managed Services Renewal | IT_SERVICES | DTP-01 | Renewal with TechCorp, pricing above market |
+| CASE-002 | End-User Hardware Refresh | HARDWARE | DTP-01 | 2,500 unit refresh (Dell vs HP/Lenovo) |
+| CASE-009 | Global Telecom Consolidation | TELECOM | DTP-01 | Consolidating 15 countries to 1-2 carriers |
+| CASE-003 | Cloud Migration (AWS/Azure) | CLOUD | DTP-02 | Migrating 40% workloads to cloud |
+| CASE-007 | SD-WAN Upgrade | NETWORK | DTP-02 | Replacing MPLS with SD-WAN |
+| CASE-010 | DevOps Toolchain Standards | SOFTWARE | DTP-02 | Standardizing CI/CD (GitHub vs GitLab) |
+| CASE-004 | Cybersecurity SOC Services | SECURITY | DTP-03 | Scoring proposals (SecureNet vs CyberGuard) |
+| CASE-008 | HRIS Platform Selection | SAAS | DTP-03 | Workday vs Oracle HCM evaluation |
+| CASE-005 | Data Center Co-location | INFRASTRUCTURE | DTP-04 | Equinix negotiation (power rates) |
+| CASE-006 | Microsoft EA Renewal | SOFTWARE | DTP-04 | E3 to E5 step-up, 15% uplift proposed |
 
-### Supplier Data (16 suppliers across 5 categories)
+### Supplier Data Highlights
 
 **IT Services**:
-- SUP-IT-001: TechCorp Solutions (7.8/10, stable, low risk)
-- SUP-IT-002: Global IT Partners (7.2/10, improving, medium risk)
-- SUP-IT-003: CloudFirst Systems (8.2/10, stable, low risk)
+- SUP-IT-01: TechCorp Solutions (7.8/10, stable)
+- SUP-IT-02: Global Systems Inc (6.5/10, declining risk)
 
-**Office Supplies**:
-- SUP-OFF-001: OfficeMax Pro (7.0/10, declining, cost issues)
-- SUP-OFF-002: Corporate Supply Co (8.0/10, competitive pricing)
-- SUP-OFF-003: BulkOffice Direct (7.5/10, best pricing)
+**Hardware**:
+- SUP-HW-01: Dell Technologies (8.5/10, benchmark partner)
+- SUP-HW-02: HP Inc (8.0/10, improving)
+- SUP-HW-03: Lenovo (7.5/10, stable)
 
-**Cloud Services**:
-- SUP-CLOUD-001: Amazon Web Services (8.8/10)
-- SUP-CLOUD-002: Microsoft Azure (8.7/10, better pricing)
-- SUP-CLOUD-003: Google Cloud Platform (8.5/10, best pricing)
+**Cloud**:
+- SUP-CL-01: AWS (9.0/10, strong technical)
+- SUP-CL-02: Microsoft Azure (8.8/10, better pricing)
 
-**Marketing Services**:
-- SUP-MKT-001: Creative Minds Agency (8.3/10, premium)
-- SUP-MKT-002: Digital First Marketing (8.0/10, improving)
-- SUP-MKT-003: B2B Marketing Pros (7.8/10, value pricing)
-- SUP-MKT-004: Integrated Brand Solutions (7.5/10)
+**Security**:
+- SUP-SEC-01: SecureNet Defense (9.2/10, premium)
+- SUP-SEC-02: CyberGuard AI (7.5/10, budget/innovator)
 
-**Facilities Management**:
-- SUP-FAC-001: FacilityPro Services (8.5/10, requesting 8% increase)
-- SUP-FAC-002: BuildingCare Plus (7.8/10, market rate)
-- SUP-FAC-003: Integrated Facilities Group (7.5/10, competitive)
+### Documents in ChromaDB (15+ Context-Aware Docs)
 
-### Documents in ChromaDB (11 documents, 71 chunks)
+| Document | Type | Category | Usage |
+|----------|------|----------|-------|
+| **RFP Templates** | Template | Hardware, Cloud, SOC | DTP-02 Structuring |
+| **Market Reports** | Report | Telecom, Fleet | DTP-01 Strategy |
+| **Vendor Proposals** | Proposal | SecureNet, CyberGuard, Workday, Equinix, Microsoft | DTP-03 & 04 |
+| **Contracts** | MSA | Legal | DTP-05 Review |
 
-| Document | Type | Category | DTP Relevance |
-|----------|------|----------|---------------|
-| RFP_Template_IT_Services.txt | RFx | IT_SERVICES | DTP-02, DTP-03 |
-| IT_Services_Market_Benchmark_2025.txt | Market Report | IT_SERVICES | DTP-01, DTP-04 |
-| Office_Supplies_Catalog_Pricing.txt | Catalog | OFFICE_SUPPLIES | DTP-01, DTP-02 |
-| Office_Supplies_Market_Analysis.txt | Market Report | OFFICE_SUPPLIES | DTP-01, DTP-04 |
-| Cloud_Provider_Comparison_Guide.txt | Technical Guide | CLOUD_SERVICES | DTP-01, DTP-02, DTP-03 |
-| Cloud_Migration_Best_Practices.txt | Technical Guide | CLOUD_SERVICES | DTP-02, DTP-06 |
-| Marketing_Agency_RFP_Template.txt | RFx | MARKETING_SERVICES | DTP-02, DTP-03 |
-| Marketing_Agency_Evaluation_Rubric.txt | Evaluation Guide | MARKETING_SERVICES | DTP-03 |
-| Facilities_Management_SOW.txt | Contract | FACILITIES_MANAGEMENT | DTP-05, DTP-06 |
-| Facilities_Management_Market_Rates.txt | Market Report | FACILITIES_MANAGEMENT | DTP-01, DTP-04 |
-| Procurement_Policy_DTP_Gates.txt | Policy | All | DTP-01 to DTP-06 |
-
----
 
 ## 🛠️ 5. Key Backend Components
 

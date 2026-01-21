@@ -81,13 +81,20 @@ This project includes comprehensive documentation covering all aspects of the sy
 
 ### Official Agents (7 First-Class Modules)
 
-1. **Supervisor Agent** — Orchestrates workflow, validates inputs, routes to agents
-2. **Sourcing Signal Agent** — Monitors contracts, spend, performance for opportunities
-3. **Supplier Scoring Agent** — Evaluates and ranks suppliers
-4. **RFx Draft Agent** — Assembles RFx documents (RFI/RFP/RFQ)
-5. **Negotiation Support Agent** — Provides negotiation insights (NO award decisions)
-6. **Contract Support Agent** — Extracts terms, validates, prepares handoff
-7. **Implementation Agent** — Rollout planning and value capture
+### Official Agents: What They Think & Decide
+
+The system consists of **7 specialized agents**, each with a distinct "brain" (logic), data access, and decision responsibility.
+
+| Agent | DTP Stage | Thinking Process (Logic) | Key Decisions (Human Approval) |
+|-------|-----------|--------------------------|-------------------------------|
+| **Supervisor** | *All* | **Orchestrator**: Monitors case state, validates inputs, and decides which specialist agent to call. It acts as the "Manager" ensuring no steps are skipped. | Routing to next stage, Handling exceptions |
+| **Sourcing Signal** | DTP-01 | **Scanner**: "Do we have a problem/opportunity?"<br>1. Checks contract expiry dates<br>2. Detects spend anomalies (>15% variance)<br>3. Flags supplier risk (score < 6.0) | Create new case? (Y/N) |
+| **Strategy Agent** | DTP-01 | **Strategist**: "How should we approach this?"<br>1. Retrieves market reports & benchmarks<br>2. Analyzes supplier leverage<br>3. Recommends path: Renewal, RFP, or Renegotiation | Confirm Strategy (e.g., "Go to RFP") |
+| **RFx Draft Agent** | DTP-02 | **Author**: "What are our requirements?"<br>1. Pulls similar past RFPs (RAG)<br>2. Structures technical vs commercial requirements<br>3. Drafts full RFP document | Approve RFP release to market |
+| **Supplier Scoring** | DTP-03 | **Evaluator**: "Who is the best fit?"<br>1. Numerical scoring of proposals against weightings<br>2. identifying compliance gaps<br>3. Ranking suppliers (1st, 2nd, 3rd) | Shortslist/Finalist Selection |
+| **Negotiation Support** | DTP-04 | **Coach**: "How do we get the best deal?"<br>1. Analyzes proposal vs. market benchmark<br>2. Identifies specific trade-offs (Price vs Term)<br>3. Generates script/email for negotiation | strategies and counter-offers |
+| **Contract Support** | DTP-05 | **Paralegal**: "Are the terms safe?"<br>1. Extracts key clauses (Indemnity, SLA, Term)<br>2. Flags deviations from policy<br>3. Generates signature pack | Contract Signature |
+| **Implementation** | DTP-06 | **Planner**: "How do we realize value?"<br>1. Creates rollout schedule (Gantt logic)<br>2. Defines success KPIs<br>3. Assigns resource stakeholders | Activate Project |
 
 ### Folder Structure
 
@@ -217,40 +224,32 @@ streamlit run frontend/app.py
 - **API Docs**: http://localhost:8000/docs
 - **Frontend**: http://localhost:8501
 
-### Seed Synthetic Data (Comprehensive Demo)
+### Seed Demo Data (IT & Corporate Services)
 
 ```bash
-# Seed 5 complete cases with full data
-python backend/scripts/seed_comprehensive_data.py
+# Seed 10 realistic IT cases with full data
+python backend/scripts/seed_it_demo_data.py
 ```
 
-This creates **5 comprehensive test cases** with full end-to-end data:
+This creates **10 comprehensive test cases** mirroring a real enterprise IT environment:
 
-| Case ID | Name | Category | DTP Stage | Description |
-|---------|------|----------|-----------|-------------|
-| CASE-0001 | IT Services Contract Renewal | IT_SERVICES | DTP-01 | Contract expiring in 35 days |
-| CASE-0002 | Office Supplies Cost Reduction | OFFICE_SUPPLIES | DTP-01 | Spend anomaly (+20% over budget) |
-| CASE-0003 | Cloud Infrastructure Migration | CLOUD_SERVICES | DTP-02 | AWS/Azure/GCP evaluation |
-| CASE-0004 | Marketing Agency Selection | MARKETING_SERVICES | DTP-03 | 4 agency proposals to evaluate |
-| CASE-0005 | Facilities Management Negotiation | FACILITIES_MANAGEMENT | DTP-04 | Incumbent requesting 8% increase |
+| Case ID | Name | Category | Stage | Description | Key Decision |
+|---------|------|----------|-------|-------------|--------------|
+| CASE-001 | IT Managed Services Renewal | IT_SERVICES | DTP-01 | Renewal with TechCorp, pricing above market | Review renewal terms vs market |
+| CASE-002 | End-User Hardware Refresh | HARDWARE | DTP-01 | 2,500 unit refresh (Dell vs HP/Lenovo) | Approve competitive RFP |
+| CASE-009 | Global Telecom Consolidation | TELECOM | DTP-01 | Consolidating 15 countries to 1-2 carriers | Strategic sourcing approval |
+| CASE-003 | Cloud Migration (AWS/Azure) | CLOUD | DTP-02 | Migrating 40% workloads to cloud | Approve technical requirements |
+| CASE-007 | SD-WAN Upgrade | NETWORK | DTP-02 | Replacing MPLS with SD-WAN | Approve vendor shortlist |
+| CASE-010 | DevOps Toolchain Standards | SOFTWARE | DTP-02 | Standardizing CI/CD (GitHub vs GitLab) | Approve evaluation matrix |
+| CASE-004 | Cybersecurity SOC Services | SECURITY | DTP-03 | Scoring proposals (SecureNet vs CyberGuard) | Select finalists for presentation |
+| CASE-008 | HRIS Platform Selection | SAAS | DTP-03 | Workday vs Oracle HCM evaluation | Confirm scoring results |
+| CASE-005 | Data Center Co-location | INFRASTRUCTURE | DTP-04 | Equinix negotiation (power rates) | Approve final terms |
+| CASE-006 | Microsoft EA Renewal | SOFTWARE | DTP-04 | E3 to E5 step-up, 15% uplift proposed | Authorize negotiation strategy |
 
 **Data Seeded**:
-- **16 suppliers** across 5 categories with differentiated performance
-- **12 months of spend data** per category with anomalies
-- **SLA events** (breaches, warnings, compliance) for supplier differentiation
-- **11 documents** (71 chunks) in ChromaDB:
-  - RFP templates, market benchmarks, policy docs
-  - Cloud provider comparisons, migration guides
-  - Contract templates, evaluation rubrics
-
-**Sample Chatbot Interactions**:
-```
-CASE-0001: "What's the renewal strategy for this case?"
-CASE-0002: "Why are costs increasing?"
-CASE-0003: "Compare the cloud providers"
-CASE-0004: "Evaluate the marketing proposals"
-CASE-0005: "What's our negotiation position?"
-```
+- **16 suppliers** with differentiated performance (e.g., declining trends, risk flags)
+- **11 context-aware documents** in ChromaDB (Proposals, RFPs, Market Reports)
+- **SLA events** and spend anomalies to trigger specific agent behaviors
 
 ---
 
@@ -367,18 +366,7 @@ For detailed information about all 7 agents, their sub-tasks, execution flow, an
 Comprehensive synthetic test data focused on IT & Corporate Services:
 
 ### Test Cases (10 Cases covering DTP-01 to DTP-06)
-| Case | Category | Stage | Key Features |
-|------|----------|-------|--------------|
-| CASE-001 | TELECOM | DTP-01 | Global SD-WAN Renewal, Market Report available |
-| CASE-002 | HARDWARE | DTP-02 | End User Computing RFP, High volume |
-| CASE-003 | CLOUD | DTP-06 | Cloud Migration Implementation, Multi-cloud |
-| CASE-004 | SECURITY | DTP-03 | SOC Services RFP, Premium vs Budget proposals |
-| CASE-005 | DATACENTER | DTP-04 | Colocation Renewal, Incumbent negotiation |
-| CASE-006 | SOFTWARE | DTP-04 | Microsoft EA Renewal, Detailed Proposal |
-| CASE-007 | IT_SERVICES | DTP-05 | Service Desk Outsourcing, SOW Template |
-| CASE-008 | SAAS | DTP-03 | HRIS Platform Selection (Workday), Proposal |
-| CASE-009 | LOGISTICS | DTP-01 | Global Fleet Leasing, EV Transition Report |
-| CASE-010 | HARDWARE | DTP-02 | Global Laptop Refresh, Standardization |
+See [Quick Start](#-quick-start) for the full list of 10 supported demo cases.
 
 ### Documents in ChromaDB (Context-Aware RAG)
 Agents now dynamically retrieve these documents to provide specific advice:
