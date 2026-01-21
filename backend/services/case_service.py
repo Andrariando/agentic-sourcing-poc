@@ -277,8 +277,8 @@ class CaseService:
         state = SupervisorState(
             case_id=case.case_id,
             name=case.name,
-            summary_text=case.summary_text,
-            key_findings=json.loads(case.key_findings) if case.key_findings else [],
+            summary_text=case.summary.summary_text,
+            key_findings=case.summary.key_findings,
             dtp_stage=case.dtp_stage,
             category_id=case.category_id,
             contract_id=case.contract_id,
