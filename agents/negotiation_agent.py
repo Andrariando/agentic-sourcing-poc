@@ -160,13 +160,17 @@ class NegotiationSupportAgent(BaseAgent):
         # Step 2: Proceed to Plan Generation (if Proceed)
         # Build prompt aligned with Table 3: comparative and advisory only
         
+        # Prepare retrieved documents text
+        retrieved_docs_text = "\n".join(retrieved_docs) if retrieved_docs else "No specific documents found."
+        
         # Prepare Key Findings
         key_findings_text = "None"
         if hasattr(case_summary, "key_findings") and case_summary.key_findings:
-            key_findings_text = "\\n".join([
+            key_findings_list = [
                 f"- {f.get('text', str(f)) if isinstance(f, dict) else str(f)}" 
                 for f in case_summary.key_findings
-            ])
+            ]
+            key_findings_text = "\n".join(key_findings_list)
             
         prompt = f"""You are a Negotiation Support Agent for dynamic sourcing pipelines (DTP-04).
         REASONING CONTEXT: {reasoning_decision.reasoning}
@@ -203,7 +207,7 @@ Market Context:
 {json.dumps(market, indent=2) if market else "No market data"}
 
 Retrieved Documents (Proposals / Contracts):
-{"\\n".join(retrieved_docs) if retrieved_docs else "No specific documents found."}
+{retrieved_docs_text}
 
 Create a negotiation plan (comparative and advisory). Consider:
 1. Current contract terms and pricing (bid comparison)
