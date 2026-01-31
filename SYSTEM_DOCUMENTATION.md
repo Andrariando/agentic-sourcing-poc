@@ -2,7 +2,7 @@
 
 This document provides a detailed technical deep-dive into the backend architecture and logic of the Agentic Sourcing Copilot. It is intended for auditing, technical review, and developers seeking to understand the inner workings of the system.
 
-**Last Updated**: January 2026
+**Last Updated**: January 31, 2026
 
 ---
 
@@ -640,4 +640,147 @@ To prevent generic outputs, all DTP Agents now possess **Context-Aware Retrieval
 
 ### Data Seeding
 The seed script (`backend/scripts/seed_it_demo_data.py`) automatically populates the Vector Store with these documents for all 10 demo cases. This ensures that every demo case has high-quality, relevant documents for the agents to analyze.
+
+---
+
+## 🔧 11. Artifact & Decision Flow Fixes (January 2026)
+
+### A. Artifact Type Detection (Centralized Mapping)
+
+**Problem**: Artifacts were getting wrong types due to inconsistent agent name handling (e.g., "Strategy" vs "STRATEGY" vs "StrategyAgent").
+
+**Solution**: Added centralized `AGENT_TO_ARTIFACT_TYPE` mapping in `chat_service.py`:
+
+```python
+AGENT_TO_ARTIFACT_TYPE = {
+    "Strategy": ArtifactType.STRATEGY_ANALYSIS,
+    "STRATEGY": ArtifactType.STRATEGY_ANALYSIS,
+    "StrategyAgent": ArtifactType.STRATEGY_ANALYSIS,
+    "Signal": ArtifactType.SIGNAL_REPORT,
+    "SourcingSignal": ArtifactType.SIGNAL_REPORT,
+    # ... 21 variants total
+}
+```
+
+**Usage**: Replace `output.__class__.__name__` checks with dictionary lookup.
+
+---
+
+### B. Decision Flow Bypass for Task Requests
+
+**Problem**: When `waiting_for_human = True`, ALL user messages were hijacked into the decision answer flow. Asking "Prepare the negotiation guideline" would loop back to the same decision question instead of executing agents.
+
+**Solution**: Added intent detection bypass (lines 277-287 in `chat_service.py`):
+
+```python
+# Check if user wants to DO something, not answer a question
+intent_summary = intent.get("intent_summary", "").upper()
+is_task_request = intent_summary in ["EXPLORE", "DO", "ANALYZE"]
+
+task_keywords = ["prepare", "generate", "create", "draft", "analyze", "help me with"]
+message_looks_like_task = any(kw in user_message.lower() for kw in task_keywords)
+
+if state.get("waiting_for_human") and not is_task_request and not message_looks_like_task:
+    # Only then enter decision flow
+```
+
+**Result**: Users can now execute agent tasks while decision questions are pending.
+
+---
+
+### C. Supplier ID Sync
+
+**Problem**: When user answers "Which supplier are we awarding to?" in chat, the `case.supplier_id` wasn't updated. Quick Overview showed "Not Assigned" even after selection.
+
+**Solution**: Added sync logic after saving decision answer:
+
+```python
+if pending_question["id"] == "award_supplier_id":
+    self.case_service.update_case(case_id, {"supplier_id": parsed_answer})
+```
+
+**Result**: Quick Overview now displays the selected supplier name.
+
+---
+
+### D. None Handling Fixes
+
+**Problem**: `state.get("human_decision", {}).get(...)` fails when key exists but value is `None`. Common error pattern causing `AttributeError`.
+
+**Solution**: Changed to defensive pattern using `or {}`:
+
+```python
+# Before (broken)
+current_answers = state.get("human_decision", {}).get(current_stage, {})
+
+# After (safe)
+human_decisions = state.get("human_decision") or {}
+current_answers = human_decisions.get(current_stage) or {}
+```
+
+**Locations Fixed**:
+- Line 287: First decision check
+- Line 418: Fallback decision check
+- Line 1991: Semantic validation
+- Line 1999: Parent answer lookup
+
+---
+
+### E. DTP-Ready Case Seed Data
+
+**Problem**: Cases were labeled by DTP stage but lacked the required upstream decisions to actually proceed. E.g., CASE-0004 (DTP-04) had no prior stage decisions.
+
+**Solution**: Enhanced `data/cases_seed.json` with:
+
+1. **`human_decision`**: Pre-filled answers for prior DTP stages
+2. **`case_context`**: Stage-relevant data fields
+
+**Example (CASE-0004 in DTP-04)**:
+```json
+{
+  "case_id": "CASE-0004",
+  "dtp_stage": "DTP-04",
+  "human_decision": {
+    "DTP-01": {"sourcing_required": {"answer": "Yes"}, "sourcing_route": {"answer": "Strategic"}},
+    "DTP-02": {"supplier_list_confirmed": {"answer": "Yes"}},
+    "DTP-03": {"evaluation_complete": {"answer": "Yes"}}
+  },
+  "case_context": {
+    "selected_supplier_id": "SUP-005",
+    "selected_supplier_name": "FacilityPro Services",
+    "target_savings_percent": 12
+  }
+}
+```
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `backend/services/chat_service.py` | +AGENT_TO_ARTIFACT_TYPE mapping, +STRING_TO_AGENT_NAME mapping, +decision bypass logic, +supplier sync, +None handling fixes |
+| `data/cases_seed.json` | Enhanced with human_decision and case_context for all 5 cases |
+
+---
+
+## 🔍 12. Troubleshooting Common Issues
+
+### Chat Loop (Repeated Questions)
+**Symptom**: Asking for a task like "Prepare negotiation guideline" keeps showing the same decision question.
+**Cause**: Task keywords not recognized.
+**Fix**: Add the keyword to `task_keywords` list in `chat_service.py` (line 283).
+
+### Supplier Not Showing in UI
+**Symptom**: Quick Overview shows "Not Assigned" after answering award question.
+**Cause**: Case record not updated.
+**Fix**: Ensure `award_supplier_id` sync logic is in place (line 365-370).
+
+### AttributeError on human_decision
+**Symptom**: Error accessing `human_decision.get(...)`.
+**Cause**: `human_decision` is None, not empty dict.
+**Fix**: Use `state.get("human_decision") or {}` pattern.
+
+### Artifacts Not Appearing
+**Symptom**: Artifacts generated but not visible in UI.
+**Cause**: Agent name not in `AGENT_TO_ARTIFACT_TYPE` mapping.
+**Fix**: Add the agent name variant to the mapping dictionary.
 

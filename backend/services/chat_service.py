@@ -276,7 +276,15 @@ class ChatService:
 
         # --- NEW: PROACTIVE DECISION LOGIC (Critique 3 & 7) ---
         # If waiting for human, hijack the flow to drive the decision process
-        if state.get("waiting_for_human"):
+        # BUT: Allow task requests (EXPLORE/DO intents) to bypass and execute agents
+        intent_summary = intent.get("intent_summary", "").upper()
+        is_task_request = intent_summary in ["EXPLORE", "DO", "ANALYZE"] or intent.get("requires_agent_action", False)
+        
+        # Check for keywords that indicate user wants to DO something, not answer a question
+        task_keywords = ["prepare", "generate", "create", "draft", "analyze", "help me with", "what should", "give me", "show me"]
+        message_looks_like_task = any(kw in user_message.lower() for kw in task_keywords)
+        
+        if state.get("waiting_for_human") and not is_task_request and not message_looks_like_task:
              current_stage = state.get("dtp_stage", "DTP-01")
              stage_def = DTP_DECISIONS.get(current_stage)
              
@@ -353,6 +361,14 @@ class ChatService:
                         })
                         
                         self.case_service.save_case_state(state)
+                        
+                        # SYNC SUPPLIER_ID: If user answered award_supplier_id, update case.supplier_id
+                        if pending_question["id"] == "award_supplier_id":
+                            try:
+                                self.case_service.update_case(case_id, {"supplier_id": parsed_answer})
+                                logger.info(f"[SYNC] Updated supplier_id to {parsed_answer} for case {case_id}")
+                            except Exception as e:
+                                logger.warning(f"Failed to sync supplier_id: {e}")
                         
                         # Re-evaluate to get the *NEXT* question immediately
                         # Refresh state copy
