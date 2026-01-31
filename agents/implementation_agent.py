@@ -74,7 +74,7 @@ class ImplementationAgent(BaseAgent):
                 for i, text in enumerate(data):
                     fname = metas[i].get("filename", "Doc")
                     dtype = metas[i].get("document_type", "Unknown")
-                    retrieved_guides.append(f"GUIDE DOC [{dtype}] {fname}:\\n{text}")
+                    retrieved_guides.append(f"GUIDE DOC [{dtype}] {fname}:" + "\n" + text)
         except Exception as e:
             print(f"ImplementationAgent RAG Error: {e}")
         
@@ -98,7 +98,7 @@ Rollout Playbook (from Vector Knowledge Layer):
 {json.dumps(rollout_playbook, indent=2)}
 
 Retrieved Guides (RAG):
-{"\\n".join(retrieved_guides) if retrieved_guides else "No specific guides found."}
+{chr(10).join(retrieved_guides) if retrieved_guides else "No specific guides found."}
 
 Case Summary:
 {case_summary.model_dump_json() if hasattr(case_summary, 'model_dump_json') else json.dumps(dict(case_summary))}

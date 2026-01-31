@@ -67,6 +67,75 @@ from backend.agents.supplier_eval import SupplierEvaluationAgent
 from backend.agents.negotiation import NegotiationAgent
 from backend.agents.signal import SignalAgent
 
+# ============================================================================
+# FIX 1: Centralized Agent-to-ArtifactType Mapping
+# This provides robust artifact type detection regardless of agent naming conventions
+# ============================================================================
+AGENT_TO_ARTIFACT_TYPE = {
+    # Strategy variants
+    "Strategy": ArtifactType.STRATEGY_RECOMMENDATION,
+    "STRATEGY": ArtifactType.STRATEGY_RECOMMENDATION,
+    "StrategyAgent": ArtifactType.STRATEGY_RECOMMENDATION,
+    
+    # Signal variants
+    "SOURCING_SIGNAL": ArtifactType.SIGNAL_REPORT,
+    "SourcingSignal": ArtifactType.SIGNAL_REPORT,
+    "SignalInterpretation": ArtifactType.SIGNAL_REPORT,
+    "Signal": ArtifactType.SIGNAL_REPORT,
+    
+    # Supplier Evaluation variants
+    "SupplierEvaluation": ArtifactType.SUPPLIER_SHORTLIST,
+    "SUPPLIER_SCORING": ArtifactType.SUPPLIER_SHORTLIST,
+    "SupplierScoring": ArtifactType.SUPPLIER_SHORTLIST,
+    
+    # RFx Draft variants
+    "RFxDraft": ArtifactType.RFX_DRAFT_PACK,
+    "RFX_DRAFT": ArtifactType.RFX_DRAFT_PACK,
+    "RfxDraft": ArtifactType.RFX_DRAFT_PACK,
+    
+    # Negotiation variants
+    "NegotiationSupport": ArtifactType.NEGOTIATION_PLAN,
+    "NEGOTIATION_SUPPORT": ArtifactType.NEGOTIATION_PLAN,
+    "Negotiation": ArtifactType.NEGOTIATION_PLAN,
+    
+    # Contract Support variants
+    "ContractSupport": ArtifactType.KEY_TERMS_EXTRACT,
+    "CONTRACT_SUPPORT": ArtifactType.KEY_TERMS_EXTRACT,
+    "Contract": ArtifactType.KEY_TERMS_EXTRACT,
+    
+    # Implementation variants
+    "Implementation": ArtifactType.IMPLEMENTATION_CHECKLIST,
+    "IMPLEMENTATION": ArtifactType.IMPLEMENTATION_CHECKLIST,
+    "ImplementationAgent": ArtifactType.IMPLEMENTATION_CHECKLIST,
+}
+
+# FIX 3: String to AgentName enum mapping for ArtifactBuilder integration
+STRING_TO_AGENT_NAME = {
+    "Strategy": AgentName.SOURCING_SIGNAL,  # Strategy maps to sourcing signal's domain
+    "STRATEGY": AgentName.SOURCING_SIGNAL,
+    "SOURCING_SIGNAL": AgentName.SOURCING_SIGNAL,
+    "SourcingSignal": AgentName.SOURCING_SIGNAL,
+    "Signal": AgentName.SOURCING_SIGNAL,
+    "SupplierEvaluation": AgentName.SUPPLIER_SCORING,
+    "SUPPLIER_SCORING": AgentName.SUPPLIER_SCORING,
+    "SupplierScoring": AgentName.SUPPLIER_SCORING,
+    "RFxDraft": AgentName.RFX_DRAFT,
+    "RFX_DRAFT": AgentName.RFX_DRAFT,
+    "RfxDraft": AgentName.RFX_DRAFT,
+    "NegotiationSupport": AgentName.NEGOTIATION_SUPPORT,
+    "NEGOTIATION_SUPPORT": AgentName.NEGOTIATION_SUPPORT,
+    "Negotiation": AgentName.NEGOTIATION_SUPPORT,
+    "ContractSupport": AgentName.CONTRACT_SUPPORT,
+    "CONTRACT_SUPPORT": AgentName.CONTRACT_SUPPORT,
+    "Contract": AgentName.CONTRACT_SUPPORT,
+    "Implementation": AgentName.IMPLEMENTATION,
+    "IMPLEMENTATION": AgentName.IMPLEMENTATION,
+    "Supervisor": AgentName.SUPERVISOR,
+}
+
+def get_agent_name_enum(agent_str: str) -> Optional[AgentName]:
+    """Convert string agent name to AgentName enum, or None if not found."""
+    return STRING_TO_AGENT_NAME.get(agent_str)
 
 class ChatService:
     """
@@ -1518,26 +1587,41 @@ class ChatService:
             latest_output = final_state.get("latest_agent_output")
             latest_agent = final_state.get("latest_agent_name")
             
+            # DEBUG LOGGING: Track artifact creation flow
+            logger.info(f"[ARTIFACT DEBUG] Checking artifact creation conditions:")
+            logger.info(f"[ARTIFACT DEBUG]   latest_output present: {latest_output is not None}")
+            logger.info(f"[ARTIFACT DEBUG]   latest_output type: {type(latest_output).__name__ if latest_output else 'None'}")
+            logger.info(f"[ARTIFACT DEBUG]   latest_agent: {latest_agent}")
+            logger.info(f"[ARTIFACT DEBUG]   condition pass: {bool(latest_output and latest_agent and latest_agent != 'Supervisor')}")
+            
             if latest_output and latest_agent and latest_agent != "Supervisor":
                 try:
-                    # Determine Artifact Type based on agent/output
-                    art_type = ArtifactType.AUDIT_LOG_EVENT # Default
-                    if isinstance(latest_output, StrategyRecommendation) or latest_agent.upper() == "STRATEGY":
-                        art_type = ArtifactType.STRATEGY_RECOMMENDATION
-                    elif isinstance(latest_output, SupplierShortlist) or latest_agent.upper() in ["SUPPLIER_SCORING", "SUPPLIEREVALUATION"]:
-                        art_type = ArtifactType.SUPPLIER_SHORTLIST
-                    elif isinstance(latest_output, RFxDraft) or latest_agent.upper() in ["RFX_DRAFT", "RFXDRAFT"]:
-                        art_type = ArtifactType.RFX_DRAFT_PACK
-                    elif isinstance(latest_output, NegotiationPlan) or "NEGOTIATION" in latest_agent.upper():
-                        art_type = ArtifactType.NEGOTIATION_PLAN
-                    elif isinstance(latest_output, ContractExtraction) or "CONTRACT" in latest_agent.upper():
-                        art_type = ArtifactType.KEY_TERMS_EXTRACT
-                    elif isinstance(latest_output, ImplementationPlan) or "IMPLEMENTATION" in latest_agent.upper():
-                        art_type = ArtifactType.IMPLEMENTATION_CHECKLIST
-                    elif isinstance(latest_output, SignalAssessment) or "SIGNAL" in latest_agent.upper():
-                        art_type = ArtifactType.SIGNAL_REPORT
-                    elif isinstance(latest_output, AgentDialogue):
-                        art_type = ArtifactType.AUDIT_LOG_EVENT
+                    # FIX 1: Use centralized mapping for artifact type detection
+                    # First try direct mapping lookup (handles all agent name variants)
+                    art_type = AGENT_TO_ARTIFACT_TYPE.get(latest_agent)
+                    
+                    # Fallback: Check isinstance for Pydantic model types
+                    if art_type is None:
+                        if isinstance(latest_output, StrategyRecommendation):
+                            art_type = ArtifactType.STRATEGY_RECOMMENDATION
+                        elif isinstance(latest_output, SupplierShortlist):
+                            art_type = ArtifactType.SUPPLIER_SHORTLIST
+                        elif isinstance(latest_output, RFxDraft):
+                            art_type = ArtifactType.RFX_DRAFT_PACK
+                        elif isinstance(latest_output, NegotiationPlan):
+                            art_type = ArtifactType.NEGOTIATION_PLAN
+                        elif isinstance(latest_output, ContractExtraction):
+                            art_type = ArtifactType.KEY_TERMS_EXTRACT
+                        elif isinstance(latest_output, ImplementationPlan):
+                            art_type = ArtifactType.IMPLEMENTATION_CHECKLIST
+                        elif isinstance(latest_output, SignalAssessment):
+                            art_type = ArtifactType.SIGNAL_REPORT
+                        elif isinstance(latest_output, AgentDialogue):
+                            art_type = ArtifactType.AUDIT_LOG_EVENT
+                        else:
+                            art_type = ArtifactType.AUDIT_LOG_EVENT  # Final fallback
+                    
+                    logger.info(f"[ARTIFACT DEBUG] Creating artifact for agent: {latest_agent}, type: {art_type.value}")
 
                     # Get metadata from last activity log (or create synthetic one)
                     act_log = final_state.get("activity_log", [])
@@ -1653,9 +1737,27 @@ class ChatService:
                     # Save pack
                     self.case_service.save_artifact_pack(case_id, pack)
                     final_state["latest_artifact_pack_id"] = pack.pack_id
+                    logger.info(f"[ARTIFACT DEBUG] SUCCESS: Saved artifact pack {pack.pack_id} for agent {latest_agent}")
                     
                 except Exception as e:
-                    logger.error(f"Failed to create artifact pack: {e}")
+                    logger.error(f"[ARTIFACT DEBUG] FAILED to create artifact pack: {e}")
+                    import traceback
+                    logger.error(f"[ARTIFACT DEBUG] Traceback: {traceback.format_exc()}")
+                    
+                    # FIX 2: Add error visibility - surface failures to activity log
+                    if "activity_log" not in final_state:
+                        final_state["activity_log"] = []
+                    final_state["activity_log"].append({
+                        "timestamp": datetime.now().isoformat(),
+                        "case_id": case_id,
+                        "agent_name": "System",
+                        "task_name": "Artifact Creation Error",
+                        "output_summary": f"Failed to save artifact for {latest_agent}: {str(e)}",
+                        "dtp_stage": final_state.get("dtp_stage", "Unknown"),
+                        "output_payload": {"error": str(e), "agent": latest_agent}
+                    })
+            else:
+                logger.warning(f"[ARTIFACT DEBUG] SKIPPED artifact creation: output={latest_output is not None}, agent={latest_agent}")
 
             # 6.6 NEW: Persist Supervisor Audit Log
             # Ensure Supervisor actions (routing, state updates) are visible in Audit Trail

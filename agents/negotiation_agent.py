@@ -106,7 +106,7 @@ class NegotiationSupportAgent(BaseAgent):
                     for i, text in enumerate(data):
                         fname = metas[i].get("filename", "Doc")
                         dtype = metas[i].get("document_type", "Unknown")
-                        retrieved_docs.append(f"DOCUMENT [{dtype}] {fname}:\\n{text}")
+                        retrieved_docs.append(f"DOCUMENT [{dtype}] {fname}:" + "\n" + text)
         except Exception as e:
             print(f"RAG Error: {e}")
 

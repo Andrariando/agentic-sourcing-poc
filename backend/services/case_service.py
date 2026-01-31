@@ -335,6 +335,10 @@ class CaseService:
         Returns:
             True if successful
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[ARTIFACT DEBUG] save_artifact_pack called: case_id={case_id}, pack_id={pack.pack_id}, agent={pack.agent_name}, artifacts={len(pack.artifacts)}")
+        
         session = get_db_session()
         
         try:

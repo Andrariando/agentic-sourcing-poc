@@ -74,7 +74,7 @@ class ContractSupportAgent(BaseAgent):
                 for i, text in enumerate(data):
                     fname = metas[i].get("filename", "Doc")
                     dtype = metas[i].get("document_type", "Unknown")
-                    retrieved_clauses.append(f"TEMPLATE DOC [{dtype}] {fname}:\\n{text}")
+                    retrieved_clauses.append(f"TEMPLATE DOC [{dtype}] {fname}:" + "\n" + text)
         except Exception as e:
             print(f"ContractSupportAgent RAG Error: {e}")
         
@@ -97,7 +97,7 @@ Contract Clause Library (from Vector Knowledge Layer - for grounding only):
 {json.dumps(contract_clauses_context, indent=2)}
 
 Retrieved Templates / Clauses (RAG):
-{"\\n".join(retrieved_clauses) if retrieved_clauses else "No specific templates found."}
+{chr(10).join(retrieved_clauses) if retrieved_clauses else "No specific templates found."}
 
 Case Summary:
 {case_summary.model_dump_json() if hasattr(case_summary, 'model_dump_json') else json.dumps(dict(case_summary))}

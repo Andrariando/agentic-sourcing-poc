@@ -69,7 +69,7 @@ class RFxDraftAgent(BaseAgent):
                 for i, text in enumerate(data):
                     fname = metas[i].get("filename", "Doc")
                     dtype = metas[i].get("document_type", "Unknown")
-                    retrieved_templates.append(f"TEMPLATE DOC [{dtype}] {fname}:\\n{text}")
+                    retrieved_templates.append(f"TEMPLATE DOC [{dtype}] {fname}:" + "\n" + text)
         except Exception as e:
             print(f"RFxDraftAgent RAG Error: {e}")
         
@@ -91,7 +91,7 @@ RFx Template Structure (from Vector Knowledge Layer):
 {json.dumps(rfx_template_context, indent=2)}
 
 Retrieved RAG Templates (Use these for specific section content):
-{"\\n".join(retrieved_templates) if retrieved_templates else "No specific templates found."}
+{chr(10).join(retrieved_templates) if retrieved_templates else "No specific templates found."}
 
 Case Summary:
 {case_summary.model_dump_json() if hasattr(case_summary, 'model_dump_json') else json.dumps(dict(case_summary))}
