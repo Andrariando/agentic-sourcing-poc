@@ -284,7 +284,8 @@ class ChatService:
                 # 1. Check if user answered a pending question
                 # We need to identify WHICH question was pending. 
                 # Ideally, we look at what's answered vs what's required.
-                current_answers = state.get("human_decision", {}).get(current_stage, {})
+                human_decisions = state.get("human_decision") or {}
+                current_answers = human_decisions.get(current_stage) or {}
                 
                 # Find the first unanswered required question (in order)
                 pending_question = None
@@ -412,7 +413,8 @@ class ChatService:
                 # 3. Fallback: If just entering this state or lost context, ask the first pending question
                 # (Same logic as above for finding pending_question)
                 pending_question = None
-                current_answers = state.get("human_decision", {}).get(current_stage, {})
+                human_decisions_2 = state.get("human_decision") or {}
+                current_answers = human_decisions_2.get(current_stage) or {}
                 for q in stage_def.get("questions", []):
                     if "dependency" in q:
                          dep_key, dep_val = list(q["dependency"].items())[0]
@@ -1985,7 +1987,8 @@ class ChatService:
         if decision == "Approve":
             stage_def = DTP_DECISIONS.get(current_stage)
             if stage_def:
-                current_answers = state["human_decision"].get(current_stage, {})
+                human_decisions = state.get("human_decision") or {}
+                current_answers = human_decisions.get(current_stage) or {}
                 missing_questions = []
                 
                 for q in stage_def.get("questions", []):
@@ -1994,7 +1997,8 @@ class ChatService:
                         if "dependency" in q:
                             dep_key, dep_val = list(q["dependency"].items())[0]
                             # Check if dependency matches answer
-                            parent_ans = current_answers.get(dep_key, {}).get("answer")
+                            parent_ans_obj = current_answers.get(dep_key) or {}
+                            parent_ans = parent_ans_obj.get("answer")
                             if parent_ans != dep_val:
                                 continue # dependency not met, so not required
                         

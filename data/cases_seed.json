@@ -9,7 +9,16 @@
     "trigger_source": "Signal",
     "created_date": "2024-02-01",
     "status": "In Progress",
-    "summary": "Contract CON-001 expiring in 30 days with declining performance trend"
+    "summary": "Contract CON-001 expiring in 30 days with declining performance trend. Ready for strategy decision.",
+    "human_decision": null,
+    "case_context": {
+      "contract_value": 500000,
+      "currency": "USD",
+      "incumbent_supplier": "TechServe Inc",
+      "contract_end_date": "2024-03-01",
+      "performance_trend": "declining",
+      "market_alternative_suppliers": 5
+    }
   },
   {
     "case_id": "CASE-0002",
@@ -21,7 +30,16 @@
     "trigger_source": "User",
     "created_date": "2024-01-15",
     "status": "In Progress",
-    "summary": "Review renewal options for office supplies contract"
+    "summary": "Review renewal options for office supplies contract. Low complexity, tactical sourcing likely.",
+    "human_decision": null,
+    "case_context": {
+      "contract_value": 75000,
+      "currency": "USD",
+      "incumbent_supplier": "OfficeMax Corp",
+      "contract_end_date": "2024-04-15",
+      "complexity": "low",
+      "market_alternative_suppliers": 12
+    }
   },
   {
     "case_id": "CASE-0003",
@@ -33,7 +51,44 @@
     "trigger_source": "User",
     "created_date": "2024-01-20",
     "status": "In Progress",
-    "summary": "Launch RFx process for professional services category"
+    "summary": "RFx process for professional services - evaluation phase. 4 suppliers responding.",
+    "human_decision": {
+      "DTP-01": {
+        "sourcing_required": {
+          "answer": "Yes",
+          "timestamp": "2024-01-20T10:00:00Z"
+        },
+        "sourcing_route": {
+          "answer": "Strategic",
+          "timestamp": "2024-01-20T10:05:00Z"
+        }
+      },
+      "DTP-02": {
+        "supplier_list_confirmed": {
+          "answer": "Yes",
+          "timestamp": "2024-01-22T14:00:00Z"
+        }
+      }
+    },
+    "case_context": {
+      "contract_value": 1200000,
+      "currency": "USD",
+      "complexity": "high",
+      "rfx_due_date": "2024-02-15",
+      "suppliers_invited": [
+        "SUP-004",
+        "SUP-007",
+        "SUP-008",
+        "SUP-009"
+      ],
+      "suppliers_responded": [
+        "SUP-004",
+        "SUP-007",
+        "SUP-008"
+      ],
+      "technical_evaluation_complete": false,
+      "commercial_evaluation_complete": false
+    }
   },
   {
     "case_id": "CASE-0004",
@@ -45,7 +100,46 @@
     "trigger_source": "User",
     "created_date": "2024-01-25",
     "status": "In Progress",
-    "summary": "Negotiate terms for facilities management services"
+    "summary": "Negotiate terms for facilities management. SUP-005 selected, awaiting final commercial terms.",
+    "human_decision": {
+      "DTP-01": {
+        "sourcing_required": {
+          "answer": "Yes",
+          "timestamp": "2024-01-25T09:00:00Z"
+        },
+        "sourcing_route": {
+          "answer": "Strategic",
+          "timestamp": "2024-01-25T09:10:00Z"
+        }
+      },
+      "DTP-02": {
+        "supplier_list_confirmed": {
+          "answer": "Yes",
+          "timestamp": "2024-01-27T11:00:00Z"
+        }
+      },
+      "DTP-03": {
+        "evaluation_complete": {
+          "answer": "Yes",
+          "timestamp": "2024-02-01T16:00:00Z"
+        }
+      }
+    },
+    "case_context": {
+      "contract_value": 850000,
+      "currency": "USD",
+      "selected_supplier_id": "SUP-005",
+      "selected_supplier_name": "FacilityPro Services",
+      "negotiation_start_date": "2024-02-05",
+      "target_savings_percent": 12,
+      "initial_offer_savings_percent": 8,
+      "key_terms_to_negotiate": [
+        "Payment terms",
+        "SLA penalties",
+        "Contract duration"
+      ],
+      "legal_review_status": "Pending"
+    }
   },
   {
     "case_id": "CASE-0005",
@@ -56,9 +150,33 @@
     "dtp_stage": "DTP-02",
     "trigger_source": "User",
     "created_date": "2024-02-05",
-    "status": "Open",
-    "summary": "New sourcing initiative for IT hardware procurement"
+    "status": "In Progress",
+    "summary": "New sourcing initiative for IT hardware. Strategy confirmed, building supplier shortlist.",
+    "human_decision": {
+      "DTP-01": {
+        "sourcing_required": {
+          "answer": "Yes",
+          "timestamp": "2024-02-05T10:00:00Z"
+        },
+        "sourcing_route": {
+          "answer": "Tactical",
+          "timestamp": "2024-02-05T10:15:00Z"
+        }
+      }
+    },
+    "case_context": {
+      "estimated_value": 250000,
+      "currency": "USD",
+      "requirement_type": "New procurement",
+      "urgency": "Medium",
+      "candidate_suppliers": [
+        "SUP-001",
+        "SUP-010",
+        "SUP-011",
+        "SUP-012"
+      ],
+      "shortlist_status": "In progress",
+      "market_research_complete": true
+    }
   }
 ]
-
-
