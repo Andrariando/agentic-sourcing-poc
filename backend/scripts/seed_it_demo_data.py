@@ -173,6 +173,7 @@ def seed_cases(session: Session):
             "summary_text": "Expansion of US East region. Equinix selected as preferred. Negotiating power rates and cross-connect fees.",
             "recommended_action": "Finalize terms. leverage Digital Realty quote to reduce Equinix NRCs.",
             "trigger_source": "User (Expansion)",
+            "supplier_id": "Equinix",  # Displayed in UI case list
             "human_decision": json.dumps({
                 "DTP-01": {
                     "sourcing_required": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
@@ -202,6 +203,7 @@ def seed_cases(session: Session):
             "summary_text": "3-year Enterprise Agreement renewal. Moving from E3 to E5 licenses. Microsoft proposing 15% uplift.",
             "recommended_action": "Negotiate discount on E5 step-up and Azure commit credits",
             "trigger_source": "Signal (Renewal)",
+            "supplier_id": "Microsoft",  # Displayed in UI case list
             "human_decision": json.dumps({
                 "DTP-01": {
                     "sourcing_required": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
