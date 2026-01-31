@@ -30,7 +30,7 @@ def seed_cases(session: Session):
     print("  [OK] Cleared existing cases.")
     
     cases_data = [
-        # DTP-01 Cases (Strategy)
+        # DTP-01 Cases (Strategy) - No prerequisites needed
         {
             "case_id": "CASE-001",
             "name": "IT Managed Services Renewal",
@@ -62,7 +62,7 @@ def seed_cases(session: Session):
             "trigger_source": "Signal (Spend Anomaly)"
         },
 
-        # DTP-02 Cases (Planning)
+        # DTP-02 Cases (Planning) - Need DTP-01 decisions + candidate_suppliers
         {
             "case_id": "CASE-003",
             "name": "Cloud Migration (AWS/Azure)",
@@ -71,7 +71,16 @@ def seed_cases(session: Session):
             "status": "In Progress",
             "summary_text": "Strategic initiative to migrate 40% of on-prem workloads to cloud. Defining technical requirements for AWS vs Azure pilot.",
             "recommended_action": "Finalize RFP technical requirements and selection criteria",
-            "trigger_source": "User (Strategic)"
+            "trigger_source": "User (Strategic)",
+            # PREREQUISITES for DTP-02
+            "human_decision": json.dumps({
+                "DTP-01": {
+                    "sourcing_required": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
+                }
+            }),
+            "case_context": json.dumps({
+                "candidate_suppliers": ["SUP-CL-01", "SUP-CL-02"]  # AWS, Azure
+            })
         },
         {
             "case_id": "CASE-007",
@@ -81,7 +90,15 @@ def seed_cases(session: Session):
             "status": "In Progress",
             "summary_text": "Replacing MPLS circuits with SD-WAN. Requirements gathering phase. Vendors: Cisco Viptela, VMware VeloCloud, Palo Alto Prisma.",
             "recommended_action": "Draft RFP for SD-WAN solution and managed services",
-            "trigger_source": "User (Performance)"
+            "trigger_source": "User (Performance)",
+            "human_decision": json.dumps({
+                "DTP-01": {
+                    "sourcing_required": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
+                }
+            }),
+            "case_context": json.dumps({
+                "candidate_suppliers": ["Cisco Viptela", "VMware VeloCloud", "Palo Alto Prisma"]
+            })
         },
         {
             "case_id": "CASE-010",
@@ -91,10 +108,18 @@ def seed_cases(session: Session):
             "status": "In Progress",
             "summary_text": "Standardizing CI/CD pipeline tools (GitHub vs GitLab vs Jenkins). Need to align engineering teams on single platform.",
             "recommended_action": "Prepare evaluation matrix for toolchain consolidation",
-            "trigger_source": "User (Standardization)"
+            "trigger_source": "User (Standardization)",
+            "human_decision": json.dumps({
+                "DTP-01": {
+                    "sourcing_required": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
+                }
+            }),
+            "case_context": json.dumps({
+                "candidate_suppliers": ["GitHub", "GitLab", "Jenkins"]
+            })
         },
 
-        # DTP-03 Cases (Sourcing/Evaluation)
+        # DTP-03 Cases (Sourcing/Evaluation) - Need DTP-01 + DTP-02 decisions
         {
             "case_id": "CASE-004",
             "name": "Cybersecurity SOC Services",
@@ -103,7 +128,18 @@ def seed_cases(session: Session):
             "status": "In Progress",
             "summary_text": "RFP active for 24/7 SOC services. Proposals received from SecureNet, CyberGuard AI, and Global InfoSec. Scoring in progress.",
             "recommended_action": "Complete technical scoring and down-select to 2 finalists",
-            "trigger_source": "User (Compliance)"
+            "trigger_source": "User (Compliance)",
+            "human_decision": json.dumps({
+                "DTP-01": {
+                    "sourcing_required": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
+                },
+                "DTP-02": {
+                    "supplier_list_confirmed": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
+                }
+            }),
+            "case_context": json.dumps({
+                "candidate_suppliers": ["SUP-SEC-01", "SUP-SEC-02", "SUP-SEC-03"]
+            })
         },
         {
             "case_id": "CASE-008",
@@ -113,10 +149,21 @@ def seed_cases(session: Session):
             "status": "In Progress",
             "summary_text": "Evaluating Workday vs Oracle HCM vs SAP SuccessFactors. Demos completed. Pricing proposals under review.",
             "recommended_action": "Synthesize scores and pricing for finalist selection",
-            "trigger_source": "User (New Selection)"
+            "trigger_source": "User (New Selection)",
+            "human_decision": json.dumps({
+                "DTP-01": {
+                    "sourcing_required": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
+                },
+                "DTP-02": {
+                    "supplier_list_confirmed": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
+                }
+            }),
+            "case_context": json.dumps({
+                "candidate_suppliers": ["Workday", "Oracle HCM", "SAP SuccessFactors"]
+            })
         },
 
-        # DTP-04 Cases (Negotiation)
+        # DTP-04 Cases (Negotiation) - Need DTP-01 + DTP-02 + DTP-03 decisions + finalists
         {
             "case_id": "CASE-005",
             "name": "Data Center Co-location",
@@ -125,7 +172,26 @@ def seed_cases(session: Session):
             "status": "In Progress",
             "summary_text": "Expansion of US East region. Equinix selected as preferred. Negotiating power rates and cross-connect fees.",
             "recommended_action": "Finalize terms. leverage Digital Realty quote to reduce Equinix NRCs.",
-            "trigger_source": "User (Expansion)"
+            "trigger_source": "User (Expansion)",
+            "human_decision": json.dumps({
+                "DTP-01": {
+                    "sourcing_required": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
+                },
+                "DTP-02": {
+                    "supplier_list_confirmed": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
+                },
+                "DTP-03": {
+                    "evaluation_complete": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
+                }
+            }),
+            "case_context": json.dumps({
+                "finalist_suppliers": [
+                    {"id": "SUP-DC-01", "name": "Equinix", "score": 8.9},
+                    {"id": "SUP-DC-02", "name": "Digital Realty", "score": 8.5}
+                ],
+                "selected_supplier_id": "SUP-DC-01",
+                "selected_supplier_name": "Equinix"
+            })
         },
         {
             "case_id": "CASE-006",
@@ -135,9 +201,28 @@ def seed_cases(session: Session):
             "status": "In Progress",
             "summary_text": "3-year Enterprise Agreement renewal. Moving from E3 to E5 licenses. Microsoft proposing 15% uplift.",
             "recommended_action": "Negotiate discount on E5 step-up and Azure commit credits",
-            "trigger_source": "Signal (Renewal)"
+            "trigger_source": "Signal (Renewal)",
+            "human_decision": json.dumps({
+                "DTP-01": {
+                    "sourcing_required": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
+                },
+                "DTP-02": {
+                    "supplier_list_confirmed": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
+                },
+                "DTP-03": {
+                    "evaluation_complete": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
+                }
+            }),
+            "case_context": json.dumps({
+                "finalist_suppliers": [
+                    {"id": "SUP-SW-01", "name": "Microsoft", "score": 8.5}
+                ],
+                "selected_supplier_id": "SUP-SW-01",
+                "selected_supplier_name": "Microsoft"
+            })
         }
     ]
+
 
     for case_data in cases_data:
         existing = session.exec(select(CaseState).where(CaseState.case_id == case_data["case_id"])).first()

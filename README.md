@@ -69,11 +69,11 @@ This project includes comprehensive documentation covering all aspects of the sy
 | Principle | Implementation |
 |-----------|----------------|
 | **Decision is focal point** | AI advises, human decides |
-| **Rules > LLM** | Deterministic rules before any LLM reasoning |
+| **LLM-First Intent** | LLM classifies intent dynamically (replaces legacy regex rules) |
 | **No autonomous decisions** | All recommendations require human approval |
 | **Full traceability** | Every artifact grounded in data with verification status |
 | **Grounded retrieval** | Answers cite uploaded documents/data |
-| **Supervisor-only state changes** | Only Supervisor Agent can modify case state |
+| **Supervisor routes, ChatService orchestrates** | Supervisor manages DTP stage transitions; ChatService manages chat state |
 
 ---
 
@@ -227,11 +227,11 @@ streamlit run frontend/app.py
 ### Seed Demo Data (IT & Corporate Services)
 
 ```bash
-# Seed 10 realistic IT cases with full data
+# Seed 10 realistic IT cases with DTP-ready data
 python backend/scripts/seed_it_demo_data.py
 ```
 
-This creates **10 comprehensive test cases** mirroring a real enterprise IT environment:
+This creates **10 test cases covering DTP-01 to DTP-04** (Strategy through Negotiation):
 
 | Case ID | Name | Category | Stage | Description | Key Decision |
 |---------|------|----------|-------|-------------|--------------|
@@ -253,31 +253,25 @@ This creates **10 comprehensive test cases** mirroring a real enterprise IT envi
 
 ---
 
-## 🎮 Happy Path Demo
+## 🎮 Demo Options
 
-Run the complete demo workflow:
+### Option A: Breadth Demo (10 Cases at Different Stages)
+Use `seed_it_demo_data.py` to show variety of cases across DTP-01 to DTP-04.
+- Best for: Showing system handles multiple parallel cases
+- Limitation: Each case is at a specific stage, not end-to-end
+
+### Option B: Depth Demo (One Case End-to-End)
+Use `run_happy_path_demo.py` to show complete DTP-01 → DTP-06 workflow.
+- Best for: Showing complete procurement lifecycle
+- Creates: `CASE-DEMO-001` with full history and artifacts
 
 ```bash
-# 1. Generate demo case with full workflow
+# Option A: Breadth Demo
+python backend/scripts/seed_it_demo_data.py
+
+# Option B: Depth Demo
 python backend/scripts/run_happy_path_demo.py
-
-# 2. Start backend
-python -m uvicorn backend.main:app --reload --port 8000
-
-# 3. Start frontend (in another terminal)
-streamlit run frontend/app.py
-
-# 4. Open CASE-DEMO-001 in the UI
-#    - Navigate to Case Dashboard
-#    - Select CASE-DEMO-001
-#    - View complete chat history and artifacts
 ```
-
-The demo creates `CASE-DEMO-001` with:
-- Full DTP-01 to DTP-06 workflow
-- Complete chat history from all interactions
-- All artifacts from each stage
-- Execution metadata for audit trail
 
 For detailed demo instructions, see [System Documentation - Demo & Testing](SYSTEM_DOCUMENTATION.md#demo--testing).
 
@@ -326,11 +320,11 @@ For detailed demo instructions, see [System Documentation - Demo & Testing](SYST
 
 ## 🔐 Governance Rules
 
-1. **Supervisor is ONLY component that writes case state** — All other agents return outputs only
-2. **Decision logic hierarchy** — Rules → Retrieval → Analytics → LLM (in that order)
+1. **Supervisor manages DTP stage transitions** — ChatService orchestrates chat-level state
+2. **LLM-First intent classification** — LLMResponder dynamically classifies all user intents
 3. **Human approval required** — For any DECIDE-type recommendation or stage change
 4. **Traceability** — Every artifact includes `grounded_in` references; missing = UNVERIFIED
-5. **Hybrid intent classification** — Rule-based (fast) + LLM fallback (accurate) for ambiguous cases
+5. **Preflight readiness check** — Cases blocked if prerequisites missing for current stage
 6. **Artifact persistence** — All agent outputs saved as ArtifactPacks with execution metadata
 
 ---
@@ -365,7 +359,7 @@ For detailed information about all 7 agents, their sub-tasks, execution flow, an
 
 Comprehensive synthetic test data focused on IT & Corporate Services:
 
-### Test Cases (10 Cases covering DTP-01 to DTP-06)
+### Test Cases (10 Cases covering DTP-01 to DTP-04)
 See [Quick Start](#-quick-start) for the full list of 10 supported demo cases.
 
 ### Documents in ChromaDB (Context-Aware RAG)
@@ -411,7 +405,7 @@ For detailed change log, see [SYSTEM_DOCUMENTATION.md](SYSTEM_DOCUMENTATION.md#r
 - **Research POC** — Not production-ready
 - **Synthetic data** — All metrics are illustrative
 - **No authentication** — Add API keys for production
-- **Backward compatible** — Legacy agents still work alongside new system
+- **Legacy code exists** — Root `app.py` and `process_message_langgraph()` are legacy; use API architecture
 
 ---
 

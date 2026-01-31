@@ -344,7 +344,7 @@ The system comes with comprehensive synthetic data for testing. Run the seed scr
 python backend/scripts/seed_it_demo_data.py
 ```
 
-### Available Test Cases (10 Cases covering DTP-01 to DTP-06)
+### Available Test Cases (10 Cases covering DTP-01 to DTP-04)
 
 | Case ID | Name | Category | DTP Stage | Description |
 |---------|------|----------|-----------|-------------|
@@ -391,10 +391,15 @@ python backend/scripts/seed_it_demo_data.py
 ## 🛠️ 5. Key Backend Components
 
 ### 1. ChatService (`backend/services/chat_service.py`)
-The main orchestrator. Contains:
-- `process_message()`: Primary API method (lines 121-251)
+The main orchestrator for chat interactions. Contains:
+- `process_message()`: Primary API method — orchestrates chat-level state
 - Intent-specific handlers: `_handle_status_intent()`, `_handle_explain_intent()`, etc.
+- Preflight readiness check: `check_stage_readiness()` blocks agents if prerequisites missing
 - Response formatting and error handling
+
+**State Ownership Clarification**:
+- **ChatService**: Manages `waiting_for_human`, `activity_log`, `latest_agent_output`
+- **Supervisor**: Manages DTP stage transitions and agent routing
 
 **Important**: There is a legacy `process_message_langgraph()` method (lines 1009+) used by the standalone `app.py`. The API uses the first method.
 
@@ -431,6 +436,14 @@ Agents follow a structured **Task-Based** execution model:
 - **Human-in-the-Loop**: All major decisions require explicit user approval.
 - **Cost Awareness**: The `ConversationContextManager` prunes chat history.
 - **Transparency**: Detailed execution metadata recorded for auditability.
+- **Preflight Readiness**: Cases blocked from proceeding if prerequisites missing.
+
+### State Ownership
+| Component | Manages |
+|-----------|--------|
+| **Supervisor** | DTP stage transitions, agent routing |
+| **ChatService** | `waiting_for_human`, `activity_log`, chat-level state |
+| **CaseService** | Persistence layer for all state |
 
 ---
 

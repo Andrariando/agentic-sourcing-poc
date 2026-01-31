@@ -137,6 +137,68 @@ def get_agent_name_enum(agent_str: str) -> Optional[AgentName]:
     """Convert string agent name to AgentName enum, or None if not found."""
     return STRING_TO_AGENT_NAME.get(agent_str)
 
+
+def check_stage_readiness(case, state: dict) -> dict:
+    """
+    Check if case has prerequisites for current DTP stage.
+    
+    Returns:
+        dict with keys:
+            - ready: bool - True if all prerequisites met
+            - missing: List[str] - Human-readable list of missing items
+            - stage: str - Current DTP stage
+            - description: str - Stage description
+    """
+    from shared.stage_prereqs import STAGE_PREREQS, get_stage_description
+    
+    stage = state.get("dtp_stage", "DTP-01")
+    prereqs = STAGE_PREREQS.get(stage, {})
+    missing = []
+    
+    # 1. Check required case fields
+    for field in prereqs.get("case_fields", []):
+        if not getattr(case, field, None):
+            missing.append(f"Case field '{field}' is required")
+    
+    # 2. Check required human decisions (with .answer validation)
+    human_decisions = state.get("human_decision") or {}
+    for decision_key in prereqs.get("human_decisions", []):
+        parts = decision_key.split(".")
+        if len(parts) != 2:
+            continue
+        stage_part, question_id = parts
+        stage_decisions = human_decisions.get(stage_part) or {}
+        decision_obj = stage_decisions.get(question_id)
+        
+        # Must exist, not None, and have non-empty answer
+        if not decision_obj:
+            missing.append(f"Decision '{question_id}' from {stage_part} not answered")
+        elif not decision_obj.get("answer"):
+            missing.append(f"Decision '{question_id}' from {stage_part} has empty answer")
+    
+    # 3. Check required context fields (AND logic)
+    case_context = state.get("case_context") or {}
+    for field in prereqs.get("context_fields", []):
+        value = case_context.get(field)
+        if not value:
+            missing.append(f"Context '{field}' is required for this stage")
+    
+    # 4. Check context fields with OR logic (e.g., DTP-04 finalists OR selected)
+    or_fields = prereqs.get("context_fields_or", [])
+    if or_fields:
+        has_any = any(case_context.get(f) for f in or_fields)
+        if not has_any:
+            or_list = " or ".join([f"'{f}'" for f in or_fields])
+            missing.append(f"Need at least one of: {or_list}")
+    
+    return {
+        "ready": len(missing) == 0,
+        "missing": missing,
+        "stage": stage,
+        "description": get_stage_description(stage)
+    }
+
+
 class ChatService:
     """
     Chat/Copilot service with conversational intelligence.
@@ -476,6 +538,21 @@ class ChatService:
             action_taken = "Requested more data"
             
         elif intent.get("needs_agent"):
+            # PREFLIGHT CHECK: Validate case is ready for current stage
+            readiness = check_stage_readiness(case, state)
+            if not readiness["ready"]:
+                missing_items = "\n".join([f"• {m}" for m in readiness["missing"]])
+                block_message = (
+                    f"⚠️ **Cannot proceed with {readiness['description']}**\n\n"
+                    f"The following prerequisites are missing:\n{missing_items}\n\n"
+                    f"Please complete these requirements before continuing with this stage."
+                )
+                logger.warning(f"[PREFLIGHT] Case {case_id} blocked at {readiness['stage']}: {readiness['missing']}")
+                return self._create_response(
+                    case_id, user_message, block_message, 
+                    "BLOCKED", readiness["stage"], waiting=False
+                )
+            
             # ... (agent logic remains same) ...
             print(f"[DEBUG LLM-FIRST] Running agent workflow, hint: {intent.get('agent_hint')}")
             
