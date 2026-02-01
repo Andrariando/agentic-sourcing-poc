@@ -347,6 +347,13 @@ class ChatService:
         message_looks_like_task = any(kw in user_message.lower() for kw in task_keywords)
         
         if state.get("waiting_for_human") and not is_task_request and not message_looks_like_task:
+             pass # Already waiting
+        elif intent.get("is_progression"):
+             # User wants to proceed -> Force decision mode
+             state["waiting_for_human"] = True
+             logger.info(f"[{trace_id}] Proactive progression detected. Setting waiting_for_human=True")
+
+        if state.get("waiting_for_human") and not is_task_request and not message_looks_like_task:
              current_stage = state.get("dtp_stage", "DTP-01")
              stage_def = DTP_DECISIONS.get(current_stage)
              

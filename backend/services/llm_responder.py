@@ -93,12 +93,17 @@ CLASSIFICATION RULES:
 4. REJECTION (is_rejection=true): User is declining. Examples:
    - "Reject", "No", "I don't agree", "Change it"
 
+5. PROGRESSION (is_progression=true): User wants to advance stage but is asking "How?". Examples:
+   - "How do I proceed?", "Move to next stage", "What's next?", "Advance to DTP-02"
+   (Set is_progression=true, needs_agent=false, can_answer_directly=false)
+
 Respond with JSON only:
 {{
     "needs_agent": true/false,  // TRUE ONLY if user requests NEW WORK (not questions)
     "agent_hint": "string",     // If needs_agent, which one?
     "is_approval": true/false,  // Is user approving?
     "is_rejection": true/false, // Is user rejecting?
+    "is_progression": true/false, // Is user asking to move to next stage?
     "needs_data": true/false,   // Do we need more info from user?
     "missing_info": "string",   // If needs_data, what's missing?
     "can_answer_directly": true/false,  // TRUE if this is a QUESTION we can answer
@@ -134,6 +139,7 @@ Respond with valid JSON only, no explanation."""
                     "agent_hint": "",
                     "is_approval": False,
                     "is_rejection": False,
+                    "is_progression": False,
                     "needs_data": False,
                     "missing_info": "",
                     "can_answer_directly": True,
@@ -144,6 +150,7 @@ Respond with valid JSON only, no explanation."""
                 "agent_hint": "Strategy",
                 "is_approval": False,
                 "is_rejection": False,
+                "is_progression": False,
                 "needs_data": False,
                 "missing_info": "",
                 "can_answer_directly": False,
