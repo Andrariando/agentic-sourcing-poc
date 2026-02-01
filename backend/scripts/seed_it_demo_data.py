@@ -1,7 +1,17 @@
 #!/usr/bin/env python3
 """
 IT Infrastructure Demo Seed Script
-10 Robust, End-to-End Playable Cases
+10+ Robust, End-to-End Playable Cases (ALL STAGES DTP-01 to DTP-06)
+
+FIXES APPLIED:
+- Added missing suppliers (NETWORK, SAAS, additional SOFTWARE, TELECOM, IT_SERVICES)
+- Added case_context with candidate_suppliers to DTP-01 cases
+- Fixed candidate_suppliers to use supplier IDs consistently
+- Added sourcing_route decision to DTP-02 cases
+- Added DTP-05 and DTP-06 test cases
+- Added missing RFP templates (IT Services, SD-WAN, DevOps, HRIS)
+- Added missing proposals (Oracle HCM, SAP SuccessFactors)
+- Added IT Services Market Report
 """
 import os
 import sys
@@ -21,8 +31,8 @@ from backend.persistence.models import (
 from backend.rag.vector_store import get_vector_store
 
 def seed_cases(session: Session):
-    """Seed 10 comprehensive IT cases."""
-    print("Seeding 10 IT cases...")
+    """Seed 12 comprehensive IT cases (DTP-01 through DTP-06)."""
+    print("Seeding 12 IT cases...")
     
     # Clear existing cases
     session.exec(delete(CaseState))
@@ -30,7 +40,10 @@ def seed_cases(session: Session):
     print("  [OK] Cleared existing cases.")
     
     cases_data = [
+        # ============================================================
         # DTP-01 Cases (Strategy) - No prerequisites needed
+        # FIXED: Added case_context with candidate_suppliers
+        # ============================================================
         {
             "case_id": "CASE-001",
             "name": "IT Managed Services Renewal",
@@ -39,7 +52,15 @@ def seed_cases(session: Session):
             "status": "In Progress",
             "summary_text": "Global IT Managed Services contract with TechCorp expiring in 90 days. Performance has been stable but pricing is above market.",
             "recommended_action": "Initiate renewal negotiation with competitive pressure",
-            "trigger_source": "Signal (Contract Expiry)"
+            "trigger_source": "Signal (Contract Expiry)",
+            # FIX: Add case_context with candidate_suppliers for DTP-02 advance
+            "case_context": json.dumps({
+                "candidate_suppliers": ["SUP-IT-01", "SUP-IT-02", "SUP-IT-03", "SUP-IT-04"],
+                "contract_value": 2400000,
+                "contract_end_date": "2026-04-30",
+                "incumbent_supplier": "TechCorp Solutions",
+                "incumbent_supplier_id": "SUP-IT-01"
+            })
         },
         {
             "case_id": "CASE-002",
@@ -49,7 +70,14 @@ def seed_cases(session: Session):
             "status": "In Progress",
             "summary_text": "Global laptop/desktop refresh cycle (2,500 units). Current standard is Dell. Evaluating move to Lenovo or HP for cost reduction.",
             "recommended_action": "Conduct competitive RFP for 3-year refresh program",
-            "trigger_source": "User (Budget Cycle)"
+            "trigger_source": "User (Budget Cycle)",
+            # FIX: Add case_context with candidate_suppliers
+            "case_context": json.dumps({
+                "candidate_suppliers": ["SUP-HW-01", "SUP-HW-02", "SUP-HW-03"],
+                "estimated_value": 1500000,
+                "unit_count": 2500,
+                "current_standard": "Dell"
+            })
         },
         {
             "case_id": "CASE-009",
@@ -59,10 +87,20 @@ def seed_cases(session: Session):
             "status": "In Progress",
             "summary_text": "Fragmented telecom spend across 15 countries. Goal to consolidate to 1-2 global carriers (AT&T/Verizon/BT) for 20% savings.",
             "recommended_action": "Strategic sourcing event for global consolidation",
-            "trigger_source": "Signal (Spend Anomaly)"
+            "trigger_source": "Signal (Spend Anomaly)",
+            # FIX: Add case_context with candidate_suppliers
+            "case_context": json.dumps({
+                "candidate_suppliers": ["SUP-TEL-01", "SUP-TEL-02", "SUP-TEL-03"],
+                "current_spend": 3000000,
+                "countries_covered": 15,
+                "target_savings_percent": 20
+            })
         },
 
+        # ============================================================
         # DTP-02 Cases (Planning) - Need DTP-01 decisions + candidate_suppliers
+        # FIXED: Added sourcing_route decision, used supplier IDs
+        # ============================================================
         {
             "case_id": "CASE-003",
             "name": "Cloud Migration (AWS/Azure)",
@@ -72,14 +110,15 @@ def seed_cases(session: Session):
             "summary_text": "Strategic initiative to migrate 40% of on-prem workloads to cloud. Defining technical requirements for AWS vs Azure pilot.",
             "recommended_action": "Finalize RFP technical requirements and selection criteria",
             "trigger_source": "User (Strategic)",
-            # PREREQUISITES for DTP-02
+            # FIX: Added sourcing_route decision
             "human_decision": json.dumps({
                 "DTP-01": {
-                    "sourcing_required": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
+                    "sourcing_required": {"answer": "Yes", "decided_by_role": "User", "status": "final"},
+                    "sourcing_route": {"answer": "Strategic", "decided_by_role": "User", "status": "final"}
                 }
             }),
             "case_context": json.dumps({
-                "candidate_suppliers": ["SUP-CL-01", "SUP-CL-02"]  # AWS, Azure
+                "candidate_suppliers": ["SUP-CL-01", "SUP-CL-02"]
             })
         },
         {
@@ -91,13 +130,16 @@ def seed_cases(session: Session):
             "summary_text": "Replacing MPLS circuits with SD-WAN. Requirements gathering phase. Vendors: Cisco Viptela, VMware VeloCloud, Palo Alto Prisma.",
             "recommended_action": "Draft RFP for SD-WAN solution and managed services",
             "trigger_source": "User (Performance)",
+            # FIX: Added sourcing_route, use supplier IDs
             "human_decision": json.dumps({
                 "DTP-01": {
-                    "sourcing_required": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
+                    "sourcing_required": {"answer": "Yes", "decided_by_role": "User", "status": "final"},
+                    "sourcing_route": {"answer": "Strategic", "decided_by_role": "User", "status": "final"}
                 }
             }),
+            # FIX: Use supplier IDs instead of text names
             "case_context": json.dumps({
-                "candidate_suppliers": ["Cisco Viptela", "VMware VeloCloud", "Palo Alto Prisma"]
+                "candidate_suppliers": ["SUP-NET-01", "SUP-NET-02", "SUP-NET-03"]
             })
         },
         {
@@ -109,17 +151,23 @@ def seed_cases(session: Session):
             "summary_text": "Standardizing CI/CD pipeline tools (GitHub vs GitLab vs Jenkins). Need to align engineering teams on single platform.",
             "recommended_action": "Prepare evaluation matrix for toolchain consolidation",
             "trigger_source": "User (Standardization)",
+            # FIX: Added sourcing_route
             "human_decision": json.dumps({
                 "DTP-01": {
-                    "sourcing_required": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
+                    "sourcing_required": {"answer": "Yes", "decided_by_role": "User", "status": "final"},
+                    "sourcing_route": {"answer": "Tactical", "decided_by_role": "User", "status": "final"}
                 }
             }),
+            # FIX: Use supplier IDs instead of text names
             "case_context": json.dumps({
-                "candidate_suppliers": ["GitHub", "GitLab", "Jenkins"]
+                "candidate_suppliers": ["SUP-SW-02", "SUP-SW-03", "SUP-SW-04"]
             })
         },
 
+        # ============================================================
         # DTP-03 Cases (Sourcing/Evaluation) - Need DTP-01 + DTP-02 decisions
+        # FIXED: Use supplier IDs consistently
+        # ============================================================
         {
             "case_id": "CASE-004",
             "name": "Cybersecurity SOC Services",
@@ -131,7 +179,8 @@ def seed_cases(session: Session):
             "trigger_source": "User (Compliance)",
             "human_decision": json.dumps({
                 "DTP-01": {
-                    "sourcing_required": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
+                    "sourcing_required": {"answer": "Yes", "decided_by_role": "User", "status": "final"},
+                    "sourcing_route": {"answer": "Strategic", "decided_by_role": "User", "status": "final"}
                 },
                 "DTP-02": {
                     "supplier_list_confirmed": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
@@ -152,18 +201,22 @@ def seed_cases(session: Session):
             "trigger_source": "User (New Selection)",
             "human_decision": json.dumps({
                 "DTP-01": {
-                    "sourcing_required": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
+                    "sourcing_required": {"answer": "Yes", "decided_by_role": "User", "status": "final"},
+                    "sourcing_route": {"answer": "Strategic", "decided_by_role": "User", "status": "final"}
                 },
                 "DTP-02": {
                     "supplier_list_confirmed": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
                 }
             }),
+            # FIX: Use supplier IDs instead of text names
             "case_context": json.dumps({
-                "candidate_suppliers": ["Workday", "Oracle HCM", "SAP SuccessFactors"]
+                "candidate_suppliers": ["SUP-SAAS-01", "SUP-SAAS-02", "SUP-SAAS-03"]
             })
         },
 
+        # ============================================================
         # DTP-04 Cases (Negotiation) - Need DTP-01 + DTP-02 + DTP-03 decisions + finalists
+        # ============================================================
         {
             "case_id": "CASE-005",
             "name": "Data Center Co-location",
@@ -173,10 +226,11 @@ def seed_cases(session: Session):
             "summary_text": "Expansion of US East region. Equinix selected as preferred. Negotiating power rates and cross-connect fees.",
             "recommended_action": "Finalize terms. leverage Digital Realty quote to reduce Equinix NRCs.",
             "trigger_source": "User (Expansion)",
-            "supplier_id": "Equinix",  # Displayed in UI case list
+            "supplier_id": "Equinix",
             "human_decision": json.dumps({
                 "DTP-01": {
-                    "sourcing_required": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
+                    "sourcing_required": {"answer": "Yes", "decided_by_role": "User", "status": "final"},
+                    "sourcing_route": {"answer": "Strategic", "decided_by_role": "User", "status": "final"}
                 },
                 "DTP-02": {
                     "supplier_list_confirmed": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
@@ -203,10 +257,11 @@ def seed_cases(session: Session):
             "summary_text": "3-year Enterprise Agreement renewal. Moving from E3 to E5 licenses. Microsoft proposing 15% uplift.",
             "recommended_action": "Negotiate discount on E5 step-up and Azure commit credits",
             "trigger_source": "Signal (Renewal)",
-            "supplier_id": "Microsoft",  # Displayed in UI case list
+            "supplier_id": "Microsoft",
             "human_decision": json.dumps({
                 "DTP-01": {
-                    "sourcing_required": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
+                    "sourcing_required": {"answer": "Yes", "decided_by_role": "User", "status": "final"},
+                    "sourcing_route": {"answer": "Tactical", "decided_by_role": "User", "status": "final"}
                 },
                 "DTP-02": {
                     "supplier_list_confirmed": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
@@ -222,6 +277,93 @@ def seed_cases(session: Session):
                 "selected_supplier_id": "SUP-SW-01",
                 "selected_supplier_name": "Microsoft"
             })
+        },
+
+        # ============================================================
+        # DTP-05 Case (Internal Approval) - NEW
+        # ============================================================
+        {
+            "case_id": "CASE-011",
+            "name": "Cloud Migration - Internal Approval",
+            "category_id": "CLOUD",
+            "dtp_stage": "DTP-05",
+            "status": "In Progress",
+            "summary_text": "AWS selected as cloud provider. Contract terms negotiated ($2.1M/3yr). Awaiting CFO and CIO sign-off.",
+            "recommended_action": "Complete stakeholder approval checklist",
+            "trigger_source": "System (Stage Advance)",
+            "supplier_id": "AWS",
+            "human_decision": json.dumps({
+                "DTP-01": {
+                    "sourcing_required": {"answer": "Yes", "decided_by_role": "User", "status": "final"},
+                    "sourcing_route": {"answer": "Strategic", "decided_by_role": "User", "status": "final"}
+                },
+                "DTP-02": {
+                    "supplier_list_confirmed": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
+                },
+                "DTP-03": {
+                    "evaluation_complete": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
+                },
+                "DTP-04": {
+                    "award_supplier_id": {"answer": "AWS", "decided_by_role": "User", "status": "final"},
+                    "final_savings_confirmed": {"answer": "Yes", "decided_by_role": "User", "status": "final"},
+                    "legal_approval": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
+                }
+            }),
+            "case_context": json.dumps({
+                "selected_supplier_id": "SUP-CL-01",
+                "selected_supplier_name": "AWS",
+                "negotiated_value": 2100000,
+                "contract_term_years": 3,
+                "savings_achieved": 400000,
+                "approvers_required": ["CFO", "CIO", "VP IT Operations"]
+            })
+        },
+
+        # ============================================================
+        # DTP-06 Case (Implementation) - NEW
+        # ============================================================
+        {
+            "case_id": "CASE-012",
+            "name": "SOC Services - Implementation",
+            "category_id": "SECURITY",
+            "dtp_stage": "DTP-06",
+            "status": "In Progress",
+            "summary_text": "SecureNet Defense contract signed. Implementation in progress. Go-live scheduled for Q2 2026.",
+            "recommended_action": "Monitor implementation milestones and KPIs",
+            "trigger_source": "System (Stage Advance)",
+            "supplier_id": "SecureNet Defense",
+            "human_decision": json.dumps({
+                "DTP-01": {
+                    "sourcing_required": {"answer": "Yes", "decided_by_role": "User", "status": "final"},
+                    "sourcing_route": {"answer": "Strategic", "decided_by_role": "User", "status": "final"}
+                },
+                "DTP-02": {
+                    "supplier_list_confirmed": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
+                },
+                "DTP-03": {
+                    "evaluation_complete": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
+                },
+                "DTP-04": {
+                    "award_supplier_id": {"answer": "SecureNet Defense", "decided_by_role": "User", "status": "final"},
+                    "final_savings_confirmed": {"answer": "Yes", "decided_by_role": "User", "status": "final"},
+                    "legal_approval": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
+                },
+                "DTP-05": {
+                    "stakeholder_signoff": {"answer": "Yes", "decided_by_role": "User", "status": "final"}
+                }
+            }),
+            "case_context": json.dumps({
+                "selected_supplier_id": "SUP-SEC-01",
+                "selected_supplier_name": "SecureNet Defense",
+                "contract_signed_date": "2026-01-15",
+                "go_live_date": "2026-04-01",
+                "contract_value": 241000,
+                "implementation_milestones": [
+                    {"name": "Onboarding Complete", "due": "2026-02-15", "status": "pending"},
+                    {"name": "Log Integration", "due": "2026-03-01", "status": "pending"},
+                    {"name": "Go-Live", "due": "2026-04-01", "status": "pending"}
+                ]
+            })
         }
     ]
 
@@ -233,70 +375,126 @@ def seed_cases(session: Session):
             for k, v in case_data.items():
                 setattr(existing, k, v)
         else:
-            # Create
-            # Initialize empty findings
-            # Initialize specific findings based on case ID
+            # Create with findings
             findings = []
             
-            if case_data["case_id"] == "CASE-005": # Data Center
+            if case_data["case_id"] == "CASE-001":  # IT Managed Services
+                findings = [
+                    {"type": "market_data", "text": "Benchmark: IT Managed Services $800-1,200/user/year for full outsourcing."},
+                    {"type": "pricing", "text": "Current contract at $1,100/user - above market median."},
+                    {"type": "leverage", "text": "Accenture and Infosys actively bidding in this space with competitive rates."}
+                ]
+            elif case_data["case_id"] == "CASE-005":  # Data Center
                 findings = [
                     {"type": "market_data", "text": "Benchmark: $180-220/kW is standard for NJ market."},
                     {"type": "quote", "text": "Alternative Quote: Digital Realty offering $42,000 MRC (vs Equinix $45,000)."},
                     {"type": "leverage", "text": "Equinix has 15% vacancy in NY4, potentially open to aggressive terms."}
                 ]
-            elif case_data["case_id"] == "CASE-006": # Microsoft EA
+            elif case_data["case_id"] == "CASE-006":  # Microsoft EA
                 findings = [
                     {"type": "usage_data", "text": "E3 License utilization at 98%."},
                     {"type": "pricing", "text": "Azure commit shortfall of $50k in previous term."},
                     {"type": "leverage", "text": "Microsoft fiscal year end is June 30 - likely to offer deep discount for early sign-off."}
                 ]
-            elif case_data["case_id"] == "CASE-002": # Hardware
+            elif case_data["case_id"] == "CASE-002":  # Hardware
                 findings = [
                     {"type": "quote", "text": "Lenovo Quote: 18% off list for 2500 units."},
                     {"type": "quote", "text": "HP Quote: 12% off list but includes 3-year onsite support."},
                     {"type": "market_data", "text": "Laptop component prices trending down (SSD/RAM)."}
+                ]
+            elif case_data["case_id"] == "CASE-007":  # SD-WAN
+                findings = [
+                    {"type": "market_data", "text": "SD-WAN hardware: $200-400/site/month; licensing: $100-300/site/month."},
+                    {"type": "leverage", "text": "Cisco and VMware competing aggressively for enterprise deals."}
+                ]
+            elif case_data["case_id"] == "CASE-011":  # Cloud Approval
+                findings = [
+                    {"type": "approval_status", "text": "CFO approval pending - budget allocation confirmed."},
+                    {"type": "approval_status", "text": "CIO approval pending - technical review complete."}
+                ]
+            elif case_data["case_id"] == "CASE-012":  # SOC Implementation
+                findings = [
+                    {"type": "implementation", "text": "Onboarding kickoff scheduled for 2026-02-01."},
+                    {"type": "implementation", "text": "Log integration design document received."}
                 ]
                 
             case_data["key_findings"] = json.dumps(findings)
             session.add(CaseState(**case_data))
     
     session.commit()
-    print(f"  [OK] Seeded 10 cases.")
+    print(f"  [OK] Seeded 12 cases (DTP-01 through DTP-06).")
+
 
 def seed_suppliers(session: Session):
-    """Seed comprehensive list of IT Suppliers."""
+    """Seed comprehensive list of IT Suppliers - ALL CATEGORIES."""
     print("Seeding IT suppliers...")
     
     suppliers = [
-        # IT Services
+        # ============================================================
+        # IT Services (CASE-001)
+        # ============================================================
         {"id": "SUP-IT-01", "name": "TechCorp Solutions", "cat": "IT_SERVICES", "score": 7.8, "trend": "stable"},
         {"id": "SUP-IT-02", "name": "Global Systems Inc", "cat": "IT_SERVICES", "score": 6.5, "trend": "declining"},
+        # NEW: Additional IT Services suppliers for competitive landscape
+        {"id": "SUP-IT-03", "name": "Accenture", "cat": "IT_SERVICES", "score": 8.2, "trend": "stable"},
+        {"id": "SUP-IT-04", "name": "Infosys", "cat": "IT_SERVICES", "score": 7.9, "trend": "improving"},
         
-        # Hardware
+        # ============================================================
+        # Hardware (CASE-002)
+        # ============================================================
         {"id": "SUP-HW-01", "name": "Dell Technologies", "cat": "HARDWARE", "score": 8.5, "trend": "stable"},
         {"id": "SUP-HW-02", "name": "HP Inc", "cat": "HARDWARE", "score": 8.0, "trend": "improving"},
         {"id": "SUP-HW-03", "name": "Lenovo", "cat": "HARDWARE", "score": 7.5, "trend": "stable"},
         
-        # Cloud
+        # ============================================================
+        # Cloud (CASE-003, CASE-011)
+        # ============================================================
         {"id": "SUP-CL-01", "name": "AWS", "cat": "CLOUD", "score": 9.0, "trend": "stable"},
         {"id": "SUP-CL-02", "name": "Microsoft Azure", "cat": "CLOUD", "score": 8.8, "trend": "improving"},
         
-        # Security
+        # ============================================================
+        # Security (CASE-004, CASE-012)
+        # ============================================================
         {"id": "SUP-SEC-01", "name": "SecureNet Defense", "cat": "SECURITY", "score": 9.2, "trend": "stable"},
-        {"id": "SUP-SEC-02", "name": "CyberGuard AI", "cat": "SECURITY", "score": 7.5, "trend": "improving"}, # New entrant
+        {"id": "SUP-SEC-02", "name": "CyberGuard AI", "cat": "SECURITY", "score": 7.5, "trend": "improving"},
         {"id": "SUP-SEC-03", "name": "Global InfoSec", "cat": "SECURITY", "score": 8.1, "trend": "stable"},
 
-        # Infrastructure
+        # ============================================================
+        # Infrastructure (CASE-005)
+        # ============================================================
         {"id": "SUP-DC-01", "name": "Equinix", "cat": "INFRASTRUCTURE", "score": 8.9, "trend": "stable"},
         {"id": "SUP-DC-02", "name": "Digital Realty", "cat": "INFRASTRUCTURE", "score": 8.5, "trend": "stable"},
         
-        # Telecom
+        # ============================================================
+        # Telecom (CASE-009)
+        # ============================================================
         {"id": "SUP-TEL-01", "name": "AT&T Business", "cat": "TELECOM", "score": 7.2, "trend": "declining"},
         {"id": "SUP-TEL-02", "name": "Verizon Business", "cat": "TELECOM", "score": 7.5, "trend": "stable"},
+        # NEW: Additional telecom for global consolidation
+        {"id": "SUP-TEL-03", "name": "BT Global", "cat": "TELECOM", "score": 7.0, "trend": "stable"},
         
-        # Software
+        # ============================================================
+        # Software (CASE-006, CASE-010)
+        # ============================================================
         {"id": "SUP-SW-01", "name": "Microsoft", "cat": "SOFTWARE", "score": 8.5, "trend": "stable"},
         {"id": "SUP-SW-02", "name": "GitLab", "cat": "SOFTWARE", "score": 8.2, "trend": "improving"},
+        # NEW: Additional SOFTWARE suppliers for DevOps case
+        {"id": "SUP-SW-03", "name": "GitHub", "cat": "SOFTWARE", "score": 9.1, "trend": "stable"},
+        {"id": "SUP-SW-04", "name": "Jenkins (CloudBees)", "cat": "SOFTWARE", "score": 7.5, "trend": "declining"},
+        
+        # ============================================================
+        # NETWORK - NEW CATEGORY (CASE-007 SD-WAN)
+        # ============================================================
+        {"id": "SUP-NET-01", "name": "Cisco Viptela", "cat": "NETWORK", "score": 8.7, "trend": "stable"},
+        {"id": "SUP-NET-02", "name": "VMware VeloCloud", "cat": "NETWORK", "score": 8.3, "trend": "improving"},
+        {"id": "SUP-NET-03", "name": "Palo Alto Prisma", "cat": "NETWORK", "score": 8.5, "trend": "stable"},
+        
+        # ============================================================
+        # SAAS - NEW CATEGORY (CASE-008 HRIS)
+        # ============================================================
+        {"id": "SUP-SAAS-01", "name": "Workday", "cat": "SAAS", "score": 9.0, "trend": "stable"},
+        {"id": "SUP-SAAS-02", "name": "Oracle HCM Cloud", "cat": "SAAS", "score": 8.2, "trend": "stable"},
+        {"id": "SUP-SAAS-03", "name": "SAP SuccessFactors", "cat": "SAAS", "score": 7.8, "trend": "declining"},
     ]
     
     # Clear old performance data
@@ -310,8 +508,8 @@ def seed_suppliers(session: Session):
             date = (current_date - timedelta(days=30*i)).isoformat()
             # Add some jitter
             score = s["score"]
-            if i > 0 and s["trend"] == "declining": score += 0.2 * i # Was better before
-            if i > 0 and s["trend"] == "improving": score -= 0.1 * i # Was worse before
+            if i > 0 and s["trend"] == "declining": score += 0.2 * i  # Was better before
+            if i > 0 and s["trend"] == "improving": score -= 0.1 * i  # Was worse before
             
             perf = SupplierPerformance(
                 supplier_id=s["id"],
@@ -327,10 +525,11 @@ def seed_suppliers(session: Session):
             session.add(perf)
             
     session.commit()
-    print("  [OK] Seeded suppliers.")
+    print(f"  [OK] Seeded {len(suppliers)} suppliers across all categories.")
+
 
 def seed_documents(vector_store):
-    """Seed comprehensive text documents (Simulated RAG)."""
+    """Seed comprehensive text documents (Simulated RAG) - ALL CASES COVERED."""
     print("Seeding documents (this may take a moment)...")
     
     # Reset to ensure valid state
@@ -341,7 +540,46 @@ def seed_documents(vector_store):
         print(f"  [Warning] Could not reset vector store: {e}")
     
     documents = [
-        # --- RFP TEMPLATES (DTP-02 Support) ---
+        # ============================================================
+        # RFP TEMPLATES (DTP-02 Support)
+        # ============================================================
+        
+        # NEW: IT Managed Services RFP Template (CASE-001)
+        {
+            "id": "DOC-TMP-ITS-01",
+            "name": "RFP Template - IT Managed Services",
+            "type": "Template",
+            "cat": "IT_SERVICES",
+            "content": """
+            RFP TEMPLATE: IT MANAGED SERVICES
+            
+            1. SERVICE SCOPE
+            - Service Desk (Tier 1/2/3 Support): 24/7 phone, chat, email
+            - Infrastructure Management (Servers, Network, Storage)
+            - End-User Computing Support (Laptops, Desktops, Mobile)
+            - Security Operations (Patching, Monitoring, Incident Response)
+            
+            2. SERVICE LEVEL AGREEMENTS
+            - P1 Incidents: 15-minute response, 4-hour resolution
+            - P2 Incidents: 30-minute response, 8-hour resolution
+            - P3 Incidents: 2-hour response, 24-hour resolution
+            - Availability: 99.9% uptime SLA for critical systems
+            - Customer Satisfaction (CSAT): Target > 85%
+            
+            3. PRICING MODEL
+            - Option A: Fixed Monthly Retainer (per-user)
+            - Option B: Per-Device Pricing
+            - CSAT Bonus/Penalty provisions (+/- 5% of monthly fee)
+            - Transition assistance: Request 60-day overlap period
+            
+            4. EVALUATION CRITERIA
+            - Technical capability (30%)
+            - Price (25%)
+            - References/Experience (20%)
+            - Transition plan (15%)
+            - Innovation/Automation (10%)
+            """
+        },
         {
             "id": "DOC-TMP-SEC-01",
             "name": "RFP Template - Cybersecurity SOC",
@@ -442,8 +680,113 @@ def seed_documents(vector_store):
             - Man-trap Entry
             """
         },
+        
+        # NEW: SD-WAN RFP Template (CASE-007)
+        {
+            "id": "DOC-TMP-SDWAN-01",
+            "name": "RFP Template - SD-WAN Solution",
+            "type": "Template",
+            "cat": "NETWORK",
+            "content": """
+            RFP TEMPLATE: SD-WAN SOLUTION
+            
+            1. TECHNICAL REQUIREMENTS
+            - Application-aware routing with QoS policies
+            - Zero-touch provisioning (ZTP) for branch deployment
+            - Integrated security (NGFW, SWG, CASB)
+            - Cloud connectivity: AWS Direct Connect, Azure ExpressRoute
+            - WAN Optimization and compression
+            
+            2. DEPLOYMENT SCOPE
+            - 150 branch sites globally
+            - Replace existing MPLS circuits (maintain as backup)
+            - Hybrid overlay with broadband + LTE backup
+            - Central orchestration platform
+            
+            3. PRICING MODEL
+            - Per-site licensing (CPE hardware + software)
+            - Managed service optional (NOC monitoring)
+            - Implementation professional services
+            
+            4. EVALUATION CRITERIA
+            - Technical architecture (30%)
+            - Security capabilities (25%)
+            - Total Cost of Ownership (25%)
+            - Vendor stability and support (20%)
+            """
+        },
+        
+        # NEW: DevOps Toolchain RFP Template (CASE-010)
+        {
+            "id": "DOC-TMP-DEVOPS-01",
+            "name": "RFP Template - DevOps Toolchain",
+            "type": "Template",
+            "cat": "SOFTWARE",
+            "content": """
+            RFP TEMPLATE: DEVOPS TOOLCHAIN STANDARDIZATION
+            
+            1. CAPABILITIES REQUIRED
+            - Source Control: Git-based with branching strategies
+            - CI/CD Pipelines: Build, test, deploy automation
+            - Artifact Management: Container registry, package management
+            - Security Scanning: SAST/DAST integration
+            - Container Orchestration: Kubernetes support
+            
+            2. INTEGRATION REQUIREMENTS
+            - Azure DevOps / AWS CodePipeline compatibility
+            - Kubernetes deployment support (EKS/AKS/GKE)
+            - JIRA / ServiceNow integration for tracking
+            - SSO via SAML/OIDC
+            
+            3. LICENSING MODEL
+            - Per-developer seat (named vs concurrent)
+            - Enterprise self-hosted vs SaaS cloud-hosted
+            - Support tier (Standard/Premium/Enterprise)
+            
+            4. EVALUATION CRITERIA
+            - Feature completeness (30%)
+            - Developer experience/adoption (25%)
+            - Security and compliance (25%)
+            - Total cost (20%)
+            """
+        },
+        
+        # NEW: HRIS RFP Template (CASE-008)
+        {
+            "id": "DOC-TMP-HRIS-01",
+            "name": "RFP Template - HRIS Platform",
+            "type": "Template",
+            "cat": "SAAS",
+            "content": """
+            RFP TEMPLATE: HUMAN RESOURCES INFORMATION SYSTEM (HRIS)
+            
+            1. FUNCTIONAL REQUIREMENTS
+            - Core HR: Employee Records, Org Charts, Workflows
+            - Payroll Processing: Global/Multi-country support
+            - Benefits Administration: Open enrollment, life events
+            - Talent Management: Recruiting, Performance, Learning
+            - Workforce Analytics: Dashboards, reporting, predictive
+            
+            2. TECHNICAL REQUIREMENTS
+            - Single Sign-On (SSO) via SAML/OIDC
+            - API integrations: Payroll providers, benefits vendors
+            - Mobile app for employee self-service
+            - Data residency options (US, EU, APAC)
+            
+            3. EVALUATION CRITERIA
+            - Total Cost of Ownership (5-year) - 25%
+            - Implementation timeline and risk - 20%
+            - User experience (Gartner Peer Insights) - 20%
+            - Global payroll coverage - 20%
+            - Integration flexibility - 15%
+            """
+        },
 
-        # --- PROPOSALS (CLOUD - CASE-003) ---
+        # ============================================================
+        # PROPOSALS (DTP-03/04 Support)
+        # ============================================================
+        
+        # Cloud Proposals (CASE-003)
         {
             "id": "DOC-PROP-CASE-003-AWS",
             "name": "Proposal - AWS Professional Services",
@@ -490,7 +833,7 @@ def seed_documents(vector_store):
             """
         },
         
-        # --- PROPOSALS (DATA CENTER - CASE-005) ---
+        # Data Center Proposal (CASE-005)
         {
             "id": "DOC-PROP-CASE-005-EQ",
             "name": "Proposal - Equinix (Preferred)",
@@ -518,7 +861,7 @@ def seed_documents(vector_store):
             """
         },
         
-        # --- PROPOSALS (DTP-03 Support for CASE-004 Cybersecurity) ---
+        # Cybersecurity Proposals (CASE-004)
         {
             "id": "DOC-PROP-CASE-004-A",
             "name": "Proposal - SecureNet Defense (Premium)",
@@ -574,7 +917,7 @@ def seed_documents(vector_store):
             """
         },
         
-        # --- PROPOSALS (DTP-03 Support for CASE-008 HRIS) ---
+        # HRIS Proposals (CASE-008) - ALL THREE VENDORS
         {
             "id": "DOC-PROP-CASE-008-A",
             "name": "Proposal - Workday",
@@ -593,12 +936,67 @@ def seed_documents(vector_store):
             - Implementation: $1.2M Fixed Fee (Partner led)
             
             KEY DIFFERENTIATORS:
-            - Unified Data Core
+            - Unified Data Core (single source of truth)
             - Best-in-class Mobile App
+            - Strong in North America market
+            """
+        },
+        # NEW: Oracle HCM Proposal (CASE-008)
+        {
+            "id": "DOC-PROP-CASE-008-B",
+            "name": "Proposal - Oracle HCM Cloud",
+            "type": "Proposal",
+            "cat": "SAAS",
+            "case_id": "CASE-008",
+            "content": """
+            PROPOSAL: ORACLE HCM CLOUD
+            SUPPLIER: Oracle
+            
+            SOLUTION OVERVIEW:
+            Oracle HCM Cloud provides a complete suite with native financials integration.
+            
+            SCOPE:
+            Core HR, Global Payroll, Talent, Workforce Management
+            
+            PRICING:
+            - Subscription: $38 PEPM
+            - Implementation: $950,000 (Oracle Consulting)
+            
+            DIFFERENTIATORS:
+            - Deep ERP Integration (if using Oracle Financials)
+            - Strong global payroll coverage (190+ countries)
+            - AI-powered analytics
+            """
+        },
+        # NEW: SAP SuccessFactors Proposal (CASE-008)
+        {
+            "id": "DOC-PROP-CASE-008-C",
+            "name": "Proposal - SAP SuccessFactors",
+            "type": "Proposal",
+            "cat": "SAAS",
+            "case_id": "CASE-008",
+            "content": """
+            PROPOSAL: SAP SUCCESSFACTORS
+            SUPPLIER: SAP
+            
+            SOLUTION OVERVIEW:
+            SuccessFactors excels in talent management with strong analytics.
+            
+            SCOPE:
+            Employee Central, Recruiting, Performance & Goals, Learning
+            
+            PRICING:
+            - Subscription: $35 PEPM
+            - Implementation: $800,000 (Partner led - Deloitte/Accenture)
+            
+            DIFFERENTIATORS:
+            - Best-in-class Learning Management System
+            - SAP S/4HANA integration for ERP customers
+            - Strong in EMEA compliance (GDPR native)
             """
         },
         
-        # --- PROPOSALS (DTP-04 Support for CASE-006 Microsoft EA) ---
+        # Microsoft EA Proposal (CASE-006)
         {
             "id": "DOC-PROP-CASE-006-MSFT",
             "name": "Proposal - Microsoft EA Renewal (2025)",
@@ -628,8 +1026,38 @@ def seed_documents(vector_store):
             """
         },
         
+        # ============================================================
+        # MARKET REPORTS (DTP-01 Support)
+        # ============================================================
         
-        # --- MARKET REPORTS (DTP-01 Support) ---
+        # NEW: IT Managed Services Market Report (CASE-001)
+        {
+            "id": "DOC-MKT-ITS-01",
+            "name": "IT Managed Services Market Report 2025",
+            "type": "Market Report",
+            "cat": "IT_SERVICES",
+            "content": """
+            2025 IT MANAGED SERVICES MARKET INTELLIGENCE
+            
+            PRICING BENCHMARKS:
+            - Full IT Outsourcing: $800-1,200 per user/year
+            - Service Desk Only: $150-250 per user/year
+            - Infrastructure Management: $50-100 per device/month
+            - Security Operations Add-on: $100-200 per user/year
+            
+            NEGOTIATION LEVERS:
+            - Multi-year commitment (3-5 years) for 10-15% discount
+            - CSAT-linked pricing (bonus/penalty provisions)
+            - Transition assistance credits (60-90 days overlap)
+            - Automation investment commitments from provider
+            
+            KEY PROVIDERS:
+            - TechCorp Solutions: Mid-market focus, competitive pricing
+            - Accenture: Enterprise scale, premium pricing
+            - Infosys: Cost-competitive, strong automation
+            - Global Systems Inc: Regional player, declining market share
+            """
+        },
         {
             "id": "DOC-MKT-TEL-01",
             "name": "Telecom Market Report 2025",
@@ -675,7 +1103,9 @@ def seed_documents(vector_store):
             """
         },
         
-        # --- CONTRACT TEMPLATES (DTP-05 Support) ---
+        # ============================================================
+        # CONTRACT TEMPLATES (DTP-05 Support)
+        # ============================================================
         {
             "id": "DOC-CTR-MSA-TMP",
             "name": "Template - Master Services Agreement (MSA)",
@@ -722,7 +1152,9 @@ def seed_documents(vector_store):
             """
         },
         
-        # --- IMPLEMENTATION GUIDES (DTP-06 Support) ---
+        # ============================================================
+        # IMPLEMENTATION GUIDES (DTP-06 Support)
+        # ============================================================
         {
             "id": "DOC-IMPL-CLD-01",
             "name": "Cloud Migration Implementation Guide",
@@ -789,8 +1221,11 @@ def seed_documents(vector_store):
         except Exception as e:
             print(f"  [Error] Failed to add {doc['name']}: {e}")
 
+
 def main():
-    print("Initializing IT Demo Data...")
+    print("=" * 60)
+    print("Initializing IT Demo Data (v2 - ALL FIXES APPLIED)")
+    print("=" * 60)
     init_db()
     engine = get_engine()
     
@@ -804,7 +1239,9 @@ def main():
     except Exception as e:
         print(f"Warning: ChromaDB seeding failed (is Chroma running?): {e}")
     
-    print("Seed complete.")
+    print("=" * 60)
+    print("Seed complete. 12 cases, 28 suppliers, 20+ documents.")
+    print("=" * 60)
 
 if __name__ == "__main__":
     main()

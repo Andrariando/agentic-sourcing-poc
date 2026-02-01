@@ -432,6 +432,15 @@ class ChatService:
                             except Exception as e:
                                 logger.warning(f"Failed to sync supplier_id: {e}")
                         
+                        # COMPLETE CASE: If user confirmed contract_signed at DTP-06, mark case complete
+                        if pending_question["id"] == "contract_signed" and current_stage == "DTP-06" and parsed_answer == "Yes":
+                            try:
+                                self.case_service.update_case(case_id, {"status": "Completed"})
+                                state["status"] = "Completed"
+                                logger.info(f"[COMPLETE] Case {case_id} marked as Completed (contract signed)")
+                            except Exception as e:
+                                logger.warning(f"Failed to mark case complete: {e}")
+                        
                         # Re-evaluate to get the *NEXT* question immediately
                         # Refresh state copy
                         current_answers = state["human_decision"][current_stage]
