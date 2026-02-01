@@ -38,7 +38,7 @@ class PipelineState(TypedDict):
     latest_agent_name: Optional[str]
     activity_log: List[AgentActionLog]  # Current run
     conversation_history: List[Dict[str, str]]  # Serialized ChatMessages (role, content)
-    human_decision: Optional[HumanDecision]
+    human_decision: Optional[Dict[str, Any]] # Changed from HumanDecision to Dict to support DTP-01/02 rich structure
     budget_state: BudgetState
     cache_meta: CacheMeta
     error_state: Optional[Dict[str, Any]]

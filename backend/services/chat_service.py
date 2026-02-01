@@ -351,7 +351,9 @@ class ChatService:
         elif intent.get("is_progression"):
              # User wants to proceed -> Force decision mode
              state["waiting_for_human"] = True
-             logger.info(f"[{trace_id}] Proactive progression detected. Setting waiting_for_human=True")
+             state["status"] = "Waiting for Human Decision"
+             self.case_service.save_case_state(state) # CRITICAL: Persist waiting state immediately
+             logger.info(f"[{trace_id}] Proactive progression detected. Setting waiting_for_human=True and status='Waiting for Human Decision'")
 
         if state.get("waiting_for_human") and not is_task_request and not message_looks_like_task:
              current_stage = state.get("dtp_stage", "DTP-01")
@@ -536,6 +538,10 @@ class ChatService:
                          for i, opt in enumerate(pending_question['options'], 1):
                              response += f"{i}. {opt['label']}\n"
                          response += "\n_(Please reply with the number)_"
+                     
+                     # SAVE STATE: Ensure waiting_for_human is persisted
+                     self.case_service.save_case_state(state)
+                     
                      return self._create_response(case_id, user_message, response, "DECIDE", state.get("dtp_stage", "DTP-01"), waiting=True)
 
 
@@ -2197,9 +2203,23 @@ class ChatService:
             # We pass a flag to tell the graph this is a decision event
             state["last_human_action"] = "approve_decision" if decision == "Approve" else "reject_decision"
             
+            logger.info(f"[DEBUG process_decision] INPUT human_decision: {json.dumps(state.get('human_decision', {}), default=str)}")
             final_state = self._run_workflow(state)
+            logger.info(f"[DEBUG process_decision] OUTPUT human_decision: {json.dumps(final_state.get('human_decision', {}), default=str)}")
             print(f"[DEBUG process_decision] State dtp_stage AFTER workflow: {final_state.get('dtp_stage')}")
             
+            # Map CaseSummary back to top-level for persistence
+            if "case_summary" in final_state:
+                summary = final_state["case_summary"]
+                if hasattr(summary, "status"):
+                     final_state["status"] = summary.status
+                if hasattr(summary, "dtp_stage"):
+                     final_state["dtp_stage"] = summary.dtp_stage
+            
+            # Fallback for status
+            if "status" not in final_state:
+                 final_state["status"] = "In Progress"
+                 
             self.case_service.save_case_state(final_state)
             
             return {

@@ -177,7 +177,7 @@ class CaseService:
         if not case:
             session.close()
             return False
-        
+            
         # Apply updates
         for key, value in updates.items():
             if hasattr(case, key):

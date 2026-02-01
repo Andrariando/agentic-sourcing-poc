@@ -1536,6 +1536,7 @@ def wait_for_human_node(state: PipelineState) -> PipelineState:
     
     # Mark that we're waiting - workflow will END here
     state["waiting_for_human"] = True
+    state["case_summary"].status = "Waiting for Human Decision"
     return state
 
 
