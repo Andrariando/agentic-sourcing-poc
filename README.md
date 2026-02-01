@@ -387,9 +387,12 @@ Seed via: `python backend/scripts/seed_it_demo_data.py`
 - Fixed "Approve Loop" where new commands were blocked by pending approval state
 - Fixed unrequested email template generation in LLM responses
 - Fixed Windows encoding issues (emojis → ASCII)
+- **[Feb 2026]** Fixed decision persistence across DTP stages (preflight checks now work correctly)
+- **[Feb 2026]** Fixed circular dependency in DTP-02 prerequisites  
+- **[Feb 2026]** Fixed `budget_state` initialization in workflow
 
 ### Verification & Testing
-- **End-to-End Simulation**: New `scripts/simulate_case_001_journey.py` verifies the full DTP-01 to DTP-06 lifecycle.
+- **End-to-End Simulation**: `scripts/simulate_case_001_journey.py` verifies the full DTP-01 to DTP-06 lifecycle.
 - **Data Enhancements**:
   - New comprehensive seed script with 5 cases
   - 16 suppliers with differentiated performance

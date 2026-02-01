@@ -801,7 +801,27 @@ current_answers = human_decisions.get(current_stage) or {}
 
 ---
 
-## 🔍 12. Troubleshooting Common Issues
+## 🔧 13. Workflow Fixes (February 2026)
+
+### Decision Persistence Across Stages
+
+**Problem**: Preflight checks failed with "Decision 'sourcing_required' from DTP-01 not answered" even after decisions were made. Historical decisions were being cleared after each stage transition.
+
+**Root Cause**: Two locations in `workflow.py` set `state["human_decision"] = None` after processing:
+1. `supervisor_node` (line 369-372)
+2. `process_human_decision` (line 1718-1722)
+
+**Solution**: Removed both lines that cleared `human_decision`. Now only `waiting_for_human` flag is cleared, preserving historical decision data for preflight checks.
+
+### Stage Prerequisites Fix
+
+**Problem**: DTP-02 prereqs required `candidate_suppliers` as an INPUT, but DTP-02's purpose is to PRODUCE this list (circular dependency).
+
+**Solution**: Removed `candidate_suppliers` from `context_fields` in `shared/stage_prereqs.py`. DTP-02 now only requires the `DTP-01.sourcing_required` decision to be answered.
+
+---
+
+## 🔍 14. Troubleshooting Common Issues
 
 ### Chat Loop (Repeated Questions)
 **Symptom**: Asking for a task like "Prepare negotiation guideline" keeps showing the same decision question.
@@ -822,4 +842,14 @@ current_answers = human_decisions.get(current_stage) or {}
 **Symptom**: Artifacts generated but not visible in UI.
 **Cause**: Agent name not in `AGENT_TO_ARTIFACT_TYPE` mapping.
 **Fix**: Add the agent name variant to the mapping dictionary.
+
+### Preflight Check Blocks Stage Transition
+**Symptom**: "Decision 'X' from DTP-Y not answered" even after answering.
+**Cause**: `human_decision` dict cleared after stage transition.
+**Fix**: Ensure `workflow.py` does NOT set `state["human_decision"] = None` in `supervisor_node` or `process_human_decision`.
+
+### KeyError: budget_state
+**Symptom**: Error when processing human decisions in workflow.
+**Cause**: `budget_state` not initialized in state before running workflow.
+**Fix**: Add `if "budget_state" not in state: state["budget_state"] = {}` before `_run_workflow()`.
 
