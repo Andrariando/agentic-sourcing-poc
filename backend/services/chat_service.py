@@ -548,6 +548,7 @@ class ChatService:
             
         elif intent.get("needs_agent"):
             # PREFLIGHT CHECK: Validate case is ready for current stage
+            case = self.case_service.get_case(case_id)  # Get case object for readiness check
             readiness = check_stage_readiness(case, state)
             if not readiness["ready"]:
                 missing_items = "\n".join([f"• {m}" for m in readiness["missing"]])
