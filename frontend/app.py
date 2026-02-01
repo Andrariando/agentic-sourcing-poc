@@ -170,7 +170,7 @@ def main():
         
         # Search input with functional suggestions
         search_query = st.text_input(
-            "",
+            "Search pages",
             value=st.session_state.get("page_search", ""),
             placeholder="app",
             key="page_search_input",

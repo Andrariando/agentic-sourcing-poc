@@ -464,7 +464,7 @@ class ChatService:
                                      response += f"{i}. {opt['label']}\n"
                                  response += "\n_(Please reply with the number)_"
                              
-                             return self._create_response(case_id, user_message, response, "DECIDE", state.get("dtp_stage"), waiting=True)
+                             return self._create_response(case_id, user_message, response, "DECIDE", state.get("dtp_stage", "DTP-01"), waiting=True)
                         else:
                              # All done! Ask for confirmation
                              response = "**All questions answered.**\n\nSummary of your decisions:\n"
@@ -493,9 +493,10 @@ class ChatService:
                      # Call process_decision
                      result = self.process_decision(case_id, "Approve")
                      if result["success"]:
-                        return self._create_response(case_id, user_message, f"Confirmed! moving to {result.get('new_dtp_stage')}", "DECIDE", result.get("new_dtp_stage"), waiting=False)
+                        new_stage = result.get('new_dtp_stage') or state.get("dtp_stage", "DTP-01")
+                        return self._create_response(case_id, user_message, f"Confirmed! moving to {new_stage}", "DECIDE", new_stage, waiting=False)
                      else:
-                        return self._create_response(case_id, user_message, result["message"], "DECIDE", state.get("dtp_stage"), waiting=True)
+                        return self._create_response(case_id, user_message, result["message"], "DECIDE", state.get("dtp_stage", "DTP-01"), waiting=True)
 
                 # 3. Fallback: If just entering this state or lost context, ask the first pending question
                 # (Same logic as above for finding pending_question)
@@ -518,7 +519,7 @@ class ChatService:
                          for i, opt in enumerate(pending_question['options'], 1):
                              response += f"{i}. {opt['label']}\n"
                          response += "\n_(Please reply with the number)_"
-                     return self._create_response(case_id, user_message, response, "DECIDE", state.get("dtp_stage"), waiting=True)
+                     return self._create_response(case_id, user_message, response, "DECIDE", state.get("dtp_stage", "DTP-01"), waiting=True)
 
 
         # --- END NEW PROACTIVE LOGIC ---
@@ -1573,7 +1574,7 @@ class ChatService:
         # SupervisorState does NOT have a "case_summary" key. 
         # PipelineState expects it. We must CONSTRUCT it from flat fields.
         if "case_summary" not in workflow_state:
-            from utils.schemas import CaseSummary
+            from shared.schemas import CaseSummary
             workflow_state["case_summary"] = CaseSummary(
                 case_id=workflow_state.get("case_id", case_id),
                 category_id=workflow_state.get("category_id", "UNKNOWN"),
