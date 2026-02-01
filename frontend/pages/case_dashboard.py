@@ -232,7 +232,7 @@ def render_case_dashboard():
                     import sys
                     from pathlib import Path
                     
-                    with st.spinner("Resetting database and generating 10 IT cases..."):
+                    with st.spinner("Resetting database and generating IT cases..."):
                         project_root = Path(__file__).parent.parent.parent
                         script_path = project_root / "backend" / "scripts" / "seed_it_demo_data.py"
                         
