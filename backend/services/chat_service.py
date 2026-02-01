@@ -1584,6 +1584,7 @@ class ChatService:
             from shared.schemas import CaseSummary
             workflow_state["case_summary"] = CaseSummary(
                 case_id=workflow_state.get("case_id", case_id),
+                name=workflow_state.get("name", "Unnamed Case"),
                 category_id=workflow_state.get("category_id", "UNKNOWN"),
                 contract_id=workflow_state.get("contract_id"),
                 supplier_id=workflow_state.get("supplier_id"),
@@ -1591,6 +1592,7 @@ class ChatService:
                 trigger_source=workflow_state.get("trigger_source", "User"),
                 status=workflow_state.get("status", "In Progress"),
                 created_date=workflow_state.get("created_date", ""),
+                updated_date=workflow_state.get("updated_date", ""),
                 summary_text=workflow_state.get("summary_text", ""),
                 key_findings=workflow_state.get("key_findings", []),
                 recommended_action=workflow_state.get("recommended_action")
