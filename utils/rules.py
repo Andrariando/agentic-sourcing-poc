@@ -204,13 +204,47 @@ class RuleEngine:
                 return 0.0  # Below minimum threshold
         
         # Rule: Must-have requirements check
+        # FIX: Handle both requirement objects (dict with description) and plain strings
         if requirements:
             must_haves = requirements.get("must_have", [])
             supplier_capabilities = supplier.get("capabilities", [])
+            supplier_certs = supplier.get("certifications", [])
             
-            missing_must_haves = [req for req in must_haves if req not in supplier_capabilities]
-            if missing_must_haves:
-                return 0.0  # Missing must-have requirements
+            # Combine capabilities and certifications for matching
+            all_caps = [c.lower() for c in supplier_capabilities + supplier_certs]
+            
+            missing_must_haves = []
+            for req in must_haves:
+                # Extract requirement description (handle both dict and string formats)
+                if isinstance(req, dict):
+                    req_desc = req.get("description", "").lower()
+                else:
+                    req_desc = str(req).lower()
+                
+                if not req_desc:
+                    continue
+                
+                # Fuzzy match: Check if supplier has capability addressing this requirement
+                # Look for keyword overlap between requirement and capabilities
+                req_keywords = set(req_desc.split())
+                matched = False
+                for cap in all_caps:
+                    cap_keywords = set(cap.split())
+                    # Match if there's significant keyword overlap (at least 2 words or 30% overlap)
+                    overlap = req_keywords & cap_keywords
+                    if len(overlap) >= 2 or (len(overlap) > 0 and len(overlap) / max(len(req_keywords), 1) >= 0.3):
+                        matched = True
+                        break
+                
+                if not matched:
+                    missing_must_haves.append(req_desc)
+            
+            # Only fail if supplier meets NONE of the requirements
+            # For POC: Be lenient - let LLM scoring handle detailed evaluation
+            # Only use deterministic filter for clearly unqualified suppliers
+            matched_count = len(must_haves) - len(missing_must_haves)
+            if must_haves and matched_count == 0:
+                return 0.0  # Supplier doesn't address any must-have requirements
         
         # No deterministic rule applies - requires ML/analytics
         return None

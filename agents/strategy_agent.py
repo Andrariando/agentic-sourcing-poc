@@ -105,52 +105,11 @@ class StrategyAgent(BaseAgent):
         except Exception as e:
             print(f"StrategyAgent RAG Error: {e}")
         
-        # STEP 2.5: Check for User Override (Collaboration Priority)
-        # If user explicitly requests a strategy, respect it (if allowed).
-        # This fixes the "One-Shot" flaw where rules ignore user feedback.
-        user_strategy = self._extract_strategy_from_intent(user_intent)
-        
-        if user_strategy:
-            # Check policy constraint
-            is_allowed = not allowed_strategies or user_strategy in allowed_strategies
-            
-            if is_allowed:
-                # Create recommendation based on User's Choice
-                recommendation = self._create_rule_based_recommendation(
-                    case_summary, user_strategy, contract, performance, market
-                )
-                
-                # Tag it as User Override
-                recommendation.rationale.insert(0, f"User explicitly requested '{user_strategy}' strategy")
-                recommendation.risk_assessment += " (User Decision)"
-                
-                llm_input_payload = {
-                    "case_summary": case_summary.model_dump() if hasattr(case_summary, "model_dump") else dict(case_summary),
-                    "user_intent": user_intent,
-                    "contract": contract,
-                    "performance": performance,
-                    "market": market,
-                    "category": category,
-                    "requirements": requirements,
-                    "rule_applied": True,
-                    "rule_based_strategy": user_strategy,
-                    "override": True
-                }
-                
-                output_dict = recommendation.model_dump() if hasattr(recommendation, "model_dump") else dict(recommendation)
-                
-                # Cache result
-                if use_cache:
-                    cache_meta, _ = self.check_cache(
-                        case_summary.case_id,
-                        user_intent.lower().strip(),
-                        case_summary,
-                        question_text=user_intent
-                    )
-                    from utils.caching import set_cache
-                    set_cache(cache_meta.cache_key, (recommendation, llm_input_payload, output_dict))
-                
-                return recommendation, llm_input_payload, output_dict, 0, 0
+        # NOTE: User strategy preferences are now handled by LLM intent analysis
+        # in llm_responder.py, which properly understands context and conversation.
+        # The previous _extract_strategy_from_intent() keyword detection was too
+        # aggressive and caused false "Terminate" recommendations.
+        # User preferences are passed via conversation_history to the LLM prompt.
 
         # STEP 3: Apply deterministic rules FIRST (Priority 1)
         rule_based_strategy = self.rule_engine.apply_strategy_rules(

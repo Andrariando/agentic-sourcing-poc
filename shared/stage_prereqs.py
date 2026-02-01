@@ -19,7 +19,7 @@ STAGE_PREREQS: Dict[str, Dict[str, Any]] = {
         "description": "Supplier Identification",
         "case_fields": [],
         "human_decisions": ["DTP-01.sourcing_required"],  # Must confirm sourcing needed
-        "context_fields": ["candidate_suppliers"],  # Required for demo stability
+        "context_fields": [],  # candidate_suppliers is OUTPUT of this stage, not input
         "context_fields_or": [],
     },
     "DTP-03": {

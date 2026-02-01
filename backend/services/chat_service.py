@@ -2198,6 +2198,12 @@ class ChatService:
                 recommended_action=state.get("recommended_action")
             )
 
+        # CRITICAL FIX: Ensure budget_state is initialized for workflow
+        # The workflow graph nodes access state["budget_state"] directly
+        if "budget_state" not in state:
+            from utils.token_accounting import create_initial_budget_state
+            state["budget_state"] = create_initial_budget_state()
+
         # Run workflow to let Supervisor process the decision
         try:
             # We pass a flag to tell the graph this is a decision event

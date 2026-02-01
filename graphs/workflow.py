@@ -366,9 +366,10 @@ def supervisor_node(state: PipelineState) -> PipelineState:
         task_description = "Process Human Decision"
         # Process the decision first
         state = process_human_decision(state)
-        # Clear waiting flag and human_decision after processing
+        # Clear waiting flag after processing
+        # NOTE: Do NOT clear state["human_decision"] - it contains historical
+        # decisions from prior stages that preflight checks need!
         state["waiting_for_human"] = False
-        state["human_decision"] = None
         
         # If rejected, end here
         if state["case_summary"].status == "Rejected":
@@ -1715,8 +1716,11 @@ def process_human_decision(state: PipelineState) -> PipelineState:
         )
         state = add_log_to_state(state, log)
     
-    # ISSUE #6 FIX: Clear human_decision after processing to prevent re-processing
-    state["human_decision"] = None
+    # ISSUE #6 FIX: Prevent re-processing by clearing the 'decision' action
+    # BUT: Do NOT clear the entire human_decision dict - it contains historical
+    # decisions from prior stages that preflight checks need!
+    # Instead, we just clear the last_human_action flag
+    state["last_human_action"] = None  # Clear action flag, keep decision history
     
     return state
 
