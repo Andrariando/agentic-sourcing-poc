@@ -245,8 +245,8 @@ note right of router
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     1. LLM classification (primary path)
     2. Structured output (Pydantic schema)
-    3. Aggressive caching (500 entries)
-    4. Two-level: UserGoal + WorkType
+    3. Caching (Planned)
+    4. Two-level Logic: UserGoal + WorkType
     5. Context-aware (DTP stage, conversation history)
     6. Rule fallback (errors only)
     7. Few-shot examples in prompt

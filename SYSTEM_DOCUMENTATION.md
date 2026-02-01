@@ -632,7 +632,7 @@ def load_json_data(filename: str) -> list:
 
 ---
 
-## 🧠 10. Agent Context Awareness (RAG) (January 2026)
+### 10. Agent Context Awareness (RAG) (January 2026)
 
 To prevent generic outputs, all DTP Agents now possess **Context-Aware Retrieval Augmented Generation (RAG)** capabilities. They automatically retrieve and reference specific case documents from the Vector Store (ChromaDB) to ground their advice.
 
@@ -656,7 +656,33 @@ The seed script (`backend/scripts/seed_it_demo_data.py`) automatically populates
 
 ---
 
-## 🔧 11. Artifact & Decision Flow Fixes (January 2026)
+## 🔧 11. Proactive Assistant & Verification (February 2026)
+
+### A. Proactive Assistant (DTP Stage Progression)
+
+**Purpose**: To guide users seamlessly through the complex DTP process without requiring them to memorize stage gates.
+
+**Mechanism**:
+1.  **Intent Detection**: The `LLMResponder` detects "Progression" intents (e.g., "Ready to move next", "Approve and proceed") via the `is_progression` flag.
+2.  **Proactive Questioning**: If DTP prerequisites are missing (e.g., "Is sourcing required?"), the system *pauses* stage advancement and asks the user specifically for that data.
+3.  **State Persistence**: Crucially, the system enters a persistent `Waiting for Human Decision` state. **[CRITICAL FIX]** The state is saved *immediately* upon triggering the question, ensuring the context is not lost if the user replies hours later.
+4.  **Confirmation Loop**: Once all data is gathered, the system asks for a final distinct confirmation ("Confirm transition to DTP-04?") before calling the Supervisor to advance the stage.
+
+### B. Verification: End-to-End Simulation
+
+A new simulation harness (`scripts/simulate_case_001_journey.py`) has been added to verify the complete lifecycle without UI interaction.
+
+**Capabilities**:
+- **Mocked LLM**: Simulates user intents ("Approve", "Strategic") using a deterministic mock layer, removing randomness.
+- **Full DTP Coverage**: verifying transitions from DTP-01 (Strategy) → DTP-06 (Implementation).
+- **State Validation**: Asserts that `dtp_stage` and `status` are correct at every step.
+
+**Usage**:
+```bash
+python scripts/simulate_case_001_journey.py
+```
+
+### C. Artifact & Decision Flow Fixes (January 2026)
 
 ### A. Artifact Type Detection (Centralized Mapping)
 

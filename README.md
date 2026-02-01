@@ -377,12 +377,9 @@ Seed via: `python backend/scripts/seed_it_demo_data.py`
 
 ---
 
-## 🔧 Recent Changes (January 2026)
-
-### Architecture Overhaul
-- **LLM-First Conversational Architecture**: Replaced regex/rule-based intent routing with `LLMResponder` for natural, dynamic understanding.
-- **Enhanced Agent Logs**: Added detailed `reasoning_log` to activity logs, exposing agent thinking process (confidence, data used, risk factors).
-- **Conversation Memory**: Integrated context-aware memory for "ChatGPT-like" follow-up questions.
+### Proactive Assistant Workflow
+- **State-Aware Progression triggered by LLM**: The system proactively guides users through DTP stages (e.g., "Ready to move to Negotiation?").
+- **Persistence Fixes**: Robust state management ensures no context is lost during multi-turn decision flows.
 
 ### Bug Fixes
 - Fixed duplicate `process_message` method in ChatService
@@ -391,10 +388,12 @@ Seed via: `python backend/scripts/seed_it_demo_data.py`
 - Fixed unrequested email template generation in LLM responses
 - Fixed Windows encoding issues (emojis → ASCII)
 
-### Data Enhancements
-- New comprehensive seed script with 5 cases
-- 16 suppliers with differentiated performance
-- 11 documents for RAG retrieval
+### Verification & Testing
+- **End-to-End Simulation**: New `scripts/simulate_case_001_journey.py` verifies the full DTP-01 to DTP-06 lifecycle.
+- **Data Enhancements**:
+  - New comprehensive seed script with 5 cases
+  - 16 suppliers with differentiated performance
+  - 11 documents for RAG retrieval
 
 For detailed change log, see [SYSTEM_DOCUMENTATION.md](SYSTEM_DOCUMENTATION.md#recent-changes-january-2026).
 
@@ -405,7 +404,7 @@ For detailed change log, see [SYSTEM_DOCUMENTATION.md](SYSTEM_DOCUMENTATION.md#r
 - **Research POC** — Not production-ready
 - **Synthetic data** — All metrics are illustrative
 - **No authentication** — Add API keys for production
-- **Legacy code exists** — Root `app.py` and `process_message_langgraph()` are legacy; use API architecture
+- **Persistence** — Uses local SQLite (not suitable for stateless cloud deployments without external DB)
 
 ---
 
