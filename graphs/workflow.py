@@ -1553,8 +1553,11 @@ def process_human_decision(state: PipelineState) -> PipelineState:
     """
     Process human decision and continue workflow.
     
-    CRITICAL FIX: human_decision is a DICT created by process_decision in chat_service.py,
-    not a Pydantic object. Must use dict access (get()) not attribute access (.decision).
+    CRITICAL FIX: human_decision can be in TWO formats:
+    1. Flat: {"decision": "Approve", "reason": ..., "edited_fields": ...}
+    2. Nested (from chat_service): {"DTP-01": {"sourcing_required": {"answer": "Yes", ...}}}
+    
+    We detect by checking for "decision" key (flat) vs stage keys (nested).
     """
     human_decision = state.get("human_decision")
     print(f"[DEBUG process_human_decision] Called with human_decision: {human_decision}")
@@ -1565,11 +1568,40 @@ def process_human_decision(state: PipelineState) -> PipelineState:
         return state
     
     case_summary = state["case_summary"]
+    current_stage = state.get("dtp_stage", "DTP-01")
     
-    # CRITICAL FIX: Use dict access, not attribute access
-    decision = human_decision.get("decision") if isinstance(human_decision, dict) else getattr(human_decision, "decision", None)
-    edited_fields = human_decision.get("edited_fields") if isinstance(human_decision, dict) else getattr(human_decision, "edited_fields", None)
-    reason = human_decision.get("reason") if isinstance(human_decision, dict) else getattr(human_decision, "reason", None)
+    # CRITICAL FIX: Detect format and extract decision appropriately
+    decision = None
+    edited_fields = None
+    reason = None
+    
+    if isinstance(human_decision, dict):
+        # Check if it's flat format (has "decision" key)
+        if "decision" in human_decision:
+            decision = human_decision.get("decision")
+            edited_fields = human_decision.get("edited_fields")
+            reason = human_decision.get("reason")
+        # Check if it's nested format (has stage keys like "DTP-01")
+        elif any(key.startswith("DTP-") for key in human_decision.keys()):
+            # Nested format from chat_service.process_decision
+            # Check last_human_action which is set by process_decision
+            last_action = state.get("last_human_action", "")
+            if last_action == "approve_decision":
+                decision = "Approve"
+            elif last_action == "reject_decision":
+                decision = "Reject"
+            else:
+                # Fallback: If current stage's questions are answered, treat as Approve
+                stage_decisions = human_decision.get(current_stage, {})
+                if stage_decisions:
+                    # At least one answer exists for current stage
+                    decision = "Approve"
+                    print(f"[DEBUG] Inferred Approve from stage decisions: {stage_decisions.keys()}")
+    else:
+        # Object format (legacy)
+        decision = getattr(human_decision, "decision", None)
+        edited_fields = getattr(human_decision, "edited_fields", None)
+        reason = getattr(human_decision, "reason", None)
     
     print(f"[DEBUG process_human_decision] Extracted decision: {decision}")
     print(f"[DEBUG process_human_decision] Current dtp_stage: {state.get('dtp_stage')}")

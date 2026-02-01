@@ -393,6 +393,16 @@ class ChatService:
                             valid_map[opt["value"].lower()] = opt["value"] # "yes" -> "Yes"
                             valid_map[opt["label"].lower()] = opt["value"] # "yes, proceed..." -> "Yes"
                         
+                        # Add natural language synonyms for common answers
+                        # Map approval-like words to "Yes" if it exists
+                        if any(opt["value"] == "Yes" for opt in options):
+                            for synonym in ["approve", "proceed", "confirm", "confirmed", "ok", "okay", "sure"]:
+                                valid_map[synonym] = "Yes"
+                        # Map rejection-like words to "No" if it exists  
+                        if any(opt["value"] == "No" for opt in options):
+                            for synonym in ["reject", "decline", "cancel", "no thanks", "not now"]:
+                                valid_map[synonym] = "No"
+                        
                         clean_input = user_message.strip().lower()
                         # Remove trailing punctuation
                         clean_input = clean_input.rstrip(".,!")
@@ -2161,6 +2171,26 @@ class ChatService:
         })
         
         self.case_service.save_case_state(state) # Save intermediate state
+
+        # CRITICAL FIX: Construct case_summary before running workflow
+        # The workflow graph nodes access state["case_summary"] directly
+        if "case_summary" not in state:
+            from shared.schemas import CaseSummary
+            state["case_summary"] = CaseSummary(
+                case_id=state.get("case_id", case_id),
+                name=state.get("name", "Unnamed Case"),
+                category_id=state.get("category_id", "UNKNOWN"),
+                contract_id=state.get("contract_id"),
+                supplier_id=state.get("supplier_id"),
+                dtp_stage=state.get("dtp_stage", "DTP-01"),
+                trigger_source=state.get("trigger_source", "User"),
+                status=state.get("status", "In Progress"),
+                created_date=state.get("created_date", ""),
+                updated_date=state.get("updated_date", ""),
+                summary_text=state.get("summary_text", ""),
+                key_findings=state.get("key_findings", []),
+                recommended_action=state.get("recommended_action")
+            )
 
         # Run workflow to let Supervisor process the decision
         try:
