@@ -72,7 +72,7 @@ package "**FRONTEND** - Streamlit UI" <<frontend>> {
 ' ============== BACKEND CONTAINER ==============
 package "**BACKEND** - FastAPI Server" <<backend>> {
     
-    rectangle "🌐 **REST API**\n/cases, /chat, /decisions,\n/ingest, /health" as api
+    rectangle "🌐 **REST API**\n/api/cases, /api/chat,\n/api/decisions, /api/ingest,\n/health" as api
     
     package "**Services Layer**" {
         rectangle "💬 **Chat Service**\nOrchestrator,\nState management" as chat_svc
@@ -82,13 +82,13 @@ package "**BACKEND** - FastAPI Server" <<backend>> {
         rectangle "📥 **Ingestion Service**\nUpload orchestration,\nvalidation" as ingest_svc
     }
     
-    package "**SUPERVISOR** - Central Orchestrator" <<supervisor>> {
+    package "**SUPERVISOR** - Central Orchestrator\n(backed by LangGraph workflow)" <<supervisor>> {
         rectangle "🧠 **Intent Router**\nLLM-First Classification:\n• LLM with structured output (primary)\n• Aggressive caching (500 entries)\n• Rule fallback (errors only)\n• Two-level (UserGoal+WorkType)" as router
         rectangle "📊 **State Manager**\nDTP stage tracking,\nvalidation, transitions,\nONLY state writer" as state_mgr
         rectangle "📋 **Action Planner**\nAgent selection,\ntask planning" as planner
     }
     
-    package "**7 OFFICIAL AGENTS**" <<agent>> {
+    package "**OFFICIAL AGENTS (6 specialists)**" <<agent>> {
         rectangle "📡 **Sourcing Signal**\n(DTP-01)\nSignal detection,\nurgency scoring\n----\n**Inputs:**\nCase: trigger_source, status\nPerf: overall_score, trend\nSpend: variance_percent\nSLA: severity" as signal_agent
         rectangle "⭐ **Supplier Scoring**\n(DTP-02)\nEvaluation, ranking,\neligibility checks\n----\n**Inputs:**\nPerf: quality_score, delivery\nRFP: eval_criteria\nMarket: benchmarks" as supplier_agent
         rectangle "📝 **RFx Draft**\n(DTP-03)\nRFI/RFP/RFQ assembly\n----\n**Inputs:**\nDocs: proposals, quotes\nPolicy: eval_rubrics\nPast: comparisons" as rfx_agent
@@ -233,11 +233,12 @@ doc_ingest --> vector_store : "Embed & store\nchunks"
 data_ingest --> sqlite : "Validate & insert\nrecords"
 doc_ingest --> files : "Store original"
 
-' LLM Calls (only via task_llm)
+' LLM Calls (Tasks)
 task_llm --> llm : "Narration only\n(after rules/retrieval/analytics)"
 
-' Hybrid Classification LLM call
+' Hybrid Classification & Response LLM calls
 router --> llm : "LLM Classification\n(primary, JSON mode)"
+llm_resp --> llm : "Intent analysis\n+ natural replies"
 
 ' ============== NOTES ==============
 note right of router
@@ -292,8 +293,8 @@ note right of conv_mgr
     (Optional Feature)
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     • Enabled via env var
-    • Cost-aware context selection
-    • Pre-execution cost estimation
+    • Cost-aware context selection (implemented)
+    • Summarization hook present (implementation TODO)
     • Backward compatible (disabled
       by default)
     • Messages persist in database
