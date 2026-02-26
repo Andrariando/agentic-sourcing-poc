@@ -69,7 +69,7 @@ def _is_error_output(output) -> bool:
     # Check for StrategyRecommendation errors
     if isinstance(output, StrategyRecommendation):
         return (
-            output.confidence < 0.5 and
+            output.confidence <= 0.5 and
             any("fallback" in r.lower() or "error" in r.lower() for r in (output.rationale or []))
         )
     

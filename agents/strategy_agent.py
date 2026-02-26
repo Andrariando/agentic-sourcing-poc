@@ -201,8 +201,11 @@ class StrategyAgent(BaseAgent):
             
             return recommendation, llm_input_payload, output_dict, input_tokens, output_tokens
         except Exception as e:
+            print(f"⚠️ StrategyAgent Exception: {e}")
+            import traceback
+            traceback.print_exc()
             # Fallback
-            return self.create_fallback_output(StrategyRecommendation, case_summary.case_id, case_summary.category_id), llm_input_payload, {}, 0, 0
+            return self.create_fallback_output(StrategyRecommendation, case_summary.case_id, case_summary.category_id, str(e)), llm_input_payload, {}, 0, 0
     
     def _create_rule_based_recommendation(
         self,
@@ -360,14 +363,14 @@ IMPORTANT: All list fields (like "rationale") must contain simple strings, not o
 
 Provide ONLY valid JSON, no markdown formatting."""
     
-    def create_fallback_output(self, schema: type, case_id: str, category_id: str) -> StrategyRecommendation:
+    def create_fallback_output(self, schema: type, case_id: str, category_id: str, error_msg: str = "") -> StrategyRecommendation:
         """Fallback output when LLM fails"""
         return StrategyRecommendation(
             case_id=case_id,
             category_id=category_id,
             recommended_strategy="Monitor",
             confidence=0.5,
-            rationale=["Fallback recommendation due to processing error"],
+            rationale=[f"Fallback recommendation due to processing error: {error_msg}"] if error_msg else ["Fallback recommendation due to processing error"],
             risk_assessment="Unable to assess risk",
             timeline_recommendation="Review required"
         )

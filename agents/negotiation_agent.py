@@ -276,15 +276,15 @@ Provide ONLY valid JSON, no markdown formatting."""
             import traceback
             traceback.print_exc()
             # Fallback
-            return self.create_fallback_output(NegotiationPlan, case_summary.case_id, case_summary.category_id, supplier_id), llm_input_payload, {}, 0, 0
+            return self.create_fallback_output(NegotiationPlan, case_summary.case_id, case_summary.category_id, supplier_id, str(e)), llm_input_payload, {}, 0, 0
     
-    def create_fallback_output(self, schema: type, case_id: str, category_id: str, supplier_id: str) -> NegotiationPlan:
+    def create_fallback_output(self, schema: type, case_id: str, category_id: str, supplier_id: str, error_msg: str = "") -> NegotiationPlan:
         """Fallback output when LLM fails"""
         return NegotiationPlan(
             case_id=case_id,
             category_id=category_id,
             supplier_id=supplier_id,
-            negotiation_objectives=["Fallback objective"],
+            negotiation_objectives=[f"Fallback objective: {error_msg}"] if error_msg else ["Fallback objective"],
             target_terms={},
             leverage_points=[],
             fallback_positions={},

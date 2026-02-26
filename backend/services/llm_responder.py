@@ -131,6 +131,8 @@ Respond with valid JSON only, no explanation."""
             return result
         except Exception as e:
             logger.error(f"[LLMResponder] Intent analysis failed: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             # Fallback: DO NOT default to agent if it's likely a question
             # Check for question marks or question words
             if "?" in user_message or any(w in user_message.lower() for w in ["what", "how", "why", "when"]):
@@ -221,6 +223,8 @@ Generate a natural, helpful response:"""
             return response.content
         except Exception as e:
             logger.error(f"[LLMResponder] Response generation failed: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return f"I apologize, but I encountered an issue processing your request. Could you please try rephrasing or let me know more about what you'd like to do?"
     
     def generate_approval_response(
