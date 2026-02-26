@@ -48,7 +48,7 @@ def seed_cases(session: Session):
             "name": "Global Telecom Consolidation",
             "category_id": "TELECOM",
             "dtp_stage": "DTP-01",
-            "status": "Waiting for Human Decision",
+            "status": "In Progress",
             "summary_text": "Fragmented telecom spend across 15 countries. Goal to consolidate to 1-2 global carriers (AT&T/Verizon/BT) for 20% savings.",
             "recommended_action": "Strategic sourcing event for global consolidation",
             "trigger_source": "Signal (Spend Anomaly)",
@@ -74,7 +74,7 @@ def seed_cases(session: Session):
                     "Engage AT&T and Verizon account teams for pre-RFP discussions."
                 ]
             }),
-            "waiting_for_human": True,
+            "waiting_for_human": False,
             "chat_history": json.dumps([
                 {"role": "user", "content": "Analyze the telecom spend anomaly we got yesterday."},
                 {"role": "assistant", "content": "I have analyzed the global telecom spend. We have $3M in fragmented spend across 15 countries. Based on current market conditions, I recommend a Strategic Sourcing event focusing on AT&T, Verizon, and BT to drive a 20% savings target. I have prepared the Strategy Recommendation card. Shall we proceed with this strategy?"}
@@ -117,7 +117,7 @@ def seed_cases(session: Session):
                 "explanation": "I have drafted the RFP based on the AWS vs Azure capability matrix in the knowledge base.",
                 "missing_information": ["Target completion date for migration"]
             }),
-            "waiting_for_human": True,
+            "waiting_for_human": False,
             "chat_history": json.dumps([
                 {"role": "user", "content": "Draft the RFP for the Cloud Migration. Focus on comparing AWS and Azure for our VMware lift-and-shift."},
                 {"role": "assistant", "content": "I have drafted the RFP sections, weighting Migration Velocity at 35% given your previous urgency on data center exit. Please review the draft and let me know if it is ready to publish."}
@@ -135,7 +135,7 @@ def seed_cases(session: Session):
             "name": "HRIS Platform Selection",
             "category_id": "SAAS",
             "dtp_stage": "DTP-03",
-            "status": "Waiting for Human Decision",
+            "status": "In Progress",
             "summary_text": "Evaluating Workday vs Oracle HCM vs SAP SuccessFactors. Proposals received and scored.",
             "recommended_action": "Synthesize scores and pricing for finalist selection",
             "trigger_source": "User (New Selection)",
@@ -161,7 +161,7 @@ def seed_cases(session: Session):
                 "comparison_summary": "Workday leads technically with a 9.2 score, specifically excelling in User Experience (9.5/10) as required by the RFP. Oracle HCM is a strong cost-effective alternative at 8.5.",
                 "recommendation": "Advance Workday and Oracle HCM to Finalist Negotiation phase."
             }),
-            "waiting_for_human": True,
+            "waiting_for_human": False,
             "chat_history": json.dumps([
                 {"role": "user", "content": "Evaluate the 3 HRIS proposals we just received (Workday, Oracle, SAP)."},
                 {"role": "assistant", "content": "I have extracted and scored the 3 proposals against our RFP criteria. Workday is the clear technical leader, but Oracle offers better pricing. I recommend dropping SAP and advancing Workday and Oracle to negotiation. Do you approve?"}
@@ -211,7 +211,7 @@ def seed_cases(session: Session):
                     "Target Azure Discount": "12% MAC discount"
                 }
             }),
-            "waiting_for_human": True,
+            "waiting_for_human": False,
             "chat_history": json.dumps([
                 {"role": "user", "content": "Help me prepare for the Microsoft EA negotiation later today. They want a 15% uplift for E5."},
                 {"role": "assistant", "content": "I've analyzed their proposal. 15% is above the market benchmark for our volume (normally 8-10%). Because their fiscal year ends in June, we have high leverage if we promise to sign by May 15. I've drafted a negotiation plan targeting an 8% cap and demanding Azure transition credits."}
@@ -229,7 +229,7 @@ def seed_cases(session: Session):
             "name": "Cloud Migration - Internal Approval",
             "category_id": "CLOUD",
             "dtp_stage": "DTP-05",
-            "status": "Waiting for Human Decision",
+            "status": "In Progress",
             "summary_text": "AWS selected as cloud provider. Contract terms negotiated ($2.1M/3yr). Extracted key terms for CFO sign-off.",
             "recommended_action": "Complete stakeholder approval checklist",
             "trigger_source": "System (Stage Advance)",
@@ -264,7 +264,7 @@ def seed_cases(session: Session):
                 ],
                 "overall_risk": "Low"
             }),
-            "waiting_for_human": True,
+            "waiting_for_human": False,
             "chat_history": json.dumps([
                 {"role": "user", "content": "Extract the key terms from the final AWS draft so I can send the summary to the CFO for sign off."},
                 {"role": "assistant", "content": "I have extracted the TCV, Termination clauses, and SLA guarantees directly from the 82-page PDF. **Warning:** I noticed the SLA says 99.99%, but our negotiation target was five-nines (99.999%). You may want Legal to double check that specific clause before sending to the CFO."}
