@@ -221,12 +221,12 @@ def render_case_dashboard():
     # Demo Data Section (collapsed by default)
     with st.expander("🎯 Demo Data & Quick Access", expanded=False):
         st.markdown("**Manage Demo Environment**")
-        st.info("ℹ️ This will reset the database and load the 10 IT-Infrastructure focused demo cases.")
+        st.info("ℹ️ This will reset the database and load the 6 curated Pillar demo cases (1 for each stage).")
         
         col_actions, col_clear = st.columns([1.5, 1])
         
         with col_actions:
-             if st.button("🔄 Reset & Load 10 IT Cases", help="Wipes database and loads the 10 approved IT scenarios (DTP-01 to DTP-06)", use_container_width=True, type="primary"):
+             if st.button("🔄 Reset & Load 6 Pillar Cases", help="Wipes database and loads the 6 end-to-end playable scenarios (DTP-01 to DTP-06)", use_container_width=True, type="primary"):
                 try:
                     import subprocess
                     import sys
@@ -245,7 +245,7 @@ def render_case_dashboard():
                         )
                         
                         if result.returncode == 0:
-                            st.success("✅ Environment successfully reset with 10 IT Cases!")
+                            st.success("✅ Environment successfully reset with the 6 Pillar Cases!")
                             st.rerun()
                         else:
                             st.error(f"Seeding failed:\n{result.stderr}")
