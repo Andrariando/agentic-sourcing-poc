@@ -17,6 +17,7 @@ MIT Color System:
 - MIT Cardinal Red (#A31F34): Actions and urgency only
 """
 import streamlit as st
+import textwrap
 from typing import Optional, List, Dict, Any
 import json
 from datetime import datetime
@@ -450,81 +451,81 @@ def render_case_details_panel(case, client) -> None:
         </div>
         """, unsafe_allow_html=True)
         
+    # ===== Section 2: Supporting Context (Signals & Findings) =====
+    with st.container(border=True):
+        st.markdown(f'<h3 style="color: {MIT_NAVY}; font-size: 0.9rem; margin:0; padding-bottom: 8px; border-bottom: 1px solid {LIGHT_GRAY};">📡 Context & Signals</h3>', unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # Parse key findings for signals
+        if case.summary and case.summary.key_findings:
+            for finding in case.summary.key_findings[:5]:
+                # Handle both string and dict formats
+                if isinstance(finding, dict):
+                    finding_text = finding.get("text", str(finding))
+                else:
+                    finding_text = str(finding)
+                
+                indicator = "yellow"
+                finding_lower = finding_text.lower()
+                if "high" in finding_lower or "breach" in finding_lower or "decline" in finding_lower:
+                    indicator = "red"
+                elif "strong" in finding_lower or "improving" in finding_lower or "good" in finding_lower:
+                    indicator = "green"
+                
+                st.markdown(
+                    f'<div style="display: flex; align-items: flex-start; padding: 6px 0; font-size: 0.85rem;">'
+                    f'<span class="signal-indicator {indicator}"></span>'
+                    f'<span style="margin-left:8px;">{finding_text}</span>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+        else:
+            st.markdown(f'<div style="color: {CHARCOAL}; font-size: 0.85rem;">No signals detected yet. Ask the copilot to scan for signals.</div>', unsafe_allow_html=True)
     
-    # ===== Section 2: Strategy Rationale =====
-    st.markdown(f"""
-    <div class="section-card">
-        <div class="section-card-header">
-            <h3 class="section-card-title">🎯 Recommended Strategy</h3>
-        </div>
-        <div class="section-card-content">
-            <div style="font-size: 1.25rem; font-weight: 600; color: {MIT_NAVY}; margin-bottom: 12px;">
-                {recommendation}
-            </div>
-            <div style="display: flex; gap: 16px; margin-bottom: 12px;">
-                <span style="font-size: 0.85rem;">
-                    <strong>Confidence:</strong> {confidence:.0%}
-                </span>
-                <span style="font-size: 0.85rem;">
-                    <strong>Stage:</strong> {case.dtp_stage}
-                </span>
-            </div>
-    """, unsafe_allow_html=True)
-    
-    # Show rationale if available
-    rationale = []
-    if case.latest_agent_output:
-        output = case.latest_agent_output
-        rationale = output.get("rationale", []) if isinstance(output, dict) else getattr(output, "rationale", [])
-    
-    if rationale:
-        st.markdown("<div style='margin-top: 8px;'>", unsafe_allow_html=True)
-        for item in rationale[:5]:
-            st.markdown(f"""
-            <div style="display: flex; align-items: flex-start; gap: 8px; padding: 4px 0; font-size: 0.85rem;">
-                <span style="color: {SUCCESS_GREEN};">✓</span>
-                <span>{item}</span>
-            </div>
-            """, unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-    
-    st.markdown("</div></div>", unsafe_allow_html=True)
-    
-    # ===== Section 3: Supporting Context (Signals & Findings) =====
-    st.markdown("""
-    <div class="section-card">
-        <div class="section-card-header">
-            <h3 class="section-card-title">📊 Signals & Key Findings</h3>
-        </div>
-        <div class="section-card-content">
-    """, unsafe_allow_html=True)
-    
-    # Parse key findings for signals
-    if case.summary and case.summary.key_findings:
-        for finding in case.summary.key_findings[:5]:
-            # Handle both string and dict formats
-            if isinstance(finding, dict):
-                finding_text = finding.get("text", str(finding))
-            else:
-                finding_text = str(finding)
+    # ===== Section 3: Strategy Rationale =====
+    with st.container(border=True):
+        st.markdown(f'<h3 style="color: {MIT_NAVY}; font-size: 0.9rem; margin:0; padding-bottom: 8px; border-bottom: 1px solid {LIGHT_GRAY};">🎯 Recommended Strategy</h3>', unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        if recommendation == "Pending Analysis":
+            st.markdown(
+                f'<div style="font-size: 1.1rem; font-weight: 500; color: {CHARCOAL}; margin-bottom: 12px; font-style: italic;">'
+                f'⏳ Waiting for Copilot Analysis...'
+                f'</div>'
+                f'<div style="font-size: 0.85rem; color: {CHARCOAL};">'
+                f'Interact with the Case Copilot to generate a strategy based on the signals above.'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+        else:
+            st.markdown(
+                f'<div style="font-size: 1.25rem; font-weight: 600; color: {MIT_NAVY}; margin-bottom: 12px;">'
+                f'{recommendation}'
+                f'</div>'
+                f'<div style="display: flex; gap: 16px; margin-bottom: 12px;">'
+                f'<span style="font-size: 0.85rem;"><strong>Confidence:</strong> {confidence:.0%}</span>'
+                f'<span style="font-size: 0.85rem;"><strong>Stage:</strong> {case.dtp_stage}</span>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
             
-            indicator = "yellow"
-            finding_lower = finding_text.lower()
-            if "high" in finding_lower or "breach" in finding_lower or "decline" in finding_lower:
-                indicator = "red"
-            elif "strong" in finding_lower or "improving" in finding_lower or "good" in finding_lower:
-                indicator = "green"
+            # Show rationale if available
+            rationale = []
+            if case.latest_agent_output:
+                output = case.latest_agent_output
+                rationale = output.get("rationale", []) if isinstance(output, dict) else getattr(output, "rationale", [])
             
-            st.markdown(f"""
-            <div style="display: flex; align-items: flex-start; padding: 6px 0; font-size: 0.85rem;">
-                <span class="signal-indicator {indicator}"></span>
-                <span>{finding_text}</span>
-            </div>
-            """, unsafe_allow_html=True)
-    else:
-        st.markdown(f'<div style="color: {CHARCOAL}; font-size: 0.85rem;">No signals detected yet. Ask the copilot to scan for signals.</div>', unsafe_allow_html=True)
-    
-    st.markdown("</div></div>", unsafe_allow_html=True)
+            if rationale:
+                st.markdown("<div style='margin-top: 8px;'>", unsafe_allow_html=True)
+                for item in rationale[:5]:
+                    st.markdown(
+                        f'<div style="display: flex; align-items: flex-start; gap: 8px; padding: 4px 0; font-size: 0.85rem;">'
+                        f'<span style="color: {SUCCESS_GREEN};">✓</span>'
+                        f'<span>{item}</span>'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
+                st.markdown("</div>", unsafe_allow_html=True)
     
     # ===== Section 4: Governance & Decision Console =====
     render_decision_console(case, client)
