@@ -393,15 +393,41 @@ def render_case_details_panel(case, client) -> None:
     render_triage_panel(case)
     
     # ===== Section 1: Quick Overview =====
-    st.markdown("""
-    <div class="section-card">
-        <div class="section-card-header">
-            <h3 class="section-card-title">📋 Quick Overview</h3>
-        </div>
-        <div class="section-card-content">
-    """, unsafe_allow_html=True)
-    
-    # Get recommendation from latest agent output
+    with st.container(border=True):
+        # Build entire overview HTML as one string, then render once
+        overview_html = (
+            f'<h3 style="color: {MIT_NAVY}; font-size: 0.9rem; margin:0; padding-bottom: 8px; '
+            f'border-bottom: 1px solid {LIGHT_GRAY};">📋 Quick Overview</h3><br>'
+            f'<div style="display: flex; justify-content: space-between; padding: 6px 0; font-size: 0.85rem; border-bottom: 1px solid #F0F0F0;">'
+            f'<span style="color: {CHARCOAL}; font-weight: 500;">Case ID</span>'
+            f'<span>{case.case_id}</span></div>'
+            f'<div style="display: flex; justify-content: space-between; padding: 6px 0; font-size: 0.85rem; border-bottom: 1px solid #F0F0F0;">'
+            f'<span style="color: {CHARCOAL}; font-weight: 500;">Category</span>'
+            f'<span>{case.category_id}</span></div>'
+            f'<div style="display: flex; justify-content: space-between; padding: 6px 0; font-size: 0.85rem; border-bottom: 1px solid #F0F0F0;">'
+            f'<span style="color: {CHARCOAL}; font-weight: 500;">Trigger Source</span>'
+            f'<span>{case.trigger_source}</span></div>'
+            f'<div style="display: flex; justify-content: space-between; padding: 6px 0; font-size: 0.85rem;">'
+            f'<span style="color: {CHARCOAL}; font-weight: 500;">Estimated Spend</span>'
+            f'<span>$3.0M</span></div>'
+        )
+        st.markdown(overview_html, unsafe_allow_html=True)
+        
+        with st.expander("More Details", expanded=False):
+            more_details_html = (
+                f'<div style="display: flex; justify-content: space-between; padding: 6px 0; font-size: 0.85rem; border-bottom: 1px solid #F0F0F0;">'
+                f'<span style="color: {CHARCOAL}; font-weight: 500;">Supplier</span>'
+                f'<span>{case.supplier_id or "Not Assigned"}</span></div>'
+                f'<div style="display: flex; justify-content: space-between; padding: 6px 0; font-size: 0.85rem; border-bottom: 1px solid #F0F0F0;">'
+                f'<span style="color: {CHARCOAL}; font-weight: 500;">Contract</span>'
+                f'<span>{case.contract_id or "Not Specified"}</span></div>'
+                f'<div style="display: flex; justify-content: space-between; padding: 6px 0; font-size: 0.85rem;">'
+                f'<span style="color: {CHARCOAL}; font-weight: 500;">Created</span>'
+                f'<span>{case.created_date}</span></div>'
+            )
+            st.markdown(more_details_html, unsafe_allow_html=True)
+        
+    # Get recommendation from latest agent output (used by Strategy section below)
     recommendation = "Pending Analysis"
     confidence = 0.0
     if case.latest_agent_output:
@@ -412,45 +438,7 @@ def render_case_details_panel(case, client) -> None:
         conf = output.get("confidence") if isinstance(output, dict) else getattr(output, "confidence", None)
         if conf:
             confidence = conf
-    
-    # Overview details
-    st.markdown(f"""
-        <div class="detail-row">
-            <span class="detail-label">Case ID</span>
-            <span class="detail-value">{case.case_id}</span>
-        </div>
-        <div class="detail-row">
-            <span class="detail-label">Category</span>
-            <span class="detail-value">{case.category_id}</span>
-        </div>
-        <div class="detail-row">
-            <span class="detail-label">Trigger Source</span>
-            <span class="detail-value">{case.trigger_source}</span>
-        </div>
-        <div class="detail-row">
-            <span class="detail-label">Estimated Spend</span>
-            <span class="detail-value">$3.0M</span>
-        </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    with st.expander("More Details", expanded=False):
-        st.markdown(f"""
-        <div class="detail-row">
-            <span class="detail-label">Supplier</span>
-            <span class="detail-value">{case.supplier_id or 'Not Assigned'}</span>
-        </div>
-        <div class="detail-row">
-            <span class="detail-label">Contract</span>
-            <span class="detail-value">{case.contract_id or 'Not Specified'}</span>
-        </div>
-        <div class="detail-row">
-            <span class="detail-label">Created</span>
-            <span class="detail-value">{case.created_date}</span>
-        </div>
-        """, unsafe_allow_html=True)
-        
+
     # ===== Section 2: Supporting Context (Signals & Findings) =====
     with st.container(border=True):
         # Build entire signals HTML as one string, then render once
