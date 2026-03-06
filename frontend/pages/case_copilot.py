@@ -388,6 +388,9 @@ def render_case_details_panel(case, client) -> None:
     5. Documents & Timeline
     """
     
+    # Move Triage Panel inside this detailed view to consolidate horizontal header space (Idea 1)
+    render_triage_panel(case)
+    
     # ===== Section 1: Quick Overview =====
     st.markdown("""
     <div class="section-card">
@@ -420,6 +423,20 @@ def render_case_details_panel(case, client) -> None:
             <span class="detail-value">{case.category_id}</span>
         </div>
         <div class="detail-row">
+            <span class="detail-label">Trigger Source</span>
+            <span class="detail-value">{case.trigger_source}</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">Estimated Spend</span>
+            <span class="detail-value">$3.0M</span>
+        </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    with st.expander("More Details", expanded=False):
+        st.markdown(f"""
+        <div class="detail-row">
             <span class="detail-label">Supplier</span>
             <span class="detail-value">{case.supplier_id or 'Not Assigned'}</span>
         </div>
@@ -428,16 +445,11 @@ def render_case_details_panel(case, client) -> None:
             <span class="detail-value">{case.contract_id or 'Not Specified'}</span>
         </div>
         <div class="detail-row">
-            <span class="detail-label">Trigger Source</span>
-            <span class="detail-value">{case.trigger_source}</span>
-        </div>
-        <div class="detail-row">
             <span class="detail-label">Created</span>
             <span class="detail-value">{case.created_date}</span>
         </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
+        
     
     # ===== Section 2: Strategy Rationale =====
     st.markdown(f"""
@@ -1315,9 +1327,6 @@ def render_case_copilot(case_id: str):
     
     # Condensed Case Header (full width)
     render_case_header_condensed(case)
-    
-    # DTP-01 Triage Panel (only shown in DTP-01)
-    render_triage_panel(case)
     
     # Main layout: Case Details (60%) | Chat (40%)
     col_details, col_chat = st.columns([0.6, 0.4], gap="medium")
