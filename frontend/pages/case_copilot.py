@@ -432,9 +432,16 @@ def render_case_details_panel(case, client) -> None:
     confidence = 0.0
     if case.latest_agent_output:
         output = case.latest_agent_output
-        rec = output.get("recommended_strategy") if isinstance(output, dict) else getattr(output, "recommended_strategy", None)
+        # Extract recommendation using possible keys from different agent output schemas
+        rec = None
+        for key in ["recommended_strategy", "recommended_action", "recommendation", "explanation"]:
+            rec = output.get(key) if isinstance(output, dict) else getattr(output, key, None)
+            if rec:
+                break
+                
         if rec:
             recommendation = rec
+            
         conf = output.get("confidence") if isinstance(output, dict) else getattr(output, "confidence", None)
         if conf:
             confidence = conf
