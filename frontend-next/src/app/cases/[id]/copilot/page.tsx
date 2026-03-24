@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import { CheckCircle2, AlertTriangle, FileText, Activity, ShieldCheck, ChevronRight, MessageSquare, Briefcase, Clock, Terminal } from "lucide-react";
 import { motion } from "framer-motion";
+import { buildDecisionDataForStage } from "@/lib/dtp-approve-defaults";
 
 export default function LegacyCaseCopilotPage() {
   const params = useParams();
@@ -17,6 +18,8 @@ export default function LegacyCaseCopilotPage() {
   ]);
   const [input, setInput] = useState("");
   const [governanceApproved, setGovernanceApproved] = useState(false);
+  const [govSoc2, setGovSoc2] = useState<"verified" | "pending" | "">("");
+  const [govInfra, setGovInfra] = useState<"meets" | "exemption" | "">("");
   const [isTyping, setIsTyping] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
@@ -190,6 +193,24 @@ export default function LegacyCaseCopilotPage() {
 
   // 4. Governance Approval
   const handleApproveGovernance = async () => {
+    if (govSoc2 !== "verified" || govInfra !== "meets") {
+      alert("Please confirm SOC2 verification and that IT infrastructure meets thresholds before approving.");
+      return;
+    }
+
+    const stage = caseDetails?.dtp_stage || "DTP-01";
+    const stagePayload = buildDecisionDataForStage(stage, caseDetails?.supplier_id);
+    if (!stagePayload) {
+      alert(`No decision schema for stage ${stage}. Check API / case state.`);
+      return;
+    }
+
+    const decision_data = {
+      ...stagePayload,
+      governance_soc2_status: govSoc2 === "verified" ? "Yes, Verified" : govSoc2,
+      governance_infra_status: govInfra === "meets" ? "Meets Thresholds" : govInfra,
+    };
+
     try {
       const url = process.env.NEXT_PUBLIC_API_URL 
         ? `${process.env.NEXT_PUBLIC_API_URL}/api/decisions/approve`
@@ -201,17 +222,27 @@ export default function LegacyCaseCopilotPage() {
         body: JSON.stringify({
           case_id: caseId,
           decision: "Approve",
-          reason: "Approved via Next.js Copilot UI"
+          reason: "Approved via Next.js Copilot UI",
+          decision_data,
         })
       });
       if (res.ok) {
         setGovernanceApproved(true);
       } else {
-        alert("Server failed to approve decision. Make sure the API is running.");
+        let detail = res.statusText || `HTTP ${res.status}`;
+        try {
+          const body = await res.json();
+          if (body?.detail) {
+            detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+          }
+        } catch {
+          /* ignore */
+        }
+        alert(`Could not approve: ${detail}`);
       }
     } catch(err) {
       console.error(err);
-      alert("Network error. Could not approve.");
+      alert("Network error. Check NEXT_PUBLIC_API_URL points at your running API (not localhost from Vercel).");
     }
   };
 
@@ -425,15 +456,27 @@ export default function LegacyCaseCopilotPage() {
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Has InfoSec verified the SOC2 compliance? *</label>
                     <div className="flex gap-4">
-                      <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer"><input type="radio" name="soc" className="w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" /> Yes, Verified</label>
-                      <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer"><input type="radio" name="soc" className="w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" /> Pending / Missing</label>
+                      <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                        <input type="radio" name="soc" checked={govSoc2 === "verified"} onChange={() => setGovSoc2("verified")} className="w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" />
+                        Yes, Verified
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                        <input type="radio" name="soc" checked={govSoc2 === "pending"} onChange={() => setGovSoc2("pending")} className="w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" />
+                        Pending / Missing
+                      </label>
                     </div>
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Does this supplier meet minimum IT Infrastructure thresholds? *</label>
                     <div className="flex gap-4">
-                      <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer"><input type="radio" name="thresh" className="w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" /> Meets Thresholds</label>
-                      <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer"><input type="radio" name="thresh" className="w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" /> Does Not Meet (Requires Exemption)</label>
+                      <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                        <input type="radio" name="thresh" checked={govInfra === "meets"} onChange={() => setGovInfra("meets")} className="w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" />
+                        Meets Thresholds
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                        <input type="radio" name="thresh" checked={govInfra === "exemption"} onChange={() => setGovInfra("exemption")} className="w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" />
+                        Does Not Meet (Requires Exemption)
+                      </label>
                     </div>
                   </div>
                   
