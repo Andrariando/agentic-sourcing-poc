@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Agentic AI Sourcing Portal – IT Infrastructure</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
+<style>
+  /* ─── Design Tokens ─────────────────────────────────────── */
+  :root{
+    --ink:#0d0f14;
+    --canvas:#f4f2ee;
+    --accent:#1a3cff;
+    --accent2:#ff5c35;
+    --mid:#5a5f72;
+    --line:#d4d0c8;
+    --card:#ffffff;
+    --t1:#0d9e5c;
+    --t2:#2563eb;
+    --t3:#d97706;
+    --t4:#9ca3af;
+    --radius:12px;
+    --shadow:0 4px 28px rgba(13,15,20,.10);
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:'DM Sans',sans-serif;background:var(--canvas);color:var(--ink);min-height:100vh;overflow-x:hidden}
+
+  /* ─── Nav ───────────────────────────────────────────────── */
+  nav{
+    position:sticky;top:0;z-index:100;
+    background:var(--ink);
+    display:flex;align-items:center;gap:0;
+    padding:0 2rem;height:60px;
+  }
+  .nav-brand{
+    font-family:'Syne',sans-serif;font-weight:800;font-size:1rem;
+    color:#fff;letter-spacing:.04em;margin-right:auto;
+    display:flex;align-items:center;gap:.5rem;
+  }
+  .nav-brand span{color:var(--accent2)}
+  .nav-tabs{display:flex;height:100%}
+  .nav-tab{
+    font-family:'Syne',sans-serif;font-size:.78rem;font-weight:600;
+    letter-spacing:.08em;text-transform:uppercase;
+    color:rgba(255,255,255,.55);
+    background:none;border:none;cursor:pointer;
+    padding:0 1.4rem;height:100%;
+    border-bottom:3px solid transparent;
+    transition:color .2s,border-color .2s;
+    white-space:nowrap;
+  }
+  .nav-tab:hover{color:#fff}
+  .nav-tab.active{color:#fff;border-bottom-color:var(--accent2)}
+
+  /* ─── Pages ─────────────────────────────────────────────── */
+  .page{display:none;animation:fadeUp .35s ease both}
+  .page.active{display:block}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+
+  /* ─── Hero Banner ───────────────────────────────────────── */
+  .hero{
+    background:var(--ink);color:#fff;
+    padding:3rem 2.5rem 2.5rem;
+    position:relative;overflow:hidden;
+  }
+  .hero::after{
+    content:'';position:absolute;right:-80px;top:-60px;
+    width:420px;height:420px;border-radius:50%;
+    background:radial-gradient(circle,rgba(26,60,255,.35),transparent 70%);
+    pointer-events:none;
+  }
+  .hero-eyebrow{
+    font-family:'Syne',sans-serif;font-size:.72rem;font-weight:700;
+    letter-spacing:.18em;text-transform:uppercase;
+    color:var(--accent2);margin-bottom:.6rem;
+  }
+  .hero h1{font-family:'Syne',sans-serif;font-size:2rem;font-weight:800;line-height:1.15;max-width:560px}
+  .hero p{margin-top:.8rem;font-size:.92rem;color:rgba(255,255,255,.6);max-width:480px;line-height:1.6}
+
+  /* ─── Section wrappers ───────────────────────────────────── */
+  .section{padding:2rem 2.5rem}
+  .section-title{
+    font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;
+    letter-spacing:.06em;text-transform:uppercase;color:var(--mid);
+    margin-bottom:1.2rem;display:flex;align-items:center;gap:.6rem;
+  }
+  .section-title::after{content:'';flex:1;height:1px;background:var(--line)}
+
+  /* ─── Cards ─────────────────────────────────────────────── */
+  .card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:1.5rem;border:1px solid var(--line)}
+
+  /* ══════════════════════════════════════════════════════════
+     PAGE 1 – BUSINESS INTAKE
+  ══════════════════════════════════════════════════════════ */
+  .intake-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.2rem}
+  .field-group{display:flex;flex-direction:column;gap:.4rem}
+  .field-group.full{grid-column:1/-1}
+  label{font-size:.78rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--mid)}
+  input,select,textarea{
+    font-family:'DM Sans',sans-serif;font-size:.88rem;color:var(--ink);
+    background:#fff;border:1.5px solid var(--line);border-radius:8px;
+    padding:.65rem .9rem;width:100%;transition:border-color .2s,box-shadow .2s;
+  }
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(26,60,255,.12)}
+  textarea{resize:vertical;min-height:80px}
+  .score-preview{
+    background:linear-gradient(135deg,#0d0f14 0%,#1c2a5e 100%);
+    border-radius:var(--radius);padding:1.5rem;color:#fff;
+    display:flex;flex-direction:column;gap:.8rem;
+  }
+  .score-preview h3{font-family:'Syne',sans-serif;font-size:.82rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.55)}
+  .score-big{font-family:'Syne',sans-serif;font-size:3.5rem;font-weight:800;line-height:1;color:#fff}
+  .score-big span{font-size:1.2rem;color:rgba(255,255,255,.4)}
+  .score-bars{display:flex;flex-direction:column;gap:.5rem}
+  .bar-row{display:flex;align-items:center;gap:.6rem;font-size:.76rem}
+  .bar-label{width:36px;color:rgba(255,255,255,.55);font-size:.7rem}
+  .bar-track{flex:1;height:6px;background:rgba(255,255,255,.1);border-radius:3px;overflow:hidden}
+  .bar-fill{height:100%;border-radius:3px;transition:width .5s ease}
+  .tier-badge{
+    display:inline-flex;align-items:center;gap:.4rem;
+    padding:.35rem .85rem;border-radius:99px;font-size:.76rem;font-weight:700;
+    letter-spacing:.06em;text-transform:uppercase;
+  }
+  .t1{background:rgba(13,158,92,.15);color:var(--t1)}
+  .t2{background:rgba(37,99,235,.15);color:var(--t2)}
+  .t3{background:rgba(217,119,6,.15);color:var(--t3)}
+  .t4{background:rgba(156,163,175,.15);color:var(--t4)}
+  .btn{
+    display:inline-flex;align-items:center;gap:.5rem;
+    padding:.75rem 1.6rem;border-radius:8px;font-family:'Syne',sans-serif;
+    font-size:.82rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    cursor:pointer;border:none;transition:all .2s;
+  }
+  .btn-primary{background:var(--accent);color:#fff}
+  .btn-primary:hover{background:#0f2bd4;transform:translateY(-1px);box-shadow:0 6px 20px rgba(26,60,255,.3)}
+  .btn-outline{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
+  .btn-outline:hover{border-color:var(--ink);background:var(--ink);color:#fff}
+  .form-actions{display:flex;gap:.8rem;margin-top:1.4rem}
+
+  /* pathway pill */
+  .pathway-opts{display:flex;gap:.6rem;flex-wrap:wrap}
+  .pathway-opt input{display:none}
+  .pathway-opt label{
+    font-family:'Syne',sans-serif;font-size:.76rem;font-weight:600;
+    letter-spacing:.05em;padding:.45rem 1rem;border-radius:6px;
+    border:1.5px solid var(--line);cursor:pointer;transition:all .2s;
+    text-transform:none;
+  }
+  .pathway-opt input:checked + label{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  /* ══════════════════════════════════════════════════════════
+     PAGE 2 – PRIORITY LIST
+  ══════════════════════════════════════════════════════════ */
+  .filters{display:flex;gap:.7rem;flex-wrap:wrap;margin-bottom:1.4rem;align-items:center}
+  .filter-btn{
+    font-family:'Syne',sans-serif;font-size:.73rem;font-weight:700;
+    letter-spacing:.06em;padding:.35rem .9rem;border-radius:6px;
+    border:1.5px solid var(--line);background:#fff;cursor:pointer;transition:all .18s;
+  }
+  .filter-btn.active,.filter-btn:hover{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .search-box{margin-left:auto;position:relative}
+  .search-box input{padding:.4rem .9rem .4rem 2.2rem;border-radius:6px;font-size:.82rem;width:220px}
+  .search-box::before{content:'⌕';position:absolute;left:.7rem;top:50%;transform:translateY(-50%);color:var(--mid);font-size:1rem}
+
+  table{width:100%;border-collapse:collapse;font-size:.84rem}
+  thead tr{border-bottom:2px solid var(--ink)}
+  th{
+    font-family:'Syne',sans-serif;font-size:.7rem;font-weight:700;
+    letter-spacing:.1em;text-transform:uppercase;color:var(--mid);
+    padding:.75rem .9rem;text-align:left;white-space:nowrap;
+  }
+  td{padding:.75rem .9rem;border-bottom:1px solid var(--line);vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  tr:hover td{background:rgba(26,60,255,.03)}
+  .score-chip{
+    font-family:'Syne',sans-serif;font-weight:700;font-size:.82rem;
+    width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;
+  }
+  .sc-t1{background:rgba(13,158,92,.12);color:var(--t1)}
+  .sc-t2{background:rgba(37,99,235,.12);color:var(--t2)}
+  .sc-t3{background:rgba(217,119,6,.12);color:var(--t3)}
+  .sc-t4{background:rgba(156,163,175,.12);color:var(--t4)}
+  .action-link{
+    font-size:.76rem;font-weight:600;color:var(--accent);
+    text-decoration:none;letter-spacing:.03em;white-space:nowrap;
+  }
+  .action-link:hover{text-decoration:underline}
+  .type-tag{
+    font-size:.68rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+    padding:.2rem .55rem;border-radius:4px;
+  }
+  .tag-contract{background:#ede9fe;color:#5b21b6}
+  .tag-new{background:#dbeafe;color:#1d4ed8}
+  .summary-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.4rem}
+  .stat-card{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:1rem 1.2rem;
+  }
+  .stat-num{font-family:'Syne',sans-serif;font-size:1.8rem;font-weight:800}
+  .stat-lbl{font-size:.73rem;color:var(--mid);text-transform:uppercase;letter-spacing:.06em;margin-top:.1rem}
+  .progress-mini{height:4px;background:var(--line);border-radius:2px;margin-top:.6rem;overflow:hidden}
+  .progress-mini-fill{height:100%;border-radius:2px}
+
+  /* ══════════════════════════════════════════════════════════
+     PAGE 3 – KPI DASHBOARD
+  ══════════════════════════════════════════════════════════ */
+  .kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.2rem;margin-bottom:1.4rem}
+  .kpi-card{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:1.3rem 1.4rem;position:relative;overflow:hidden;
+  }
+  .kpi-card::before{
+    content:'';position:absolute;top:0;left:0;right:0;height:3px;
+    background:var(--accent);
+  }
+  .kpi-card.kli::before{background:var(--accent2)}
+  .kpi-label{font-size:.68rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--mid)}
+  .kpi-name{font-family:'Syne',sans-serif;font-size:.9rem;font-weight:700;margin:.35rem 0 .6rem}
+  .kpi-value{font-family:'Syne',sans-serif;font-size:2.2rem;font-weight:800;line-height:1}
+  .kpi-unit{font-size:.8rem;color:var(--mid);margin-left:.2rem}
+  .kpi-target{font-size:.74rem;color:var(--mid);margin-top:.4rem}
+  .kpi-trend{
+    display:inline-flex;align-items:center;gap:.25rem;
+    font-size:.73rem;font-weight:600;margin-top:.5rem;
+    padding:.2rem .6rem;border-radius:4px;
+  }
+  .trend-up{background:#dcfce7;color:#16a34a}
+  .trend-down{background:#fee2e2;color:#dc2626}
+  .trend-neutral{background:#f1f5f9;color:#64748b}
+  .outcome-block{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:1.4rem;margin-bottom:1rem;
+  }
+  .outcome-num{
+    font-family:'Syne',sans-serif;font-size:.7rem;font-weight:800;letter-spacing:.1em;
+    color:var(--accent);text-transform:uppercase;margin-bottom:.4rem;
+  }
+  .outcome-title{font-family:'Syne',sans-serif;font-size:.96rem;font-weight:700;margin-bottom:.5rem}
+  .outcome-desc{font-size:.83rem;color:var(--mid);line-height:1.6;margin-bottom:.9rem}
+  .kpi-pills{display:flex;gap:.5rem;flex-wrap:wrap}
+  .kpi-pill{
+    font-size:.7rem;font-weight:600;letter-spacing:.04em;
+    padding:.3rem .75rem;border-radius:99px;
+  }
+  .kpi-pill.kpi-type{background:rgba(26,60,255,.1);color:var(--accent)}
+  .kpi-pill.kli-type{background:rgba(255,92,53,.1);color:var(--accent2)}
+
+  /* gauge ring */
+  .gauge-wrap{display:flex;align-items:center;gap:1.5rem;margin-top:.8rem}
+  .gauge-ring{position:relative;width:80px;height:80px;flex-shrink:0}
+  .gauge-ring svg{transform:rotate(-90deg)}
+  .gauge-text{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-family:'Syne',sans-serif;font-size:.92rem;font-weight:800;
+  }
+  .gauge-meta{flex:1}
+  .gauge-meta p{font-size:.78rem;color:var(--mid);line-height:1.5}
+
+  /* agent table */
+  .agent-row td:first-child{font-weight:600;font-family:'Syne',sans-serif;font-size:.8rem}
+  .stability-bar{width:100px;height:8px;background:var(--line);border-radius:4px;overflow:hidden;display:inline-block;vertical-align:middle}
+  .stability-fill{height:100%;border-radius:4px;background:var(--accent)}
+
+  /* ─── Footer ────────────────────────────────────────────── */
+  footer{
+    text-align:center;padding:1.5rem 2rem;font-size:.74rem;
+    color:var(--mid);border-top:1px solid var(--line);margin-top:2rem;
+  }
+
+  /* ─── Responsive ────────────────────────────────────────── */
+  @media(max-width:720px){
+    .intake-grid{grid-template-columns:1fr}
+    .kpi-grid{grid-template-columns:1fr 1fr}
+    .summary-stats{grid-template-columns:1fr 1fr}
+  }
+  @media(max-width:480px){
+    .kpi-grid{grid-template-columns:1fr}
+    .summary-stats{grid-template-columns:1fr 1fr}
+    nav{padding:0 1rem}
+    .section{padding:1.5rem 1.2rem}
+    .hero{padding:2rem 1.4rem}
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-brand">⬡ Agentic<span>AI</span> Sourcing</div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="showPage('intake',this)">Business Intake</button>
+    <button class="nav-tab" onclick="showPage('priority',this)">Priority List</button>
+    <button class="nav-tab" onclick="showPage('kpi',this)">KPI Dashboard</button>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════
+     PAGE 1 – BUSINESS INTAKE REQUEST
+═══════════════════════════════════════════════════════════ -->
+<div id="page-intake" class="page active">
+  <div class="hero">
+    <div class="hero-eyebrow">IT Infrastructure · Sourcing Portal</div>
+    <h1>Business Intake Request</h1>
+    <p>Submit a new sourcing need. AI agents will score urgency, estimate spend impact, and recommend a sourcing pathway automatically.</p>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Request Details</div>
+    <div style="display:grid;grid-template-columns:1fr 340px;gap:1.4rem;align-items:start">
+
+      <!-- Form card -->
+      <div class="card">
+        <div class="intake-grid">
+
+          <div class="field-group full">
+            <label>Request Title *</label>
+            <input type="text" id="f-title" placeholder="e.g. Network Switch Refresh – Data Center A" oninput="recalc()"/>
+          </div>
+
+          <div class="field-group">
+            <label>Business Requester *</label>
+            <input type="text" id="f-requester" placeholder="Full name"/>
+          </div>
+
+          <div class="field-group">
+            <label>Department / BU</label>
+            <input type="text" id="f-dept" placeholder="e.g. IT Operations"/>
+          </div>
+
+          <div class="field-group">
+            <label>Category</label>
+            <select id="f-category" onchange="recalc()">
+              <option value="">— Select category —</option>
+              <option value="network">Network Infrastructure</option>
+              <option value="compute">Compute &amp; Servers</option>
+              <option value="storage">Storage &amp; Backup</option>
+              <option value="cloud">Cloud Services</option>
+              <option value="security">Cybersecurity</option>
+              <option value="euc">End User Computing</option>
+            </select>
+          </div>
+
+          <div class="field-group">
+            <label>Estimated Contract Value (USD) *</label>
+            <input type="number" id="f-value" placeholder="0" min="0" step="10000" oninput="recalc()"/>
+          </div>
+
+          <div class="field-group">
+            <label>Implementation Timeline *</label>
+            <select id="f-timeline" onchange="recalc()">
+              <option value="">— Select timeline —</option>
+              <option value="3">Within 3 months</option>
+              <option value="6">3–6 months</option>
+              <option value="12">6–12 months</option>
+              <option value="12+">Over 12 months</option>
+            </select>
+          </div>
+
+          <div class="field-group">
+            <label>Preferred Supplier Status</label>
+            <select id="f-supplier" onchange="recalc()">
+              <option value="">— Unknown / TBD —</option>
+              <option value="preferred">Preferred Supplier</option>
+              <option value="straightpo">Straight-to-PO Allowed</option>
+              <option value="allowed">Allowed Supplier</option>
+              <option value="nonpreferred">Non-Preferred Supplier</option>
+            </select>
+          </div>
+
+          <div class="field-group">
+            <label>Contract Type</label>
+            <select id="f-ctype">
+              <option value="new">New Sourcing Request</option>
+              <option value="renewal">Contract Renewal</option>
+              <option value="amendment">Amendment / Extension</option>
+            </select>
+          </div>
+
+          <div class="field-group full">
+            <label>Sourcing Pathway</label>
+            <div class="pathway-opts">
+              <div class="pathway-opt"><input type="radio" name="pathway" id="p1" value="rfp"/><label for="p1">RFP</label></div>
+              <div class="pathway-opt"><input type="radio" name="pathway" id="p2" value="rfq"/><label for="p2">RFQ</label></div>
+              <div class="pathway-opt"><input type="radio" name="pathway" id="p3" value="rfi"/><label for="p3">RFI</label></div>
+              <div class="pathway-opt"><input type="radio" name="pathway" id="p4" value="direct"/><label for="p4">Direct Negotiation</label></div>
+              <div class="pathway-opt"><input type="radio" name="pathway" id="p5" value="po"/><label for="p5">Straight-to-PO</label></div>
+            </div>
+          </div>
+
+          <div class="field-group full">
+            <label>Business Justification &amp; Requirements</label>
+            <textarea id="f-justification" rows="3" placeholder="Describe the business need, technical requirements, and any compliance or risk considerations…"></textarea>
+          </div>
+
+          <div class="field-group">
+            <label>Urgency Level</label>
+            <select id="f-urgency">
+              <option value="critical">Critical – operations at risk</option>
+              <option value="high">High – significant impact</option>
+              <option value="medium" selected>Medium – planned activity</option>
+              <option value="low">Low – nice-to-have</option>
+            </select>
+          </div>
+
+          <div class="field-group">
+            <label>Incumbent Supplier (if any)</label>
+            <input type="text" id="f-incumbent" placeholder="Supplier name or N/A"/>
+          </div>
+
+        </div><!-- intake-grid -->
+
+        <div class="form-actions">
+          <button class="btn btn-primary" onclick="submitForm()">Submit Request →</button>
+          <button class="btn btn-outline" onclick="clearForm()">Clear</button>
+        </div>
+      </div><!-- card -->
+
+      <!-- Score Preview -->
+      <div>
+        <div class="score-preview">
+          <h3>AI Score Preview</h3>
+          <div>
+            <div class="score-big" id="score-display">—<span>/10</span></div>
+            <div style="margin-top:.5rem" id="tier-display"></div>
+          </div>
+          <div class="score-bars" id="score-bars">
+            <div style="font-size:.72rem;color:rgba(255,255,255,.4)">Fill in the form to see scores</div>
+          </div>
+          <div style="font-size:.73rem;color:rgba(255,255,255,.38);margin-top:.4rem">
+            Formula: PS = 0.30(IUS) + 0.30(ES) + 0.25(CSIS) + 0.15(SAS)
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:1rem;padding:1rem 1.2rem">
+          <div style="font-family:'Syne',sans-serif;font-size:.75rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mid);margin-bottom:.7rem">Required Fields Checklist</div>
+          <div id="checklist" style="display:flex;flex-direction:column;gap:.4rem;font-size:.81rem"></div>
+        </div>
+
+        <div class="card" style="margin-top:1rem;padding:1rem 1.2rem;background:#fffbf0;border-color:#fde68a">
+          <div style="font-family:'Syne',sans-serif;font-size:.73rem;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.4rem">ℹ AI-in-the-Loop Note</div>
+          <div style="font-size:.78rem;color:#78350f;line-height:1.6">
+            Sourcing managers review all AI-generated scores before actions are taken. Override any score with a documented reason to improve model calibration.
+          </div>
+        </div>
+      </div><!-- score sidebar -->
+
+    </div><!-- grid -->
+  </div><!-- section -->
+
+  <div class="section" id="confirmation-section" style="display:none">
+    <div class="card" style="background:linear-gradient(135deg,#0d9e5c18,#0d9e5c05);border-color:var(--t1)">
+      <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.1rem;color:var(--t1);margin-bottom:.4rem">✓ Request Submitted Successfully</div>
+      <div id="confirm-text" style="font-size:.85rem;color:var(--mid)"></div>
+      <div style="margin-top:1rem;display:flex;gap:.7rem">
+        <button class="btn btn-primary" onclick="showPage('priority', document.querySelectorAll('.nav-tab')[1])">View Priority List →</button>
+        <button class="btn btn-outline" onclick="clearForm()">New Request</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     PAGE 2 – PRIORITIZED LIST
+═══════════════════════════════════════════════════════════ -->
+<div id="page-priority" class="page">
+  <div class="hero">
+    <div class="hero-eyebrow">IT Infrastructure · Sourcing Pipeline</div>
+    <h1>Prioritized Sourcing List</h1>
+    <p>AI-scored opportunities ranked by composite priority score. Tier 1 items require immediate action.</p>
+  </div>
+
+  <div class="section">
+    <!-- Stats row -->
+    <div class="summary-stats">
+      <div class="stat-card">
+        <div class="stat-num" style="color:var(--t1)">4</div>
+        <div class="stat-lbl">Tier 1 – Immediate</div>
+        <div class="progress-mini"><div class="progress-mini-fill" style="width:40%;background:var(--t1)"></div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" style="color:var(--t2)">5</div>
+        <div class="stat-lbl">Tier 2 – Benchmark</div>
+        <div class="progress-mini"><div class="progress-mini-fill" style="width:50%;background:var(--t2)"></div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" style="color:var(--t3)">3</div>
+        <div class="stat-lbl">Tier 3 – Monitor</div>
+        <div class="progress-mini"><div class="progress-mini-fill" style="width:30%;background:var(--t3)"></div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num">$14.2M</div>
+        <div class="stat-lbl">Total Pipeline Value</div>
+        <div class="progress-mini"><div class="progress-mini-fill" style="width:72%;background:var(--accent)"></div></div>
+      </div>
+    </div>
+
+    <div class="section-title">Sourcing Opportunities</div>
+
+    <!-- Filters -->
+    <div class="filters">
+      <button class="filter-btn active" onclick="filterTable('all',this)">All</button>
+      <button class="filter-btn" onclick="filterTable('T1',this)">Tier 1</button>
+      <button class="filter-btn" onclick="filterTable('T2',this)">Tier 2</button>
+      <button class="filter-btn" onclick="filterTable('T3',this)">Tier 3</button>
+      <button class="filter-btn" onclick="filterTable('contract',this)">Existing Contracts</button>
+      <button class="filter-btn" onclick="filterTable('new',this)">New Requests</button>
+      <div class="search-box">
+        <input type="text" id="search-input" placeholder="Search supplier or title…" oninput="searchTable()"/>
+      </div>
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden">
+      <table id="priority-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Supplier / Request</th>
+            <th>Type</th>
+            <th>Score</th>
+            <th>Tier</th>
+            <th>EUS/IUS</th>
+            <th>FIS/ES</th>
+            <th>RSS/CSIS</th>
+            <th>SAS</th>
+            <th>Value (USD)</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:1rem;font-size:.76rem;color:var(--mid)">
+      Scores auto-calculated per framework. EUS/IUS = Urgency · FIS/ES = Financial · RSS/CSIS = Risk/Category · SAS = Strategic Alignment. Human override required to change tier assignment.
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     PAGE 3 – KPI DASHBOARD
+═══════════════════════════════════════════════════════════ -->
+<div id="page-kpi" class="page">
+  <div class="hero">
+    <div class="hero-eyebrow">POC · Performance Measurement</div>
+    <h1>KPI &amp; KLI Dashboard</h1>
+    <p>Per sourcing opportunity tracking of all five POC outcome metrics. Averages calculated across the full pipeline at the bottom.</p>
+  </div>
+
+  <div class="section">
+
+    <!-- Legend -->
+    <div style="display:flex;gap:1.2rem;align-items:center;margin-bottom:1.2rem;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:.4rem;font-size:.76rem;font-weight:600;color:var(--mid)">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--accent)"></span> KPI — Key Performance Indicator
+      </div>
+      <div style="display:flex;align-items:center;gap:.4rem;font-size:.76rem;font-weight:600;color:var(--mid)">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--accent2)"></span> KLI — Key Learning Indicator
+      </div>
+      <div style="margin-left:auto;display:flex;gap:.6rem" id="kpi-filter-btns">
+        <button class="filter-btn active" onclick="filterKpi('all',this)">All</button>
+        <button class="filter-btn" onclick="filterKpi('contract',this)">Contracts</button>
+        <button class="filter-btn" onclick="filterKpi('new',this)">New Requests</button>
+      </div>
+    </div>
+
+    <div class="section-title">Sourcing Opportunity Matrix</div>
+
+    <!-- Scrollable table wrapper -->
+    <div style="overflow-x:auto">
+      <div class="card" style="padding:0;overflow:hidden;min-width:900px">
+        <table id="kpi-table" style="width:100%;border-collapse:collapse;font-size:.82rem">
+          <thead>
+            <!-- Column group header row -->
+            <tr style="background:#f8f7f4;border-bottom:1px solid var(--line)">
+              <th rowspan="2" style="padding:.8rem 1rem;text-align:left;vertical-align:bottom;border-right:2px solid var(--line);min-width:200px;font-family:'Syne',sans-serif;font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mid)">Sourcing Opportunity</th>
+              <th rowspan="2" style="padding:.8rem .7rem;text-align:center;vertical-align:bottom;border-right:1px solid var(--line);font-family:'Syne',sans-serif;font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mid)">Tier</th>
+              <th colspan="2" style="padding:.6rem .7rem;text-align:center;border-bottom:1px solid var(--line);border-right:1px solid #e0dcd4;background:rgba(26,60,255,.05);font-family:'Syne',sans-serif;font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)">Outcome 1 · Consistency</th>
+              <th colspan="1" style="padding:.6rem .7rem;text-align:center;border-bottom:1px solid var(--line);border-right:1px solid #e0dcd4;background:rgba(26,60,255,.05);font-family:'Syne',sans-serif;font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)">Outcome 2 · Cycle Time</th>
+              <th colspan="1" style="padding:.6rem .7rem;text-align:center;border-bottom:1px solid var(--line);border-right:1px solid #e0dcd4;background:rgba(255,92,53,.05);font-family:'Syne',sans-serif;font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent2)">Outcome 3 · Collaboration</th>
+              <th colspan="2" style="padding:.6rem .7rem;text-align:center;border-bottom:1px solid var(--line);border-right:1px solid #e0dcd4;background:rgba(26,60,255,.05);font-family:'Syne',sans-serif;font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)">Outcome 4 · Visibility</th>
+              <th colspan="2" style="padding:.6rem .7rem;text-align:center;border-bottom:1px solid var(--line);background:rgba(255,92,53,.05);font-family:'Syne',sans-serif;font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent2)">Outcome 5 · Scale Readiness</th>
+            </tr>
+            <tr style="background:#f8f7f4;border-bottom:2px solid var(--ink)">
+              <!-- Outcome 1 -->
+              <th style="padding:.6rem .7rem;text-align:center;background:rgba(26,60,255,.04);font-family:'Syne',sans-serif;font-size:.65rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase">
+                <span style="display:block;color:var(--accent);margin-bottom:.1rem">KPI</span>AI Reliability<br>Rate (%)
+              </th>
+              <th style="padding:.6rem .7rem;text-align:center;border-right:1px solid #e0dcd4;background:rgba(255,92,53,.04);font-family:'Syne',sans-serif;font-size:.65rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase">
+                <span style="display:block;color:var(--accent2);margin-bottom:.1rem">KLI</span>Override<br>Count
+              </th>
+              <!-- Outcome 2 -->
+              <th style="padding:.6rem .7rem;text-align:center;border-right:1px solid #e0dcd4;background:rgba(26,60,255,.04);font-family:'Syne',sans-serif;font-size:.65rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase">
+                <span style="display:block;color:var(--accent);margin-bottom:.1rem">KPI</span>Cycle Time<br>Reduction (%)
+              </th>
+              <!-- Outcome 3 -->
+              <th style="padding:.6rem .7rem;text-align:center;border-right:1px solid #e0dcd4;background:rgba(255,92,53,.04);font-family:'Syne',sans-serif;font-size:.65rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase">
+                <span style="display:block;color:var(--accent2);margin-bottom:.1rem">KLI</span>Edit Density<br>(edits/draft)
+              </th>
+              <!-- Outcome 4 -->
+              <th style="padding:.6rem .7rem;text-align:center;background:rgba(26,60,255,.04);font-family:'Syne',sans-serif;font-size:.65rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase">
+                <span style="display:block;color:var(--accent);margin-bottom:.1rem">KPI</span>Timeliness<br>(days earlier)
+              </th>
+              <th style="padding:.6rem .7rem;text-align:center;border-right:1px solid #e0dcd4;background:rgba(255,92,53,.04);font-family:'Syne',sans-serif;font-size:.65rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase">
+                <span style="display:block;color:var(--accent2);margin-bottom:.1rem">KLI</span>Signal<br>Accuracy (%)
+              </th>
+              <!-- Outcome 5 -->
+              <th style="padding:.6rem .7rem;text-align:center;background:rgba(26,60,255,.04);font-family:'Syne',sans-serif;font-size:.65rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase">
+                <span style="display:block;color:var(--accent);margin-bottom:.1rem">KPI</span>Data<br>Completeness (%)
+              </th>
+              <th style="padding:.6rem .7rem;text-align:center;background:rgba(255,92,53,.04);font-family:'Syne',sans-serif;font-size:.65rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase">
+                <span style="display:block;color:var(--accent2);margin-bottom:.1rem">KLI</span>Agent<br>Stability (%)
+              </th>
+            </tr>
+          </thead>
+          <tbody id="kpi-table-body"></tbody>
+          <tfoot id="kpi-table-foot"></tfoot>
+        </table>
+      </div>
+    </div>
+
+    <div style="margin-top:.8rem;font-size:.74rem;color:var(--mid);line-height:1.6">
+      <strong>KPI</strong> = Key Performance Indicator (measurable outcome target) &nbsp;·&nbsp;
+      <strong>KLI</strong> = Key Learning Indicator (behavioural signal for model improvement) &nbsp;·&nbsp;
+      Cells shaded <span style="background:rgba(13,158,92,.12);color:var(--t1);padding:.1rem .4rem;border-radius:3px;font-size:.72rem">green</span> are on/above target,
+      <span style="background:rgba(217,119,6,.12);color:var(--t3);padding:.1rem .4rem;border-radius:3px;font-size:.72rem">amber</span> need attention.
+    </div>
+  </div>
+</div>
+
+<footer>Agentic AI Sourcing Portal · IT Infrastructure · POC v1.0 · Requirements Document © 2025</footer>
+
+<script>
+/* ─────────────────────────────────────────────
+   Navigation
+───────────────────────────────────────────── */
+function showPage(id, btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  btn.classList.add('active');
+}
+
+/* ─────────────────────────────────────────────
+   Score Calculation (Page 1)
+───────────────────────────────────────────── */
+function ius(val){
+  if(!val)return 0;
+  if(val==='3')return 10;
+  if(val==='6')return 8;
+  if(val==='12')return 6;
+  return 3;
+}
+function esScore(val,maxVal=5000000){
+  if(!val||isNaN(val))return 0;
+  return Math.min(10,(parseFloat(val)/maxVal)*10);
+}
+function sasScore(val){
+  if(!val)return 5;
+  const m={preferred:10,straightpo:10,allowed:7,nonpreferred:3};
+  return m[val]||5;
+}
+const csisFixed=6.5; // representative category spend score
+
+function recalc(){
+  const timeline=document.getElementById('f-timeline').value;
+  const value=document.getElementById('f-value').value;
+  const supplier=document.getElementById('f-supplier').value;
+
+  const IUS=ius(timeline);
+  const ES=esScore(value);
+  const SAS=sasScore(supplier);
+  const CSIS=csisFixed;
+
+  const hasFilled=(IUS>0||ES>0);
+  if(!hasFilled){
+    document.getElementById('score-display').innerHTML='—<span>/10</span>';
+    document.getElementById('tier-display').innerHTML='';
+    document.getElementById('score-bars').innerHTML='<div style="font-size:.72rem;color:rgba(255,255,255,.4)">Fill in the form to see scores</div>';
+    return;
+  }
+
+  const score=(0.30*IUS)+(0.30*ES)+(0.25*CSIS)+(0.15*SAS);
+  const s=Math.round(score*10)/10;
+  document.getElementById('score-display').innerHTML=s+'<span>/10</span>';
+
+  let tier,tierClass,tierLabel;
+  if(s>=8){tier='Tier 1';tierClass='t1';tierLabel='Immediate Sourcing Event'}
+  else if(s>=6){tier='Tier 2';tierClass='t2';tierLabel='Benchmark / Renegotiate'}
+  else if(s>=4){tier='Tier 3';tierClass='t3';tierLabel='Monitor'}
+  else{tier='Tier 4';tierClass='t4';tierLabel='Low Priority'}
+  document.getElementById('tier-display').innerHTML=`<span class="tier-badge ${tierClass}">${tier} – ${tierLabel}</span>`;
+
+  const bars=[
+    {label:'IUS',val:IUS,color:'#60a5fa'},
+    {label:'ES', val:ES, color:'#34d399'},
+    {label:'CSIS',val:CSIS,color:'#a78bfa'},
+    {label:'SAS',val:SAS,color:'#fb923c'},
+  ];
+  document.getElementById('score-bars').innerHTML=bars.map(b=>`
+    <div class="bar-row">
+      <div class="bar-label">${b.label}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${b.val*10}%;background:${b.color}"></div></div>
+      <div style="width:24px;text-align:right;color:rgba(255,255,255,.7);font-size:.72rem">${Math.round(b.val*10)/10}</div>
+    </div>`).join('');
+
+  updateChecklist();
+}
+
+function updateChecklist(){
+  const fields=[
+    {id:'f-title',label:'Request Title'},
+    {id:'f-requester',label:'Requester Name'},
+    {id:'f-value',label:'Estimated Value'},
+    {id:'f-timeline',label:'Implementation Timeline'},
+    {id:'f-category',label:'Category'},
+  ];
+  const html=fields.map(f=>{
+    const el=document.getElementById(f.id);
+    const ok=el&&el.value&&el.value.trim()!==''&&el.value!=='';
+    return `<div style="display:flex;align-items:center;gap:.5rem">
+      <span style="color:${ok?'var(--t1)':'var(--t3)'}">${ok?'✓':'○'}</span>
+      <span style="color:${ok?'var(--ink)':'var(--mid)'}">${f.label}</span>
+    </div>`;
+  }).join('');
+  document.getElementById('checklist').innerHTML=html;
+}
+updateChecklist();
+
+function submitForm(){
+  const title=document.getElementById('f-title').value;
+  if(!title){alert('Please enter a Request Title.');return;}
+  const value=document.getElementById('f-value').value||'TBD';
+  document.getElementById('confirm-text').innerText=
+    `"${title}" has been submitted to the sourcing pipeline. Estimated value: $${parseFloat(value||0).toLocaleString()}. An AI score has been calculated and the request will appear in the Priority List once reviewed by a sourcing manager.`;
+  document.getElementById('confirmation-section').style.display='block';
+  window.scrollTo({top:document.getElementById('confirmation-section').offsetTop-80,behavior:'smooth'});
+}
+
+function clearForm(){
+  ['f-title','f-requester','f-dept','f-value','f-incumbent','f-justification'].forEach(id=>{
+    document.getElementById(id).value='';
+  });
+  ['f-category','f-timeline','f-supplier','f-ctype','f-urgency'].forEach(id=>{
+    document.getElementById(id).selectedIndex=0;
+  });
+  document.querySelectorAll('input[name="pathway"]').forEach(r=>r.checked=false);
+  document.getElementById('confirmation-section').style.display='none';
+  recalc();
+}
+
+/* ─────────────────────────────────────────────
+   Priority Table Data (Page 2)
+───────────────────────────────────────────── */
+const rows=[
+  {rank:1,name:'Cisco Systems',title:'Core Network Refresh',type:'contract',score:9.2,tier:'T1',eus:10,fis:9.1,rss:8,sas:10,value:3200000,action:'Launch RFP'},
+  {rank:2,name:'Dell Technologies',title:'Server Infrastructure Renewal',type:'contract',score:8.9,tier:'T1',eus:8,fis:9.5,rss:7,sas:10,value:2800000,action:'Launch RFP'},
+  {rank:3,name:'New Request',title:'Cloud Security Platform',type:'new',score:8.6,tier:'T1',eus:10,fis:8.2,rss:null,sas:7,value:1500000,action:'Draft RFQ'},
+  {rank:4,name:'Palo Alto Networks',title:'Firewall License Renewal',type:'contract',score:8.1,tier:'T1',eus:10,fis:7.8,rss:6,sas:10,value:980000,action:'Direct Negotiation'},
+  {rank:5,name:'VMware',title:'Virtualisation Suite Renewal',type:'contract',score:7.8,tier:'T2',eus:6,fis:8.9,rss:5,sas:7,value:2100000,action:'Benchmark'},
+  {rank:6,name:'New Request',title:'Backup & DR Solution',type:'new',score:7.4,tier:'T2',eus:8,fis:7.1,rss:null,sas:7,value:750000,action:'Draft RFI'},
+  {rank:7,name:'IBM',title:'Mainframe Support Contract',type:'contract',score:7.1,tier:'T2',eus:6,fis:7.8,rss:4,sas:7,value:1900000,action:'Benchmark'},
+  {rank:8,name:'Juniper Networks',title:'WAN Optimisation',type:'contract',score:6.9,tier:'T2',eus:4,fis:7.2,rss:6,sas:10,value:680000,action:'Renegotiate'},
+  {rank:9,name:'New Request',title:'End User Computing Refresh',type:'new',score:6.5,tier:'T2',eus:6,fis:6.8,rss:null,sas:7,value:420000,action:'Draft RFQ'},
+  {rank:10,name:'NetApp',title:'Storage Expansion',type:'contract',score:5.8,tier:'T3',eus:4,fis:6.1,rss:5,sas:7,value:890000,action:'Monitor'},
+  {rank:11,name:'New Request',title:'IT Asset Management Tool',type:'new',score:5.2,tier:'T3',eus:6,fis:4.9,rss:null,sas:3,value:200000,action:'Monitor'},
+  {rank:12,name:'Fortinet',title:'SD-WAN Pilot',type:'contract',score:4.8,tier:'T3',eus:1,fis:5.5,rss:3,sas:7,value:350000,action:'Monitor'},
+];
+
+function renderRows(data){
+  const tierMap={T1:'t1',T2:'t2',T3:'t3',T4:'t4'};
+  const tierLabel={T1:'Tier 1',T2:'Tier 2',T3:'Tier 3',T4:'Tier 4'};
+  const actions={T1:'#0d9e5c',T2:'#2563eb',T3:'#d97706'};
+  document.getElementById('table-body').innerHTML=data.map(r=>`
+    <tr data-tier="${r.tier}" data-type="${r.type}">
+      <td style="color:var(--mid);font-size:.76rem">${r.rank}</td>
+      <td>
+        <div style="font-weight:600;font-size:.85rem">${r.name}</div>
+        <div style="font-size:.74rem;color:var(--mid)">${r.title}</div>
+      </td>
+      <td><span class="type-tag ${r.type==='contract'?'tag-contract':'tag-new'}">${r.type==='contract'?'Contract':'New Req'}</span></td>
+      <td><div class="score-chip sc-${tierMap[r.tier]}">${r.score}</div></td>
+      <td><span class="tier-badge ${tierMap[r.tier]}">${tierLabel[r.tier]}</span></td>
+      <td>${r.eus}</td>
+      <td>${r.fis}</td>
+      <td>${r.rss!=null?r.rss:'N/A'}</td>
+      <td>${r.sas}</td>
+      <td>$${(r.value/1000000).toFixed(2)}M</td>
+      <td><a href="#" class="action-link">${r.action} →</a></td>
+    </tr>`).join('');
+}
+renderRows(rows);
+
+let activeFilter='all';
+function filterTable(f,btn){
+  activeFilter=f;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  applyFilters();
+}
+function searchTable(){applyFilters();}
+function applyFilters(){
+  const q=(document.getElementById('search-input').value||'').toLowerCase();
+  const filtered=rows.filter(r=>{
+    const tierOk=activeFilter==='all'||r.tier===activeFilter||r.type===activeFilter;
+    const searchOk=!q||r.name.toLowerCase().includes(q)||r.title.toLowerCase().includes(q);
+    return tierOk&&searchOk;
+  });
+  renderRows(filtered);
+}
+
+/* ─────────────────────────────────────────────
+   KPI Matrix Table (Page 3)
+  Columns: AI Reliability%, Override Count, Cycle Time Reduction%,
+           Edit Density, Timeliness (days), Signal Accuracy%,
+           Data Completeness%, Agent Stability%
+  Targets: reliability>=85 good, overrides<=2 good,
+           cycleTime>=30 good, editDensity<=3 good,
+           timeliness>=15 good, signalAcc>=85 good,
+           dataComp>=90 good, agentStab>=85 good
+───────────────────────────────────────────── */
+const kpiData=[
+  {name:'Cisco Systems',       title:'Core Network Refresh',        type:'contract', tier:'T1', reliability:92, overrides:1, cycleTime:45, editDensity:1.8, timeliness:28, signalAcc:95, dataComp:96, agentStab:93},
+  {name:'Dell Technologies',   title:'Server Infrastructure Renewal',type:'contract', tier:'T1', reliability:88, overrides:2, cycleTime:40, editDensity:2.1, timeliness:22, signalAcc:91, dataComp:94, agentStab:90},
+  {name:'New Request',         title:'Cloud Security Platform',      type:'new',      tier:'T1', reliability:85, overrides:3, cycleTime:38, editDensity:2.4, timeliness:18, signalAcc:88, dataComp:80, agentStab:85},
+  {name:'Palo Alto Networks',  title:'Firewall License Renewal',     type:'contract', tier:'T1', reliability:90, overrides:1, cycleTime:42, editDensity:1.5, timeliness:25, signalAcc:93, dataComp:98, agentStab:94},
+  {name:'VMware',              title:'Virtualisation Suite Renewal', type:'contract', tier:'T2', reliability:83, overrides:4, cycleTime:32, editDensity:2.9, timeliness:14, signalAcc:84, dataComp:88, agentStab:82},
+  {name:'New Request',         title:'Backup & DR Solution',         type:'new',      tier:'T2', reliability:79, overrides:5, cycleTime:29, editDensity:3.2, timeliness:12, signalAcc:80, dataComp:75, agentStab:78},
+  {name:'IBM',                 title:'Mainframe Support Contract',   type:'contract', tier:'T2', reliability:87, overrides:2, cycleTime:35, editDensity:2.2, timeliness:19, signalAcc:89, dataComp:91, agentStab:88},
+  {name:'Juniper Networks',    title:'WAN Optimisation',             type:'contract', tier:'T2', reliability:84, overrides:3, cycleTime:30, editDensity:2.7, timeliness:16, signalAcc:86, dataComp:85, agentStab:84},
+  {name:'New Request',         title:'End User Computing Refresh',   type:'new',      tier:'T2', reliability:76, overrides:6, cycleTime:25, editDensity:3.5, timeliness:10, signalAcc:78, dataComp:72, agentStab:75},
+  {name:'NetApp',              title:'Storage Expansion',            type:'contract', tier:'T3', reliability:81, overrides:4, cycleTime:28, editDensity:3.0, timeliness:13, signalAcc:82, dataComp:83, agentStab:80},
+  {name:'New Request',         title:'IT Asset Management Tool',     type:'new',      tier:'T3', reliability:74, overrides:7, cycleTime:22, editDensity:3.8, timeliness:8,  signalAcc:75, dataComp:68, agentStab:72},
+  {name:'Fortinet',            title:'SD-WAN Pilot',                 type:'contract', tier:'T3', reliability:82, overrides:3, cycleTime:27, editDensity:2.6, timeliness:11, signalAcc:83, dataComp:86, agentStab:81},
+];
+
+// Thresholds: [good_fn, warn_fn] — returns 'good','warn','bad'
+const kpiCols=[
+  {key:'reliability', rate:(v)=>v>=85?'good':v>=75?'warn':'bad', fmt:(v)=>v+'%'},
+  {key:'overrides',   rate:(v)=>v<=2?'good':v<=4?'warn':'bad',   fmt:(v)=>v},
+  {key:'cycleTime',   rate:(v)=>v>=35?'good':v>=25?'warn':'bad', fmt:(v)=>v+'%'},
+  {key:'editDensity', rate:(v)=>v<=2.5?'good':v<=3.5?'warn':'bad',fmt:(v)=>v},
+  {key:'timeliness',  rate:(v)=>v>=20?'good':v>=12?'warn':'bad', fmt:(v)=>'+'+v+'d'},
+  {key:'signalAcc',   rate:(v)=>v>=88?'good':v>=78?'warn':'bad', fmt:(v)=>v+'%'},
+  {key:'dataComp',    rate:(v)=>v>=90?'good':v>=75?'warn':'bad', fmt:(v)=>v+'%'},
+  {key:'agentStab',   rate:(v)=>v>=87?'good':v>=78?'warn':'bad', fmt:(v)=>v+'%'},
+];
+
+const tierMap={T1:'t1',T2:'t2',T3:'t3',T4:'t4'};
+const tierLabel={T1:'Tier 1',T2:'Tier 2',T3:'Tier 3',T4:'Tier 4'};
+
+function cellStyle(rating){
+  if(rating==='good') return 'background:rgba(13,158,92,.1);color:#0d6b40;font-weight:700';
+  if(rating==='warn') return 'background:rgba(217,119,6,.1);color:#92400e;font-weight:600';
+  return 'background:rgba(220,38,38,.08);color:#991b1b;font-weight:600';
+}
+
+let kpiActiveFilter='all';
+function filterKpi(f,btn){
+  kpiActiveFilter=f;
+  document.querySelectorAll('#kpi-filter-btns .filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderKpiTable();
+}
+
+function avg(arr,key){
+  const vals=arr.map(r=>r[key]).filter(v=>v!=null);
+  return vals.length?Math.round((vals.reduce((a,b)=>a+b,0)/vals.length)*10)/10:'-';
+}
+
+function renderKpiTable(){
+  const data=kpiData.filter(r=>kpiActiveFilter==='all'||r.type===kpiActiveFilter);
+
+  // Body rows
+  document.getElementById('kpi-table-body').innerHTML=data.map(r=>`
+    <tr>
+      <td style="padding:.7rem 1rem;border-right:2px solid var(--line);border-bottom:1px solid var(--line)">
+        <div style="font-weight:600;font-size:.84rem">${r.name}</div>
+        <div style="font-size:.72rem;color:var(--mid)">${r.title}</div>
+      </td>
+      <td style="padding:.7rem .7rem;text-align:center;border-right:1px solid var(--line);border-bottom:1px solid var(--line)">
+        <span class="tier-badge ${tierMap[r.tier]}">${tierLabel[r.tier]}</span>
+      </td>
+      ${kpiCols.map((col,i)=>{
+        const v=r[col.key];
+        const rating=col.rate(v);
+        const borderRight=([1,2,3,5,6].includes(i))?'border-right:1px solid #e0dcd4;':'';
+        return `<td style="padding:.65rem .7rem;text-align:center;${borderRight}border-bottom:1px solid var(--line)">
+          <span style="display:inline-block;padding:.25rem .6rem;border-radius:6px;font-size:.82rem;${cellStyle(rating)}">${col.fmt(v)}</span>
+        </td>`;
+      }).join('')}
+    </tr>`).join('');
+
+  // Average footer row
+  const borderStyles=[
+    'border-right:2px solid var(--ink);',
+    'border-right:1px solid var(--ink);',
+    'border-right:1px solid var(--ink);',
+    'border-right:1px solid var(--ink);',
+    '',
+    'border-right:1px solid var(--ink);',
+    '',
+    '',
+  ];
+  document.getElementById('kpi-table-foot').innerHTML=`
+    <tr style="background:#0d0f14;color:#fff">
+      <td colspan="2" style="padding:.8rem 1rem;border-right:2px solid #333;font-family:'Syne',sans-serif;font-size:.75rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase">
+        Pipeline Average
+      </td>
+      ${kpiCols.map((col,i)=>{
+        const a=avg(data,col.key);
+        const rating=typeof a==='number'?col.rate(a):'bad';
+        const br=[1,2,3,5,6].includes(i)?'border-right:1px solid #333;':'';
+        return `<td style="padding:.8rem .7rem;text-align:center;${br}">
+          <span style="display:inline-block;padding:.3rem .7rem;border-radius:6px;font-size:.85rem;font-weight:800;
+            background:${rating==='good'?'rgba(13,158,92,.25)':rating==='warn'?'rgba(217,119,6,.25)':'rgba(220,38,38,.2)'};
+            color:${rating==='good'?'#4ade80':rating==='warn'?'#fbbf24':'#f87171'}">
+            ${col.fmt(a)}
+          </span>
+        </td>`;
+      }).join('')}
+    </tr>`;
+}
+renderKpiTable();
+</script>
+</body>
+</html>

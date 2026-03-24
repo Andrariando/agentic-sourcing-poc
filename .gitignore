@@ -2,3 +2,20 @@
 __pycache__/
 *.pyc
 .vscode/
+
+# Local Data & Databases (Do NOT push to GitHub)
+/Sample Data/
+/data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Next.js Build Output
+/frontend-next/.next/
+/frontend-next/out/
+/frontend-next/node_modules/
+
+# Python Virtual Environments
+venv/
+env/
+.venv/

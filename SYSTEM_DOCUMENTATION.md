@@ -2,7 +2,7 @@
 
 This document provides a detailed technical deep-dive into the backend architecture and logic of the Agentic Sourcing Copilot. It is intended for auditing, technical review, and developers seeking to understand the inner workings of the system.
 
-**Last Updated**: January 31, 2026
+**Last Updated**: March 24, 2026
 
 ---
 
@@ -19,13 +19,16 @@ The system follows a service-oriented architecture with a clear separation betwe
 ### Running the System
 
 ```bash
-# Terminal 1: Start Backend API
+# Terminal 1: Start Backend API (serves BOTH Legacy DTP + Heatmap APIs)
 python -m uvicorn backend.main:app --port 8000
 
-# Terminal 2: Start Frontend
-python -m streamlit run frontend/app.py
+# Terminal 2: Start Next.js Frontend (replaces Streamlit)
+cd frontend-next && npm run dev
 
-# Seed Demo Data (IT Cases)
+# Generate Heatmap Synthetic Data (run once)
+python backend/heatmap/seed_synthetic_data.py
+
+# Seed Legacy DTP Demo Data (run once)
 python backend/scripts/seed_it_demo_data.py
 ```
 
@@ -705,7 +708,26 @@ AGENT_TO_ARTIFACT_TYPE = {
 
 ---
 
-### B. Decision Flow Bypass for Task Requests
+### B. UI String Matching Fix for Recommended Strategy
+
+**Problem**: The "Recommended Strategy" UI component in `case_copilot.py` was hard-coded to expect only a `recommended_strategy` key from the agent output. Different agents (e.g. StrategyAgent vs SignalAssessmentAgent) use different schema fields such as `recommended_action`, `recommendation`, or `explanation` for their final output. Because the key was missing, the UI remained stuck on "Waiting for Copilot Analysis...".
+
+**Solution**: Updated the recommendation extractor to check multiple acceptable fields using a prioritized list. 
+
+```python
+        # Extract recommendation using possible keys from different agent output schemas
+        rec = None
+        for key in ["recommended_strategy", "recommended_action", "recommendation", "explanation"]:
+            rec = output.get(key) if isinstance(output, dict) else getattr(output, key, None)
+            if rec:
+                break
+```
+
+**Result**: The "Recommended Strategy" component now dynamically displays the correct output regardless of which specific agent processed the request.
+
+---
+
+### C. Decision Flow Bypass for Task Requests
 
 **Problem**: When `waiting_for_human = True`, ALL user messages were hijacked into the decision answer flow. Asking "Prepare the negotiation guideline" would loop back to the same decision question instead of executing agents.
 
@@ -852,4 +874,144 @@ current_answers = human_decisions.get(current_stage) or {}
 **Symptom**: Error when processing human decisions in workflow.
 **Cause**: `budget_state` not initialized in state before running workflow.
 **Fix**: Add `if "budget_state" not in state: state["budget_state"] = {}` before `_run_workflow()`.
+
+---
+
+## 🗺️ 15. Opportunity Heatmap Agentic System (March 2026)
+
+The **Opportunity Heatmap** is a **completely independent agentic system** that continuously evaluates IT Infrastructure sourcing opportunities (contract renewals and new requests) and prioritizes them using a weighted AI scoring model. It is architecturally separate from the Legacy DTP system.
+
+### Dual-System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    UNIFIED FASTAPI BACKEND                         │
+│  backend/main.py (serves BOTH systems on port 8000)                │
+├─────────────────────────────┬───────────────────────────────────────┤
+│  NEW HEATMAP SYSTEM         │  LEGACY DTP SYSTEM                   │
+│  /api/heatmap/*             │  /api/cases/* /api/chat/*             │
+│                             │                                       │
+│  backend/heatmap/           │  backend/services/                    │
+│  ├── agents/                │  backend/supervisor/                  │
+│  │   ├── state.py           │  agents/                              │
+│  │   ├── spend_agent.py     │  graphs/                              │
+│  │   ├── contract_agent.py  │                                       │
+│  │   ├── strategy_agent.py  │                                       │
+│  │   ├── risk_agent.py      │                                       │
+│  │   ├── supervisor_agent.py│                                       │
+│  │   └── graph.py           │                                       │
+│  ├── persistence/           │  backend/persistence/                 │
+│  │   ├── heatmap_database.py│  (database.py, models.py)             │
+│  │   ├── heatmap_models.py  │                                       │
+│  │   └── heatmap_vector_store│                                      │
+│  ├── services/              │  backend/services/                    │
+│  │   ├── feedback_service.py│  (case_service.py, chat_service.py)   │
+│  │   └── case_bridge.py ────┼──▶ create_case() (ONLY TOUCHPOINT)    │
+│  └── heatmap_router.py      │                                       │
+│                             │                                       │
+│  data/heatmap.db            │  data/datalake.db                     │
+│  ChromaDB: heatmap_documents│  ChromaDB: sourcing_documents         │
+└─────────────────────────────┴───────────────────────────────────────┘
+```
+
+> **CRITICAL**: The two systems share NO state, NO agents, and NO databases. The `case_bridge.py` is the **only** integration point, calling `create_case()` to push approved opportunities into the legacy DTP01 pipeline.
+
+### Heatmap Scoring Formulas
+
+**Existing Contracts:**
+```
+PS_contract = 0.30(EUS) + 0.25(FIS) + 0.20(RSS) + 0.15(SCS) + 0.10(SAS)
+```
+
+**New Requests:**
+```
+PS_new = 0.30(IUS) + 0.30(ES) + 0.25(CSIS) + 0.15(SAS)
+```
+
+| Score | Full Name | Range | Source |
+|-------|-----------|-------|--------|
+| EUS | Expiry Urgency Score | 0-10 | Contract Agent |
+| IUS | Implementation Urgency Score | 0-10 | Contract Agent |
+| FIS | Financial Impact Score | 0-10 | Spend Agent |
+| ES | Estimated Spend Score | 0-10 | Spend Agent |
+| RSS | Supplier Risk Score | 0-10 | Risk Agent |
+| SCS | Spend Concentration Score | 0-10 | Spend Agent |
+| CSIS | Category Spend Importance Score | 0-10 | Spend Agent |
+| SAS | Strategic Alignment Score | 0-10 | Strategy Agent |
+
+### Tier Classification
+| Tier | Score Range | Priority |
+|------|-------------|----------|
+| T1 | ≥ 8.0 | Critical — immediate sourcing action |
+| T2 | 6.0 – 7.99 | High — plan within quarter |
+| T3 | 4.0 – 5.99 | Medium — monitor |
+| T4 | < 4.0 | Low — no action needed |
+
+### LangGraph Pipeline
+
+The pipeline runs sequentially per opportunity:
+```
+spend_agent → contract_agent → strategy_agent → risk_agent → supervisor → tick → (loop or END)
+```
+
+- Each agent appends its signal to the shared `HeatmapState`.
+- The `supervisor` aggregates all 4 signals using the weighted formula.
+- The `tick` node increments the index; the conditional edge loops or terminates.
+
+### Human-in-the-Loop AI Learning
+
+1. **User Input**: Humans adjust scoring weights OR override total scores via the UI. They provide written feedback explaining why.
+2. **Storage**: Adjustments saved to `ReviewFeedback` table (SQLite). Written feedback embedded into `heatmap_documents` collection (ChromaDB).
+3. **Learning Loop**: Future scoring runs query ChromaDB for relevant historical feedback, allowing agents to "remember" past human context.
+
+### API Routes
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/heatmap/opportunities` | List all scored opportunities |
+| POST | `/api/heatmap/feedback` | Submit human score adjustment + written feedback |
+| POST | `/api/heatmap/approve` | Approve opportunities → creates Legacy DTP cases via bridge |
+| POST | `/api/heatmap/run` | Trigger the LangGraph scoring pipeline |
+
+### Synthetic Data
+
+Generated to `data/heatmap/synthetic/` (excluded from git). Schemas mirror the real Sample Data:
+- `synthetic_spend.csv` (150 PO records)
+- `synthetic_contracts.csv` (25 contracts)
+- `synthetic_supplier_metrics.csv` (10 suppliers)
+
+### Next.js Frontend (`frontend-next/`)
+
+Replaces the entire Streamlit UI with a unified Next.js 16 application (Tailwind CSS v4, App Router).
+
+| Route | System | Description |
+|-------|--------|-------------|
+| `/heatmap` | Heatmap | Priority list with Tier badges and score breakdowns |
+| `/intake` | Heatmap | Business intake form with live agentic score preview |
+| `/dashboard/heatmap` | Heatmap | KLI metrics (cycle time, agent reliability, edit density) |
+| `/cases` | Legacy DTP | Case dashboard tracking DTP01–DTP06 progress |
+| `/cases/[id]/copilot` | Legacy DTP | Chat interface with the Legacy DTP Supervisor |
+
+**Theme**: MIT colorways (Cardinal Red `#A31F34`, Silver Gray `#8A8B8C`) and Sponsor colorways (Blue `#1a3cff`, Orange `#ff5c35`).
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `backend/heatmap/agents/state.py` | TypedDict state for the LangGraph pipeline |
+| `backend/heatmap/agents/graph.py` | LangGraph pipeline definition |
+| `backend/heatmap/agents/spend_agent.py` | FIS / ES / SCS / CSIS scoring |
+| `backend/heatmap/agents/contract_agent.py` | EUS / IUS scoring based on expiry dates |
+| `backend/heatmap/agents/strategy_agent.py` | SAS scoring |
+| `backend/heatmap/agents/risk_agent.py` | RSS scoring from supplier metrics |
+| `backend/heatmap/agents/supervisor_agent.py` | Weighted aggregation and tier classification |
+| `backend/heatmap/persistence/heatmap_models.py` | SQLModel tables (Opportunity, ReviewFeedback, AuditLog, etc.) |
+| `backend/heatmap/persistence/heatmap_database.py` | SQLite connection (separate `heatmap.db`) |
+| `backend/heatmap/persistence/heatmap_vector_store.py` | ChromaDB collection for feedback memory |
+| `backend/heatmap/services/feedback_service.py` | Human feedback + vector embedding |
+| `backend/heatmap/services/case_bridge.py` | Bridge to Legacy create_case() API |
+| `backend/heatmap/heatmap_router.py` | FastAPI router |
+| `backend/heatmap/seed_synthetic_data.py` | Synthetic data generator |
+| `backend/persistence/db_interface.py` | Abstract DB interface (Azure SQL ready) |
+| `backend/rag/vector_store_interface.py` | Abstract Vector Store interface (Azure AI Search ready) |
 

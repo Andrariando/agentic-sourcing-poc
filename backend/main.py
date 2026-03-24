@@ -64,6 +64,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from backend.heatmap.heatmap_router import heatmap_router
+app.include_router(heatmap_router, prefix="/api/heatmap", tags=["heatmap"])
+
 
 # ============================================================
 # HEALTH CHECK

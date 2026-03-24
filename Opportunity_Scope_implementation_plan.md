@@ -1,30 +1,36 @@
 # IT Infrastructure Sourcing Opportunity Heatmap — Implementation Plan
 
-Build a second, independent agentic system (left side of the architecture) that identifies, scores, and ranks renewal opportunities for IT Infrastructure contracts, and feeds approved opportunities into the existing case system (right side).
-
-## User Review Required
-
-> [!IMPORTANT]
-> **Two Supervisor Systems**: The new Opportunity Heatmap Supervisor is completely independent from the existing DTP Supervisor. They share **no state**. The only bridge is: approved opportunities create cases in the existing system via [case_service.py](file:///c:/Users/Diandra%20Riando/OneDrive/Documents/Capstone/Cursor%20Code/backend/services/case_service.py).
-
-> [!IMPORTANT]
-> **Data Generation Needed**: You mentioned you'll provide sampling data and need help generating seed data. The plan below creates a seed data generator that produces synthetic IT Infrastructure contracts, spend history, risk scores, and strategy data matching the [Synthetic_Sourcing_POC_Data.xlsx](file:///c:/Users/Diandra%20Riando/OneDrive/Documents/Capstone/Cursor%20Code/Synthetic_Sourcing_POC_Data.xlsx) format. We will refine this together.
-
-> [!WARNING]
-> **Minimal Legacy Changes**: The existing case system receives only a [create_case()](file:///c:/Users/Diandra%20Riando/OneDrive/Documents/Capstone/Cursor%20Code/frontend/api_client.py#273-311) call when opportunities are approved. No changes to existing agents, supervisor, schemas, or database models.
+Build a second, independent agentic system (left side of the architecture) that identifies, scores, and ranks renewal and new sourcing opportunities for IT Infrastructure contracts, and feeds approved opportunities into the existing case system (right side) flowing through DTP01 to DTP06.
 
 ---
 
-## Architecture Overview
+## 1. Goal Description
+The purpose of this framework is to prioritize sourcing opportunities within the IT Infrastructure category using enterprise data, focusing on opportunities that create the highest financial value, address risk exposure, and align with category strategy. We are also migrating the UI to Next.js for a more advanced, responsive experience hosted on Vercel, utilizing MIT and Sponsor Colorways.
+
+## 2. User Review Required
+
+> [!IMPORTANT]
+> **Data Generation Strategy**: We will create a robust synthetic data generator instead of using the raw "Sample Data" files. This ensures no sensitive data is pushed to GitHub. The generator will mimic the exact schemas of `IT Infra Spend.xlsx`, `IT Infrastructure Contract Data.xlsx`, and `Supplier Metrics Data _ IT Inrastructure.xlsx`.
+
+> [!WARNING]
+> **Two Separate Agentic Systems**: The new Opportunity Heatmap Supervisor (prioritization) is **completely independent** from the existing legacy DTP Supervisor (case management). They share **no state or agents**. The only connection is a secure bridge where approved opportunities create cases in the existing legacy system via a simple `create_case()` API call.
+
+> [!WARNING]
+> **Minimal Legacy Changes**: The existing legacy system receives only a `create_case()` call when opportunities are approved. There will be **no changes** to existing agents, supervisor, schemas, or database models in the original codebase.
+
+## 3. Architecture Overview
 
 ```mermaid
 graph TD
-    subgraph "New System (Left Side)"
-        UI["🖥️ Opportunity Heatmap Page<br>(Streamlit Tab)"]
-        API["FastAPI Router<br>/api/heatmap/*"]
+    subgraph "Next.js Frontend (Vercel)"
+        UI["🖥️ Advanced Next.js UI<br>(React, styled with MIT/Sponsor Colorways)"]
+    end
+
+    subgraph "Backend (Hosted Locally or Azure/Render)"
+        API["FastAPI App<br>/api/heatmap/*"]
         SUP["Heatmap Supervisor Agent<br>(LangGraph Orchestrator)"]
         SPA["Spend Pattern Agent"]
-        CRA["Contract Renewal Agent"]
+        CRA["Contract Renewal & Urgency Agent"]
         CSA["Category Strategy Agent"]
         SRA["Supplier Risk Agent"]
         HDB[("Heatmap DB<br>(SQLite)")]
@@ -36,7 +42,7 @@ graph TD
         EDB[("datalake.db")]
     end
 
-    UI --> API
+    UI <--> |REST API| API
     API --> SUP
     SUP --> SPA & CRA & CSA & SRA
     SPA & CRA & CSA & SRA --> HDB
@@ -48,418 +54,124 @@ graph TD
 
 ---
 
-## Proposed Changes
+## 4. Proposed Changes: Phased Implementation
 
-### Phase 1: Repository/Adapter Pattern & Data Layer
+We will implement this in distinct phases, ensuring the core logic works before finalizing the Next.js UI migration.
 
-Establish abstract interfaces for database and vector store access so the entire system can be swapped to Azure SQL + Azure AI Search later.
+### Phase 1: Synthetic Data Generation & Data Layer
+Create abstract interfaces for database and vector store access. Generate synthetic data based exactly on the schemas found in the `Sample Data` to avoid using real documents.
 
----
+#### [NEW] `backend/heatmap/seed_synthetic_data.py`
+A robust generator outputting data matching the schemas:
+- **Spend**: `['PO Number', 'PO Line', 'PO Date', 'Requisition ID', 'Requisition Date', 'Category', 'Subcategory', 'Supplier Parent', 'Supplier', 'PO Spend (USD)', 'Currency', 'Business Unit', 'Cost Center', 'Requester', 'Description', 'Month', 'Year', 'Payment Terms']`
+- **Contracts**: `['Contract ID', 'Contract Title', 'Supplier Parent', 'Supplier', 'Category', 'Subcategory', 'Contract Type', 'Status', 'Effective Date', 'Expiration Date', 'Auto-Renewal', 'Notice Period (Days)', 'TCV (Total Contract Value USD)', 'ACV (Annual Contract Value USD)', 'Business Owner', 'Sourcing Manager', 'Payment Terms', 'SLA Penalties (Y/N)']`
+- **Supplier Metrics**: `['Supplier Number', 'Supplier Parent', 'Supplier', 'Site', 'Category', 'Subcategory', 'Sector', 'Region', 'Country', 'State', 'City', 'Spend Tier (USD)', 'Supplier Parent Risk Rating', 'Supplier Risk Score', 'Criticality Risk Level', 'Criticality Risk Score', 'Strategic Risk Score', 'BPRA Security Scorecard', 'BPRA Vendor Status', 'Ethics', 'Labor & Human Rights', 'Resilinc Alerts by Supplier', 'Sanctions, AML+ABC due diligence', 'Environment', 'Supplier Financial Health', 'Sustainable Procurement']`
 
-#### [NEW] [db_interface.py](file:///c:/Users/Diandra Riando/OneDrive/Documents/Capstone/Cursor Code/backend/persistence/db_interface.py)
+All data will be generated into `.csv` or `.json` formats within `data/heatmap/synthetic/`.
 
-Abstract base class (`DatabaseInterface`) with methods: [get_session()](file:///c:/Users/Diandra%20Riando/OneDrive/Documents/Capstone/Cursor%20Code/backend/persistence/database.py#58-63), `execute_query()`, `init_tables()`. Both the existing [database.py](file:///c:/Users/Diandra%20Riando/OneDrive/Documents/Capstone/Cursor%20Code/backend/persistence/database.py) and the new heatmap DB will implement this. This does **not** modify the existing [database.py](file:///c:/Users/Diandra%20Riando/OneDrive/Documents/Capstone/Cursor%20Code/backend/persistence/database.py) — it wraps it.
+#### [NEW] `backend/persistence/db_interface.py` & `backend/rag/vector_store_interface.py`
+Abstract base classes allowing switching between SQLite/ChromaDB and Azure SQL/Azure AI Search.
 
-#### [NEW] [vector_store_interface.py](file:///c:/Users/Diandra Riando/OneDrive/Documents/Capstone/Cursor Code/backend/rag/vector_store_interface.py)
-
-Abstract base class (`VectorStoreInterface`) with methods: [add_chunks()](file:///c:/Users/Diandra%20Riando/OneDrive/Documents/Capstone/Cursor%20Code/backend/rag/vector_store.py#77-145), [search()](file:///c:/Users/Diandra%20Riando/OneDrive/Documents/Capstone/Cursor%20Code/backend/rag/vector_store.py#146-192), [delete_document()](file:///c:/Users/Diandra%20Riando/OneDrive/Documents/Capstone/Cursor%20Code/backend/main.py#304-314), [count()](file:///c:/Users/Diandra%20Riando/OneDrive/Documents/Capstone/Cursor%20Code/backend/rag/vector_store.py#217-220). The existing [VectorStore](file:///c:/Users/Diandra%20Riando/OneDrive/Documents/Capstone/Cursor%20Code/backend/rag/vector_store.py#38-228) class already matches this shape, so we create the interface and have the existing class inherit from it (minimal change — just adding the base class import).
-
-#### [NEW] [heatmap_database.py](file:///c:/Users/Diandra Riando/OneDrive/Documents/Capstone/Cursor Code/backend/heatmap/persistence/heatmap_database.py)
-
-Separate SQLite database (`data/heatmap.db`) for opportunity data. Implements `DatabaseInterface`. Tables:
-
-| Table | Purpose |
-|---|---|
-| `opportunities` | Opportunity register (wide table per PRD §11 Dataset 1) |
-| `opportunity_signals` | Signal facts (long table per PRD §11 Dataset 2) |
-| `review_feedback` | Human feedback (per PRD §11 Dataset 3) |
-| `scoring_weights` | Current/historical weight configurations |
-| `scoring_runs` | Run metadata (weights used, timestamp, version) |
-| `audit_log` | All changes (weights, overrides, approvals) |
-| `refresh_schedule` | Periodic refresh configuration |
-
-#### [NEW] [heatmap_models.py](file:///c:/Users/Diandra Riando/OneDrive/Documents/Capstone/Cursor Code/backend/heatmap/persistence/heatmap_models.py)
-
-SQLModel classes for all tables above. Key models:
-
-- `Opportunity`: contract_id, supplier_id, category, subcategory, component scores (spend/contract/strategy/risk), weights used, total_score, tier (P0/P1/P2), rank, recommended_action_window, justification_summary, confidence_level, last_refresh_ts
-- `OpportunitySignal`: opportunity_id, signal_name, signal_value, normalized_value, weight, contribution, rule_triggered, evidence_pointer
-- `ReviewFeedback`: opportunity_id, reviewer_id, timestamp, adjustment_type (delta/override), adjustment_value, reason_code, comment_text, component_affected
-- `ScoringWeights`: run_id, w_spend, w_contract, w_strategy, w_risk, is_suggested (bool), accepted_by_user (bool)
-- `ScoringRun`: run_id, timestamp, total_opportunities, weights_snapshot_json
-- `AuditLog`: event_type, entity_id, old_value, new_value, user_id, timestamp
-
-#### [NEW] [heatmap_vector_store.py](file:///c:/Users/Diandra Riando/OneDrive/Documents/Capstone/Cursor Code/backend/heatmap/persistence/heatmap_vector_store.py)
-
-Separate ChromaDB collection (`heatmap_documents`) for opportunity-related documents. Implements `VectorStoreInterface`. Uses collection name `heatmap_documents` to avoid conflicts with the existing `sourcing_documents` collection.
-
-#### [NEW] [seed_heatmap_data.py](file:///c:/Users/Diandra Riando/OneDrive/Documents/Capstone/Cursor Code/backend/heatmap/seed_heatmap_data.py)
-
-Generates synthetic IT Infrastructure data matching the [Synthetic_Sourcing_POC_Data.xlsx](file:///c:/Users/Diandra%20Riando/OneDrive/Documents/Capstone/Cursor%20Code/Synthetic_Sourcing_POC_Data.xlsx) format:
-
-- **~15 IT Infra contracts** across subcategories (Cloud Hosting, Network Infrastructure, Data Center, End User Computing, Cybersecurity)
-- **Monthly spend records** (12+ months per contract) with trends and volatility
-- **Supplier risk scores** (0–100 numeric, mapped from the `Supplier_Risk_Score` 1–5 scale in the sample data)
-- **Category strategy objectives** and preferred supplier lists
-- All data stored as JSON files in `data/heatmap/` for portability
-
-#### [NEW] [data_loader.py](file:///c:/Users/Diandra Riando/OneDrive/Documents/Capstone/Cursor Code/backend/heatmap/data_loader.py)
-
-Utility to load heatmap seed data from JSON files and Excel, computing derived features (days_to_expiry, spend_trend, spend_volatility, notice_period_status).
+#### [NEW] `backend/heatmap/persistence/heatmap_database.py` & `heatmap_models.py`
+Separate SQLite models (`data/heatmap.db`) for tracking opportunities, signals, human feedback, weights, and priority tiers.
 
 ---
 
-### Phase 2: LangGraph Multi-Agent System
+### Phase 2: AI Multi-Agent Scoring Engine (LangGraph)
+Implement the Prioritization Framework Formulas:
 
-Build the 5-agent system using LangGraph's `StateGraph` with the Heatmap Supervisor as orchestrator.
+- **Existing Contracts**: `PS_contract = 0.30(EUS) + 0.25(FIS) + 0.20(RSS) + 0.15(SCS) + 0.10(SAS)`
+- **New Requests**: `PS_new = 0.30(IUS) + 0.30(ES) + 0.25(CSIS) + 0.15(SAS)`
 
----
+#### [NEW] `backend/heatmap/agents/state.py` & `graph.py`
+Defines the `HeatmapState` and parallelized `StateGraph` linking the 4 agents to the supervisor.
 
-#### [NEW] [state.py](file:///c:/Users/Diandra Riando/OneDrive/Documents/Capstone/Cursor Code/backend/heatmap/agents/state.py)
+#### [NEW] Agents (`spend_agent.py`, `contract_agent.py`, `strategy_agent.py`, `risk_agent.py`)
+Each agent uses LLMs and heuristics on the synthetic data:
+- `contract_agent` calculates Expiry Urgency Score (EUS) and Implementation Urgency Score (IUS).
+- `spend_agent` calculates FIS, SCS, ES, and CSIS using category maximums.
+- `risk_agent` extracts RSS from the synthetic Supplier Risk data.
+- `strategy_agent` evaluates Strategic Alignment Score (SAS).
 
-LangGraph state definition (`HeatmapState`) — a TypedDict with:
-- `contracts`: list of contract dicts to process
-- `spend_signals`: agent output from Spend Pattern Agent
-- `contract_signals`: agent output from Contract Renewal Agent
-- `strategy_signals`: agent output from Category Strategy Agent
-- `risk_signals`: agent output from Supplier Risk Agent
-- `scored_opportunities`: final scored/ranked list
-- `weights`: current weight configuration
-- `run_id`: scoring run identifier
-- `errors`: list of any processing errors
-- `feedback_history`: historical feedback for learning
-
-#### [NEW] [spend_agent.py](file:///c:/Users/Diandra Riando/OneDrive/Documents/Capstone/Cursor Code/backend/heatmap/agents/spend_agent.py)
-
-**Spend Pattern Agent** — For each contract:
-1. Loads spend history (12-month)
-2. Calls LLM to interpret spend patterns → produces `SpendScore (0-100)` with evidence
-3. Returns structured output: score, trend assessment, volatility flag, evidence text
-
-The LLM receives the raw spend data and generates both the normalized score AND the natural-language explanation (e.g., "Spend is $2.5M last 12 months, top decile within IT Infra. Upward trend of 12% suggests growing dependency.").
-
-#### [NEW] [contract_agent.py](file:///c:/Users/Diandra Riando/OneDrive/Documents/Capstone/Cursor Code/backend/heatmap/agents/contract_agent.py)
-
-**Contract Renewal Agent** — For each contract:
-1. Calculates days-to-expiry, notice period windows
-2. Calls LLM to assess urgency → produces `ContractUrgencyScore (0-100)` with evidence
-3. Returns: score, action_window_recommendation, notice_period_status, evidence text
-
-#### [NEW] [strategy_agent.py](file:///c:/Users/Diandra Riando/OneDrive/Documents/Capstone/Cursor Code/backend/heatmap/agents/strategy_agent.py)
-
-**Category Strategy Agent** — For each contract:
-1. Loads preferred supplier list and category objectives from strategy data
-2. Calls LLM to assess strategic alignment → produces `StrategyScore (0-100)` with evidence
-3. Returns: score, preferred_supplier_match (bool), objective_alignment_tags, evidence text
-
-#### [NEW] [risk_agent.py](file:///c:/Users/Diandra Riando/OneDrive/Documents/Capstone/Cursor Code/backend/heatmap/agents/risk_agent.py)
-
-**Supplier Risk Agent** — For each contract:
-1. Loads supplier risk score and financial health data
-2. Calls LLM to assess risk exposure → produces `RiskScore (0-100)` with evidence
-3. Returns: score, risk_category, risk_trend, evidence text
-
-#### [NEW] [supervisor_agent.py](file:///c:/Users/Diandra Riando/OneDrive/Documents/Capstone/Cursor Code/backend/heatmap/agents/supervisor_agent.py)
-
-**Heatmap Supervisor Agent** — Orchestration node that:
-1. Collects all 4 agent outputs
-2. Computes `Final Score = w_spend * SpendScore + w_contract * ContractUrgencyScore + w_strategy * StrategyScore + w_risk * RiskScore`
-3. Applies rule boosts (optional)
-4. Assigns priority tiers (P0/P1/P2) using configurable thresholds
-5. Calls LLM to generate the final explainability bundle ("why A > B")
-6. Incorporates historical feedback corrections if available
-7. Returns ranked opportunity list with full explainability
-
-#### [NEW] [graph.py](file:///c:/Users/Diandra Riando/OneDrive/Documents/Capstone/Cursor Code/backend/heatmap/agents/graph.py)
-
-LangGraph `StateGraph` definition:
-
-```
-START → load_contracts → [spend_agent, contract_agent, strategy_agent, risk_agent] (parallel) → supervisor_scoring → END
-```
-
-The 4 signal agents run in **parallel** (LangGraph fan-out), then the supervisor collects and scores. Supports:
-- Full run (all contracts)
-- Single contract re-scoring (after feedback)
-- Refresh with updated data
-
-#### [NEW] [schemas.py](file:///c:/Users/Diandra Riando/OneDrive/Documents/Capstone/Cursor Code/backend/heatmap/schemas.py)
-
-Pydantic models for:
-- `SpendSignal`, `ContractSignal`, `StrategySignal`, `RiskSignal` (agent outputs)
-- `ScoredOpportunity` (final output per opportunity)
-- `ExplainabilityBundle` (score breakdown + evidence + data freshness)
-- `WeightConfig` (w_spend, w_contract, w_strategy, w_risk + thresholds)
-- `FeedbackRequest` (adjustment_type, adjustment_value, reason_code, comment)
-- `ApprovalRequest` (list of opportunity_ids to approve)
+#### [NEW] `backend/heatmap/agents/supervisor_agent.py`
+Aggregates the scores, calculates the final `PS_contract` or `PS_new`, creates explains for each opportunity, and assigns them to Priority Tiers (T1, T2, T3, T4).
 
 ---
 
-### Phase 3: Feedback & Learning Loop
+### Phase 3: APIs, Feedback Loop, and Legacy Case System Integration
+Expose the backend logic so a frontend can consume it, and securely link approved cases to the legacy system without disturbing its existing logic.
+
+#### [NEW] `backend/heatmap/heatmap_router.py`
+FastAPI routes (`/api/heatmap/run`, `/api/heatmap/opportunities`, `/api/heatmap/approve`, `/api/heatmap/feedback`).
+
+#### [NEW] `backend/heatmap/services/case_bridge.py`
+The **only** touchpoint between the new Heatmap system and the legacy DTP system. On approval:
+1. Takes the approved opportunity list (with scores + explanations).
+2. Formats the payload (Contract ID, Supplier, Category, Action window, etc.).
+3. Calls `case_service.create_case()` to create a case in the legacy system with `trigger_source = "OpportunityHeatmap"`.
+4. Records the legacy `case_id` mapping in the Heatmap DB audit log.
+5. The legacy system then manages the case through DTP01 to DTP06 via its own existing agents. No changes to `case_service.py` are needed.
+
+#### [NEW] `backend/heatmap/services/feedback_service.py` & AI Learning Loop
+Handles the crucial human-in-the-loop learning mechanism:
+1. **User Input Mechanism**: Within the Next.js UI, the Human can manually adjust the **scoring weights** (e.g., dial down `w_spend` and dial up `w_risk`) OR override the **total score** for a specific opportunity. They are highly encouraged to provide **written feedback** explaining the adjustment (e.g., "Cybersecurity risks are uniquely critical this quarter").
+2. **Storage**: This feedback (the delta in score/weight + the written text) is stored structurally in the SQLite `ReviewFeedback` table **and** embedded as text into the ChromaDB Vector Store (`heatmap_documents` collection).
+3. **Agentic Learning Loop**: When the Heatmap Supervisor Agent scores future opportunities, it queries the Vector Store for relevant historical feedback. The agent "remembers" the past written context and actively applying those learnings to future recommendations. Additionally, after N feedback loops, the system will recalculate and formally suggest new default weightings (`w_spend`, `w_contract`, etc.) based on aggregate human behavior.
 
 ---
 
-#### [NEW] [feedback_service.py](file:///c:/Users/Diandra Riando/OneDrive/Documents/Capstone/Cursor Code/backend/heatmap/services/feedback_service.py)
+### Phase 4: Basic Verification (Backend Output Testing)
+Before touching the UI, we verify all scores are mathematically aligned with the framework rules and that cases successfully flow into DTP01 and advance properly. 
 
-Handles:
-- **Score adjustment storage**: Human can override any component score or total score, with a mandatory reason code + optional free text
-- **Reason codes**: `data_issue`, `not_real_opportunity`, `already_in_progress`, `strategic_exception`, `risk_not_applicable`, `scope_misclassified`
-- **Bias analysis**: After N feedback entries, computes systematic bias per component (e.g., "users consistently boost StrategyScore by +15 for cybersecurity contracts")
-- **Weight suggestion**: Proposes updated default weights for next run based on feedback patterns. User can accept or ignore.
-- **Feedback memory**: The LLM agents receive relevant historical feedback when re-scoring, so they learn from past human corrections.
-
-#### [NEW] [refresh_service.py](file:///c:/Users/Diandra Riando/OneDrive/Documents/Capstone/Cursor Code/backend/heatmap/services/refresh_service.py)
-
-- **Manual Refresh**: Button triggers full pipeline re-run, incorporating all feedback
-- **Periodic Refresh**: User configures interval (e.g., every 24h). Uses `threading.Timer` or APScheduler for prototype.
-- Refresh saves current state as a snapshot before running, enabling version comparison
+*(Wait for manual user check in Swagger UI or via Streamlit scaffolding before building Next.js)*
 
 ---
 
-### Phase 4: API Layer
+### Phase 5: Advanced Next.js UI Frontend (Final Phase)
+Replace the entire Streamlit UI with a unified, separate Next.js web application that serves both the **New Heatmap System** and the **Legacy DTP System**.
+
+#### [NEW FOLDER] `frontend-next/`
+A standard Next.js 14+ app layout (App router, React, Tailwind CSS or Vanilla CSS).
+
+- **Colors & Theming**: Employs MIT colorways (Cardinal Red `#A31F34`, Silver Gray `#8A8B8C`) and Sponsor Colorways (Blue `#1a3cff`, Orange `#ff5c35`).
+- **Hosting**: Prepared for deployment on Vercel. Connects to the local FastAPI backend during development via environment variables (`NEXT_PUBLIC_API_URL=http://localhost:8000`).
+
+#### Key Pages/Components for the New Heatmap System:
+1. **Business Intake Page (`/intake`)**: Form to capture "New Sourcing Requests". Shows live preview of scores (IUS, ES, CSIS, SAS) mimicking the `UI Reference`.
+2. **Prioritized List (`/heatmap`)**: Data table of all scored opportunities (Contracts and New Requests). Shows tier badges, value, and action buttons. 
+3. **KPI/KLI Dashboard (`/dashboard/heatmap`)**: Visualizations tracking AI reliability, cycle time reduction, and edit density.
+4. **Approval Flow Modal**: Allows bulk selection of opportunities to "Approve & Create Cases", hitting the `/api/heatmap/approve` backend route.
+
+#### Key Pages/Components for the Legacy DTP System:
+1. **Case Dashboard (`/cases`)**: Replaces `case_dashboard.py`. Displays all active legacy cases natively in the new Next.js styling, tracking progress through DTP01 to DTP06.
+2. **Case Copilot (`/cases/[id]/copilot`)**: Replaces `case_copilot.py`. Provides the chat interface with the Legacy DTP Supervisor, allowing file uploads and interactive AI assistance for case advancement inside the advanced UI.
 
 ---
 
-#### [NEW] [heatmap_router.py](file:///c:/Users/Diandra Riando/OneDrive/Documents/Capstone/Cursor Code/backend/heatmap/heatmap_router.py)
-
-FastAPI router (`/api/heatmap/`) with endpoints:
-
-| Method | Path | Purpose |
-|---|---|---|
-| `POST` | `/run` | Trigger full scoring pipeline run |
-| `GET` | `/opportunities` | List scored opportunities (filterable) |
-| `GET` | `/opportunities/{id}` | Get single opportunity with full explainability |
-| `PUT` | `/opportunities/{id}/feedback` | Submit score adjustment + comment |
-| `GET` | `/weights` | Get current weight config |
-| `PUT` | `/weights` | Update weights |
-| `GET` | `/weights/suggested` | Get AI-suggested weights from feedback |
-| `POST` | `/approve` | Approve selected opportunities → create cases |
-| `GET` | `/runs` | List past scoring runs |
-| `GET` | `/runs/{id}` | Get run details + snapshot |
-| `POST` | `/refresh` | Manual refresh |
-| `PUT` | `/refresh/schedule` | Set periodic refresh interval |
-| `GET` | `/audit-log` | Get audit trail |
-| `GET` | `/health` | Heatmap subsystem health |
-
-#### [MODIFY] [main.py](file:///c:/Users/Diandra Riando/OneDrive/Documents/Capstone/Cursor Code/backend/main.py)
-
-Add **one line** to include the heatmap router:
-```python
-from backend.heatmap.heatmap_router import heatmap_router
-app.include_router(heatmap_router, prefix="/api/heatmap", tags=["heatmap"])
-```
-
-#### [NEW] [heatmap_api_client.py](file:///c:/Users/Diandra Riando/OneDrive/Documents/Capstone/Cursor Code/frontend/heatmap_api_client.py)
-
-Frontend API client for heatmap endpoints. Follows same pattern as existing [api_client.py](file:///c:/Users/Diandra%20Riando/OneDrive/Documents/Capstone/Cursor%20Code/frontend/api_client.py) (supports HTTP and integrated modes).
-
----
-
-### Phase 5: Frontend (Streamlit)
-
----
-
-#### [NEW] [opportunity_heatmap.py](file:///c:/Users/Diandra Riando/OneDrive/Documents/Capstone/Cursor Code/frontend/pages/opportunity_heatmap.py)
-
-New Streamlit page with the following sections:
-
-1. **Header & Controls Bar**
-   - Refresh button (manual), periodic refresh toggle + interval setting
-   - Filter dropdowns: subcategory, supplier, risk band, expiry window, tier
-   - Weight adjustment sliders (w_spend, w_contract, w_strategy, w_risk) — live preview
-
-2. **Opportunity Heatmap / Priority List**
-   - Table/cards showing ranked opportunities with color-coded tiers (P0 red, P1 amber, P2 green)
-   - Columns: Rank, Contract ID, Supplier, Subcategory, Total Score, Tier, Action Window
-   - Clickable rows for drill-down
-
-3. **Opportunity Detail Panel** (on click)
-   - Score breakdown radar chart (4 components)
-   - Evidence & rationale (per-component explanations)
-   - Data freshness timestamps
-   - Historical score trend (if multiple runs)
-
-4. **Review & Feedback Panel**
-   - Score override sliders (per-component or total)
-   - Reason code dropdown + free text comment
-   - Submit feedback button
-
-5. **Approval Workflow**
-   - Checkbox selection for batch approval
-   - "Approve & Create Cases" button
-   - Approval confirmation with summary of what will be created
-   - Version snapshot display
-
-6. **Analytics Sidebar**
-   - Feedback summary (total adjustments, common reason codes)
-   - Suggested weights (from learning loop) with accept/ignore buttons
-   - Run comparison (last run vs this run)
-
-#### [MODIFY] [app.py](file:///c:/Users/Diandra Riando/OneDrive/Documents/Capstone/Cursor Code/frontend/app.py)
-
-Add the Opportunity Heatmap as a new navigation tab:
-
-```diff
- from frontend.pages.case_copilot import render_case_copilot
- from frontend.pages.knowledge_management import render_knowledge_management
-+from frontend.pages.opportunity_heatmap import render_opportunity_heatmap
-
- pages = {
-     "dashboard": "Case Dashboard",
-     "copilot": "Case Copilot",
--    "knowledge": "Knowledge Management"
-+    "knowledge": "Knowledge Management",
-+    "heatmap": "🔥 Opportunity Heatmap"
- }
-
-+elif st.session_state.current_page == "heatmap":
-+    render_opportunity_heatmap()
-```
-
----
-
-### Phase 6: Case System Integration
-
----
-
-#### [NEW] [case_bridge.py](file:///c:/Users/Diandra Riando/OneDrive/Documents/Capstone/Cursor Code/backend/heatmap/services/case_bridge.py)
-
-Bridge between heatmap system and existing case system. On approval:
-1. Takes the approved opportunity list (with scores + explanations)
-2. Formats the integration payload per PRD §10.2 (Contract ID, Supplier, Category, Rationale bundle, Action window)
-3. Calls `case_service.create_case()` to create a case in the existing system with `trigger_source = "OpportunityHeatmap"`
-4. Records the case_id mapping in the heatmap DB audit log
-5. Marks opportunities as "Approved" with version snapshot
-
-This is the **only** touchpoint with the legacy system. No changes to [case_service.py](file:///c:/Users/Diandra%20Riando/OneDrive/Documents/Capstone/Cursor%20Code/backend/services/case_service.py) are needed — it already accepts [CreateCaseRequest](file:///c:/Users/Diandra%20Riando/OneDrive/Documents/Capstone/Cursor%20Code/shared/schemas.py#66-73) with `category_id`, `contract_id`, `supplier_id`, and `trigger_source`.
-
----
-
-### Phase 7: Project Structure
-
-All new code goes under `backend/heatmap/`:
-
-```
-backend/heatmap/
-├── __init__.py
-├── heatmap_router.py          # FastAPI endpoints
-├── schemas.py                 # Pydantic models
-├── seed_heatmap_data.py       # Synthetic data generator
-├── data_loader.py             # Data loading utilities
-├── agents/
-│   ├── __init__.py
-│   ├── state.py               # LangGraph state
-│   ├── graph.py               # LangGraph workflow
-│   ├── spend_agent.py
-│   ├── contract_agent.py
-│   ├── strategy_agent.py
-│   ├── risk_agent.py
-│   └── supervisor_agent.py
-├── persistence/
-│   ├── __init__.py
-│   ├── heatmap_database.py    # SQLite connection
-│   ├── heatmap_models.py      # SQLModel tables
-│   └── heatmap_vector_store.py
-└── services/
-    ├── __init__.py
-    ├── feedback_service.py    # Feedback & learning loop
-    ├── refresh_service.py     # Manual + periodic refresh
-    └── case_bridge.py         # Approved → case creation
-
-backend/persistence/
-├── db_interface.py            # NEW: Abstract DB interface
-└── (existing files unchanged)
-
-backend/rag/
-├── vector_store_interface.py  # NEW: Abstract vector store interface
-└── (existing files unchanged)
-
-frontend/
-├── heatmap_api_client.py      # NEW: Heatmap API client
-└── pages/
-    └── opportunity_heatmap.py # NEW: Heatmap Streamlit page
-
-data/heatmap/                  # NEW: Heatmap seed data directory
-├── contracts.json
-├── spend_history.json
-├── supplier_risk.json
-├── category_strategy.json
-└── preferred_suppliers.json
-```
-
----
-
-## Files Modified in Existing System
-
-Only **2 minimal changes** to existing files:
-
-| File | Change |
-|---|---|
-| [main.py](file:///c:/Users/Diandra Riando/OneDrive/Documents/Capstone/Cursor Code/backend/main.py) | Add 2 lines: import + `app.include_router()` |
-| [app.py](file:///c:/Users/Diandra Riando/OneDrive/Documents/Capstone/Cursor Code/frontend/app.py) | Add heatmap to `pages` dict + routing `elif` (~5 lines) |
-
-Everything else is new files in new directories.
-
----
-
-## Verification Plan
+## 5. Verification Plan
 
 ### Automated Tests
+1. **Formula Verification Tests**: 
+   ```bash
+   python -m pytest backend/heatmap/tests/test_formulas.py -v
+   ```
+   *Validates that contract formulas and new request formulas exactly match section 4 & 5 of the Prioritization Framework docx.*
 
-#### 1. Scoring Engine Unit Test
-```bash
-cd "c:\Users\Diandra Riando\OneDrive\Documents\Capstone\Cursor Code"
-python -m pytest backend/heatmap/tests/test_scoring.py -v
-```
-Tests:
-- Weight normalization (weights sum to 1.0)
-- Score computation correctness
-- Priority tier assignment thresholds
-- Edge cases: missing data → "confidence low" flag
-- Reproducibility: same inputs + same weights = same rank
+2. **Synthetic Data Validation**:
+   ```bash
+   python -m pytest backend/heatmap/tests/test_synthetic_data.py -v
+   ```
+   *Asserts synthetic datasets correctly map all required columns and contain no real data.*
 
-#### 2. LangGraph Pipeline Integration Test
-```bash
-python -m pytest backend/heatmap/tests/test_graph.py -v
-```
-Tests:
-- Full pipeline runs without errors
-- All 4 agents produce valid output schemas
-- Supervisor correctly aggregates signals
-- Parallel agent execution works
-
-#### 3. Feedback Loop Test
-```bash
-python -m pytest backend/heatmap/tests/test_feedback.py -v
-```
-Tests:
-- Feedback storage and retrieval
-- Weight suggestion computation after N adjustments
-- Score override persistence
-- Audit log creation
-
-#### 4. Case Bridge Integration Test
-```bash
-python -m pytest backend/heatmap/tests/test_case_bridge.py -v
-```
-Tests:
-- Approved opportunity creates a valid case
-- Integration payload matches expected format
-- Case appears in existing case list
-- Approval snapshot is versioned
+3. **Case Flow Test (DTP)**:
+   ```bash
+   python -m pytest backend/heatmap/tests/test_case_bridge.py -v
+   ```
+   *Mocks an approval hit and verifies the opportunity translates successfully from Heatmap to a Case, progressing correctly into the DTP states.*
 
 ### Manual Verification
-
-#### 5. End-to-End UI Test (via browser)
-1. Start the app: `streamlit run frontend/app.py`
-2. Click "🔥 Opportunity Heatmap" in sidebar
-3. Verify opportunity list loads with scored/ranked items
-4. Click an opportunity — verify score breakdown and evidence display
-5. Adjust a component score via slider, select reason code, type comment, submit
-6. Click "Refresh" — verify scores update incorporating feedback
-7. Select 2-3 opportunities, click "Approve & Create Cases"
-8. Navigate to "Case Dashboard" — verify new cases appear with `trigger_source = "OpportunityHeatmap"`
-9. Adjust weights via sliders — verify live re-ranking
-
-> [!NOTE]
-> I will perform step 5 via the browser tool to create a screen recording of the workflow.
+1. Run the local backend: `uvicorn backend.main:app --reload`
+2. Generate synthetic data once: `python backend/heatmap/seed_synthetic_data.py`
+3. Run the Next.js frontend (in `frontend-next/`): `npm run dev`
+4. **Intake Flow**: Go to `http://localhost:3000/intake`, fill out a new request, ensure the live score matches `PS_new`.
+5. **Priority Flow**: Go to `/priority`, click "Approve" on a top-tier contract opportunity. Observe the console or UI notification for successful DTP01 creation.
