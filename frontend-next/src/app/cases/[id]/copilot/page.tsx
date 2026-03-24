@@ -1,28 +1,121 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useParams } from "next/navigation";
 import { CheckCircle2, AlertTriangle, FileText, Activity, ShieldCheck, ChevronRight, MessageSquare, Briefcase, Clock } from "lucide-react";
 
 export default function LegacyCaseCopilotPage() {
+  const params = useParams();
+  const caseId = params.id as string;
+
+  const [caseDetails, setCaseDetails] = useState<any>(null);
+  const [documents, setDocuments] = useState<any[]>([]);
   const [messages, setMessages] = useState([
-    { role: "assistant", content: "Good morning! Let's advance TechGlobal Inc into DTP02 Supplier Evaluation. Have you uploaded their recent SOC2 compliance report?" }
+    { role: "assistant", content: `Hello! I am the Supervisor Agent assigned to ${caseId}. How can I assist you with this evaluation?` }
   ]);
   const [input, setInput] = useState("");
   const [governanceApproved, setGovernanceApproved] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
 
-  const handleSend = () => {
-    if (!input.trim()) return;
-    setMessages([...messages, { role: "user", content: input }]);
-    setInput("");
+  // 1. Fetch Case Details & Chat History
+  useEffect(() => {
+    async function fetchCase() {
+      try {
+        const url = process.env.NEXT_PUBLIC_API_URL 
+          ? `${process.env.NEXT_PUBLIC_API_URL}/api/cases/${caseId}`
+          : `http://localhost:8000/api/cases/${caseId}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        setCaseDetails(data);
+
+        // Load chat history if exists
+        if (data.activity_log) {
+            const chatLogs = data.activity_log
+                .filter((log: any) => log.action && log.action.startsWith("Chat:"))
+                .map((log: any) => {
+                    const role = log.action.toLowerCase().includes("user") ? "user" : "assistant";
+                    return { role, content: log.details?.message || "" };
+                })
+                .filter((msg: any) => msg.content);
+            if (chatLogs.length > 0) {
+                setMessages(chatLogs);
+            }
+        }
+      } catch (err) {
+        console.error("Failed to fetch case details:", err);
+      }
+    }
     
-    // Simulate thinking delay
-    setTimeout(() => {
-      setMessages(prev => [
-        ...prev, 
-        { role: "assistant", content: "Thank you. I have extracted the BPRA risk indicators and updated the supplier profile. Would you like me to submit the DTP02 evaluation for approval?" }
-      ]);
-    }, 1500);
+    // 2. Fetch Documents
+    async function fetchDocs() {
+      try {
+        const url = process.env.NEXT_PUBLIC_API_URL 
+          ? `${process.env.NEXT_PUBLIC_API_URL}/api/documents`
+          : `http://localhost:8000/api/documents`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.documents) {
+            setDocuments(data.documents);
+        }
+      } catch (err) {
+        console.error("Failed to fetch documents:", err);
+      }
+    }
+
+    if (caseId) {
+      fetchCase();
+      fetchDocs();
+    }
+  }, [caseId]);
+
+  // 3. Handle Live Chat
+  const handleSend = async () => {
+    if (!input.trim()) return;
+    const userMsg = input;
+    setMessages(prev => [...prev, { role: "user", content: userMsg }]);
+    setInput("");
+    setIsTyping(true);
+    
+    try {
+      const url = process.env.NEXT_PUBLIC_API_URL 
+        ? `${process.env.NEXT_PUBLIC_API_URL}/api/chat`
+        : `http://localhost:8000/api/chat`;
+        
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          case_id: caseId,
+          user_message: userMsg,
+          use_tier_2: true
+        })
+      });
+      
+      const data = await res.json();
+      if (data.messages && data.messages.length > 0) {
+        // Find the last assistant message
+        const lastMsg = [...data.messages].reverse().find(m => m.role === "assistant" || m.role === "ai");
+        if (lastMsg) {
+            setMessages(prev => [...prev, { role: "assistant", content: lastMsg.content }]);
+        }
+      } else if (data.response) {
+         setMessages(prev => [...prev, { role: "assistant", content: data.response }]);
+      }
+    } catch (err) {
+      console.error(err);
+      setMessages(prev => [...prev, { role: "assistant", content: "Error: Could not reach the LangGraph Backend API." }]);
+    } finally {
+      setIsTyping(false);
+    }
   };
+
+  const handleDocumentClick = (filename: string) => {
+     alert(`Feature coming soon: Download/Preview for ${filename}`);
+  };
+
+  const displayName = caseDetails?.name || "TechGlobal Inc Renewal";
+  const displayCategory = caseDetails?.category_id || "IT Infrastructure";
+  const displayStage = caseDetails?.dtp_stage || "DTP02";
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden w-full m-0 p-0 font-sans">
@@ -33,13 +126,13 @@ export default function LegacyCaseCopilotPage() {
         {/* Condensed Header */}
         <div className="bg-sponsor-blue text-white p-6 sticky top-0 z-10 shadow-md flex justify-between items-center">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight mb-1">TechGlobal Inc Renewal</h1>
+            <h1 className="text-2xl font-bold tracking-tight mb-1">{displayName}</h1>
             <div className="flex items-center gap-3 text-sm text-blue-100 font-medium">
-              <span>CASE-2026-001</span>
+              <span>{caseId}</span>
               <span>•</span>
               <span className="bg-blue-800/50 px-2 py-0.5 rounded text-white flex items-center gap-1.5 border border-blue-400/30">
                 <Briefcase className="w-3.5 h-3.5" />
-                IT Infrastructure
+                {displayCategory}
               </span>
             </div>
           </div>
@@ -66,17 +159,17 @@ export default function LegacyCaseCopilotPage() {
             <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-slate-100 bg-white">
               <div className="p-4 text-center">
                 <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">DTP Stage</p>
-                <p className="font-semibold text-slate-800">DTP02</p>
+                <p className="font-semibold text-slate-800">{displayStage}</p>
                 <p className="text-xs text-slate-500">Supplier Eval</p>
               </div>
               <div className="p-4 text-center">
                 <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Supplier</p>
-                <p className="font-semibold text-slate-800">TechGlobal Inc</p>
+                <p className="font-semibold text-slate-800">{caseDetails?.supplier_id || "TechGlobal Inc"}</p>
                 <p className="text-xs text-slate-500">ID: SUP-9021</p>
               </div>
               <div className="p-4 text-center">
                 <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Trigger Source</p>
-                <p className="font-semibold text-sponsor-blue">Signal</p>
+                <p className="font-semibold text-sponsor-blue">{caseDetails?.trigger_source || "Signal"}</p>
                 <p className="text-xs text-slate-500">Expiry Risk</p>
               </div>
               <div className="p-4 text-center">
@@ -118,20 +211,42 @@ export default function LegacyCaseCopilotPage() {
                 Extracted Artifacts
               </h3>
               <ul className="space-y-3">
-                <li className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg transition-colors border border-transparent hover:border-slate-100 cursor-pointer">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded bg-red-50 text-red-600 flex items-center justify-center font-bold text-[10px] uppercase shadow-sm">PDF</div>
-                    <span className="text-sm font-medium text-sponsor-blue underline decoration-blue-100 underline-offset-2">Master_Agreement_2021.pdf</span>
-                  </div>
-                  <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded">Ingested</span>
-                </li>
-                <li className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg transition-colors border border-transparent hover:border-slate-100 cursor-pointer">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded bg-green-50 text-green-700 flex items-center justify-center font-bold text-[10px] uppercase shadow-sm">XLSX</div>
-                    <span className="text-sm font-medium text-sponsor-blue underline decoration-blue-100 underline-offset-2">PO_Spend_History_12M.xlsx</span>
-                  </div>
-                  <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded">Ingested</span>
-                </li>
+                {documents.length > 0 ? (
+                  documents.map((doc, idx) => {
+                    const ext = doc.filename.split('.').pop()?.toUpperCase() || 'DOC';
+                    const isPdf = ext === 'PDF';
+                    return (
+                      <li key={idx} onClick={() => handleDocumentClick(doc.filename)} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg transition-colors border border-transparent hover:border-slate-100 cursor-pointer">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded flex items-center justify-center font-bold text-[10px] uppercase shadow-sm ${isPdf ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>
+                            {ext}
+                          </div>
+                          <span className="text-sm font-medium text-sponsor-blue underline decoration-blue-100 underline-offset-2 break-all">{doc.filename}</span>
+                        </div>
+                        <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded">Ingested</span>
+                      </li>
+                    );
+                  })
+                ) : (
+                  <>
+                    <li onClick={() => handleDocumentClick("Master_Agreement_2021.pdf")} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg transition-colors border border-transparent hover:border-slate-100 cursor-pointer">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded bg-red-50 text-red-600 flex items-center justify-center font-bold text-[10px] uppercase shadow-sm">PDF</div>
+                        <span className="text-sm font-medium text-sponsor-blue underline decoration-blue-100 underline-offset-2">Master_Agreement_2021.pdf</span>
+                      </div>
+                      <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded">Ingested</span>
+                    </li>
+                    <li onClick={() => handleDocumentClick("PO_Spend_History_12M.xlsx")} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg transition-colors border border-transparent hover:border-slate-100 cursor-pointer">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded bg-green-50 text-green-700 flex items-center justify-center font-bold text-[10px] uppercase shadow-sm">XLSX</div>
+                        <span className="text-sm font-medium text-sponsor-blue underline decoration-blue-100 underline-offset-2">PO_Spend_History_12M.xlsx</span>
+                      </div>
+                      <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded">Ingested</span>
+                    </li>
+                  </>
+                )}
+                
+                {/* Always show a pending placeholder to demonstrate future capabilities */}
                 <li className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg transition-colors border border-transparent hover:border-slate-100 cursor-pointer">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-[10px] border border-slate-200 border-dashed">NEW</div>
@@ -233,12 +348,25 @@ export default function LegacyCaseCopilotPage() {
               <div className={`max-w-[85%] p-4 text-[15px] leading-relaxed shadow-sm ${
                 msg.role === "user" 
                 ? "bg-sponsor-blue text-white rounded-2xl rounded-tr-sm" 
-                : "bg-white border border-slate-200 text-slate-700 rounded-2xl rounded-tl-sm shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)]"
+                : "bg-white border border-slate-200 text-slate-700 rounded-2xl rounded-tl-sm shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] break-words"
               }`}>
                 {msg.content}
               </div>
             </div>
           ))}
+
+          {isTyping && (
+             <div className="flex justify-start">
+                <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center mr-3 mt-1 shrink-0">
+                  <MessageSquare className="w-4 h-4 text-sponsor-blue" />
+                </div>
+                <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-sm shadow-sm p-4 flex gap-1 items-center">
+                   <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></div>
+                   <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:0.2s]"></div>
+                   <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:0.4s]"></div>
+                </div>
+             </div>
+          )}
         </div>
 
         {/* Input Area */}
@@ -256,11 +384,12 @@ export default function LegacyCaseCopilotPage() {
                   handleSend(); 
                 }
               }}
+              disabled={isTyping}
             />
             <button 
               className="p-3 bg-sponsor-blue text-white rounded-lg hover:bg-blue-700 transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed m-0.5"
               onClick={handleSend}
-              disabled={!input.trim()}
+              disabled={!input.trim() || isTyping}
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
                 <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />

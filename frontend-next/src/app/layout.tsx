@@ -18,8 +18,9 @@ export default function RootLayout({
         {/* Sidebar Navigation */}
         <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col shadow-xl z-20 shrink-0">
           <div className="h-16 flex items-center px-6 border-b border-white/10 shrink-0">
-            <h1 className="font-bold text-lg text-white tracking-wide">
-              <span className="text-mit-red">Sourcing</span>Heatmap
+            <h1 className="font-bold text-base text-white tracking-wide leading-tight mt-2">
+              <span className="text-mit-red block text-[10px] uppercase tracking-widest mb-0.5">Procurement</span>
+              Agentic System
             </h1>
           </div>
           
