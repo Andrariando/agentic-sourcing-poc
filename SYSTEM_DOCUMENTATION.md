@@ -970,7 +970,7 @@ spend_agent → contract_agent → strategy_agent → risk_agent → supervisor 
 |--------|------|-------------|
 | GET | `/api/heatmap/opportunities` | List all scored opportunities |
 | POST | `/api/heatmap/feedback` | Submit human score adjustment + written feedback (supports both structured payload and legacy Next.js payload) |
-| POST | `/api/heatmap/approve` | Approve opportunities → creates Legacy DTP cases via bridge |
+| POST | `/api/heatmap/approve` | Approve opportunities → creates Legacy DTP cases via bridge (returns `cases` map: opportunity id → case id; idempotent per opportunity via heatmap `AuditLog`) |
 | POST | `/api/heatmap/run` | Start heatmap scoring job in background (non-blocking) |
 | GET | `/api/heatmap/run/status` | Check scoring job status (`running`, success/error, timestamps, count) |
 
@@ -997,7 +997,17 @@ The backend now accepts two feedback formats:
 
 The router translates legacy tier overrides into structured adjustments before persisting to `ReviewFeedback` and `AuditLog`.
 
-#### 2) Opportunity-to-case bridge reuse
+#### 2) Duplicate “Heatmap Approved” rows on the case dashboard
+
+Two legacy cases with the same supplier name usually mean one of:
+
+- **Two heatmap opportunities** (e.g. same supplier, different `category`: `IT Infrastructure` vs `CLOUD`) were both approved — each gets its own legacy case (different template path: DTP-01 vs DTP-02).
+- **Review modal + Approve Selected** used to disagree: Review only called `/feedback` and redirected to a **seeded** case id without bridging, while Approve created a **new** case — or the UI showed “Approved” locally while the DB stayed `Pending`, so Approve could run again.
+- **Double-submit** on Approve before idempotency could create two cases for the same opportunity.
+
+**Mitigations (implemented):** bridge checks existing `CASE_APPROVED` audit for that `opportunity_id` before creating; T1 Review flow calls `/api/heatmap/approve` and redirects to the returned `case_id`; bulk approve refreshes opportunities from the API.
+
+#### 3) Opportunity-to-case bridge reuse
 
 `backend/heatmap/services/case_bridge.py` now reuses existing seeded case paths where possible (e.g., CASE-001..CASE-006 mapping by category keywords) to preserve rich DTP context and demo continuity.
 

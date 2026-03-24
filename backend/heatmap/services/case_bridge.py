@@ -1,4 +1,5 @@
-from typing import List, Optional
+from typing import List, Optional, Dict, Tuple
+import re
 from datetime import datetime
 from uuid import uuid4
 from sqlmodel import select
@@ -99,42 +100,73 @@ class CaseBridgeService:
             session.close()
         return new_case_id
 
-    def approve_opportunities(self, opportunity_ids: List[int], approver_id: str) -> int:
+    def _existing_case_for_opportunity(self, session, opp_id: int) -> Optional[str]:
+        """If this opportunity was already bridged, return legacy case_id (idempotent approve)."""
+        row = session.exec(
+            select(AuditLog).where(
+                AuditLog.event_type == "CASE_APPROVED",
+                AuditLog.entity_id == str(opp_id),
+            )
+        ).first()
+        if not row or not row.new_value:
+            return None
+        m = re.search(r"Linked to Case:\s*(\S+)", row.new_value)
+        return m.group(1) if m else None
+
+    def approve_opportunities(
+        self, opportunity_ids: List[int], approver_id: str
+    ) -> Tuple[int, Dict[int, str]]:
+        """
+        Bridge approved opportunities to legacy cases.
+        Returns (approved_count_this_call, mapping opportunity_id -> case_id).
+        Skips opportunities already bridged (audit log) to avoid duplicates on double-submit.
+        """
         session = heatmap_db.get_db_session()
         approved_count = 0
-        
+        cases: dict[int, str] = {}
+
         try:
             for opp_id in opportunity_ids:
                 opp = session.get(Opportunity, opp_id)
-                if not opp or opp.status == "Approved":
+                if not opp:
                     continue
-                    
-                # Create case by reusing existing case path templates when available.
+
+                existing = self._existing_case_for_opportunity(session, opp_id)
+                if existing:
+                    if opp.status != "Approved":
+                        opp.status = "Approved"
+                        session.add(opp)
+                    cases[opp_id] = existing
+                    continue
+
+                # Marked approved in UI or manually, but no audit row — do not create another case.
+                if opp.status == "Approved":
+                    continue
+
                 try:
                     case_id = self._create_case_from_template(opp)
-                    
-                    # Mark approved internally and link
+
                     opp.status = "Approved"
                     session.add(opp)
-                    
-                    # Audit trail
+
                     audit = AuditLog(
                         event_type="CASE_APPROVED",
                         entity_id=str(opp.id),
                         new_value=f"Linked to Case: {case_id}",
-                        user_id=approver_id
+                        user_id=approver_id,
                     )
                     session.add(audit)
                     approved_count += 1
-                    
+                    cases[opp_id] = case_id
+
                 except Exception as e:
                     print(f"Failed to bridge opportunity {opp_id} to legacy system: {e}")
-                    
+
             session.commit()
         finally:
             session.close()
-            
-        return approved_count
+
+        return approved_count, cases
 
 
 def get_case_bridge_service() -> CaseBridgeService:

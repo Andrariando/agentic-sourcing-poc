@@ -106,27 +106,47 @@ export default function HeatmapPriorityPage() {
       });
       
       if (res.ok) {
-        // Optimistic UI update
+        // Optimistic UI update (tier / notes); server-side Approved only after /approve.
         const updated = opportunities.map(o => {
           if (o.id === reviewOpp.id) {
-            return { ...o, tier: feedbackTier, status: "Approved" };
+            return { ...o, tier: feedbackTier };
           }
           return o;
         });
         setOpportunities(updated);
         setReviewOpp(null);
-        
-        // Map Tier 1 approvals directly to the robust end-to-end demo cases
-        if (feedbackTier === 'T1') {
-            const cat = reviewOpp.category?.toUpperCase() || '';
-            let caseId = "CASE-001"; // Fallback to Telecom
-            if (cat.includes("CLOUD") || cat.includes("INFRASTRUCTURE")) caseId = "CASE-002";
-            else if (cat.includes("SAAS")) caseId = "CASE-003";
-            else if (cat.includes("SOFTWARE") || cat.includes("IT")) caseId = "CASE-004";
-            else if (cat.includes("SECURITY")) caseId = "CASE-006";
-            
-            // Redirect to the robust end-to-end Case Copilot
-            window.location.href = `/cases/${caseId}/copilot`;
+
+        // Tier 1: single bridge into legacy — same path as "Approve Selected" (one case per opportunity).
+        if (feedbackTier === "T1") {
+          try {
+            const approveUrl = process.env.NEXT_PUBLIC_API_URL
+              ? `${process.env.NEXT_PUBLIC_API_URL}/api/heatmap/approve`
+              : "http://localhost:8000/api/heatmap/approve";
+            const approveRes = await fetch(approveUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                opportunity_ids: [reviewOpp.id],
+                approver_id: "human-manager",
+              }),
+            });
+            const approveData = await approveRes.json();
+            const caseId = approveData.cases?.[String(reviewOpp.id)];
+            if (caseId) {
+              window.location.href = `/cases/${caseId}/copilot`;
+              return;
+            }
+          } catch (e) {
+            console.error(e);
+          }
+          // Fallback: seeded demo cases (no new row) if approve did not return an id.
+          const cat = reviewOpp.category?.toUpperCase() || "";
+          let caseId = "CASE-001";
+          if (cat.includes("CLOUD") || cat.includes("INFRASTRUCTURE")) caseId = "CASE-002";
+          else if (cat.includes("SAAS")) caseId = "CASE-003";
+          else if (cat.includes("SOFTWARE") || cat.includes("IT")) caseId = "CASE-004";
+          else if (cat.includes("SECURITY")) caseId = "CASE-006";
+          window.location.href = `/cases/${caseId}/copilot`;
         }
       } else {
         alert("Feedback submission failed. Please verify backend payload compatibility.");
@@ -164,8 +184,27 @@ export default function HeatmapPriorityPage() {
       });
 
       if (res.ok) {
-        alert(`Success! ${selectedIds.size} Tier-1 opportunities have been pushed to DTP01 Case Generation. You can now view them in the Case Dashboard.`);
+        const data = await res.json();
+        const ids = data.cases ? Object.values(data.cases).join(", ") : "";
+        const linked = data.cases ? Object.keys(data.cases).length : 0;
+        alert(
+          `Success! ${linked} opportunity(ies) linked to case(s)` +
+            (data.approved_count ? ` (${data.approved_count} newly created). ` : ". ") +
+            (ids ? `Case ID(s): ${ids}. ` : "") +
+            "Open the Case Dashboard to continue."
+        );
         setSelectedIds(new Set());
+        // Refresh list so server-side Approved status matches the UI.
+        const oppUrl = process.env.NEXT_PUBLIC_API_URL
+          ? `${process.env.NEXT_PUBLIC_API_URL}/api/heatmap/opportunities`
+          : "http://localhost:8000/api/heatmap/opportunities";
+        const oppRes = await fetch(oppUrl, { cache: "no-store" });
+        const oppJson = await oppRes.json();
+        if (oppJson.opportunities) {
+          setOpportunities(
+            oppJson.opportunities.sort((a: any, b: any) => b.total_score - a.total_score)
+          );
+        }
       } else {
         alert("Failed to push to casework. Please try again.");
       }

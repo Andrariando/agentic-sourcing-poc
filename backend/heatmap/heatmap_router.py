@@ -40,6 +40,12 @@ class ApprovalRequest(BaseModel):
     opportunity_ids: List[int]
     approver_id: str
 
+
+class ApproveOpportunitiesResponse(BaseModel):
+    success: bool
+    approved_count: int
+    cases: dict[str, str]
+
 class PipelineStatusResponse(BaseModel):
     running: bool
     last_started_at: Optional[float] = None
@@ -92,11 +98,15 @@ def submit_feedback(req: FeedbackRequest):
     )
     return {"success": success}
 
-@heatmap_router.post("/approve")
+@heatmap_router.post("/approve", response_model=ApproveOpportunitiesResponse)
 def approve_opportunities(req: ApprovalRequest):
     svc = get_case_bridge_service()
-    count = svc.approve_opportunities(req.opportunity_ids, req.approver_id)
-    return {"success": True, "approved_count": count}
+    count, case_map = svc.approve_opportunities(req.opportunity_ids, req.approver_id)
+    # JSON object keys must be strings
+    cases_str = {str(k): v for k, v in case_map.items()}
+    return ApproveOpportunitiesResponse(
+        success=True, approved_count=count, cases=cases_str
+    )
 
 @heatmap_router.post("/run")
 def run_pipeline():
