@@ -10,9 +10,10 @@ export default function LegacyCaseCopilotPage() {
   const caseId = params.id as string;
 
   const [caseDetails, setCaseDetails] = useState<any>(null);
+  const [caseError, setCaseError] = useState<string | null>(null);
   const [documents, setDocuments] = useState<any[]>([]);
   const [messages, setMessages] = useState([
-    { role: "assistant", content: `Hello! I am the Supervisor Agent assigned to ${caseId}. How can I assist you with this evaluation?` }
+    { role: "assistant", content: `Hello! I am the Supervisor Agent assigned to this case. How can I assist you?` }
   ]);
   const [input, setInput] = useState("");
   const [governanceApproved, setGovernanceApproved] = useState(false);
@@ -31,6 +32,10 @@ export default function LegacyCaseCopilotPage() {
           ? `${process.env.NEXT_PUBLIC_API_URL}/api/cases/${caseId}`
           : `http://localhost:8000/api/cases/${caseId}`;
         const res = await fetch(url);
+        if (!res.ok) {
+          setCaseError("Case not found or API error.");
+          return;
+        }
         const data = await res.json();
         setCaseDetails(data);
 
@@ -45,6 +50,7 @@ export default function LegacyCaseCopilotPage() {
         }
       } catch (err) {
         console.error("Failed to fetch case details:", err);
+        setCaseError("Network error attempting to fetch case.");
       }
     }
     
@@ -108,6 +114,8 @@ export default function LegacyCaseCopilotPage() {
         if (lastMsg) {
             setMessages(prev => [...prev, { role: "assistant", content: lastMsg.content }]);
         }
+      } else if (data.assistant_message) {
+         setMessages(prev => [...prev, { role: "assistant", content: data.assistant_message }]);
       } else if (data.response) {
          setMessages(prev => [...prev, { role: "assistant", content: data.response }]);
       }
@@ -228,6 +236,19 @@ export default function LegacyCaseCopilotPage() {
   const strategyConfidence = strategyOutput?.confidence ? `${(strategyOutput.confidence * 100).toFixed(0)}%` : null;
   const recommendedAction = caseDetails?.summary?.recommended_action || strategyOutput?.recommended_strategy || "Pending agent analysis";
   const riskAssessment = strategyOutput?.risk_assessment || null;
+
+  if (caseError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-slate-50">
+        <AlertTriangle className="w-16 h-16 text-mit-red mb-4" />
+        <h1 className="text-2xl font-bold font-syne text-slate-800 mb-2">Case Not Found</h1>
+        <p className="text-slate-600 mb-6">{caseError}</p>
+        <button onClick={() => window.location.href = '/heatmap'} className="px-6 py-2 bg-sponsor-blue text-white rounded-lg font-bold">
+          Return to Dashboard
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden w-full m-0 p-0 font-sans">
@@ -353,22 +374,9 @@ export default function LegacyCaseCopilotPage() {
                     );
                   })
                 ) : (
-                  <>
-                    <li onClick={() => handleDocumentClick("Master_Agreement_2021.pdf")} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg transition-colors border border-transparent hover:border-slate-100 cursor-pointer">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded bg-red-50 text-red-600 flex items-center justify-center font-bold text-[10px] uppercase shadow-sm">PDF</div>
-                        <span className="text-sm font-medium text-sponsor-blue underline decoration-blue-100 underline-offset-2">Master_Agreement_2021.pdf</span>
-                      </div>
-                      <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded">Ingested</span>
-                    </li>
-                    <li onClick={() => handleDocumentClick("PO_Spend_History_12M.xlsx")} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg transition-colors border border-transparent hover:border-slate-100 cursor-pointer">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded bg-green-50 text-green-700 flex items-center justify-center font-bold text-[10px] uppercase shadow-sm">XLSX</div>
-                        <span className="text-sm font-medium text-sponsor-blue underline decoration-blue-100 underline-offset-2">PO_Spend_History_12M.xlsx</span>
-                      </div>
-                      <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded">Ingested</span>
-                    </li>
-                  </>
+                  <div className="text-sm text-slate-400 italic py-2">
+                    No artifacts extracted yet. Upload a document below.
+                  </div>
                 )}
                 
                 {/* Live Document Upload component */}

@@ -114,6 +114,19 @@ export default function HeatmapPriorityPage() {
         });
         setOpportunities(updated);
         setReviewOpp(null);
+        
+        // Map Tier 1 approvals directly to the robust end-to-end demo cases
+        if (feedbackTier === 'T1') {
+            const cat = reviewOpp.category?.toUpperCase() || '';
+            let caseId = "CASE-001"; // Fallback to Telecom
+            if (cat.includes("CLOUD") || cat.includes("INFRASTRUCTURE")) caseId = "CASE-002";
+            else if (cat.includes("SAAS")) caseId = "CASE-003";
+            else if (cat.includes("SOFTWARE") || cat.includes("IT")) caseId = "CASE-004";
+            else if (cat.includes("SECURITY")) caseId = "CASE-006";
+            
+            // Redirect to the robust end-to-end Case Copilot
+            window.location.href = `/cases/${caseId}/copilot`;
+        }
       }
     } catch (e) {
       console.error(e);
