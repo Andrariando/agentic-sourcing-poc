@@ -7,6 +7,7 @@ import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, Res
 export default function HeatmapPriorityPage() {
   const [opportunities, setOpportunities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pipelineRunning, setPipelineRunning] = useState(false);
   const [viewMode, setViewMode] = useState<'table' | 'heatmap'>('table');
   
   // Selection State
@@ -127,6 +128,8 @@ export default function HeatmapPriorityPage() {
             // Redirect to the robust end-to-end Case Copilot
             window.location.href = `/cases/${caseId}/copilot`;
         }
+      } else {
+        alert("Feedback submission failed. Please verify backend payload compatibility.");
       }
     } catch (e) {
       console.error(e);
@@ -169,6 +172,54 @@ export default function HeatmapPriorityPage() {
     } catch (err) {
       console.error(err);
       alert("Network error pushing to casework.");
+    }
+  };
+
+  const handleRefreshScores = async () => {
+    setPipelineRunning(true);
+    try {
+      const runUrl = process.env.NEXT_PUBLIC_API_URL
+        ? `${process.env.NEXT_PUBLIC_API_URL}/api/heatmap/run`
+        : "http://localhost:8000/api/heatmap/run";
+      const statusUrl = process.env.NEXT_PUBLIC_API_URL
+        ? `${process.env.NEXT_PUBLIC_API_URL}/api/heatmap/run/status`
+        : "http://localhost:8000/api/heatmap/run/status";
+      const oppUrl = process.env.NEXT_PUBLIC_API_URL
+        ? `${process.env.NEXT_PUBLIC_API_URL}/api/heatmap/opportunities`
+        : "http://localhost:8000/api/heatmap/opportunities";
+
+      const runRes = await fetch(runUrl, { method: "POST" });
+      if (!runRes.ok) {
+        alert("Failed to run scoring pipeline.");
+        return;
+      }
+
+      // Poll pipeline status for up to 60s (demo-safe on small backend instances).
+      const maxPolls = 20;
+      for (let i = 0; i < maxPolls; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        const statusRes = await fetch(statusUrl, { cache: "no-store" });
+        if (!statusRes.ok) continue;
+        const status = await statusRes.json();
+        if (!status.running) {
+          if (status.last_success === false) {
+            alert(`Scoring finished with error: ${status.last_error || "unknown error"}`);
+          }
+          break;
+        }
+      }
+
+      const oppRes = await fetch(oppUrl, { cache: "no-store" });
+      const data = await oppRes.json();
+      if (data.opportunities) {
+        const sorted = data.opportunities.sort((a: any, b: any) => b.total_score - a.total_score);
+        setOpportunities(sorted);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Network error refreshing scores.");
+    } finally {
+      setPipelineRunning(false);
     }
   };
 
@@ -296,8 +347,12 @@ export default function HeatmapPriorityPage() {
                 )}
               </div>
               <div className="flex gap-3">
-                <button className="px-4 py-2 bg-white border border-slate-200 shadow-sm rounded-md text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
-                  Refresh Scores
+                <button
+                  onClick={handleRefreshScores}
+                  disabled={pipelineRunning}
+                  className="px-4 py-2 bg-white border border-slate-200 shadow-sm rounded-md text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {pipelineRunning ? "Refreshing..." : "Refresh Scores"}
                 </button>
                 <button 
                   onClick={handlePushToCasework}

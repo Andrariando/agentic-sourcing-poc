@@ -969,9 +969,39 @@ spend_agent → contract_agent → strategy_agent → risk_agent → supervisor 
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/heatmap/opportunities` | List all scored opportunities |
-| POST | `/api/heatmap/feedback` | Submit human score adjustment + written feedback |
+| POST | `/api/heatmap/feedback` | Submit human score adjustment + written feedback (supports both structured payload and legacy Next.js payload) |
 | POST | `/api/heatmap/approve` | Approve opportunities → creates Legacy DTP cases via bridge |
-| POST | `/api/heatmap/run` | Trigger the LangGraph scoring pipeline |
+| POST | `/api/heatmap/run` | Start heatmap scoring job in background (non-blocking) |
+| GET | `/api/heatmap/run/status` | Check scoring job status (`running`, success/error, timestamps, count) |
+
+### Deployment-Safe Runtime Mode (Render 512MB)
+
+To support low-memory hosting (Render 512MB), Heatmap scoring is intentionally run in a lightweight mode:
+
+1. `POST /api/heatmap/run` returns immediately and starts a background thread.
+2. Frontend polls `GET /api/heatmap/run/status` until completion.
+3. Once complete, frontend refreshes `GET /api/heatmap/opportunities`.
+
+This prevents long synchronous requests and significantly reduces timeout risk during demos.
+
+### Compatibility Notes (March 24, 2026)
+
+#### 1) Feedback payload backward compatibility
+
+The backend now accepts two feedback formats:
+
+- **Structured format** (canonical):
+  - `reviewer_id`, `adjustment_type`, `adjustment_value`, `reason_code`, `comment_text`, `component_affected`
+- **Legacy Next.js format** (auto-translated):
+  - `user_id`, `original_tier`, `suggested_tier`, `feedback_notes`
+
+The router translates legacy tier overrides into structured adjustments before persisting to `ReviewFeedback` and `AuditLog`.
+
+#### 2) Opportunity-to-case bridge reuse
+
+`backend/heatmap/services/case_bridge.py` now reuses existing seeded case paths where possible (e.g., CASE-001..CASE-006 mapping by category keywords) to preserve rich DTP context and demo continuity.
+
+Instead of creating only empty DTP-01 cases, the bridge can clone a template path and fill opportunity-specific identifiers (supplier/contract/name/trigger source), which reduces missing-context issues in case copilot demos.
 
 ### Synthetic Data
 

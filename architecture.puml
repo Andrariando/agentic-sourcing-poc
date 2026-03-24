@@ -22,7 +22,7 @@
 '            http://www.plantuml.com/plantuml
 ' =============================================================================
 
-title Agentic Sourcing Copilot - Enterprise Architecture\n//Human-in-the-Loop Multi-Agent Decision Support System//\n\n**Current Implementation** — LLM-First Classification & Artifact System
+title Agentic Sourcing Copilot - Enterprise Architecture\n//Human-in-the-Loop Multi-Agent Decision Support System//\n\n**Current Implementation** — Next.js + Dual Agentic Systems + Artifact System
 
 skinparam backgroundColor #FEFEFE
 skinparam defaultFontSize 11
@@ -62,17 +62,24 @@ rectangle "👤 **Procurement Officer**\n(Human Decision-Maker)" as human <<huma
 rectangle "🤖 **OpenAI GPT-4**\n(LLM Provider)" as llm <<external>>
 
 ' ============== FRONTEND CONTAINER ==============
-package "**FRONTEND** - Streamlit UI" <<frontend>> {
-    rectangle "📊 **Case Dashboard**\nCase list, metrics,\nfiltering, status view" as dashboard
-    rectangle "💬 **Case Copilot**\nChat interface,\nartifact display,\naudit trail" as copilot
-    rectangle "📁 **Knowledge Management**\nDocument upload,\ndata ingestion" as knowledge
+package "**FRONTEND** - Next.js UI" <<frontend>> {
+    package "**SYSTEM A** - Opportunity Prioritization" {
+        rectangle "🔥 **Opportunity Heatmap**\nPrioritized list,\nhuman override,\napprove to case" as heatmap_ui
+    }
+    package "**SYSTEM B** - Case Copilot (DTP-01..DTP-06)" {
+        rectangle "📊 **Case Dashboard**\nCase list, metrics,\nfiltering, status view" as dashboard
+        rectangle "💬 **Case Copilot**\nChat interface,\nartifact display,\naudit trail" as copilot
+        rectangle "📁 **Knowledge Management**\nDocument upload,\ndata ingestion" as knowledge
+    }
+    package "**SHARED**" {
     rectangle "🔌 **API Client**\nHTTP/REST communication\nor Direct imports" as api_client
+    }
 }
 
 ' ============== BACKEND CONTAINER ==============
 package "**BACKEND** - FastAPI Server" <<backend>> {
     
-    rectangle "🌐 **REST API**\n/api/cases, /api/chat,\n/api/decisions, /api/ingest,\n/health" as api
+    rectangle "🌐 **REST API**\n/api/cases, /api/chat,\n/api/decisions, /api/ingest,\n/api/heatmap/*, /health" as api
     
     package "**Services Layer**" {
         rectangle "💬 **Chat Service**\nOrchestrator,\nState management" as chat_svc
@@ -140,12 +147,15 @@ human --> knowledge : "Uploads documents\n& data files"
 dashboard --> api_client
 copilot --> api_client
 knowledge --> api_client
+heatmap_ui --> api_client
 api_client --> api : "REST API calls\nor Direct imports"
 
 ' API to Services
 api --> case_svc : "Case CRUD"
 api --> chat_svc : "Chat messages"
 api --> ingest_svc : "File uploads"
+api --> router : "/api/heatmap/opportunities\n/api/heatmap/approve"
+api --> case_svc : "Opportunity approved\n→ create case"
 
 ' Chat Service to Supervisor
 chat_svc --> llm_resp : "1. User Message"
@@ -240,6 +250,10 @@ task_llm --> llm : "Narration only\n(after rules/retrieval/analytics)"
 router --> llm : "LLM Classification\n(primary, JSON mode)"
 llm_resp --> llm : "Intent analysis\n+ natural replies"
 
+' Heatmap run mode (demo-safe deployment)
+heatmap_ui --> api : "POST /api/heatmap/run\n(start background scoring)"
+heatmap_ui --> api : "GET /api/heatmap/run/status\n(poll until done)"
+
 ' ============== NOTES ==============
 note right of router
     **LLM-First Intent Classification**
@@ -251,6 +265,33 @@ note right of router
     5. Context-aware (DTP stage, conversation history)
     6. Rule fallback (errors only)
     7. Few-shot examples in prompt
+end note
+
+note right of api
+    **Heatmap Runtime Mode (Render-safe)**
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    • /api/heatmap/run is non-blocking
+      (starts background job)
+    • UI polls /api/heatmap/run/status
+    • Refresh opportunities after completion
+    • Prevents long request timeouts
+      on low-memory deployments
+end note
+
+note top of heatmap_ui
+    **System A (Prioritization)**
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Human reviews AI-ranked opportunities,
+    overrides priority, and approves T1
+    opportunities to become cases.
+end note
+
+note top of copilot
+    **System B (Case Execution)**
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Approved opportunities are worked
+    through DTP-01..DTP-06 with copilot
+    assistance and human approvals.
 end note
 
 note bottom of task_rules
@@ -340,10 +381,10 @@ end note
 legend right
     |= Color |= Component Type |
     | <#FFEBEE> | Human Actor |
-    | <#E3F2FD> | Frontend (Streamlit) |
+    | <#E3F2FD> | Frontend (Next.js) |
     | <#E8F5E9> | Backend (FastAPI) |
     | <#FFF3E0> | Supervisor (Orchestrator) |
-    | <#F3E5F5> | Official Agents (7) |
+    | <#F3E5F5> | Official Agents (6) |
     | <#FFF9C4> | Task Execution Layer |
     | <#ECEFF1> | Data / Persistence |
     | <#E8E8E8> | External System |
@@ -351,9 +392,10 @@ legend right
     **Key Governance Rules:**
     1. Supervisor is ONLY state writer
     2. Rules → Retrieval → Analytics → LLM
-    3. Hybrid classification (rules + LLM)
+    3. LLM-first classification + rule fallback
     4. Stage advancement requires approval
     5. All artifacts tracked with metadata
+    6. Heatmap run uses async + status polling
 endlegend
 
 @enduml
