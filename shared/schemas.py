@@ -54,6 +54,8 @@ class CaseDetail(BaseModel):
     activity_log: List[Dict[str, Any]] = Field(default_factory=list)
     human_decision: Optional[Dict[str, Any]] = None
     chat_history: Optional[Any] = None  # Pre-seeded chat history (JSON string or list)
+    # Stage-aware hints for copilot UI + prompts (from DTP_DECISIONS + human_decision)
+    copilot_focus: Optional[Dict[str, Any]] = None
 
 
 class CaseListResponse(BaseModel):

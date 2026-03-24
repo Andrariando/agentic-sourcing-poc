@@ -16,7 +16,17 @@ class CaseBridgeService:
     Bridge between the NEW Heatmap System and the LEGACY DTP Case System.
     This is the ONLY touchpoint between the two agentic systems.
     """
-    
+
+    def _bridged_case_title(self, opp: Opportunity, template: Optional[CaseState]) -> str:
+        """
+        Display name for a casework row cloned from heatmap (avoid implying prior approval).
+        """
+        supplier = (opp.supplier_name or opp.supplier_id or "New request").strip()
+        if template and template.name:
+            return f"{supplier} – {template.name}"
+        cat = (opp.category or "General").strip()
+        return f"{supplier} – {cat}"
+
     def _find_template_case(self, opportunity_category: str) -> Optional[CaseState]:
         """
         Try to reuse an existing rich demo case path, prioritized by category match.
@@ -63,7 +73,7 @@ class CaseBridgeService:
                 trigger_source="OpportunityHeatmap",
                 contract_id=opp.contract_id,
                 supplier_id=opp.supplier_id or opp.supplier_name,
-                name=f"Heatmap Approved: {opp.supplier_name or 'New Request'}"
+                name=self._bridged_case_title(opp, None),
             )
 
         now = datetime.now().isoformat()
@@ -76,8 +86,8 @@ class CaseBridgeService:
             trigger_source="OpportunityHeatmap",
             dtp_stage=template.dtp_stage or "DTP-01",
             status="In Progress",
-            name=f"Heatmap Approved: {opp.supplier_name or 'New Request'}",
-            summary_text=template.summary_text or f"Opportunity approved from heatmap: {opp.category}",
+            name=self._bridged_case_title(opp, template),
+            summary_text=template.summary_text or f"Sourced from priority heatmap – {opp.category}",
             key_findings=template.key_findings,
             recommended_action=template.recommended_action,
             latest_agent_output=template.latest_agent_output,

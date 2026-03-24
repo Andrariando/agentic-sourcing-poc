@@ -50,6 +50,7 @@ from shared.schemas import (
 )
 from shared.constants import UserIntent, UserGoal
 from shared.decision_definitions import DTP_DECISIONS
+from shared.case_context_derive import merge_derived_case_context
 
 # Import new official agents
 from backend.agents import (
@@ -179,7 +180,7 @@ def check_stage_readiness(case, state: dict) -> dict:
             missing.append(f"Decision '{question_id}' from {stage_part} has empty answer")
     
     # 3. Check required context fields (AND logic)
-    case_context = state.get("case_context") or {}
+    case_context = merge_derived_case_context(case, state)
     for field in prereqs.get("context_fields", []):
         value = case_context.get(field)
         if not value:
@@ -324,8 +325,13 @@ class ChatService:
             "status": state.get("status", "In Progress"),
             "latest_agent_output": state.get("latest_agent_output"),
             "latest_agent_name": state.get("latest_agent_name"),
-            "waiting_for_human": state.get("waiting_for_human", False)
+            "waiting_for_human": state.get("waiting_for_human", False),
         }
+        detail = self.case_service.get_case(case_id)
+        if detail and getattr(detail, "copilot_focus", None):
+            ctx = detail.copilot_focus
+            if isinstance(ctx, dict):
+                case_context["copilot_focus"] = ctx
         
         # 5. Use LLM to analyze intent
         responder = get_llm_responder()

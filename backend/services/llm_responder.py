@@ -16,6 +16,8 @@ from datetime import datetime
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
+from shared.copilot_focus import format_copilot_focus_for_prompt
+
 logger = logging.getLogger(__name__)
 
 
@@ -66,6 +68,9 @@ CASE CONTEXT:
 - Has Agent Output: {bool(case_context.get('latest_agent_output'))}
 - Waiting for Human: {case_context.get('waiting_for_human', False)}
 
+STAGE COACH (use to stay relevant; prefer guiding the user through these decisions before suggesting heavy agent runs):
+{format_copilot_focus_for_prompt(case_context.get("copilot_focus")) or "—"}
+
 CONVERSATION HISTORY:
 {history_text}
 
@@ -111,6 +116,7 @@ Respond with JSON only:
 }}
 
 IMPORTANT: If the user is ASKING a question (what, why, how, which, etc.), set can_answer_directly=true and needs_agent=false.
+If STAGE COACH lists open decisions and the user sounds unsure or exploratory, set can_answer_directly=true and needs_agent=false so the assistant can discuss tradeoffs first.
 
 Respond with valid JSON only, no explanation."""
 
@@ -179,10 +185,10 @@ You help users with sourcing decisions, supplier evaluation, negotiations, and c
 
 PERSONALITY:
 - Be conversational and natural, like ChatGPT
-- Be concise but informative
+- Be concise but informative (short paragraphs; avoid long bullet dumps unless asked)
 - Never use templated or robotic language
 - If something went wrong, acknowledge it honestly
-- Proactively offer helpful next steps
+- Proactively help: if the STAGE COACH section lists open decisions, name tradeoffs, compare options in plain language, then ask ONE clear follow-up question OR offer 2–3 numbered choices—don't wait for the user to guess.
 - If you don't have enough information, ask for it naturally (don't draft an email)
 - NEVER generate a "Subject:" line or email template unless explicitly asked to draft an email.
 - Answer questions directly.
@@ -193,8 +199,10 @@ RULES:
 - If the user asks a specific question (e.g., "What are savings?") and the data isn't in the Agent Output, say "I don't have specific savings data in the current analysis." then offer to find it.
 - If the user approved something, acknowledge it warmly and explain next steps.
 - If you need more data, ask specific questions.
-- Always be helpful and action-oriented."""
+- Always be helpful and action-oriented.
+- Optional: end with a short line in brackets like [Explore options] only when it matches a sensible next user message—at most one such hint."""
 
+        coach_block = format_copilot_focus_for_prompt(case_context.get("copilot_focus"))
         user_prompt = f"""CASE CONTEXT:
 - Case ID: {case_context.get('case_id', 'Unknown')}
 - Name: {case_context.get('case_name', 'Unknown')}
@@ -203,6 +211,9 @@ RULES:
 - DTP Stage: {case_context.get('dtp_stage', 'DTP-01')}
 - Category: {case_context.get('category_id', 'Unknown')}
 - Status: {case_context.get('status', 'Unknown')}
+
+STAGE COACH (prioritize helping with any open decisions here):
+{coach_block or "—"}
 
 {f"CONVERSATION HISTORY:{chr(10)}{history_text}" if history_text else ""}
 

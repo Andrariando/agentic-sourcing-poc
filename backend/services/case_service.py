@@ -14,6 +14,8 @@ from backend.persistence.models import (
     ArtifactPack as ArtifactPackModel
 )
 from backend.supervisor.state import StateManager, SupervisorState
+from shared.case_context_derive import merge_derived_case_context
+from shared.copilot_focus import build_copilot_focus
 from shared.schemas import (
     CaseSummary, CaseDetail, Artifact, ArtifactPack, 
     NextAction, RiskItem, GroundingReference,
@@ -105,6 +107,9 @@ class CaseService:
             recommended_action=case.recommended_action
         )
         
+        human_decision = json.loads(case.human_decision) if case.human_decision else None
+        copilot_focus = build_copilot_focus(case.dtp_stage, human_decision)
+        
         return CaseDetail(
             case_id=case.case_id,
             name=case.name,
@@ -122,8 +127,9 @@ class CaseService:
             latest_agent_output=json.loads(case.latest_agent_output) if case.latest_agent_output else None,
             latest_agent_name=case.latest_agent_name,
             activity_log=json.loads(case.activity_log) if case.activity_log else [],
-            human_decision=json.loads(case.human_decision) if case.human_decision else None,
-            chat_history=case.chat_history  # Pass through as-is (JSON string or None)
+            human_decision=human_decision,
+            chat_history=case.chat_history,  # Pass through as-is (JSON string or None)
+            copilot_focus=copilot_focus,
         )
     
     def create_case(
@@ -302,6 +308,12 @@ class CaseService:
         # Add latest_artifact_pack_id to state (as additional field, not in TypedDict)
         if latest_artifact_pack_id:
             state["latest_artifact_pack_id"] = latest_artifact_pack_id
+
+        # Merge derived context (supplier_id, shortlists from latest_agent_output) for
+        # stage prereqs and LangGraph tools — DB has no case_context column.
+        ctx = merge_derived_case_context(case, dict(state))
+        if ctx:
+            state["case_context"] = ctx
         
         return state
     

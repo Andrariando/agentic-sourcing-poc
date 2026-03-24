@@ -2,11 +2,53 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
-import { CheckCircle2, AlertTriangle, FileText, Activity, ShieldCheck, ChevronRight, MessageSquare, Briefcase, Clock, Terminal } from "lucide-react";
+import { CheckCircle2, AlertTriangle, FileText, ShieldCheck, ChevronRight, MessageSquare, Briefcase, Clock, Terminal } from "lucide-react";
 import { motion } from "framer-motion";
 import { buildDecisionDataForStage } from "@/lib/dtp-approve-defaults";
 import { apiFetch } from "@/lib/api-fetch";
 import { getApiBaseUrl, apiConnectivityHint } from "@/lib/api-base";
+
+function readDecisionAnswer(val: unknown): string | undefined {
+  if (val == null) return undefined;
+  if (typeof val === "object" && val !== null && "answer" in (val as object)) {
+    const a = (val as { answer?: unknown }).answer;
+    if (a == null || a === "") return undefined;
+    return String(a);
+  }
+  if (typeof val === "string" && val) return val;
+  return undefined;
+}
+
+function buildAssistantWelcome(data: any): string {
+  const name = data.name || "this case";
+  const stage = data.dtp_stage || "DTP-01";
+  const focus = data.copilot_focus;
+  const title = focus?.stage_title ? ` — ${focus.stage_title}` : "";
+  let msg = `I'm your Supervisor for **${name}**. We're in **${stage}${title}**.\n\n`;
+  if (focus?.stage_description) msg += `${focus.stage_description}\n\n`;
+  const pending = focus?.pending_questions || [];
+  if (pending.length > 0) {
+    const pq = pending[0];
+    msg += `**Decision to work through:** ${pq.text}\n`;
+    const labels = pq.option_labels as string[] | undefined;
+    if (labels?.length) msg += `*Options:* ${labels.slice(0, 6).join(" · ")}\n\n`;
+    msg += `Tell me your priorities and we can compare tradeoffs—no need to have it figured out yet. [What are my best options here?]`;
+  } else {
+    msg += `Checklist items for this stage look complete. I can help with next steps, risks, or what happens if we move forward. [What's the smartest next step?]`;
+  }
+  return msg;
+}
+
+/** Copilot governance SOC2 / infra attestations saved by /api/decisions/approve */
+function isGovernanceCompleteOnServer(caseDetails: any): boolean {
+  const stage = caseDetails?.dtp_stage;
+  if (!stage || !caseDetails?.human_decision?.[stage]) return false;
+  const row = caseDetails.human_decision[stage];
+  return Boolean(
+    readDecisionAnswer(row.governance_soc2_status) &&
+      readDecisionAnswer(row.governance_infra_status)
+  );
+}
 
 export default function LegacyCaseCopilotPage() {
   const params = useParams();
@@ -15,9 +57,7 @@ export default function LegacyCaseCopilotPage() {
   const [caseDetails, setCaseDetails] = useState<any>(null);
   const [caseError, setCaseError] = useState<string | null>(null);
   const [documents, setDocuments] = useState<any[]>([]);
-  const [messages, setMessages] = useState([
-    { role: "assistant", content: `Hello! I am the Supervisor Agent assigned to this case. How can I assist you?` }
-  ]);
+  const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
   const [governanceApproved, setGovernanceApproved] = useState(false);
   const [govSoc2, setGovSoc2] = useState<"verified" | "pending" | "">("");
@@ -25,35 +65,53 @@ export default function LegacyCaseCopilotPage() {
   const [isTyping, setIsTyping] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
+  const initialChatHydrated = useRef(false);
+
+  useEffect(() => {
+    if (caseDetails && !isGovernanceCompleteOnServer(caseDetails)) {
+      setGovernanceApproved(false);
+    }
+  }, [caseDetails?.case_id, caseDetails?.dtp_stage, caseDetails?.human_decision]);
+
+  const showEvalApproved =
+    (caseDetails && isGovernanceCompleteOnServer(caseDetails)) || governanceApproved;
 
   const container: any = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1 } } };
   const item: any = { hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } } };
 
-  // 1. Fetch Case Details & Chat History
+  // 1. Fetch Case Details & Chat History (poll only updates case meta — never resets chat)
   useEffect(() => {
-    async function fetchCase() {
+    initialChatHydrated.current = false;
+
+    async function fetchCase(isPoll: boolean) {
       try {
         const url = `${getApiBaseUrl()}/api/cases/${caseId}`;
         const res = await apiFetch(url);
         if (!res.ok) {
-          setCaseError("Case not found or API error.");
+          if (!isPoll) setCaseError("Case not found or API error.");
           return;
         }
         const data = await res.json();
         setCaseDetails(data);
 
-        // Load chat history from pre-seeded chat_history field OR from activity log chat entries
+        if (isPoll || initialChatHydrated.current) return;
+        initialChatHydrated.current = true;
+
         if (data.chat_history) {
           try {
             const parsed = typeof data.chat_history === 'string' ? JSON.parse(data.chat_history) : data.chat_history;
             if (Array.isArray(parsed) && parsed.length > 0) {
               setMessages(parsed.map((m: any) => ({ role: m.role, content: m.content })));
+              return;
             }
-          } catch(e) { console.warn('Failed to parse chat_history', e); }
+          } catch (e) {
+            console.warn('Failed to parse chat_history', e);
+          }
         }
+        setMessages([{ role: "assistant", content: buildAssistantWelcome(data) }]);
       } catch (err) {
         console.error("Failed to fetch case details:", err);
-        setCaseError("Network error attempting to fetch case.");
+        if (!isPoll) setCaseError("Network error attempting to fetch case.");
       }
     }
     
@@ -72,10 +130,9 @@ export default function LegacyCaseCopilotPage() {
     }
 
     if (caseId) {
-      fetchCase();
+      fetchCase(false);
       fetchDocs();
-      // Setup simple polling for live agentic logs
-      const interval = setInterval(fetchCase, 5000);
+      const interval = setInterval(() => fetchCase(true), 5000);
       return () => clearInterval(interval);
     }
   }, [caseId]);
@@ -259,6 +316,9 @@ export default function LegacyCaseCopilotPage() {
   const strategyConfidence = strategyOutput?.confidence ? `${(strategyOutput.confidence * 100).toFixed(0)}%` : null;
   const recommendedAction = caseDetails?.summary?.recommended_action || strategyOutput?.recommended_strategy || "Pending agent analysis";
   const riskAssessment = strategyOutput?.risk_assessment || null;
+  const topFindings = keyFindings.slice(0, 3);
+  const focus = caseDetails?.copilot_focus;
+  const suggestedChatPrompts: string[] = (focus?.suggested_chat_prompts as string[]) || [];
 
   if (caseError) {
     return (
@@ -299,149 +359,93 @@ export default function LegacyCaseCopilotPage() {
           </div>
         </div>
 
-        <motion.div variants={container} initial="hidden" animate="show" className="p-8 space-y-8 flex-1">
-          
-          {/* Quick Overview & Triage panel */}
+        <motion.div variants={container} initial="hidden" animate="show" className="p-8 space-y-6 flex-1">
+          {/* Essential context only — what you need to understand the case */}
           <motion.div variants={item} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="bg-amber-50 border-b border-amber-200 p-4 flex gap-4 items-start">
-              <div className="bg-amber-100 text-amber-700 p-2 rounded-lg">
+            <div className="bg-amber-50 border-b border-amber-200 p-4 flex gap-3 items-start">
+              <div className="bg-amber-100 text-amber-700 p-2 rounded-lg shrink-0">
                 <AlertTriangle className="w-5 h-5" />
               </div>
-              <div>
-                <h3 className="text-amber-900 font-bold text-sm">{displayStage} Triage: Sourcing Action Required</h3>
-                <p className="text-amber-700 text-sm mt-1 leading-relaxed">
-                  {summaryText}
+              <div className="min-w-0">
+                <h3 className="text-amber-900 font-bold text-sm">{displayStage}{focus?.stage_title ? ` · ${focus.stage_title}` : ""}</h3>
+                <p className="text-amber-900/90 text-sm mt-1 leading-relaxed">{summaryText}</p>
+                <p className="text-xs text-amber-800/80 mt-2">
+                  <span className="font-semibold">Supplier:</span> {supplierId} · <span className="font-semibold">Trigger:</span> {triggerSource} · <span className="font-semibold">Suggested move:</span> {recommendedAction}
+                  {strategyConfidence ? ` (${strategyConfidence} confidence)` : ""}
                 </p>
               </div>
             </div>
-            <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-slate-100 bg-white">
-              <div className="p-4 text-center">
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">DTP Stage</p>
-                <p className="font-semibold text-slate-800">{displayStage}</p>
-                <p className="text-xs text-slate-500">Active</p>
-              </div>
-              <div className="p-4 text-center">
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Supplier</p>
-                <p className="font-semibold text-slate-800">{supplierId}</p>
-                <p className="text-xs text-slate-500">ID Reference</p>
-              </div>
-              <div className="p-4 text-center">
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Trigger Source</p>
-                <p className="font-semibold text-sponsor-blue">{triggerSource}</p>
-                <p className="text-xs text-slate-500">System Origin</p>
-              </div>
-              <div className="p-4 text-center">
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Recommended</p>
-                <p className="font-bold text-slate-800 text-[13px] leading-snug">{recommendedAction}</p>
-                {strategyConfidence && <p className="text-xs text-green-600 font-semibold mt-1">Confidence: {strategyConfidence}</p>}
-              </div>
+            <div className="p-4 border-t border-slate-100">
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Top signals</p>
+              {topFindings.length > 0 ? (
+                <ul className="space-y-2">
+                  {topFindings.map((finding, idx) => (
+                    <li key={idx} className="text-sm text-slate-700 flex gap-2">
+                      <span className="text-sponsor-blue font-bold">·</span>
+                      <span>{finding.text}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-slate-400 italic">No key findings yet—upload a document or ask Copilot to analyze.</p>
+              )}
+              {riskAssessment && (
+                <p className="text-sm text-slate-700 mt-3 pt-3 border-t border-slate-100"><span className="font-semibold">Risk note:</span> {riskAssessment}</p>
+              )}
             </div>
           </motion.div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Context & Signals */}
-            <motion.div variants={item} className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-red-50 to-white rounded-bl-full border-l border-b border-red-50"></div>
-              <h3 className="text-slate-800 font-bold text-sm flex items-center gap-2 mb-4">
-                <Activity className="w-4 h-4 text-slate-400" />
-                Context & AI Signals
-              </h3>
-              <div className="space-y-4">
-                {keyFindings.length > 0 ? (
-                  keyFindings.map((finding, idx) => {
-                    // Color based on type or default — null-safe
-                    const txt = (finding.text || '').toLowerCase();
-                    const isRisk = finding.type === 'pricing' || txt.includes('risk') || txt.includes('expir') || txt.includes('spend') || txt.includes('cost');
-                    const isPositive = finding.type === 'evaluation' || finding.type === 'approval_status' || txt.includes('leading') || txt.includes('ready') || txt.includes('stable');
-                    return (
-                      <div key={idx} className="flex gap-3 items-start">
-                        <div className={`w-2 h-2 rounded-full ${isRisk ? 'bg-mit-red shadow-red-200' : isPositive ? 'bg-green-500 shadow-green-200' : 'bg-blue-500 shadow-blue-200'} mt-1.5 shadow-sm shrink-0`}></div>
-                        <p className="text-sm text-slate-700">{finding.text}</p>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="text-sm text-slate-400 italic">No contextual signals available yet. Provide documents or trigger agent analysis.</div>
-                )}
-                
-                {riskAssessment && (
-                  <div className="flex gap-3 items-start mt-2 pt-2 border-t border-slate-100">
-                    <div className="w-2 h-2 rounded-full bg-amber-500 shadow-amber-200 mt-1.5 shadow-sm shrink-0"></div>
-                    <p className="text-sm text-slate-700"><span className="font-semibold">Risk:</span> {riskAssessment}</p>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-
-            {/* Extracted Artifacts */}
-            <motion.div variants={item} className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-              <h3 className="text-slate-800 font-bold text-sm flex items-center gap-2 mb-4">
-                <FileText className="w-4 h-4 text-slate-400" />
-                Extracted Artifacts
-              </h3>
-              <ul className="space-y-3">
+          <details className="bg-white rounded-xl border border-slate-200 shadow-sm group">
+            <summary className="cursor-pointer list-none flex items-center gap-2 px-4 py-3 font-bold text-sm text-slate-800 border-b border-slate-100">
+              <ChevronRight className="w-4 h-4 text-slate-400 group-open:rotate-90 transition-transform" />
+              <FileText className="w-4 h-4 text-slate-400" />
+              Supporting documents ({documents.length})
+            </summary>
+            <div className="p-4 pt-0">
+              <ul className="space-y-2">
                 {documents.length > 0 ? (
                   documents.map((doc, idx) => {
-                    const ext = doc.filename.split('.').pop()?.toUpperCase() || 'DOC';
-                    const isPdf = ext === 'PDF';
+                    const ext = doc.filename.split(".").pop()?.toUpperCase() || "DOC";
+                    const isPdf = ext === "PDF";
                     return (
-                      <li key={idx} onClick={() => handleDocumentClick(doc.filename)} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg transition-colors border border-transparent hover:border-slate-100 cursor-pointer">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded flex items-center justify-center font-bold text-[10px] uppercase shadow-sm ${isPdf ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>
-                            {ext}
-                          </div>
-                          <span className="text-sm font-medium text-sponsor-blue underline decoration-blue-100 underline-offset-2 break-all">{doc.filename}</span>
-                        </div>
-                        <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded">Ingested</span>
+                      <li key={idx} onClick={() => handleDocumentClick(doc.filename)} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg cursor-pointer text-sm">
+                        <span className={`font-bold text-[10px] px-2 py-0.5 rounded ${isPdf ? "bg-red-50 text-red-600" : "bg-green-50 text-green-700"}`}>{ext}</span>
+                        <span className="flex-1 truncate ml-2 text-sponsor-blue">{doc.filename}</span>
                       </li>
                     );
                   })
                 ) : (
-                  <div className="text-sm text-slate-400 italic py-2">
-                    No artifacts extracted yet. Upload a document below.
-                  </div>
+                  <li className="text-sm text-slate-400 italic py-2">None yet.</li>
                 )}
-                
-                {/* Live Document Upload component */}
-                <li className="relative group flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg transition-colors border-2 border-slate-200 border-dashed cursor-pointer overflow-hidden">
-                  <input type="file" onChange={handleFileUpload} disabled={isUploading} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-[10px] uppercase shadow-sm group-hover:bg-sponsor-blue group-hover:text-white transition-colors">
-                      {isUploading ? <Clock className="w-4 h-4 animate-spin" /> : "NEW"}
-                    </div>
-                    <span className="text-sm font-medium text-slate-400 italic group-hover:text-sponsor-blue transition-colors">
-                      {isUploading ? "Vectorizing Content..." : "Drop new PDF / XLSX here..."}
-                    </span>
-                  </div>
-                  <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Upload</span>
+                <li className="relative border-2 border-dashed border-slate-200 rounded-lg p-2 mt-2">
+                  <input type="file" onChange={handleFileUpload} disabled={isUploading} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                  <span className="text-sm text-slate-500">{isUploading ? "Uploading…" : "Upload PDF / XLSX"}</span>
                 </li>
               </ul>
-            </motion.div>
-          </div>
+            </div>
+          </details>
 
-          {/* Governance Decision Console */}
           <motion.div variants={item} className="bg-white rounded-xl shadow-sm border-2 border-slate-200 overflow-hidden">
             <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
               <h3 className="text-slate-800 font-bold text-[15px] flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-sponsor-blue" />
-                {displayStage}: Governance Decision Console
+                Governance · {displayStage}
               </h3>
-              <div className="flex items-center gap-2 text-xs font-semibold text-green-600 bg-green-50/50 px-2.5 py-1 rounded-full border border-green-200">
-                <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>
-                Synced with Copilot
-              </div>
             </div>
-            
             <div className="p-6">
-              <p className="text-sm text-slate-600 mb-6 italic border-l-2 border-slate-300 pl-4 py-1">
-                Approve the supplier risk evaluation to proceed into DTP03 Sourcing & Negotiation strategy. Requirements: Full IT Risk sweep, BPRA, and InfoSec SOC2 verification.
+              <p className="text-sm text-slate-600 mb-4 leading-relaxed">
+                <strong>{displayStage}</strong>
+                {focus?.pending_questions?.length
+                  ? " — Discuss tradeoffs in Copilot first if you want, then record IT risk attestations below before approving."
+                  : " — Formal checklist for this stage looks complete; attest below if your process still requires it."}
               </p>
+              <p className="text-xs text-slate-500 mb-4">SOC2 and infrastructure gates apply before you confirm.</p>
 
-              {governanceApproved ? (
+              {showEvalApproved ? (
                 <div className="bg-green-50 text-green-800 p-6 rounded-lg text-center border border-green-200">
                   <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-3" />
                   <h4 className="font-bold text-lg mb-1">Evaluation Approved</h4>
-                  <p className="text-sm text-green-700">DTP02 gate cleared! Transitioning to DTP03 Sourcing via the Capstone Pipeline.</p>
+                  <p className="text-sm text-green-700">Recorded. Workflow will advance from {displayStage} when the backend processes this approval.</p>
                 </div>
               ) : (
                 <div className="space-y-6">
@@ -485,38 +489,27 @@ export default function LegacyCaseCopilotPage() {
             </div>
           </motion.div>
 
-          {/* Live Agentic Activity Log */}
-          <motion.div variants={item} className="bg-ink rounded-xl shadow-2xl border border-slate-800 overflow-hidden flex flex-col mt-6 mb-12">
-            <div className="bg-slate-900/80 px-4 py-3 border-b border-slate-800 flex justify-between items-center shrink-0">
-               <h3 className="text-white font-bold text-[13px] flex items-center gap-2 font-syne tracking-wide">
-                 <Terminal className="w-4 h-4 text-emerald-400" />
-                 Live Agentic Process Log
-               </h3>
-               <div className="flex items-center gap-2">
-                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
-                 <span className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">System Active</span>
-               </div>
-            </div>
-            
-            <div className="p-4 h-48 overflow-y-auto space-y-2.5 font-mono text-[11.5px] bg-[#0A0C10] select-text">
+          <details className="bg-[#0A0C10] rounded-xl border border-slate-800 overflow-hidden mb-12 group">
+            <summary className="cursor-pointer list-none flex items-center justify-between px-4 py-3 bg-slate-900/80 text-white font-bold text-[13px]">
+              <span className="flex items-center gap-2 font-syne tracking-wide">
+                <Terminal className="w-4 h-4 text-emerald-400" />
+                Agent activity ({caseDetails?.activity_log?.length ?? 0}) — expand if debugging
+              </span>
+              <ChevronRight className="w-4 h-4 text-slate-400 group-open:rotate-90 transition-transform" />
+            </summary>
+            <div className="p-4 max-h-48 overflow-y-auto space-y-2.5 font-mono text-[11.5px] text-slate-300 select-text">
               {caseDetails?.activity_log && caseDetails.activity_log.length > 0 ? caseDetails.activity_log.map((log: any, i: number) => (
-                 <div key={i} className="flex gap-3 text-slate-300 border-b border-slate-800/40 pb-2.5 last:border-0 hover:bg-white/5 transition-colors -mx-4 px-4 py-1">
-                    <span className="text-slate-500 shrink-0">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
-                    <span className="text-emerald-400 font-semibold shrink-0">
-                      {log.agent_name || 'System'}:
-                    </span>
-                    <span className="text-slate-400 break-words leading-relaxed max-w-[80%]">
-                      {log.output_summary || log.task_name || 'Processing...'}
-                    </span>
-                 </div>
+                <div key={i} className="flex gap-3 border-b border-slate-800/40 pb-2 last:border-0">
+                  <span className="text-slate-500 shrink-0">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
+                  <span className="text-emerald-400 font-semibold shrink-0">{log.agent_name || "System"}:</span>
+                  <span className="text-slate-400 break-words">{log.output_summary || log.task_name || "…"}</span>
+                </div>
               )) : (
-                 <div className="text-slate-500 italic flex items-center gap-2 h-full justify-center">
-                   <div className="w-1.5 h-1.5 bg-slate-600 rounded-full animate-pulse"></div> Waiting for LangGraph Events...
-                 </div>
+                <p className="text-slate-500 italic text-center py-4">No agent steps yet.</p>
               )}
               <div ref={logEndRef} />
             </div>
-          </motion.div>
+          </details>
 
         </motion.div>
       </div>
@@ -525,16 +518,30 @@ export default function LegacyCaseCopilotPage() {
       <div className="w-[40%] flex flex-col h-full bg-white shadow-2xl z-20">
         
         {/* Chat Header */}
-        <header className="px-6 py-5 border-b border-slate-100 bg-white">
+        <header className="px-6 py-4 border-b border-slate-100 bg-white space-y-3">
           <div className="flex items-center gap-3">
              <div className="w-8 h-8 rounded-lg bg-sponsor-blue flex items-center justify-center shadow-md">
                <MessageSquare className="w-4 h-4 text-white" />
              </div>
              <div>
                <h2 className="text-lg font-bold text-slate-900 leading-tight">Case Copilot</h2>
-               <p className="text-xs text-slate-500 font-medium">Chat Agent Assistance</p>
+               <p className="text-xs text-slate-500 font-medium">{displayStage}{focus?.stage_title ? ` · ${focus.stage_title}` : ""}</p>
              </div>
           </div>
+          {suggestedChatPrompts.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {suggestedChatPrompts.map((q, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => { setInput(q); setTimeout(() => document.getElementById("send-btn")?.click(), 50); }}
+                  className="text-left text-[11px] font-medium px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-sponsor-blue hover:text-white border border-slate-200 transition-colors max-w-[100%] line-clamp-2"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          )}
         </header>
 
         {/* Messages body */}

@@ -30,16 +30,10 @@ from backend.persistence.models import (
 )
 from backend.rag.vector_store import get_vector_store
 
-def seed_cases(session: Session):
-    """Seed 12 comprehensive IT cases (DTP-01 through DTP-06)."""
-    print("Seeding 12 IT cases...")
-    
-    # Clear existing cases
-    session.exec(delete(CaseState))
-    session.commit()
-    print("  [OK] Cleared existing cases.")
-    
-    cases_data = [
+
+
+def _pillar_case_dicts():
+    return [
         # ============================================================
         # CASE-001: DTP-01 (Strategy) - Global Telecom Consolidation
         # ============================================================
@@ -335,6 +329,17 @@ def seed_cases(session: Session):
         }
     ]
 
+
+def seed_cases(session: Session):
+    """Seed 12 comprehensive IT cases (DTP-01 through DTP-06)."""
+    print("Seeding 12 IT cases...")
+    
+    # Clear existing cases
+    session.exec(delete(CaseState))
+    session.commit()
+    print("  [OK] Cleared existing cases.")
+    
+    cases_data = _pillar_case_dicts()
     for case_data in cases_data:
         existing = session.exec(select(CaseState).where(CaseState.case_id == case_data["case_id"])).first()
         if existing:
@@ -373,6 +378,51 @@ def seed_cases(session: Session):
     
     session.commit()
     print(f"  [OK] Seeded 6 comprehensive pillar cases (DTP-01 through DTP-06).")
+
+
+def _allowed_case_columns() -> set:
+    return set(CaseState.model_fields.keys()) - {"id"}
+
+
+def upsert_pillar_cases(session: Session) -> None:
+    """
+    Re-apply CASE-001..CASE-006 fixtures without deleting heatmap-bridged or other rows.
+    """
+    print("Upserting pillar cases (CASE-001..CASE-006)...")
+    allowed = _allowed_case_columns()
+    cases_data = _pillar_case_dicts()
+    for case_data in cases_data:
+        filtered = {k: v for k, v in case_data.items() if k in allowed}
+        existing = session.exec(
+            select(CaseState).where(CaseState.case_id == filtered["case_id"])
+        ).first()
+        if existing:
+            for k, v in filtered.items():
+                setattr(existing, k, v)
+            session.add(existing)
+        else:
+            findings = []
+            cid = case_data["case_id"]
+            if cid == "CASE-001":
+                findings = [
+                    {"type": "market_data", "text": "Benchmark: Telecom MSA 18-24% savings from consolidation."},
+                    {"type": "pricing", "text": "Current fragmented spend at $3M - high inefficiency."},
+                ]
+            elif cid == "CASE-002":
+                findings = [{"type": "market_data", "text": "AWS and Azure leading capability matrices."}]
+            elif cid == "CASE-003":
+                findings = [{"type": "evaluation", "text": "Workday leading technically vs Oracle/SAP."}]
+            elif cid == "CASE-004":
+                findings = [{"type": "leverage", "text": "Microsoft fiscal year end is June 30."}]
+            elif cid == "CASE-005":
+                findings = [{"type": "approval_status", "text": "Ready for CFO approval. Contract extracted."}]
+            elif cid == "CASE-006":
+                findings = [{"type": "implementation", "text": "Implementation delayed by AWS Log Integration."}]
+            row = dict(filtered)
+            row["key_findings"] = json.dumps(findings)
+            session.add(CaseState(**{k: v for k, v in row.items() if k in allowed}))
+    session.commit()
+    print("  [OK] Pillar cases upserted.")
 
 
 def seed_suppliers(session: Session):
