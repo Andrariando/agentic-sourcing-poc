@@ -1,7 +1,40 @@
-import React from "react";
+"use client";
+
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 
+interface CaseSummary {
+  case_id: string;
+  name: string;
+  category_id: string;
+  dtp_stage: string;
+  status: string;
+}
+
 export default function LegacyCaseDashboard() {
+  const [cases, setCases] = useState<CaseSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchCases() {
+      try {
+        const url = process.env.NEXT_PUBLIC_API_URL 
+          ? `${process.env.NEXT_PUBLIC_API_URL}/api/cases`
+          : "http://localhost:8000/api/cases";
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.cases) {
+          setCases(data.cases);
+        }
+      } catch (err) {
+        console.error("Failed to fetch cases:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchCases();
+  }, []);
+
   return (
     <div className="flex-1 overflow-y-auto p-8 bg-slate-50 min-h-full">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -27,34 +60,38 @@ export default function LegacyCaseDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
-                <tr className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4 text-sm font-medium text-slate-900">CASE-2026-001</td>
-                  <td className="px-6 py-4 font-semibold text-slate-900">TechGlobal Inc Renewal</td>
-                  <td className="px-6 py-4 text-sm text-slate-600">IT Infrastructure</td>
-                  <td className="px-6 py-4">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                      DTP02 (Supplier Eval)
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-slate-600">In Progress</td>
-                  <td className="px-6 py-4 text-right">
-                    <Link href="/cases/CASE-2026-001/copilot" className="text-sponsor-blue hover:text-blue-800 text-sm font-medium">Open Copilot</Link>
-                  </td>
-                </tr>
-                <tr className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4 text-sm font-medium text-slate-900">CASE-2026-002</td>
-                  <td className="px-6 py-4 font-semibold text-slate-900">AWS Expansion</td>
-                  <td className="px-6 py-4 text-sm text-slate-600">IT Infrastructure</td>
-                  <td className="px-6 py-4">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                      DTP01 (Triage)
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-slate-600">Pending Agent</td>
-                  <td className="px-6 py-4 text-right">
-                    <Link href="/cases/CASE-2026-002/copilot" className="text-sponsor-blue hover:text-blue-800 text-sm font-medium">Open Copilot</Link>
-                  </td>
-                </tr>
+                {loading ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-12 text-center text-slate-400">Loading cases...</td>
+                  </tr>
+                ) : cases.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-12 text-center text-slate-400">No active cases found.</td>
+                  </tr>
+                ) : (
+                  cases.map((c) => (
+                    <tr key={c.case_id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-6 py-4 text-sm font-medium text-slate-900">{c.case_id}</td>
+                      <td className="px-6 py-4 font-semibold text-slate-900">{c.name}</td>
+                      <td className="px-6 py-4 text-sm text-slate-600">{c.category_id}</td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          c.dtp_stage.includes("01") ? "bg-blue-100 text-blue-800" :
+                          c.dtp_stage.includes("02") ? "bg-indigo-100 text-indigo-800" :
+                          "bg-emerald-100 text-emerald-800"
+                        }`}>
+                          {c.dtp_stage}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-600">{c.status}</td>
+                      <td className="px-6 py-4 text-right">
+                        <Link href={`/cases/${c.case_id}/copilot`} className="text-sponsor-blue hover:text-blue-800 text-sm font-medium">
+                          Open Copilot
+                        </Link>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

@@ -10,7 +10,7 @@ export default function HeatmapPriorityPage() {
   const [viewMode, setViewMode] = useState<'table' | 'heatmap'>('table');
   
   // Selection State
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   
   // Review Modal State
   const [reviewOpp, setReviewOpp] = useState<any | null>(null);
@@ -68,13 +68,13 @@ export default function HeatmapPriorityPage() {
   // Selection Logic
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
-      setSelectedIds(new Set(opportunities.map(o => o.contract_id || o.request_id)));
+      setSelectedIds(new Set(opportunities.map(o => o.id as number)));
     } else {
       setSelectedIds(new Set());
     }
   };
 
-  const handleSelectOne = (id: string) => {
+  const handleSelectOne = (id: number) => {
     const nextSet = new Set(selectedIds);
     if (nextSet.has(id)) nextSet.delete(id);
     else nextSet.add(id);
@@ -91,7 +91,7 @@ export default function HeatmapPriorityPage() {
         : "http://localhost:8000/api/heatmap/feedback";
 
       const payload = {
-        opportunity_id: reviewOpp.id?.toString() || reviewOpp.contract_id || reviewOpp.request_id,
+        opportunity_id: reviewOpp.id,
         user_id: "human-manager",
         original_tier: reviewOpp.tier,
         suggested_tier: feedbackTier,
@@ -107,7 +107,7 @@ export default function HeatmapPriorityPage() {
       if (res.ok) {
         // Optimistic UI update
         const updated = opportunities.map(o => {
-          if ((o.contract_id || o.request_id) === (reviewOpp.contract_id || reviewOpp.request_id)) {
+          if (o.id === reviewOpp.id) {
             return { ...o, tier: feedbackTier, status: "Approved" };
           }
           return o;
@@ -135,18 +135,41 @@ export default function HeatmapPriorityPage() {
     }
   };
 
-  const handlePushToCasework = () => {
+  const handlePushToCasework = async () => {
     // Check if any non-T1 is selected
-    const selectedOpps = opportunities.filter(o => selectedIds.has(o.contract_id || o.request_id));
+    const selectedOpps = opportunities.filter(o => selectedIds.has(o.id as number));
+    if (selectedOpps.length === 0) return;
+
     const nonT1 = selectedOpps.some(o => o.tier !== 'T1');
-    
     if (nonT1) {
       alert("Error: Only Tier 1 (Critical) opportunities can be pushed directly to the Legacy Case Dashboard. Please review and approve lower tier items first.");
       return;
     }
-    
-    alert(`Success! ${selectedIds.size} Tier-1 opportunities have been pushed to DTP01 Case Generation.`);
-    setSelectedIds(new Set());
+
+    try {
+      const url = process.env.NEXT_PUBLIC_API_URL 
+        ? `${process.env.NEXT_PUBLIC_API_URL}/api/heatmap/approve`
+        : "http://localhost:8000/api/heatmap/approve";
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          opportunity_ids: Array.from(selectedIds),
+          approver_id: "human-manager"
+        })
+      });
+
+      if (res.ok) {
+        alert(`Success! ${selectedIds.size} Tier-1 opportunities have been pushed to DTP01 Case Generation. You can now view them in the Case Dashboard.`);
+        setSelectedIds(new Set());
+      } else {
+        alert("Failed to push to casework. Please try again.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Network error pushing to casework.");
+    }
   };
 
   // Prepare Chart Data with better numeric spread for the visual demo
