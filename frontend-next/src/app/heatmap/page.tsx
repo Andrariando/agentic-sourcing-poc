@@ -107,13 +107,33 @@ export default function HeatmapPriorityPage() {
     }
   };
 
-  // Prepare Chart Data
-  const chartData = opportunities.map(o => ({
-    ...o,
-    x: o.fis_score || o.es_score || (o.total_score / 2),
-    y: o.eus_score || o.ius_score || (o.total_score / 2),
-    z: (o.total_score * 15) // visual size
-  }));
+  const handlePushToCasework = () => {
+    // Check if any non-T1 is selected
+    const selectedOpps = opportunities.filter(o => selectedIds.has(o.contract_id || o.request_id));
+    const nonT1 = selectedOpps.some(o => o.tier !== 'T1');
+    
+    if (nonT1) {
+      alert("Error: Only Tier 1 (Critical) opportunities can be pushed directly to the Legacy Case Dashboard. Please review and approve lower tier items first.");
+      return;
+    }
+    
+    alert(`Success! ${selectedIds.size} Tier-1 opportunities have been pushed to DTP01 Case Generation.`);
+    setSelectedIds(new Set());
+  };
+
+  // Prepare Chart Data with better numeric spread for the visual demo
+  const chartData = opportunities.map(o => {
+    // Generate a clean deterministic spread based on multiple sub-scores rather than just the saturated FIS score.
+    const spreadX = (o.fis_score || 5) * 0.6 + (o.csis_score || 5) * 0.4;
+    const spreadY = (o.eus_score || 5) * 0.5 + (o.rss_score || 5) * 0.5;
+
+    return {
+      ...o,
+      x: Number(spreadX.toFixed(1)),
+      y: Number(spreadY.toFixed(1)),
+      z: (o.total_score * 15) // visual radius size
+    };
+  });
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
@@ -220,16 +240,16 @@ export default function HeatmapPriorityPage() {
                 )}
               </div>
               <div className="flex gap-3">
-                <input 
-                  type="text" 
-                  placeholder="Search suppliers..." 
-                  className="pl-3 pr-4 py-1.5 border border-slate-300 rounded-md text-sm w-64 focus:outline-none focus:ring-1 focus:ring-sponsor-blue"
-                />
-                {selectedIds.size > 0 && (
-                  <button className="px-3 py-1.5 bg-sponsor-blue text-white rounded-md text-sm font-medium hover:bg-blue-700 transition">
-                    Push to Casework
-                  </button>
-                )}
+                <button className="px-4 py-2 bg-white border border-slate-200 shadow-sm rounded-md text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+                  Refresh Scores
+                </button>
+                <button 
+                  onClick={handlePushToCasework}
+                  disabled={selectedIds.size === 0}
+                  className="px-4 py-2 bg-sponsor-blue text-white shadow-md rounded-md text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Approve Selected (Run DTP01)
+                </button>
               </div>
             </div>
             <div className="overflow-x-auto">
@@ -337,71 +357,133 @@ export default function HeatmapPriorityPage() {
         )}
       </div>
 
-      {/* Slide-over Feedback Modal */}
+      {/* Slide-over Feedback Modal - Rich Case Details Style */}
       {reviewOpp && (
         <div className="fixed inset-0 z-50 overflow-hidden">
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={() => setReviewOpp(null)} />
-          <div className="fixed inset-y-0 right-0 w-full max-w-md bg-white shadow-2xl flex flex-col transform transition-transform border-l border-slate-200">
-            <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h2 className="text-lg font-bold text-slate-900">Review Opportunity</h2>
-              <button onClick={() => setReviewOpp(null)} className="text-slate-400 hover:text-slate-600 transition bg-white p-1 rounded-full shadow-sm">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setReviewOpp(null)} />
+          <div className="fixed inset-y-0 right-0 w-full max-w-2xl bg-white shadow-2xl flex flex-col transform transition-transform border-l border-slate-200">
+            <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900 tracking-tight">Opportunity Review</h2>
+                <p className="text-sm text-slate-500 mt-1">Review AI analysis and provide human-in-the-loop feedback</p>
+              </div>
+              <button onClick={() => setReviewOpp(null)} className="text-slate-400 hover:text-slate-600 transition bg-white p-2 rounded-full shadow-sm">
                 <X className="w-5 h-5" />
               </button>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              <div>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Target</p>
-                <p className="text-xl font-bold text-slate-800">{reviewOpp.supplier_name || 'New Requirement'}</p>
-                <p className="text-sm font-mono text-slate-500">{reviewOpp.contract_id || reviewOpp.request_id}</p>
-              </div>
-
-              <div className="bg-blue-50/50 p-4 rounded-lg border border-blue-100">
-                <div className="flex justify-between items-end mb-3">
-                  <p className="text-sm font-semibold text-slate-700">Agentic Score</p>
-                  <p className="text-2xl font-bold text-sponsor-blue">{reviewOpp.total_score?.toFixed(1)}/10</p>
+            <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-slate-50/30">
+              
+              {/* Header Box */}
+              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex justify-between items-start">
+                <div>
+                  <p className="text-xs font-bold text-sponsor-blue uppercase tracking-widest mb-2 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-sponsor-blue animate-pulse"></span>
+                    Target
+                  </p>
+                  <p className="text-2xl font-bold text-slate-800">{reviewOpp.supplier_name || 'New Requirement'}</p>
+                  <p className="text-sm font-mono text-slate-500 mt-1">{reviewOpp.contract_id || reviewOpp.request_id}</p>
+                  <div className="mt-4 flex gap-2">
+                    <span className="px-2.5 py-1 bg-slate-100 rounded text-xs font-medium text-slate-600 border border-slate-200">{reviewOpp.category}</span>
+                    <span className="px-2.5 py-1 bg-slate-100 rounded text-xs font-medium text-slate-600 border border-slate-200">{reviewOpp.subcategory || 'General'}</span>
+                  </div>
                 </div>
-                <p className="text-sm text-slate-600 leading-relaxed italic border-l-2 border-sponsor-blue pl-3">"{reviewOpp.justification_summary}"</p>
+                <div className="text-right">
+                  <p className="text-sm font-semibold text-slate-500 mb-1">Agentic Score</p>
+                  <p className="text-4xl font-black text-sponsor-blue tracking-tighter">{reviewOpp.total_score?.toFixed(1)}<span className="text-lg text-slate-400">/10</span></p>
+                  <p className="text-xs font-bold text-mit-red mt-2 uppercase bg-red-50 inline-block px-2 py-1 rounded">{reviewOpp.tier} - {reviewOpp.recommended_action_window}</p>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Override Tier (Optional)</label>
-                <select 
-                  className="w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 text-sm focus:ring-sponsor-blue focus:border-sponsor-blue"
-                  value={feedbackTier} 
-                  onChange={(e) => setFeedbackTier(e.target.value)}
-                >
-                  <option value="T1">T1 - Critical</option>
-                  <option value="T2">T2 - Immediate</option>
-                  <option value="T3">T3 - Monitor</option>
-                  <option value="T4">T4 - Low Priority</option>
-                </select>
+              {/* Justification Box */}
+              <div className="bg-blue-50/50 p-6 rounded-xl border border-blue-100">
+                <p className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">AI Engine Justification</p>
+                <p className="text-sm text-slate-700 leading-relaxed italic border-l-4 border-sponsor-blue pl-4 py-1">"{reviewOpp.justification_summary}"</p>
               </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Feedback Notes</label>
-                <textarea 
-                  className="w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 text-sm focus:ring-sponsor-blue focus:border-sponsor-blue min-h-[120px]"
-                  placeholder="Provide context for the AI engine (e.g., 'We are sunsetting this supplier next year, reduce priority')"
-                  value={feedbackReason}
-                  onChange={(e) => setFeedbackReason(e.target.value)}
-                />
+              {/* Detailed Breakdown & Artifacts Grid */}
+              <div className="grid grid-cols-2 gap-6">
+                
+                {/* Mathematical Engine Breakdown */}
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2">Sub-Score Breakdown</p>
+                  <div className="space-y-3">
+                    {reviewOpp.eus_score !== null && <div className="flex justify-between items-center"><span className="text-sm text-slate-600">Expiry Urgency (EUS)</span><span className="font-mono text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded">{reviewOpp.eus_score?.toFixed(1)}</span></div>}
+                    {reviewOpp.ius_score !== null && <div className="flex justify-between items-center"><span className="text-sm text-slate-600">Implement Urgency (IUS)</span><span className="font-mono text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded">{reviewOpp.ius_score?.toFixed(1)}</span></div>}
+                    {reviewOpp.fis_score !== null && <div className="flex justify-between items-center"><span className="text-sm text-slate-600">Financial Impact (FIS)</span><span className="font-mono text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded">{reviewOpp.fis_score?.toFixed(1)}</span></div>}
+                    {reviewOpp.es_score !== null && <div className="flex justify-between items-center"><span className="text-sm text-slate-600">Estimated Spend (ES)</span><span className="font-mono text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded">{reviewOpp.es_score?.toFixed(1)}</span></div>}
+                    {reviewOpp.rss_score !== null && <div className="flex justify-between items-center"><span className="text-sm text-slate-600">Supplier Risk (RSS)</span><span className="font-mono text-sm font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-100">{reviewOpp.rss_score?.toFixed(1)}</span></div>}
+                    {reviewOpp.csis_score !== null && <div className="flex justify-between items-center"><span className="text-sm text-slate-600">Category Spend (CSIS)</span><span className="font-mono text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded">{reviewOpp.csis_score?.toFixed(1)}</span></div>}
+                  </div>
+                </div>
+
+                {/* Context & Artifacts */}
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-slate-50 to-slate-100 rounded-bl-full border-l border-b border-slate-100"></div>
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2 relative z-10">Supporting Artifacts</p>
+                  <ul className="space-y-3 relative z-10">
+                    <li className="flex items-center gap-3 text-sm text-slate-700 hover:text-sponsor-blue cursor-pointer transition">
+                      <div className="w-8 h-8 rounded bg-red-50 text-red-500 flex items-center justify-center font-bold text-xs">PDF</div>
+                      <span className="underline decoration-slate-200 underline-offset-2">Master_Agreement_2021.pdf</span>
+                    </li>
+                    <li className="flex items-center gap-3 text-sm text-slate-700 hover:text-sponsor-blue cursor-pointer transition">
+                      <div className="w-8 h-8 rounded bg-green-50 text-green-600 flex items-center justify-center font-bold text-xs">XLSX</div>
+                      <span className="underline decoration-slate-200 underline-offset-2">PO_Spend_History_12M.xlsx</span>
+                    </li>
+                    <li className="flex items-center gap-3 text-sm text-slate-700 hover:text-sponsor-blue cursor-pointer transition">
+                      <div className="w-8 h-8 rounded bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs">DOC</div>
+                      <span className="underline decoration-slate-200 underline-offset-2">Supplier_QBR_Notes.docx</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Human Feedback Section component */}
+              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                <p className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-3 mb-5 flex items-center gap-2">
+                  <ExternalLink className="w-4 h-4 text-slate-400" />
+                  Human-in-the-Loop Override
+                </p>
+                <div className="grid grid-cols-3 gap-6">
+                  <div className="col-span-1 border-r border-slate-100 pr-6">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Adjust Priority</label>
+                    <select 
+                      className="w-full border border-slate-300 rounded-lg shadow-sm py-2.5 px-3 text-sm focus:ring-2 focus:ring-sponsor-blue/20 focus:border-sponsor-blue font-medium bg-slate-50 cursor-pointer"
+                      value={feedbackTier} 
+                      onChange={(e) => setFeedbackTier(e.target.value)}
+                    >
+                      <option value="T1">T1 - Critical</option>
+                      <option value="T2">T2 - Immediate</option>
+                      <option value="T3">T3 - Monitor</option>
+                      <option value="T4">T4 - Low Priority</option>
+                    </select>
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Rationale & Next Steps</label>
+                    <textarea 
+                      className="w-full border border-slate-300 rounded-lg shadow-sm py-3 px-4 text-sm focus:ring-2 focus:ring-sponsor-blue/20 focus:border-sponsor-blue min-h-[100px] placeholder-slate-400 bg-slate-50"
+                      placeholder="e.g., 'We decided to consolidate this supplier last week, pushing to Q3 instead. Downgrading to Tier 3 monitor.'"
+                      value={feedbackReason}
+                      onChange={(e) => setFeedbackReason(e.target.value)}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="p-6 border-t border-slate-100 bg-slate-50 flex gap-3">
+            <div className="p-6 border-t border-slate-200 bg-white flex gap-4">
               <button 
                 onClick={() => setReviewOpp(null)}
-                className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 bg-white rounded-md font-medium text-sm hover:bg-slate-50 transition"
+                className="flex-1 px-4 py-3 border-2 border-slate-200 text-slate-700 bg-white rounded-lg font-bold text-sm hover:bg-slate-50 hover:border-slate-300 transition"
               >
-                Cancel
+                Cancel Evaluation
               </button>
               <button 
                 onClick={submitFeedback}
                 disabled={feedbackSubmitting}
-                className="flex-1 px-4 py-2 bg-sponsor-blue text-white rounded-md font-medium text-sm hover:bg-blue-700 transition shadow-sm disabled:opacity-50"
+                className="flex-[2] px-4 py-3 bg-sponsor-blue text-white rounded-lg font-bold text-sm hover:bg-blue-700 transition shadow-lg disabled:opacity-50"
               >
-                {feedbackSubmitting ? 'Submitting...' : 'Approve & Submit'}
+                {feedbackSubmitting ? 'Submitting to Agent Memory...' : 'Approve & Train Engine'}
               </button>
             </div>
           </div>
