@@ -3,32 +3,51 @@
 @theme {
   --color-mit-red: #A31F34;
   --color-mit-gray: #8A8B8C;
-  --color-sponsor-blue: #1a3cff;
-  --color-sponsor-orange: #ff5c35;
+  --color-sponsor-blue: #003A8F; /* Changed value */
+  --color-sponsor-orange: #F28C28; /* Changed value */
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-ink: #0d0f14; /* New */
+  --color-canvas: #f4f2ee; /* New */
 }
 
-:root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-  
-  --card: #ffffff;
-  --card-foreground: #0f172a;
-  
-  --border: #e2e8f0;
+@layer base { /* New layer */
+  :root {
+    --background: #f4f2ee; /* Changed value */
+    --foreground: #0d0f14; /* Changed value */
+    
+    --card: #ffffff;
+    --card-foreground: #0f172a;
+    
+    --border: #e2e8f0;
+
+    --ink: #0d0f14; /* New */
+    --canvas: #f4f2ee; /* New */
+    --accent: #1a3cff; /* New */
+    --accent2: #ff5c35; /* New */
+    --mid: #5a5f72; /* New */
+    --line: #d4d0c8; /* New */
+    --t1: #0d9e5c; /* New */
+    --t2: #2563eb; /* New */
+    --t3: #d97706; /* New */
+    --t4: #9ca3af; /* New */
+  }
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0f172a;
-    --foreground: #f8fafc;
+    --background: #0d0f14; /* Changed value */
+    --foreground: #f4f2ee; /* Changed value */
     
     --card: #1e293b;
     --card-foreground: #f8fafc;
     
     --border: #334155;
+
+    --ink: #f4f2ee; /* New */
+    --canvas: #0d0f14; /* New */
+    --line: #334155; /* New */
   }
 }
 

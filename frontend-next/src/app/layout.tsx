@@ -1,6 +1,10 @@
 import type { Metadata } from 'next';
+import { Syne, DM_Sans } from 'next/font/google';
 import './globals.css';
 import Link from 'next/link';
+
+const syne = Syne({ subsets: ['latin'], variable: '--font-syne', weight: ['400', '600', '700', '800'] });
+const dmSans = DM_Sans({ subsets: ['latin'], variable: '--font-dm-sans', weight: ['400', '500', '700'] });
 
 export const metadata: Metadata = {
   title: 'Agentic Sourcing Heatmap',
@@ -13,18 +17,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className="antialiased flex h-screen overflow-hidden">
+    <html lang="en" className={`${syne.variable} ${dmSans.variable}`}>
+      <body className="antialiased flex h-screen overflow-hidden bg-canvas text-ink font-sans">
         {/* Sidebar Navigation */}
-        <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col shadow-xl z-20 shrink-0">
+        <aside className="w-64 bg-slate-900/95 backdrop-blur-md text-slate-300 flex flex-col shadow-2xl z-20 shrink-0 border-r border-white/5">
           <div className="h-16 flex items-center px-6 border-b border-white/10 shrink-0">
-            <h1 className="font-bold text-base text-white tracking-wide leading-tight mt-2">
-              <span className="text-mit-red block text-[10px] uppercase tracking-widest mb-0.5">Procurement</span>
+            <Link href="/" className="font-bold text-base text-white tracking-wide leading-tight mt-2 font-syne hover:opacity-90 transition">
+              <span className="text-mit-red block text-[10px] uppercase tracking-widest mb-0.5 font-bold">Procurement</span>
               Agentic System
-            </h1>
+            </Link>
           </div>
           
-          <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-8">
+          <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-8 mt-2">
             {/* Heatmap System */}
             <div>
               <h2 className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">New Heatmap System</h2>

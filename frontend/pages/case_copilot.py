@@ -881,19 +881,17 @@ def _render_agent_logs(case):
             status = payload.get("status", "Info")
             
             st.markdown(f"""
-            <div style="background-color: #F8F9FA; border-left: 3px solid {MIT_NAVY}; padding: 8px 12px; margin-bottom: 8px; font-size: 0.85rem;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                    <strong>{agent}</strong>
-                    <span style="color: {CHARCOAL}; font-size: 0.75rem;">{timestamp}</span>
+            <div style="background-color: #0A0C10; border: 1px solid #1f2937; border-radius: 6px; padding: 12px; margin-bottom: 8px; font-family: monospace; color: #e2e8f0; font-size: 0.8rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);">
+                <div style="color: #64748b; margin-bottom: 6px; display: flex; align-items: center; gap: 8px;">
+                    <span>[{timestamp}]</span> 
+                    <span style="color: #34d399; font-weight: bold; font-family: sans-serif;">{agent}</span>
+                    <span style="background: #1e293b; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; color: #94a3b8;">{status}</span>
                 </div>
-                <div style="font-weight: 600; font-size: 0.8rem; color: {MIT_NAVY}; margin-bottom: 4px;">
-                    Status: {status}
-                </div>
-                <div style="color: {NEAR_BLACK}; margin-bottom: 6px;">
+                <div style="color: #cbd5e1; margin-bottom: 6px; line-height: 1.4;">
                     {summary}
                 </div>
-                <div style="font-size: 0.8rem; color: {CHARCOAL}; font-style: italic; background-color: #EEE; padding: 4px; border-radius: 4px;">
-                    Reasoning: {reasoning}
+                <div style="color: #64748b; font-style: italic; border-left: 2px solid #334155; padding-left: 8px; margin-top: 8px;">
+                    {reasoning}
                 </div>
             </div>
             """, unsafe_allow_html=True)

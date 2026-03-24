@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
-import { CheckCircle2, AlertTriangle, FileText, Activity, ShieldCheck, ChevronRight, MessageSquare, Briefcase, Clock } from "lucide-react";
+import { CheckCircle2, AlertTriangle, FileText, Activity, ShieldCheck, ChevronRight, MessageSquare, Briefcase, Clock, Terminal } from "lucide-react";
+import { motion } from "framer-motion";
 
 export default function LegacyCaseCopilotPage() {
   const params = useParams();
@@ -16,6 +17,11 @@ export default function LegacyCaseCopilotPage() {
   const [input, setInput] = useState("");
   const [governanceApproved, setGovernanceApproved] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const logEndRef = useRef<HTMLDivElement>(null);
+
+  const container: any = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1 } } };
+  const item: any = { hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } } };
 
   // 1. Fetch Case Details & Chat History
   useEffect(() => {
@@ -65,8 +71,16 @@ export default function LegacyCaseCopilotPage() {
     if (caseId) {
       fetchCase();
       fetchDocs();
+      // Setup simple polling for live agentic logs
+      const interval = setInterval(fetchCase, 5000);
+      return () => clearInterval(interval);
     }
   }, [caseId]);
+
+  // Auto-scroll the process log
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [caseDetails?.activity_log]);
 
   // 3. Handle Live Chat
   const handleSend = async () => {
@@ -113,6 +127,63 @@ export default function LegacyCaseCopilotPage() {
      alert(`Feature coming soon: Download/Preview for ${filename}`);
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    setIsUploading(true);
+    
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("document_type", "OTHER");
+      formData.append("case_id", caseId);
+
+      const url = process.env.NEXT_PUBLIC_API_URL 
+        ? `${process.env.NEXT_PUBLIC_API_URL}/api/ingest/document`
+        : `http://localhost:8000/api/ingest/document`;
+
+      await fetch(url, {
+        method: 'POST',
+        body: formData
+      });
+      
+      // Auto-reload the page to show new doc and new Agentic Log entry
+      window.location.reload(); 
+    } catch (err) {
+      console.error(err);
+      alert("Document upload failed.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const renderMessageContent = (content: string) => {
+    // If the message contains [Bracketed Actions], render them as clickable action chips
+    const actionRegex = /\[(.*?)\]/g;
+    const matches = Array.from(content.matchAll(actionRegex));
+    
+    if (matches.length === 0) return content;
+    
+    const cleanContent = content.replace(actionRegex, '').trim();
+    
+    return (
+      <div className="flex flex-col gap-3">
+        <span>{cleanContent}</span>
+        <div className="flex flex-wrap gap-2 mt-1">
+           {matches.map((match, idx) => (
+             <button 
+               key={idx} 
+               onClick={() => { setInput(match[1]); setTimeout(() => document.getElementById("send-btn")?.click(), 100); }}
+               className="bg-white text-sponsor-blue border border-sponsor-blue/30 px-3 py-1.5 rounded-full text-[11px] font-bold tracking-wide hover:bg-sponsor-blue hover:text-white transition-colors shadow-sm"
+             >
+               ⚡ {match[1]}
+             </button>
+           ))}
+        </div>
+      </div>
+    );
+  };
+
   const displayName = caseDetails?.name || "TechGlobal Inc Renewal";
   const displayCategory = caseDetails?.category_id || "IT Infrastructure";
   const displayStage = caseDetails?.dtp_stage || "DTP02";
@@ -124,9 +195,9 @@ export default function LegacyCaseCopilotPage() {
       <div className="w-[60%] flex flex-col h-full overflow-y-auto bg-slate-50/50 border-r border-slate-200">
         
         {/* Condensed Header */}
-        <div className="bg-sponsor-blue text-white p-6 sticky top-0 z-10 shadow-md flex justify-between items-center">
+        <div className="bg-sponsor-blue text-white p-6 sticky top-0 z-10 shadow-md flex justify-between items-center shrink-0">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight mb-1">{displayName}</h1>
+            <h1 className="text-2xl font-bold tracking-tight mb-1 font-syne">{displayName}</h1>
             <div className="flex items-center gap-3 text-sm text-blue-100 font-medium">
               <span>{caseId}</span>
               <span>•</span>
@@ -143,10 +214,10 @@ export default function LegacyCaseCopilotPage() {
           </div>
         </div>
 
-        <div className="p-8 space-y-8">
+        <motion.div variants={container} initial="hidden" animate="show" className="p-8 space-y-8 flex-1">
           
           {/* Quick Overview & Triage panel */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <motion.div variants={item} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="bg-amber-50 border-b border-amber-200 p-4 flex gap-4 items-start">
               <div className="bg-amber-100 text-amber-700 p-2 rounded-lg">
                 <AlertTriangle className="w-5 h-5" />
@@ -174,15 +245,15 @@ export default function LegacyCaseCopilotPage() {
               </div>
               <div className="p-4 text-center">
                 <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Est. Spend</p>
-                <p className="font-bold text-slate-800">$3.0M</p>
+                <p className="font-bold text-slate-800 font-syne text-lg">$3.0M</p>
                 <p className="text-xs text-slate-500">Tier 1 Target</p>
               </div>
             </div>
-          </div>
+          </motion.div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Context & Signals */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 relative overflow-hidden">
+            <motion.div variants={item} className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-red-50 to-white rounded-bl-full border-l border-b border-red-50"></div>
               <h3 className="text-slate-800 font-bold text-sm flex items-center gap-2 mb-4">
                 <Activity className="w-4 h-4 text-slate-400" />
@@ -202,10 +273,10 @@ export default function LegacyCaseCopilotPage() {
                   <p className="text-sm text-slate-700">High dependency. They host mission-critical Tier-1 business applications.</p>
                 </div>
               </div>
-            </div>
+            </motion.div>
 
             {/* Extracted Artifacts */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <motion.div variants={item} className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
               <h3 className="text-slate-800 font-bold text-sm flex items-center gap-2 mb-4">
                 <FileText className="w-4 h-4 text-slate-400" />
                 Extracted Artifacts
@@ -246,20 +317,25 @@ export default function LegacyCaseCopilotPage() {
                   </>
                 )}
                 
-                {/* Always show a pending placeholder to demonstrate future capabilities */}
-                <li className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg transition-colors border border-transparent hover:border-slate-100 cursor-pointer">
+                {/* Live Document Upload component */}
+                <li className="relative group flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg transition-colors border-2 border-slate-200 border-dashed cursor-pointer overflow-hidden">
+                  <input type="file" onChange={handleFileUpload} disabled={isUploading} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-[10px] border border-slate-200 border-dashed">NEW</div>
-                    <span className="text-sm font-medium text-slate-400 italic">Upload SOC2 Report...</span>
+                    <div className="w-8 h-8 rounded bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-[10px] uppercase shadow-sm group-hover:bg-sponsor-blue group-hover:text-white transition-colors">
+                      {isUploading ? <Clock className="w-4 h-4 animate-spin" /> : "NEW"}
+                    </div>
+                    <span className="text-sm font-medium text-slate-400 italic group-hover:text-sponsor-blue transition-colors">
+                      {isUploading ? "Vectorizing Content..." : "Drop new PDF / XLSX here..."}
+                    </span>
                   </div>
-                  <span className="text-xs text-slate-400 uppercase font-semibold">Pending</span>
+                  <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Upload</span>
                 </li>
               </ul>
-            </div>
+            </motion.div>
           </div>
 
           {/* Governance Decision Console */}
-          <div className="bg-white rounded-xl shadow-sm border-2 border-slate-200 overflow-hidden">
+          <motion.div variants={item} className="bg-white rounded-xl shadow-sm border-2 border-slate-200 overflow-hidden">
             <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
               <h3 className="text-slate-800 font-bold text-[15px] flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-sponsor-blue" />
@@ -310,10 +386,42 @@ export default function LegacyCaseCopilotPage() {
                 </div>
               )}
             </div>
-          </div>
+          </motion.div>
 
-          <div className="mb-12"></div>
-        </div>
+          {/* Live Agentic Activity Log */}
+          <motion.div variants={item} className="bg-ink rounded-xl shadow-2xl border border-slate-800 overflow-hidden flex flex-col mt-6 mb-12">
+            <div className="bg-slate-900/80 px-4 py-3 border-b border-slate-800 flex justify-between items-center shrink-0">
+               <h3 className="text-white font-bold text-[13px] flex items-center gap-2 font-syne tracking-wide">
+                 <Terminal className="w-4 h-4 text-emerald-400" />
+                 Live Agentic Process Log
+               </h3>
+               <div className="flex items-center gap-2">
+                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+                 <span className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">System Active</span>
+               </div>
+            </div>
+            
+            <div className="p-4 h-48 overflow-y-auto space-y-2.5 font-mono text-[11.5px] bg-[#0A0C10] select-text">
+              {caseDetails?.activity_log && caseDetails.activity_log.length > 0 ? caseDetails.activity_log.map((log: any, i: number) => (
+                 <div key={i} className="flex gap-3 text-slate-300 border-b border-slate-800/40 pb-2.5 last:border-0 hover:bg-white/5 transition-colors -mx-4 px-4 py-1">
+                    <span className="text-slate-500 shrink-0">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
+                    <span className={`${log.action.includes('Agent') || log.action.includes('AI') ? 'text-accent2' : 'text-accent'} font-semibold shrink-0`}>
+                      {log.action}:
+                    </span>
+                    <span className="text-slate-400 break-words leading-relaxed max-w-[80%]">
+                      {log.details?.message ? log.details.message : (log.details?.decision ? `Decision: ${log.details.decision}` : JSON.stringify(log.details))}
+                    </span>
+                 </div>
+              )) : (
+                 <div className="text-slate-500 italic flex items-center gap-2 h-full justify-center">
+                   <div className="w-1.5 h-1.5 bg-slate-600 rounded-full animate-pulse"></div> Waiting for LangGraph Events...
+                 </div>
+              )}
+              <div ref={logEndRef} />
+            </div>
+          </motion.div>
+
+        </motion.div>
       </div>
 
       {/* RIGHT PANEL: Copilot Chat (40%) */}
@@ -350,7 +458,7 @@ export default function LegacyCaseCopilotPage() {
                 ? "bg-sponsor-blue text-white rounded-2xl rounded-tr-sm" 
                 : "bg-white border border-slate-200 text-slate-700 rounded-2xl rounded-tl-sm shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] break-words"
               }`}>
-                {msg.content}
+                {msg.role === "assistant" ? renderMessageContent(msg.content) : msg.content}
               </div>
             </div>
           ))}
@@ -387,6 +495,7 @@ export default function LegacyCaseCopilotPage() {
               disabled={isTyping}
             />
             <button 
+              id="send-btn"
               className="p-3 bg-sponsor-blue text-white rounded-lg hover:bg-blue-700 transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed m-0.5"
               onClick={handleSend}
               disabled={!input.trim() || isTyping}
