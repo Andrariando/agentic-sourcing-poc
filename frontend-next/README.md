@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Procurement Agentic System — Next.js Frontend
+
+The modern, premium frontend for the Procurement Agentic System. Built with Next.js 16 (App Router), Tailwind CSS v4, Recharts, and Framer Motion.
+
+## Design System
+
+| Token | Value | Usage |
+|-------|-------|-------|
+| `--ink` | `#0F172A` | Deep navy backgrounds |
+| `--canvas` | `#F8FAFC` | Light surface backgrounds |
+| `--sponsor-blue` | `#1E3A8A` | Primary accent / interactive |
+| `--mit-red` | `#A31F34` | Critical / T1 alerts |
+| Font (Headers) | **Syne** | Bold, modern headings |
+| Font (Body) | **DM Sans** | Clean, readable body text |
+
+## Pages
+
+| Route | Description |
+|-------|-------------|
+| `/heatmap` | Sourcing Priority Heatmap — KPI stat cards, Table/Matrix toggle, Recharts scatter chart, Sourcing Opportunity Matrix (KLI) |
+| `/cases/[id]/copilot` | Case Copilot — 60/40 split-screen with triage panel, Context & AI Signals, Governance Console, Live Agentic Process Log, and chat panel |
+| `/intake` | Business Intake — New sourcing request form |
+| `/kpi` | KPI Dashboard |
+
+## Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| `next` (v16) | React framework (App Router + Turbopack) |
+| `recharts` | Scatter charts for the Heatmap Matrix view |
+| `framer-motion` | Staggered page-load animations |
+| `lucide-react` | Icon library |
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+# Install dependencies
+npm install
+
+# Start dev server (requires backend running on port 8000)
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment Variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | FastAPI backend URL |
 
-## Learn More
+## Key Architecture Decisions
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. **Data-Driven UI**: All UI elements dynamically bind to the backend `CaseDetail` and `ScoredOpportunity` schemas — no hardcoded mock data.
+2. **Activity Log Transparency**: The Live Agentic Process terminal polls the backend `activity_log` for real-time LangGraph execution events (`agent_name`, `task_name`, `output_summary`).
+3. **Pre-seeded Chat History**: The chat panel initializes from the `chat_history` JSON field in the `CaseDetail` response.
+4. **Signals from Key Findings**: The "Context & AI Signals" panel derives its bullet points from `summary.key_findings` (with keyword-based color coding) and `latest_agent_output.risk_assessment`.

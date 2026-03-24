@@ -34,18 +34,14 @@ export default function LegacyCaseCopilotPage() {
         const data = await res.json();
         setCaseDetails(data);
 
-        // Load chat history if exists
-        if (data.activity_log) {
-            const chatLogs = data.activity_log
-                .filter((log: any) => log.action && log.action.startsWith("Chat:"))
-                .map((log: any) => {
-                    const role = log.action.toLowerCase().includes("user") ? "user" : "assistant";
-                    return { role, content: log.details?.message || "" };
-                })
-                .filter((msg: any) => msg.content);
-            if (chatLogs.length > 0) {
-                setMessages(chatLogs);
+        // Load chat history from pre-seeded chat_history field OR from activity log chat entries
+        if (data.chat_history) {
+          try {
+            const parsed = typeof data.chat_history === 'string' ? JSON.parse(data.chat_history) : data.chat_history;
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setMessages(parsed.map((m: any) => ({ role: m.role, content: m.content })));
             }
+          } catch(e) { console.warn('Failed to parse chat_history', e); }
         }
       } catch (err) {
         console.error("Failed to fetch case details:", err);
@@ -184,9 +180,54 @@ export default function LegacyCaseCopilotPage() {
     );
   };
 
-  const displayName = caseDetails?.name || "TechGlobal Inc Renewal";
-  const displayCategory = caseDetails?.category_id || "IT Infrastructure";
-  const displayStage = caseDetails?.dtp_stage || "DTP02";
+  // 4. Governance Approval
+  const handleApproveGovernance = async () => {
+    try {
+      const url = process.env.NEXT_PUBLIC_API_URL 
+        ? `${process.env.NEXT_PUBLIC_API_URL}/api/decisions/approve`
+        : `http://localhost:8000/api/decisions/approve`;
+        
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          case_id: caseId,
+          decision: "Approve",
+          reason: "Approved via Next.js Copilot UI"
+        })
+      });
+      if (res.ok) {
+        setGovernanceApproved(true);
+      } else {
+        alert("Server failed to approve decision. Make sure the API is running.");
+      }
+    } catch(err) {
+      console.error(err);
+      alert("Network error. Could not approve.");
+    }
+  };
+
+  const displayName = caseDetails?.name || "Loading Case...";
+  const displayCategory = caseDetails?.category_id || "Category";
+  const displayStage = caseDetails?.dtp_stage || "DTP-01";
+  
+  // Derive display text from the real API schema
+  const summaryText = caseDetails?.summary?.summary_text || "Analyzing background signals and compiling case recommendations...";
+  const supplierId = caseDetails?.supplier_id || "Unassigned";
+  const triggerSource = caseDetails?.trigger_source || "User";
+  
+  // Extract key_findings as signal bullets
+  const keyFindings: Array<{type?: string; text: string}> = (caseDetails?.summary?.key_findings || []).map((f: any) => {
+    if (typeof f === 'string') return { text: f };
+    if (f?.text) return { type: f.type, text: f.text };
+    return { text: JSON.stringify(f) };
+  });
+  
+  // Strategy output (rich data from strategy agent)
+  const strategyOutput = caseDetails?.latest_agent_output;
+  const strategyConfidence = strategyOutput?.confidence ? `${(strategyOutput.confidence * 100).toFixed(0)}%` : null;
+  const recommendedAction = caseDetails?.summary?.recommended_action || strategyOutput?.recommended_strategy || "Pending agent analysis";
+  const riskAssessment = strategyOutput?.risk_assessment || null;
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden w-full m-0 p-0 font-sans">
@@ -223,30 +264,32 @@ export default function LegacyCaseCopilotPage() {
                 <AlertTriangle className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-amber-900 font-bold text-sm">DTP01 Triage: NOT COVERED - Sourcing Required</h3>
-                <p className="text-amber-700 text-sm mt-1 leading-relaxed">No existing contract covers this massive expansion request. Supplier evaluation and negotiation strategy required.</p>
+                <h3 className="text-amber-900 font-bold text-sm">{displayStage} Triage: Sourcing Action Required</h3>
+                <p className="text-amber-700 text-sm mt-1 leading-relaxed">
+                  {summaryText}
+                </p>
               </div>
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-slate-100 bg-white">
               <div className="p-4 text-center">
                 <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">DTP Stage</p>
                 <p className="font-semibold text-slate-800">{displayStage}</p>
-                <p className="text-xs text-slate-500">Supplier Eval</p>
+                <p className="text-xs text-slate-500">Active</p>
               </div>
               <div className="p-4 text-center">
                 <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Supplier</p>
-                <p className="font-semibold text-slate-800">{caseDetails?.supplier_id || "TechGlobal Inc"}</p>
-                <p className="text-xs text-slate-500">ID: SUP-9021</p>
+                <p className="font-semibold text-slate-800">{supplierId}</p>
+                <p className="text-xs text-slate-500">ID Reference</p>
               </div>
               <div className="p-4 text-center">
                 <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Trigger Source</p>
-                <p className="font-semibold text-sponsor-blue">{caseDetails?.trigger_source || "Signal"}</p>
-                <p className="text-xs text-slate-500">Expiry Risk</p>
+                <p className="font-semibold text-sponsor-blue">{triggerSource}</p>
+                <p className="text-xs text-slate-500">System Origin</p>
               </div>
               <div className="p-4 text-center">
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Est. Spend</p>
-                <p className="font-bold text-slate-800 font-syne text-lg">$3.0M</p>
-                <p className="text-xs text-slate-500">Tier 1 Target</p>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Recommended</p>
+                <p className="font-bold text-slate-800 text-[13px] leading-snug">{recommendedAction}</p>
+                {strategyConfidence && <p className="text-xs text-green-600 font-semibold mt-1">Confidence: {strategyConfidence}</p>}
               </div>
             </div>
           </motion.div>
@@ -260,18 +303,29 @@ export default function LegacyCaseCopilotPage() {
                 Context & AI Signals
               </h3>
               <div className="space-y-4">
-                <div className="flex gap-3 items-start">
-                  <div className="w-2 h-2 rounded-full bg-mit-red mt-1.5 shadow-sm shadow-red-200 shrink-0"></div>
-                  <p className="text-sm text-slate-700">Contract expires in 45 days. High Expiry Urgency Score (EUS) detected.</p>
-                </div>
-                <div className="flex gap-3 items-start">
-                  <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5 shadow-sm shadow-green-200 shrink-0"></div>
-                  <p className="text-sm text-slate-700">Strong historical SLA compliance (99.9% uptime). Low Performance Risk.</p>
-                </div>
-                <div className="flex gap-3 items-start">
-                  <div className="w-2 h-2 rounded-full bg-mit-red mt-1.5 shadow-sm shadow-red-200 shrink-0"></div>
-                  <p className="text-sm text-slate-700">High dependency. They host mission-critical Tier-1 business applications.</p>
-                </div>
+                {keyFindings.length > 0 ? (
+                  keyFindings.map((finding, idx) => {
+                    // Color based on type or default — null-safe
+                    const txt = (finding.text || '').toLowerCase();
+                    const isRisk = finding.type === 'pricing' || txt.includes('risk') || txt.includes('expir') || txt.includes('spend') || txt.includes('cost');
+                    const isPositive = finding.type === 'evaluation' || finding.type === 'approval_status' || txt.includes('leading') || txt.includes('ready') || txt.includes('stable');
+                    return (
+                      <div key={idx} className="flex gap-3 items-start">
+                        <div className={`w-2 h-2 rounded-full ${isRisk ? 'bg-mit-red shadow-red-200' : isPositive ? 'bg-green-500 shadow-green-200' : 'bg-blue-500 shadow-blue-200'} mt-1.5 shadow-sm shrink-0`}></div>
+                        <p className="text-sm text-slate-700">{finding.text}</p>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-sm text-slate-400 italic">No contextual signals available yet. Provide documents or trigger agent analysis.</div>
+                )}
+                
+                {riskAssessment && (
+                  <div className="flex gap-3 items-start mt-2 pt-2 border-t border-slate-100">
+                    <div className="w-2 h-2 rounded-full bg-amber-500 shadow-amber-200 mt-1.5 shadow-sm shrink-0"></div>
+                    <p className="text-sm text-slate-700"><span className="font-semibold">Risk:</span> {riskAssessment}</p>
+                  </div>
+                )}
               </div>
             </motion.div>
 
@@ -339,7 +393,7 @@ export default function LegacyCaseCopilotPage() {
             <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
               <h3 className="text-slate-800 font-bold text-[15px] flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-sponsor-blue" />
-                DTP02: Governance Decision Console
+                {displayStage}: Governance Decision Console
               </h3>
               <div className="flex items-center gap-2 text-xs font-semibold text-green-600 bg-green-50/50 px-2.5 py-1 rounded-full border border-green-200">
                 <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>
@@ -376,7 +430,7 @@ export default function LegacyCaseCopilotPage() {
                   </div>
                   
                   <div className="flex gap-4 pt-4 border-t border-slate-100">
-                     <button onClick={() => setGovernanceApproved(true)} className="flex-1 py-3 bg-sponsor-blue text-white rounded-lg font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-700 hover:-translate-y-0.5 transition-all">
+                     <button onClick={handleApproveGovernance} className="flex-1 py-3 bg-sponsor-blue text-white rounded-lg font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-700 hover:-translate-y-0.5 transition-all">
                        ✅ Confirm & Approve Eval
                      </button>
                      <button className="flex-1 py-3 bg-white text-slate-600 border-2 border-slate-200 rounded-lg font-bold hover:bg-slate-50 hover:text-slate-800 transition">
@@ -405,11 +459,11 @@ export default function LegacyCaseCopilotPage() {
               {caseDetails?.activity_log && caseDetails.activity_log.length > 0 ? caseDetails.activity_log.map((log: any, i: number) => (
                  <div key={i} className="flex gap-3 text-slate-300 border-b border-slate-800/40 pb-2.5 last:border-0 hover:bg-white/5 transition-colors -mx-4 px-4 py-1">
                     <span className="text-slate-500 shrink-0">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
-                    <span className={`${log.action.includes('Agent') || log.action.includes('AI') ? 'text-accent2' : 'text-accent'} font-semibold shrink-0`}>
-                      {log.action}:
+                    <span className="text-emerald-400 font-semibold shrink-0">
+                      {log.agent_name || 'System'}:
                     </span>
                     <span className="text-slate-400 break-words leading-relaxed max-w-[80%]">
-                      {log.details?.message ? log.details.message : (log.details?.decision ? `Decision: ${log.details.decision}` : JSON.stringify(log.details))}
+                      {log.output_summary || log.task_name || 'Processing...'}
                     </span>
                  </div>
               )) : (

@@ -1,8 +1,8 @@
-# Agentic Sourcing Copilot — Enterprise POC
+# Procurement Agentic System — Enterprise POC
 
 A **human-in-the-loop, multi-agent decision-support system** for procurement sourcing, built on the Dynamic Transaction Pipeline (DTP-01 to DTP-06) methodology.
 
-> **Current Version** — Procurement Workbench with 7 Official Agents & Artifact System
+> **Current Version** — Dual-Frontend System with 7 Official Agents, Artifact System & Agentic Sourcing Heatmap
 
 ---
 
@@ -101,7 +101,7 @@ The system consists of **7 specialized agents**, each with a distinct "brain" (l
 ```
 agentic-sourcing-poc/
 │
-├── frontend/                    # Streamlit UI
+├── frontend/                    # Legacy Streamlit UI (DTP System)
 │   ├── app.py                   # Main entry point
 │   ├── api_client.py            # Backend communication
 │   └── pages/
@@ -109,69 +109,44 @@ agentic-sourcing-poc/
 │       ├── case_copilot.py      # Procurement Workbench
 │       └── knowledge_management.py  # Document/data upload
 │
+├── frontend-next/               # New Next.js UI (Heatmap + Copilot)
+│   ├── src/app/
+│   │   ├── layout.tsx           # Root layout (Syne/DM Sans fonts, sidebar)
+│   │   ├── globals.css          # Premium dark-mode design tokens
+│   │   ├── heatmap/page.tsx     # Sourcing Priority Heatmap + KPI Dashboard
+│   │   ├── intake/page.tsx      # Business Intake form
+│   │   ├── kpi/page.tsx         # KPI Dashboard page
+│   │   └── cases/[id]/copilot/  # Case Copilot (60/40 split)
+│   │       └── page.tsx         # Triage, Signals, Chat, Governance
+│   └── package.json             # Dependencies (recharts, framer-motion)
+│
 ├── backend/                     # All business logic
 │   ├── main.py                  # FastAPI server
-│   │
 │   ├── supervisor/              # Central orchestration
-│   │   ├── state.py             # State management
-│   │   └── router.py            # Two-level intent routing
-│   │
 │   ├── agents/                  # Official agents (7 modules)
-│   │   ├── base.py              # Base agent with retrieval
-│   │   ├── supervisor_agent.py
-│   │   ├── sourcing_signal_agent.py
-│   │   ├── supplier_scoring_agent.py
-│   │   ├── rfx_draft_agent.py
-│   │   ├── negotiation_support_agent.py
-│   │   ├── contract_support_agent.py
-│   │   └── implementation_agent.py
-│   │
 │   ├── tasks/                   # Sub-tasks (internal to agents)
-│   │   ├── base_task.py         # Task execution hierarchy
-│   │   ├── registry.py          # Task registry
-│   │   ├── planners.py          # Deterministic playbooks
-│   │   ├── signal_tasks.py
-│   │   ├── scoring_tasks.py
-│   │   ├── rfx_tasks.py
-│   │   ├── negotiation_tasks.py
-│   │   ├── contract_tasks.py
-│   │   └── implementation_tasks.py
-│   │
 │   ├── artifacts/               # Artifact builders & renderers
-│   │   ├── builders.py          # ArtifactPack construction
-│   │   ├── renderers.py         # UI formatting
-│   │   └── utils.py             # Grounding utilities
-│   │
 │   ├── ingestion/               # Data ingestion pipelines
-│   │   ├── document_ingest.py   # PDF/DOCX/TXT → ChromaDB
-│   │   ├── data_ingest.py       # CSV/Excel → SQLite
-│   │   └── validators.py        # Schema validation
-│   │
-│   ├── rag/                     # Vector retrieval
-│   │   ├── vector_store.py      # ChromaDB wrapper
-│   │   └── retriever.py         # Document retriever
-│   │
-│   ├── persistence/             # Data lake
-│   │   ├── database.py          # SQLite connection
-│   │   └── models.py            # SQLModel tables (includes Artifact)
-│   │
+│   ├── rag/                     # Vector retrieval (ChromaDB)
+│   ├── persistence/             # Data lake (SQLite + SQLModel)
 │   ├── services/                # Business logic layer
-│   │   ├── case_service.py      # Case + artifact management
-│   │   ├── chat_service.py      # Copilot with Supervisor
-│   │   └── ingestion_service.py # Ingestion orchestration
-│   │
-│   └── scripts/                 # Utility scripts
-│       └── seed_synthetic_data.py  # Happy Path demo data
+│   └── scripts/                 # Utility & seed scripts
+│
+├── heatmap/                     # Agentic Heatmap Engine
+│   ├── heatmap_graph.py         # LangGraph scoring pipeline
+│   ├── heatmap_database.py      # SQLModel persistence
+│   ├── case_bridge.py           # T1 → DTP case creation
+│   └── engine_runner.py         # Batch scoring orchestrator
 │
 ├── shared/                      # Cross-cutting modules
-│   ├── schemas.py               # Pydantic schemas (ArtifactPack, etc.)
-│   └── constants.py             # Enums (AgentName, ArtifactType, etc.)
+│   ├── schemas.py               # Pydantic schemas
+│   └── constants.py             # Enums
 │
-└── data/                        # Synthetic data & databases
+└── data/                        # Databases & synthetic data
     ├── datalake.db              # SQLite data lake
+    ├── heatmap.db               # Heatmap scoring database
     ├── chroma_db/               # ChromaDB vector store
-    ├── synthetic/                # Synthetic data files
-    └── synthetic_docs/           # Sample documents for RAG
+    └── cases_seed.json          # Pre-seeded case data
 ```
 
 ### System Flow
@@ -213,16 +188,20 @@ echo "OPENAI_API_KEY=your-key-here" > .env
 ### Running Locally
 
 ```bash
-# Terminal 1: Start Backend
+# Terminal 1: Start Backend (from project root)
 python -m uvicorn backend.main:app --reload --port 8000
 
-# Terminal 2: Start Frontend
+# Terminal 2: Start Next.js Frontend (New Heatmap System)
+cd frontend-next && npm run dev
+
+# Terminal 3 (Optional): Start Legacy Streamlit Frontend
 streamlit run frontend/app.py
 ```
 
-- **API**: http://localhost:8000
+- **Backend API**: http://localhost:8000
 - **API Docs**: http://localhost:8000/docs
-- **Frontend**: http://localhost:8501
+- **Next.js UI**: http://localhost:3000 (New Heatmap System)
+- **Streamlit UI**: http://localhost:8501 (Legacy DTP System)
 
 ### Seed Demo Data (IT & Corporate Services)
 
@@ -316,6 +295,13 @@ For detailed demo instructions, see [System Documentation - Demo & Testing](SYST
 |--------|----------|-------------|
 | GET | `/health` | Health check |
 
+### Sourcing Heatmap System
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/heatmap/opportunities` | List all scored opportunities (T1-T4) |
+| POST | `/api/heatmap/feedback` | Submit human override feedback |
+| POST | `/api/heatmap/run` | Trigger batch scoring engine |
+
 ---
 
 ## 🔐 Governance Rules
@@ -331,13 +317,18 @@ For detailed demo instructions, see [System Documentation - Demo & Testing](SYST
 
 ## 🎨 UI Design
 
-**Procurement Workbench** — Modern SaaS layout:
+### New Heatmap System (Next.js)
+Premium dark-mode glassmorphic design with Syne/DM Sans typography:
 
-- **Top**: Condensed case header (ID, category, stage, status)
-- **Main**: Two-column layout
-  - **Left (60%)**: Case details (overview, strategy, signals, governance, timeline)
-  - **Right (40%)**: Chat interface (scrollable history, message input)
-- **Bottom**: Full-width artifacts panel (tabs: Signals, Scoring, RFx, Negotiation, Contract, Implementation, History, Audit Trail)
+- **Priority Heatmap** (`/heatmap`) — KPI stat cards, Table/Matrix toggle, Recharts scatter chart, KLI Outcome Matrix
+- **Case Copilot** (`/cases/[id]/copilot`) — 60/40 split-screen with live triage, AI signals, Governance Console, Activity Log terminal, and chat panel
+- **Business Intake** (`/intake`) — New sourcing request form
+- **KPI Dashboard** (`/kpi`) — Performance metrics
+
+### Legacy DTP System (Streamlit)
+- **Case Dashboard** — Case list & metrics
+- **Case Copilot** — Procurement Workbench with dark-mode agent activity log
+- **Knowledge Management** — Document/data upload
 
 For detailed UI/UX flow, see [System Documentation - UI/UX Flow](SYSTEM_DOCUMENTATION.md#uiux-flow).
 
@@ -424,6 +415,12 @@ Research POC — Not for production use
 | 7 Official Agents | ✅ Complete |
 | Task System | ✅ Complete |
 | Artifact System | ✅ Complete |
-| Procurement Workbench UI | ✅ Complete |
+| Legacy Streamlit UI | ✅ Complete |
+| Next.js Heatmap + Copilot UI | ✅ Complete |
+| Agentic Scoring Engine | ✅ Complete |
+| KPI Dashboard & KLI Matrix | ✅ Complete |
+| Live Agentic Process Log | ✅ Complete |
 | Synthetic Data & Demo | ✅ Complete |
+| Microsoft Entra ID Auth | 🔜 Planned |
+| Azure AI Search Integration | 🔜 Planned |
 | Production Hardening | 🔜 Planned |
