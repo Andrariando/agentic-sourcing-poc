@@ -61,11 +61,13 @@ from backend.agents import (
     ContractSupportAgent,
     ImplementationAgent,
 )
-# Legacy agents for backward compatibility
-from backend.agents.strategy import StrategyAgent
-from backend.agents.supplier_eval import SupplierEvaluationAgent
-from backend.agents.negotiation import NegotiationAgent
-from backend.agents.signal import SignalAgent
+# Legacy agents for backward compatibility (all unified in backend.agents)
+from backend.agents import (
+    StrategyAgent,
+    SupplierEvaluationAgent,
+    NegotiationAgent,
+    SignalAgent
+)
 
 # ============================================================================
 # FIX 1: Centralized Agent-to-ArtifactType Mapping
@@ -214,7 +216,7 @@ class ChatService:
     
     def __init__(self):
         self.case_service = get_case_service()
-        self.supervisor = SupervisorAgent(tier=1)
+        self.supervisor = SupervisorAgent()
         
         # Feature flag for conversation memory
         # Enable conversation memory by default for better ChatGPT-like experience
@@ -1513,7 +1515,39 @@ class ChatService:
                 case_id, message, state, agent, action_plan, intent_result, conversation_history, use_tier_2
             )
         
-        # Fall back to legacy agents
+    def _run_official_agent(
+        self,
+        case_id: str,
+        message: str,
+        state: Dict[str, Any],
+        agent: Any,
+        action_plan: Any,
+        intent: Any,
+        history: Optional[List[Dict[str, str]]] = None,
+        use_tier_2: bool = False
+    ) -> ChatResponse:
+        """
+        Run an official agent by delegating to the unified LangGraph workflow.
+        
+        This is the KEY UNIFICATION BRIDGE: even if the Tier 1 responder 
+        thinks it's calling a specific 'Official Agent', we route through 
+        the Graph to ensure logic, state, and artifacts are handled consistently.
+        """
+        logger.info(f"[UNIFICATION] Routing {action_plan.agent_name} request through LangGraph")
+        
+        # Inject the agent_name as a hint to the Graph if needed
+        # (The graph supervisor usually decides, but we can nudge it)
+        if "latest_agent_name" not in state:
+             state["latest_agent_name"] = action_plan.agent_name
+             
+        return self.process_message_langgraph(
+            case_id=case_id,
+            user_message=message,
+            use_tier_2=use_tier_2,
+            case_state=state
+        )
+
+    # Fall back to legacy agents
     
     def process_message_langgraph(
         self,

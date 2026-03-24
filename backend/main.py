@@ -47,6 +47,8 @@ async def lifespan(app: FastAPI):
     print("[INFO] Shutting down")
 
 
+from fastapi.middleware.gzip import GZipMiddleware
+
 # Create FastAPI app
 app = FastAPI(
     title="Agentic Sourcing API",
@@ -54,6 +56,9 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
+# Compression
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # CORS for frontend
 app.add_middleware(

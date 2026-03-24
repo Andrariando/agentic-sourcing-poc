@@ -62,11 +62,16 @@ export default function LegacyCaseDashboard() {
               <tbody className="divide-y divide-slate-100 bg-white">
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-slate-400">Loading cases...</td>
+                    <td colSpan={6} className="px-6 py-12 text-center">
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                        <p className="text-slate-400 font-medium">Synchronizing with Intelligence Engine...</p>
+                      </div>
+                    </td>
                   </tr>
                 ) : cases.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-slate-400">No active cases found.</td>
+                    <td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-medium">No active cases found in the DTP pipeline.</td>
                   </tr>
                 ) : (
                   cases.map((c) => (

@@ -1,5 +1,6 @@
 """
 Backend agents module.
+UNIFIED SOURCE OF TRUTH: All agents now point to the advanced root-level implementations.
 
 OFFICIAL AGENTS (7 first-class agents):
 1) Supervisor Agent - Orchestrates workflow, validates inputs
@@ -10,21 +11,22 @@ OFFICIAL AGENTS (7 first-class agents):
 6) Contract Support Agent - Extracts terms, prepares handoff
 7) Implementation Agent - Rollout planning and value capture
 """
-# New official agents
-from backend.agents.supervisor_agent import SupervisorAgent
-from backend.agents.sourcing_signal_agent import SourcingSignalAgent
-from backend.agents.supplier_scoring_agent import SupplierScoringAgent
-from backend.agents.rfx_draft_agent import RfxDraftAgent
-from backend.agents.negotiation_support_agent import NegotiationSupportAgent
-from backend.agents.contract_support_agent import ContractSupportAgent
-from backend.agents.implementation_agent import ImplementationAgent
+# Unified exports from root agents folder
+# This ensures ChatService and LangGraph use the IDENTICAL classes and logic
+from agents.supervisor import SupervisorAgent
+from agents.signal_agent import SignalInterpretationAgent as SourcingSignalAgent
+from agents.supplier_agent import SupplierEvaluationAgent as SupplierScoringAgent
+from agents.rfx_draft_agent import RFxDraftAgent as RfxDraftAgent
+from agents.negotiation_agent import NegotiationSupportAgent
+from agents.contract_support_agent import ContractSupportAgent
+from agents.implementation_agent import ImplementationAgent
 
-# Legacy imports for backward compatibility
-from backend.agents.base import BaseAgent
-from backend.agents.strategy import StrategyAgent
-from backend.agents.supplier_eval import SupplierEvaluationAgent
-from backend.agents.negotiation import NegotiationAgent
-from backend.agents.signal import SignalAgent
+# Legacy/Alternative logic for backward compatibility
+from agents.strategy_agent import StrategyAgent
+from agents.supplier_agent import SupplierEvaluationAgent
+from agents.negotiation_agent import NegotiationSupportAgent as NegotiationAgent
+from agents.signal_agent import SignalInterpretationAgent as SignalAgent
+from agents.base_agent import BaseAgent
 
 __all__ = [
     # Official agents
@@ -35,7 +37,7 @@ __all__ = [
     "NegotiationSupportAgent",
     "ContractSupportAgent",
     "ImplementationAgent",
-    # Legacy
+    # Legacy/Mapping
     "BaseAgent",
     "StrategyAgent",
     "SupplierEvaluationAgent",
