@@ -3,17 +3,20 @@ __pycache__/
 *.pyc
 .vscode/
 
-# Local Data & Databases (Do NOT push to GitHub)
+# Real Client Data (Do NOT push to GitHub)
 /Sample Data/
-/data/
-*.db
-*.sqlite
-*.sqlite3
+
+# Synthetic Data & Databases (Allowed to push)
+# /data/
+# *.db
+# *.sqlite
+# *.sqlite3
 
 # Next.js Build Output
 /frontend-next/.next/
 /frontend-next/out/
 /frontend-next/node_modules/
+/frontend-next/.env.local
 
 # Python Virtual Environments
 venv/

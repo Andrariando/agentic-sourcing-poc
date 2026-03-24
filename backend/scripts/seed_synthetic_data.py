@@ -70,7 +70,7 @@ def seed_cases(session: Session):
         session.add(case)
     
     session.commit()
-    print("  ✓ CASE-0001 created/updated")
+    print("  > CASE-0001 created/updated")
 
 
 def seed_suppliers(session: Session):
@@ -142,7 +142,7 @@ def seed_suppliers(session: Session):
             session.add(perf)
     
     session.commit()
-    print(f"  ✓ Created performance records for {len(suppliers)} suppliers")
+    print(f"  > Created performance records for {len(suppliers)} suppliers")
 
 
 def seed_spend(session: Session):
@@ -177,7 +177,7 @@ def seed_spend(session: Session):
         session.add(spend)
     
     session.commit()
-    print("  ✓ Created 12 months of spend data (with anomaly)")
+    print("  > Created 12 months of spend data (with anomaly)")
 
 
 def seed_sla_events(session: Session):
@@ -222,7 +222,7 @@ def seed_sla_events(session: Session):
             session.add(event)
     
     session.commit()
-    print("  ✓ Created SLA events for all suppliers")
+    print("  > Created SLA events for all suppliers")
 
 
 def seed_documents(vector_store):
@@ -459,22 +459,22 @@ LESSONS LEARNED:
     
     for doc in docs:
         try:
-            vector_store.add_document(
+            vector_store.add_chunks(
+                chunks=[doc["content"]],
                 document_id=doc["doc_id"],
-                content=doc["content"],
                 metadata={
                     "filename": doc["filename"],
                     "document_type": doc["document_type"],
-                    "supplier_id": doc.get("supplier_id"),
-                    "category_id": doc.get("category_id"),
+                    "supplier_id": doc.get("supplier_id", ""),
+                    "category_id": doc.get("category_id", ""),
                     "dtp_relevance": json.dumps(doc.get("dtp_relevance", [])),
                 }
             )
-            print(f"  ✓ Added {doc['filename']}")
+            print(f"  > Added {doc['filename']}")
         except Exception as e:
-            print(f"  ⚠ Error adding {doc['filename']}: {e}")
+            print(f"  ! Error adding {doc['filename']}: {e}")
     
-    print("  ✓ Documents seeded into ChromaDB")
+    print("  > Documents seeded into ChromaDB")
 
 
 def main():
@@ -499,7 +499,7 @@ def main():
         vector_store = get_vector_store()
         seed_documents(vector_store)
     except Exception as e:
-        print(f"  ⚠ ChromaDB seeding skipped: {e}")
+        print(f"  ! ChromaDB seeding skipped: {e}")
     
     print("\n" + "="*60)
     print("SEED COMPLETE")

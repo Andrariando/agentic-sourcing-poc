@@ -1,0 +1,11 @@
+Supplier Number,Supplier Parent,Supplier,Site,Category,Subcategory,Sector,Region,Country,State,City,Spend Tier (USD),Supplier Parent Risk Rating,Supplier Risk Score,Criticality Risk Level,Criticality Risk Score,Strategic Risk Score,BPRA Security Scorecard,BPRA Vendor Status,Ethics,Labor & Human Rights,Resilinc Alerts by Supplier,"Sanctions, AML+ABC due diligence",Environment,Supplier Financial Health,Sustainable Procurement
+SUP-1000,TechGlobal Inc,TechGlobal Inc,HQ,IT Infrastructure,Cybersecurity,Tech,NA,USA,NY,New York,Tier 1,High,1.46,Medium,1.64,4.67,A,Approved,Pass,Pass,0,Clear,Pass,Stable,Pass
+SUP-1001,NetSystems LLC,NetSystems LLC,HQ,IT Infrastructure,Cybersecurity,Tech,NA,USA,NY,New York,Tier 3,Low,3.97,Low,3.3,1.61,A,Approved,Pass,Pass,0,Clear,Pass,Stable,Pass
+SUP-1002,CloudServe Group,CloudServe Group,HQ,IT Infrastructure,End User Computing,Tech,NA,USA,NY,New York,Tier 2,Medium,1.32,Medium,2.61,4.95,A,Approved,Pass,Pass,0,Clear,Pass,Stable,Pass
+SUP-1003,SecureShield Tech,SecureShield Tech,HQ,IT Infrastructure,Cybersecurity,Tech,NA,USA,NY,New York,Tier 3,Medium,1.34,Low,2.15,4.52,A,Approved,Pass,Pass,0,Clear,Pass,Strong,Pass
+SUP-1004,DataCenter Partners,DataCenter Partners,HQ,IT Infrastructure,Cloud Hosting,Tech,NA,USA,NY,New York,Tier 3,Low,1.28,Medium,3.04,4.91,A,Approved,Pass,Pass,0,Clear,Pass,Strong,Pass
+SUP-1005,Endpoint Solutions Corp,Endpoint Solutions Corp,HQ,IT Infrastructure,Data Center,Tech,NA,USA,NY,New York,Tier 2,Medium,1.6,Low,2.61,1.21,A,Approved,Pass,Pass,0,Clear,Pass,Weak,Pass
+SUP-1006,AlphaNetwork Services,AlphaNetwork Services,HQ,IT Infrastructure,Cloud Hosting,Tech,NA,USA,NY,New York,Tier 1,Medium,1.15,Medium,4.8,3.22,A,Approved,Pass,Pass,0,Clear,Pass,Weak,Pass
+SUP-1007,CyberGuard Ltd,CyberGuard Ltd,HQ,IT Infrastructure,Cybersecurity,Tech,NA,USA,NY,New York,Tier 3,Medium,2.99,Low,1.79,2.13,A,Approved,Pass,Pass,0,Clear,Pass,Strong,Pass
+SUP-1008,DeltaStorage Systems,DeltaStorage Systems,HQ,IT Infrastructure,Cybersecurity,Tech,NA,USA,NY,New York,Tier 1,High,2.18,High,2.77,4.02,A,Approved,Pass,Pass,0,Clear,Pass,Strong,Pass
+SUP-1009,Infinite Computing,Infinite Computing,HQ,IT Infrastructure,Cybersecurity,Tech,NA,USA,NY,New York,Tier 2,High,3.31,Low,2.67,4.67,A,Approved,Pass,Pass,0,Clear,Pass,Strong,Pass
