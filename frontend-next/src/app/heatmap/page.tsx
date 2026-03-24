@@ -347,7 +347,7 @@ export default function HeatmapPriorityPage() {
                     </tr>
                   ) : (
                     opportunities.map((opp) => {
-                      const id = opp.contract_id || opp.request_id;
+                      const id = opp.id;
                       const isSelected = selectedIds.has(id);
                       return (
                         <tr key={id} className={`transition-colors ${isSelected ? 'bg-blue-50/50' : 'hover:bg-slate-50'}`}>
@@ -361,7 +361,7 @@ export default function HeatmapPriorityPage() {
                           </td>
                           <td className="px-6 py-4">
                             <div className="font-semibold text-slate-900">{opp.supplier_name || 'New Requirement'}</div>
-                            <div className="text-xs text-slate-500 font-mono mt-0.5">{id}</div>
+                            <div className="text-xs text-slate-500 font-mono mt-0.5">{opp.contract_id || opp.request_id}</div>
                           </td>
                           <td className="px-6 py-4 text-sm text-slate-600">
                             {opp.category}<br/>
