@@ -2,6 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { apiFetch } from "@/lib/api-fetch";
+import { getApiBaseUrl } from "@/lib/api-base";
 
 interface CaseSummary {
   case_id: string;
@@ -18,10 +20,8 @@ export default function LegacyCaseDashboard() {
   useEffect(() => {
     async function fetchCases() {
       try {
-        const url = process.env.NEXT_PUBLIC_API_URL 
-          ? `${process.env.NEXT_PUBLIC_API_URL}/api/cases`
-          : "http://localhost:8000/api/cases";
-        const res = await fetch(url);
+        const url = `${getApiBaseUrl()}/api/cases`;
+        const res = await apiFetch(url);
         const data = await res.json();
         if (data.cases) {
           setCases(data.cases);

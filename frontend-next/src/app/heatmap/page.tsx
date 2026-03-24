@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from "react";
 import { LayoutGrid, List, X, ExternalLink } from "lucide-react";
 import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { apiFetch } from "@/lib/api-fetch";
+import { getApiBaseUrl, apiConnectivityHint } from "@/lib/api-base";
 
 export default function HeatmapPriorityPage() {
   const [opportunities, setOpportunities] = useState<any[]>([]);
@@ -22,12 +24,10 @@ export default function HeatmapPriorityPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const url = process.env.NEXT_PUBLIC_API_URL 
-          ? `${process.env.NEXT_PUBLIC_API_URL}/api/heatmap/opportunities`
-          : "http://localhost:8000/api/heatmap/opportunities";
+        const url = `${getApiBaseUrl()}/api/heatmap/opportunities`;
         
         console.log("Fetching heatmap opportunities from:", url);
-        const res = await fetch(url, { cache: 'no-store' });
+        const res = await apiFetch(url, { cache: 'no-store' });
         const data = await res.json();
         
         if (data.opportunities) {
@@ -87,9 +87,7 @@ export default function HeatmapPriorityPage() {
     if (!reviewOpp) return;
     setFeedbackSubmitting(true);
     try {
-      const url = process.env.NEXT_PUBLIC_API_URL 
-        ? `${process.env.NEXT_PUBLIC_API_URL}/api/heatmap/feedback`
-        : "http://localhost:8000/api/heatmap/feedback";
+      const url = `${getApiBaseUrl()}/api/heatmap/feedback`;
 
       const payload = {
         opportunity_id: reviewOpp.id,
@@ -99,7 +97,7 @@ export default function HeatmapPriorityPage() {
         feedback_notes: feedbackReason
       };
 
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
@@ -119,10 +117,8 @@ export default function HeatmapPriorityPage() {
         // Tier 1: single bridge into legacy — same path as "Approve Selected" (one case per opportunity).
         if (feedbackTier === "T1") {
           try {
-            const approveUrl = process.env.NEXT_PUBLIC_API_URL
-              ? `${process.env.NEXT_PUBLIC_API_URL}/api/heatmap/approve`
-              : "http://localhost:8000/api/heatmap/approve";
-            const approveRes = await fetch(approveUrl, {
+            const approveUrl = `${getApiBaseUrl()}/api/heatmap/approve`;
+            const approveRes = await apiFetch(approveUrl, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -170,11 +166,9 @@ export default function HeatmapPriorityPage() {
     }
 
     try {
-      const url = process.env.NEXT_PUBLIC_API_URL 
-        ? `${process.env.NEXT_PUBLIC_API_URL}/api/heatmap/approve`
-        : "http://localhost:8000/api/heatmap/approve";
+      const url = `${getApiBaseUrl()}/api/heatmap/approve`;
 
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -195,10 +189,8 @@ export default function HeatmapPriorityPage() {
         );
         setSelectedIds(new Set());
         // Refresh list so server-side Approved status matches the UI.
-        const oppUrl = process.env.NEXT_PUBLIC_API_URL
-          ? `${process.env.NEXT_PUBLIC_API_URL}/api/heatmap/opportunities`
-          : "http://localhost:8000/api/heatmap/opportunities";
-        const oppRes = await fetch(oppUrl, { cache: "no-store" });
+        const oppUrl = `${getApiBaseUrl()}/api/heatmap/opportunities`;
+        const oppRes = await apiFetch(oppUrl, { cache: "no-store" });
         const oppJson = await oppRes.json();
         if (oppJson.opportunities) {
           setOpportunities(
@@ -217,17 +209,12 @@ export default function HeatmapPriorityPage() {
   const handleRefreshScores = async () => {
     setPipelineRunning(true);
     try {
-      const runUrl = process.env.NEXT_PUBLIC_API_URL
-        ? `${process.env.NEXT_PUBLIC_API_URL}/api/heatmap/run`
-        : "http://localhost:8000/api/heatmap/run";
-      const statusUrl = process.env.NEXT_PUBLIC_API_URL
-        ? `${process.env.NEXT_PUBLIC_API_URL}/api/heatmap/run/status`
-        : "http://localhost:8000/api/heatmap/run/status";
-      const oppUrl = process.env.NEXT_PUBLIC_API_URL
-        ? `${process.env.NEXT_PUBLIC_API_URL}/api/heatmap/opportunities`
-        : "http://localhost:8000/api/heatmap/opportunities";
+      const base = getApiBaseUrl();
+      const runUrl = `${base}/api/heatmap/run`;
+      const statusUrl = `${base}/api/heatmap/run/status`;
+      const oppUrl = `${base}/api/heatmap/opportunities`;
 
-      const runRes = await fetch(runUrl, { method: "POST" });
+      const runRes = await apiFetch(runUrl, { method: "POST" });
       if (!runRes.ok) {
         alert("Failed to run scoring pipeline.");
         return;
@@ -237,7 +224,7 @@ export default function HeatmapPriorityPage() {
       const maxPolls = 20;
       for (let i = 0; i < maxPolls; i++) {
         await new Promise((resolve) => setTimeout(resolve, 3000));
-        const statusRes = await fetch(statusUrl, { cache: "no-store" });
+        const statusRes = await apiFetch(statusUrl, { cache: "no-store" });
         if (!statusRes.ok) continue;
         const status = await statusRes.json();
         if (!status.running) {
@@ -248,7 +235,7 @@ export default function HeatmapPriorityPage() {
         }
       }
 
-      const oppRes = await fetch(oppUrl, { cache: "no-store" });
+      const oppRes = await apiFetch(oppUrl, { cache: "no-store" });
       const data = await oppRes.json();
       if (data.opportunities) {
         const sorted = data.opportunities.sort((a: any, b: any) => b.total_score - a.total_score);
@@ -256,7 +243,10 @@ export default function HeatmapPriorityPage() {
       }
     } catch (err) {
       console.error(err);
-      alert("Network error refreshing scores.");
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(
+        `Network error refreshing scores.\n\n${msg}\n\nAPI base: ${getApiBaseUrl()}${apiConnectivityHint()}`
+      );
     } finally {
       setPipelineRunning(false);
     }

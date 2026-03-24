@@ -5,6 +5,8 @@ import { useParams } from "next/navigation";
 import { CheckCircle2, AlertTriangle, FileText, Activity, ShieldCheck, ChevronRight, MessageSquare, Briefcase, Clock, Terminal } from "lucide-react";
 import { motion } from "framer-motion";
 import { buildDecisionDataForStage } from "@/lib/dtp-approve-defaults";
+import { apiFetch } from "@/lib/api-fetch";
+import { getApiBaseUrl, apiConnectivityHint } from "@/lib/api-base";
 
 export default function LegacyCaseCopilotPage() {
   const params = useParams();
@@ -31,10 +33,8 @@ export default function LegacyCaseCopilotPage() {
   useEffect(() => {
     async function fetchCase() {
       try {
-        const url = process.env.NEXT_PUBLIC_API_URL 
-          ? `${process.env.NEXT_PUBLIC_API_URL}/api/cases/${caseId}`
-          : `http://localhost:8000/api/cases/${caseId}`;
-        const res = await fetch(url);
+        const url = `${getApiBaseUrl()}/api/cases/${caseId}`;
+        const res = await apiFetch(url);
         if (!res.ok) {
           setCaseError("Case not found or API error.");
           return;
@@ -60,10 +60,8 @@ export default function LegacyCaseCopilotPage() {
     // 2. Fetch Documents
     async function fetchDocs() {
       try {
-        const url = process.env.NEXT_PUBLIC_API_URL 
-          ? `${process.env.NEXT_PUBLIC_API_URL}/api/documents`
-          : `http://localhost:8000/api/documents`;
-        const res = await fetch(url);
+        const url = `${getApiBaseUrl()}/api/documents`;
+        const res = await apiFetch(url);
         const data = await res.json();
         if (data.documents) {
             setDocuments(data.documents);
@@ -96,11 +94,9 @@ export default function LegacyCaseCopilotPage() {
     setIsTyping(true);
     
     try {
-      const url = process.env.NEXT_PUBLIC_API_URL 
-        ? `${process.env.NEXT_PUBLIC_API_URL}/api/chat`
-        : `http://localhost:8000/api/chat`;
+      const url = `${getApiBaseUrl()}/api/chat`;
         
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -145,11 +141,9 @@ export default function LegacyCaseCopilotPage() {
       formData.append("document_type", "OTHER");
       formData.append("case_id", caseId);
 
-      const url = process.env.NEXT_PUBLIC_API_URL 
-        ? `${process.env.NEXT_PUBLIC_API_URL}/api/ingest/document`
-        : `http://localhost:8000/api/ingest/document`;
+      const url = `${getApiBaseUrl()}/api/ingest/document`;
 
-      await fetch(url, {
+      await apiFetch(url, {
         method: 'POST',
         body: formData
       });
@@ -212,11 +206,9 @@ export default function LegacyCaseCopilotPage() {
     };
 
     try {
-      const url = process.env.NEXT_PUBLIC_API_URL 
-        ? `${process.env.NEXT_PUBLIC_API_URL}/api/decisions/approve`
-        : `http://localhost:8000/api/decisions/approve`;
+      const url = `${getApiBaseUrl()}/api/decisions/approve`;
         
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -242,7 +234,7 @@ export default function LegacyCaseCopilotPage() {
       }
     } catch(err) {
       console.error(err);
-      alert("Network error. Check NEXT_PUBLIC_API_URL points at your running API (not localhost from Vercel).");
+      alert(`Network error.\n\nAPI base: ${getApiBaseUrl()}${apiConnectivityHint()}`);
     }
   };
 
