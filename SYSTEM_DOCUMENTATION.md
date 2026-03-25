@@ -879,7 +879,7 @@ current_answers = human_decisions.get(current_stage) or {}
 
 ## 🗺️ 15. Opportunity Heatmap Agentic System (March 2026)
 
-The **Opportunity Heatmap** is a **completely independent agentic system** that continuously evaluates IT Infrastructure sourcing opportunities (contract renewals and new requests) and prioritizes them using a weighted AI scoring model. It is architecturally separate from the Legacy DTP system.
+The **Opportunity Heatmap** is a **completely independent agentic system** that continuously evaluates sourcing opportunities (contract renewals and new requests) and prioritizes them using a weighted AI scoring model. Batch demo data is IT Infrastructure–heavy; **category cards** (`data/heatmap/category_cards.json`) extend SAS and defaults to additional categories (for example Software, Hardware). The heatmap is architecturally separate from the Legacy DTP system.
 
 ### Dual-System Architecture
 
@@ -906,7 +906,10 @@ The **Opportunity Heatmap** is a **completely independent agentic system** that 
 │  │   └── heatmap_vector_store│                                      │
 │  ├── services/              │  backend/services/                    │
 │  │   ├── feedback_service.py│  (case_service.py, chat_service.py)   │
-│  │   └── case_bridge.py ────┼──▶ create_case() (ONLY TOUCHPOINT)    │
+│  │   ├── case_bridge.py ────┼──▶ create_case() (ONLY TOUCHPOINT)    │
+│  │   └── intake_scoring.py  │                                       │
+│  ├── context_builder.py     │  (shared context + FIS field)        │
+│  ├── run_pipeline_init.py   │  (batch job + DB seed)                │
 │  └── heatmap_router.py      │                                       │
 │                             │                                       │
 │  data/heatmap.db            │  data/datalake.db                     │
@@ -939,6 +942,10 @@ PS_new = 0.30(IUS) + 0.30(ES) + 0.25(CSIS) + 0.15(SAS)
 | CSIS | Category Spend Importance Score | 0-10 | Spend Agent |
 | SAS | Strategic Alignment Score | 0-10 | Strategy Agent |
 
+### FIS: TCV vs ACV
+
+For **existing contracts**, **FIS** is driven by contract value from the synthetic contracts CSV. By default the framework uses **TCV** (column `TCV (Total Contract Value USD)`). To use **ACV** instead, set the environment variable **`HEATMAP_FIS_USE_ACV`** to `1`, `true`, or `yes`. The spend agent and `context_builder` then read `ACV (Annual Contract Value USD)`. Intake preview responses include `meta.fis_field_note` so the UI can state which field batch scoring uses.
+
 ### Tier Classification
 | Tier | Score Range | Priority |
 |------|-------------|----------|
@@ -964,6 +971,17 @@ spend_agent → contract_agent → strategy_agent → risk_agent → supervisor 
 2. **Storage**: Adjustments saved to `ReviewFeedback` table (SQLite). Written feedback embedded into `heatmap_documents` collection (ChromaDB).
 3. **Learning Loop**: Future scoring runs query ChromaDB for relevant historical feedback, allowing agents to "remember" past human context.
 
+### Business intake and opportunity provenance
+
+- **`Opportunity.source`**: `batch` = row produced by the LangGraph CSV pipeline; `intake` = row created via **`POST /api/heatmap/intake`**.
+- **Intake fields** (stored on `Opportunity`): `estimated_spend_usd`, `implementation_timeline_months`, `request_title`, `preferred_supplier_status`, plus PS_new component scores (`ius_score`, `es_score`, `csis_score`, `sas_score`) and tier.
+- **PS_new preview/submit** (`backend/heatmap/services/intake_scoring.py`): Uses the same IUS / ES / CSIS / SAS helpers as the framework. **ES** normalizes against `max_estimated_spend_pipeline` = max(estimated spend on existing **intake** opportunities with no `contract_id`, the current request’s estimate, and `1.0`).
+- **Batch re-run safety**: `run_init` / `POST /api/heatmap/run` deletes and re-inserts only opportunities where `source == "batch"`. Intake rows are **preserved**.
+
+### Category cards
+
+`data/heatmap/category_cards.json` holds per-category metadata for **SAS**: `default_preferred_status`, optional `category_strategy_sas`, and `supplier_preferred_status` (supplier name → preferred tier). Loaded via `backend/heatmap/context_builder.py` for both the batch pipeline and intake.
+
 ### API Routes
 
 | Method | Path | Description |
@@ -973,6 +991,9 @@ spend_agent → contract_agent → strategy_agent → risk_agent → supervisor 
 | POST | `/api/heatmap/approve` | Approve opportunities → creates Legacy DTP cases via bridge (returns `cases` map: opportunity id → case id; idempotent per opportunity via heatmap `AuditLog`) |
 | POST | `/api/heatmap/run` | Start heatmap scoring job in background (non-blocking) |
 | GET | `/api/heatmap/run/status` | Check scoring job status (`running`, success/error, timestamps, count) |
+| GET | `/api/heatmap/intake/categories` | List category keys from `category_cards.json` (sorted) |
+| POST | `/api/heatmap/intake/preview` | Compute **PS_new** for a candidate request without persisting (`meta`, `scores`, `total_score`, `tier`, `justification`) |
+| POST | `/api/heatmap/intake` | Persist intake opportunity (`source=intake`); body includes `request_title`, `category`, optional `subcategory` / `supplier_name`, `estimated_spend_usd`, `implementation_timeline_months`, optional `preferred_supplier_status`, optional `justification_summary_text` |
 
 ### Deployment-Safe Runtime Mode (Render 512MB)
 
@@ -1020,6 +1041,9 @@ Generated to `data/heatmap/synthetic/` (excluded from git). Schemas mirror the r
 - `synthetic_contracts.csv` (25 contracts)
 - `synthetic_supplier_metrics.csv` (10 suppliers)
 
+Committed configuration (not generated):
+- `data/heatmap/category_cards.json` — category strategy and preferred-supplier mappings for SAS (see **Category cards** above).
+
 ### Next.js Frontend (`frontend-next/`)
 
 Replaces the entire Streamlit UI with a unified Next.js 16 application (Tailwind CSS v4, App Router).
@@ -1027,7 +1051,7 @@ Replaces the entire Streamlit UI with a unified Next.js 16 application (Tailwind
 | Route | System | Description |
 |-------|--------|-------------|
 | `/heatmap` | Heatmap | Priority list with Tier badges and score breakdowns |
-| `/intake` | Heatmap | Business intake form with live agentic score preview |
+| `/intake` | Heatmap | Business intake form; live **PS_new** preview and submit via `/api/heatmap/intake/preview` and `/api/heatmap/intake` |
 | `/dashboard/heatmap` | Heatmap | KLI metrics (cycle time, agent reliability, edit density) |
 | `/cases` | Legacy DTP | Case dashboard tracking DTP01–DTP06 progress |
 | `/cases/[id]/copilot` | Legacy DTP | Cursor-style split: left evidence/artifacts, right chat + decision console |
@@ -1051,8 +1075,12 @@ Replaces the entire Streamlit UI with a unified Next.js 16 application (Tailwind
 | `backend/heatmap/persistence/heatmap_vector_store.py` | ChromaDB collection for feedback memory |
 | `backend/heatmap/services/feedback_service.py` | Human feedback + vector embedding |
 | `backend/heatmap/services/case_bridge.py` | Bridge to Legacy create_case() API |
-| `backend/heatmap/heatmap_router.py` | FastAPI router |
+| `backend/heatmap/services/intake_scoring.py` | PS_new scoring + persist intake opportunities |
+| `backend/heatmap/context_builder.py` | Heatmap context (spend aggregates, category cards, FIS field, max TCV by category) |
+| `backend/heatmap/run_pipeline_init.py` | Generate synthetic CSVs, run LangGraph pipeline, persist batch opportunities (preserves `source=intake`) |
+| `backend/heatmap/heatmap_router.py` | FastAPI router (including intake endpoints) |
 | `backend/heatmap/seed_synthetic_data.py` | Synthetic data generator |
+| `data/heatmap/category_cards.json` | Category-level SAS / preferred-supplier configuration |
 | `backend/persistence/db_interface.py` | Abstract DB interface (Azure SQL ready) |
 | `backend/rag/vector_store_interface.py` | Abstract Vector Store interface (Azure AI Search ready) |
 

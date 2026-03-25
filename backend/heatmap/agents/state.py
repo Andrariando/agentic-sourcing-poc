@@ -1,14 +1,18 @@
-from typing import TypedDict, List, Dict, Any, Optional
+from typing import TypedDict, List, Dict, Any, Optional, NotRequired, Required
 
-class ContractData(TypedDict):
+class ContractData(TypedDict, total=False):
     contract_id: Optional[str]
     request_id: Optional[str]
     supplier_name: Optional[str]
-    category: str
+    category: Required[str]
     subcategory: Optional[str]
     spend_data: List[Dict[str, Any]]
-    contract_details: Optional[Dict[str, Any]]
+    contract_details: NotRequired[Dict[str, Any]]
     metrics_data: Optional[Dict[str, Any]]
+    estimated_spend_usd: NotRequired[float]
+    implementation_timeline_months: NotRequired[float]
+    preferred_supplier_status: NotRequired[str]
+    category_strategy: NotRequired[Dict[str, Any]]
 
 class SpendSignal(TypedDict):
     fis_score: Optional[float]
@@ -52,20 +56,15 @@ class ScoredOpportunity(TypedDict):
     action_window: Optional[str]
     justification_summary: str
 
-class HeatmapState(TypedDict):
+class HeatmapState(TypedDict, total=False):
     run_id: str
     weights: Dict[str, float]
-    
-    # Input
-    contracts: List[ContractData]
-    
-    # Internal Tracking (index aligns with contracts)
-    current_index: int
-    spend_signals: List[SpendSignal]
-    contract_signals: List[ContractSignal]
-    strategy_signals: List[StrategySignal]
-    risk_signals: List[RiskSignal]
-    
-    # Output
-    scored_opportunities: List[ScoredOpportunity]
+    heatmap_context: Dict[str, Any]
+    contracts: Required[List[ContractData]]
+    current_index: Required[int]
+    spend_signals: Required[List[SpendSignal]]
+    contract_signals: Required[List[ContractSignal]]
+    strategy_signals: Required[List[StrategySignal]]
+    risk_signals: Required[List[RiskSignal]]
+    scored_opportunities: Required[List[ScoredOpportunity]]
     errors: List[str]

@@ -5,6 +5,14 @@ import { LayoutGrid, List, X, ExternalLink } from "lucide-react";
 import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { apiFetch } from "@/lib/api-fetch";
 import { getApiBaseUrl, apiConnectivityHint } from "@/lib/api-base";
+import { HeatmapAbbr, HEATMAP_GLOSSARY, type HeatmapGlossaryKey } from "@/lib/heatmap-glossary";
+
+const TIER_TOOLTIP: Record<string, HeatmapGlossaryKey> = {
+  T1: "t1",
+  T2: "t2",
+  T3: "t3",
+  T4: "t4",
+};
 
 export default function HeatmapPriorityPage() {
   const [opportunities, setOpportunities] = useState<any[]>([]);
@@ -274,7 +282,12 @@ export default function HeatmapPriorityPage() {
           <p className="font-bold text-slate-800">{data.supplier_name || 'New Request'}</p>
           <p className="text-xs text-slate-500 mb-2">{data.contract_id || data.request_id}</p>
           <div className="flex justify-between items-center mb-2">
-            <span className="text-xs font-semibold px-2 py-0.5 rounded bg-slate-100">{data.tier}</span>
+            <span
+              className="text-xs font-semibold px-2 py-0.5 rounded bg-slate-100 cursor-help"
+              title={HEATMAP_GLOSSARY[TIER_TOOLTIP[data.tier] ?? "tier"]}
+            >
+              {data.tier}
+            </span>
             <span className="font-bold text-sponsor-blue">{data.total_score.toFixed(1)}/10</span>
           </div>
           <p className="text-xs text-slate-600 line-clamp-3 leading-snug">{data.justification_summary}</p>
@@ -311,17 +324,23 @@ export default function HeatmapPriorityPage() {
         {/* Dashboard Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-            <h3 className="text-sm font-medium text-slate-500 mb-1">Tier 1 - Immediate</h3>
+            <h3 className="text-sm font-medium text-slate-500 mb-1">
+              <HeatmapAbbr term="t1">Tier 1</HeatmapAbbr> - Immediate
+            </h3>
             <p className="text-3xl font-bold text-mit-red">{loading ? "..." : tier1}</p>
             <div className="mt-3 w-full bg-slate-100 rounded-full h-1"><div className="bg-mit-red h-1 rounded-full" style={{width: `${Math.min((tier1 / Math.max(totalMonitored, 1)) * 100, 100)}%`}}></div></div>
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-            <h3 className="text-sm font-medium text-slate-500 mb-1">Tier 2 - Benchmark</h3>
+            <h3 className="text-sm font-medium text-slate-500 mb-1">
+              <HeatmapAbbr term="t2">Tier 2</HeatmapAbbr> - Benchmark
+            </h3>
             <p className="text-3xl font-bold text-orange-500">{loading ? "..." : tier2}</p>
             <div className="mt-3 w-full bg-slate-100 rounded-full h-1"><div className="bg-orange-500 h-1 rounded-full" style={{width: `${Math.min((tier2 / Math.max(totalMonitored, 1)) * 100, 100)}%`}}></div></div>
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-            <h3 className="text-sm font-medium text-slate-500 mb-1">Tier 3 - Monitor</h3>
+            <h3 className="text-sm font-medium text-slate-500 mb-1">
+              <HeatmapAbbr term="t3">Tier 3</HeatmapAbbr> - Monitor
+            </h3>
             <p className="text-3xl font-bold text-blue-500">{loading ? "..." : tier3}</p>
             <div className="mt-3 w-full bg-slate-100 rounded-full h-1"><div className="bg-blue-500 h-1 rounded-full" style={{width: `${Math.min((tier3 / Math.max(totalMonitored, 1)) * 100, 100)}%`}}></div></div>
           </div>
@@ -336,7 +355,13 @@ export default function HeatmapPriorityPage() {
         {/* View Router */}
         {viewMode === 'heatmap' ? (
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <h2 className="font-semibold text-slate-800 mb-6">Strategic Impact vs Urgency Matrix</h2>
+            <h2 className="font-semibold text-slate-800 mb-1">Strategic Impact vs Urgency Matrix</h2>
+            <p className="text-xs text-slate-500 mb-4 leading-relaxed max-w-3xl">
+              Axis keys — horizontal: <HeatmapAbbr term="fis">FIS</HeatmapAbbr> / <HeatmapAbbr term="es">ES</HeatmapAbbr>
+              . Vertical: <HeatmapAbbr term="eus">EUS</HeatmapAbbr> / <HeatmapAbbr term="rss">RSS</HeatmapAbbr>. Renewals use{" "}
+              <HeatmapAbbr term="psContract">PS_contract</HeatmapAbbr>; new requests use{" "}
+              <HeatmapAbbr term="psNew">PS_new</HeatmapAbbr>.
+            </p>
             <div className="w-full h-[500px]">
               <ResponsiveContainer width="100%" height="100%">
                 <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
@@ -357,12 +382,33 @@ export default function HeatmapPriorityPage() {
                 </ScatterChart>
               </ResponsiveContainer>
             </div>
-            <div className="flex justify-center gap-6 mt-4 text-xs font-medium text-slate-500">
-              <span className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-mit-red opacity-80"></div> Tier 1 (Critical)</span>
-              <span className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-orange-500 opacity-80"></div> Tier 2 (Immediate)</span>
-              <span className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500 opacity-80"></div> Tier 3 (Monitor)</span>
-              <span className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-slate-500 opacity-80"></div> Tier 4 (Low)</span>
+            <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-4 text-xs font-medium text-slate-500">
+              <span className="flex items-center gap-2 cursor-help" title={HEATMAP_GLOSSARY.t1}>
+                <div className="w-3 h-3 rounded-full bg-mit-red opacity-80" />
+                Tier 1 (Critical)
+              </span>
+              <span className="flex items-center gap-2 cursor-help" title={HEATMAP_GLOSSARY.t2}>
+                <div className="w-3 h-3 rounded-full bg-orange-500 opacity-80" />
+                Tier 2 (Immediate)
+              </span>
+              <span className="flex items-center gap-2 cursor-help" title={HEATMAP_GLOSSARY.t3}>
+                <div className="w-3 h-3 rounded-full bg-blue-500 opacity-80" />
+                Tier 3 (Monitor)
+              </span>
+              <span className="flex items-center gap-2 cursor-help" title={HEATMAP_GLOSSARY.t4}>
+                <div className="w-3 h-3 rounded-full bg-slate-500 opacity-80" />
+                Tier 4 (Low)
+              </span>
             </div>
+            <p className="mt-3 text-[11px] text-slate-400 text-center flex flex-wrap justify-center gap-x-1 gap-y-0.5">
+              <span title={HEATMAP_GLOSSARY.chartAxisX} className="cursor-help border-b border-dotted border-slate-400">
+                X-axis: FIS / ES
+              </span>
+              <span className="text-slate-300">·</span>
+              <span title={HEATMAP_GLOSSARY.chartAxisY} className="cursor-help border-b border-dotted border-slate-400">
+                Y-axis: EUS / RSS
+              </span>
+            </p>
           </div>
         ) : (
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -406,9 +452,15 @@ export default function HeatmapPriorityPage() {
                     </th>
                     <th className="px-6 py-4 font-medium">Supplier / Request</th>
                     <th className="px-6 py-4 font-medium">Category</th>
-                    <th className="px-6 py-4 font-medium">Tier</th>
-                    <th className="px-6 py-4 font-medium">Score Breakdown</th>
-                    <th className="px-6 py-4 font-medium">Total</th>
+                    <th className="px-6 py-4 font-medium cursor-help" title={HEATMAP_GLOSSARY.tier}>
+                      Tier
+                    </th>
+                    <th className="px-6 py-4 font-medium cursor-help" title="Component scores (hover each chip below). Renewals: EUS, FIS, RSS, SCS, SAS. New requests: IUS, ES, CSIS, SAS.">
+                      Score Breakdown
+                    </th>
+                    <th className="px-6 py-4 font-medium cursor-help" title={HEATMAP_GLOSSARY.agenticScore}>
+                      Total
+                    </th>
                     <th className="px-6 py-4 font-medium">Action Window</th>
                     <th className="px-6 py-4 font-medium text-right">Action</th>
                   </tr>
@@ -452,22 +504,76 @@ export default function HeatmapPriorityPage() {
                             <span className="text-xs text-slate-400">{opp.subcategory || 'General'}</span>
                           </td>
                           <td className="px-6 py-4">
-                            {opp.tier === 'T1' && <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-mit-red ring-1 ring-inset ring-red-100 border border-mit-red/20">T1</span>}
-                            {opp.tier === 'T2' && <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700 ring-1 ring-inset ring-orange-100 border border-orange-200">T2</span>}
-                            {opp.tier === 'T3' && <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-sponsor-blue border border-sponsor-blue/20">T3</span>}
-                            {opp.tier === 'T4' && <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">T4</span>}
+                            {opp.tier === 'T1' && (
+                              <span title={HEATMAP_GLOSSARY.t1} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-mit-red ring-1 ring-inset ring-red-100 border border-mit-red/20 cursor-help">
+                                T1
+                              </span>
+                            )}
+                            {opp.tier === 'T2' && (
+                              <span title={HEATMAP_GLOSSARY.t2} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700 ring-1 ring-inset ring-orange-100 border border-orange-200 cursor-help">
+                                T2
+                              </span>
+                            )}
+                            {opp.tier === 'T3' && (
+                              <span title={HEATMAP_GLOSSARY.t3} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-sponsor-blue border border-sponsor-blue/20 cursor-help">
+                                T3
+                              </span>
+                            )}
+                            {opp.tier === 'T4' && (
+                              <span title={HEATMAP_GLOSSARY.t4} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200 cursor-help">
+                                T4
+                              </span>
+                            )}
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex flex-wrap gap-1.5 text-[10px] font-mono">
-                              {opp.eus_score !== null && <span title="Expiry Urgency Score" className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-600 border border-slate-200">EUS:{opp.eus_score?.toFixed(1)}</span>}
-                              {opp.ius_score !== null && <span title="Implement Urgency Score" className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-600 border border-slate-200">IUS:{opp.ius_score?.toFixed(1)}</span>}
-                              {opp.fis_score !== null && <span title="Financial Impact Score" className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-600 border border-slate-200">FIS:{opp.fis_score?.toFixed(1)}</span>}
-                              {opp.es_score !== null && <span title="Estimated Spend Score" className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-600 border border-slate-200">ES:{opp.es_score?.toFixed(1)}</span>}
-                              {opp.rss_score !== null && <span title="Supplier Risk Score" className="px-1.5 py-0.5 bg-slate-100 rounded border border-orange-200 text-orange-700 bg-orange-50">RSS:{opp.rss_score?.toFixed(1)}</span>}
+                              {opp.eus_score != null && (
+                                <span title={HEATMAP_GLOSSARY.eus} className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-600 border border-slate-200 cursor-help">
+                                  EUS:{opp.eus_score?.toFixed(1)}
+                                </span>
+                              )}
+                              {opp.ius_score != null && (
+                                <span title={HEATMAP_GLOSSARY.ius} className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-600 border border-slate-200 cursor-help">
+                                  IUS:{opp.ius_score?.toFixed(1)}
+                                </span>
+                              )}
+                              {opp.fis_score != null && (
+                                <span title={HEATMAP_GLOSSARY.fis} className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-600 border border-slate-200 cursor-help">
+                                  FIS:{opp.fis_score?.toFixed(1)}
+                                </span>
+                              )}
+                              {opp.es_score != null && (
+                                <span title={HEATMAP_GLOSSARY.es} className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-600 border border-slate-200 cursor-help">
+                                  ES:{opp.es_score?.toFixed(1)}
+                                </span>
+                              )}
+                              {opp.rss_score != null && (
+                                <span title={HEATMAP_GLOSSARY.rss} className="px-1.5 py-0.5 rounded border border-orange-200 text-orange-700 bg-orange-50 cursor-help">
+                                  RSS:{opp.rss_score?.toFixed(1)}
+                                </span>
+                              )}
+                              {opp.scs_score != null && (
+                                <span title={HEATMAP_GLOSSARY.scs} className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-600 border border-slate-200 cursor-help">
+                                  SCS:{opp.scs_score?.toFixed(1)}
+                                </span>
+                              )}
+                              {opp.sas_score != null && (
+                                <span title={HEATMAP_GLOSSARY.sas} className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-600 border border-slate-200 cursor-help">
+                                  SAS:{opp.sas_score?.toFixed(1)}
+                                </span>
+                              )}
+                              {opp.csis_score != null && (
+                                <span title={HEATMAP_GLOSSARY.csis} className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-600 border border-slate-200 cursor-help">
+                                  CSIS:{opp.csis_score?.toFixed(1)}
+                                </span>
+                              )}
                             </div>
                           </td>
                           <td className="px-6 py-4">
-                            <div className="text-lg font-bold text-slate-900">{opp.total_score?.toFixed(1)}<span className="text-xs text-slate-500 font-normal">/10</span></div>
+                            <div className="text-lg font-bold text-slate-900 cursor-help" title={HEATMAP_GLOSSARY.agenticScore}>
+                              {opp.total_score?.toFixed(1)}
+                              <span className="text-xs text-slate-500 font-normal">/10</span>
+                            </div>
                           </td>
                           <td className="px-6 py-4 text-sm font-medium text-slate-700">
                             {opp.recommended_action_window || (opp.tier === 'T1' ? 'Critical' : opp.tier === 'T2' ? 'Immediate' : 'Monitor')}
@@ -504,8 +610,20 @@ export default function HeatmapPriorityPage() {
               <p className="text-sm text-slate-500 mt-1">Per-opportunity tracking of all 5 Agentic Outcomes</p>
             </div>
             <div className="flex gap-4 items-center">
-               <span className="flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase tracking-widest"><div className="w-2.5 h-2.5 bg-sponsor-blue rounded-sm"></div> KPI</span>
-               <span className="flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase tracking-widest"><div className="w-2.5 h-2.5 bg-mit-red rounded-sm"></div> KLI</span>
+              <span
+                className="flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase tracking-widest cursor-help border-b border-dotted border-slate-400"
+                title={HEATMAP_GLOSSARY.kpi}
+              >
+                <div className="w-2.5 h-2.5 bg-sponsor-blue rounded-sm" />
+                KPI
+              </span>
+              <span
+                className="flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase tracking-widest cursor-help border-b border-dotted border-slate-400"
+                title={HEATMAP_GLOSSARY.kli}
+              >
+                <div className="w-2.5 h-2.5 bg-mit-red rounded-sm" />
+                KLI
+              </span>
             </div>
           </div>
           
@@ -514,7 +632,13 @@ export default function HeatmapPriorityPage() {
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
                      <th rowSpan={2} className="px-4 py-3 border-r border-slate-200 font-syne text-[11px] font-bold uppercase tracking-widest text-slate-500 align-bottom w-64">Sourcing Opportunity</th>
-                     <th rowSpan={2} className="px-3 py-3 border-r border-slate-200 font-syne text-[11px] font-bold uppercase tracking-widest text-slate-500 align-bottom text-center">Tier</th>
+                     <th
+                       rowSpan={2}
+                       className="px-3 py-3 border-r border-slate-200 font-syne text-[11px] font-bold uppercase tracking-widest text-slate-500 align-bottom text-center cursor-help"
+                       title={HEATMAP_GLOSSARY.tier}
+                     >
+                       Tier
+                     </th>
                      <th colSpan={2} className="px-3 py-2 border-r border-slate-200 border-b border-slate-200 bg-blue-50/30 font-syne text-[10px] font-bold uppercase tracking-widest text-sponsor-blue text-center">Outcome 1 · Consistency</th>
                      <th colSpan={1} className="px-3 py-2 border-r border-slate-200 border-b border-slate-200 bg-blue-50/30 font-syne text-[10px] font-bold uppercase tracking-widest text-sponsor-blue text-center">Outcome 2 · Cycle Time</th>
                      <th colSpan={1} className="px-3 py-2 border-r border-slate-200 border-b border-slate-200 bg-red-50/30 font-syne text-[10px] font-bold uppercase tracking-widest text-mit-red text-center">Outcome 3 · Collaboration</th>
@@ -524,32 +648,32 @@ export default function HeatmapPriorityPage() {
                   <tr className="bg-slate-50 border-b-2 border-slate-800">
                      {/* O1 */}
                      <th className="px-2 py-2 text-center text-[10px] font-bold uppercase tracking-wider text-slate-700 leading-tight">
-                       <span className="block text-sponsor-blue mb-0.5">KPI</span> AI Reliability
+                       <span className="block text-sponsor-blue mb-0.5 cursor-help" title={HEATMAP_GLOSSARY.kpi}>KPI</span> AI Reliability
                      </th>
                      <th className="px-2 py-2 text-center border-r border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-700 leading-tight">
-                       <span className="block text-mit-red mb-0.5">KLI</span> Override Count
+                       <span className="block text-mit-red mb-0.5 cursor-help" title={HEATMAP_GLOSSARY.kli}>KLI</span> Override Count
                      </th>
                      {/* O2 */}
                      <th className="px-2 py-2 text-center border-r border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-700 leading-tight">
-                       <span className="block text-sponsor-blue mb-0.5">KPI</span> Cycle Time Reduce
+                       <span className="block text-sponsor-blue mb-0.5 cursor-help" title={HEATMAP_GLOSSARY.kpi}>KPI</span> Cycle Time Reduce
                      </th>
                      {/* O3 */}
                      <th className="px-2 py-2 text-center border-r border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-700 leading-tight">
-                       <span className="block text-mit-red mb-0.5">KLI</span> Edit Density
+                       <span className="block text-mit-red mb-0.5 cursor-help" title={HEATMAP_GLOSSARY.kli}>KLI</span> Edit Density
                      </th>
                      {/* O4 */}
                      <th className="px-2 py-2 text-center text-[10px] font-bold uppercase tracking-wider text-slate-700 leading-tight">
-                       <span className="block text-sponsor-blue mb-0.5">KPI</span> Data Vis Rate
+                       <span className="block text-sponsor-blue mb-0.5 cursor-help" title={HEATMAP_GLOSSARY.kpi}>KPI</span> Data Vis Rate
                      </th>
                      <th className="px-2 py-2 text-center border-r border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-700 leading-tight">
-                       <span className="block text-sponsor-blue mb-0.5">KPI</span> Signal Density
+                       <span className="block text-sponsor-blue mb-0.5 cursor-help" title={HEATMAP_GLOSSARY.kpi}>KPI</span> Signal Density
                      </th>
                      {/* O5 */}
                      <th className="px-2 py-2 text-center text-[10px] font-bold uppercase tracking-wider text-slate-700 leading-tight">
-                       <span className="block text-mit-red mb-0.5">KLI</span> Agents Run
+                       <span className="block text-mit-red mb-0.5 cursor-help" title={HEATMAP_GLOSSARY.kli}>KLI</span> Agents Run
                      </th>
                      <th className="px-2 py-2 text-center text-[10px] font-bold uppercase tracking-wider text-slate-700 leading-tight">
-                       <span className="block text-mit-red mb-0.5">KLI</span> Exec Time (s)
+                       <span className="block text-mit-red mb-0.5 cursor-help" title={HEATMAP_GLOSSARY.kli}>KLI</span> Exec Time (s)
                      </th>
                   </tr>
                 </thead>
@@ -573,10 +697,18 @@ export default function HeatmapPriorityPage() {
                             <div className="font-mono text-[10px] text-slate-400 font-normal">{opp.contract_id || opp.request_id}</div>
                           </td>
                           <td className="px-3 py-3 text-center border-r border-slate-100">
-                             <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                               opp.tier === 'T1' ? 'bg-red-100 text-mit-red' : 
-                               opp.tier === 'T2' ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-600'
-                             }`}>{opp.tier}</span>
+                            <span
+                              className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold cursor-help ${
+                                opp.tier === "T1"
+                                  ? "bg-red-100 text-mit-red"
+                                  : opp.tier === "T2"
+                                    ? "bg-orange-100 text-orange-700"
+                                    : "bg-slate-100 text-slate-600"
+                              }`}
+                              title={HEATMAP_GLOSSARY[TIER_TOOLTIP[opp.tier] ?? "tier"]}
+                            >
+                              {opp.tier}
+                            </span>
                           </td>
                           
                           <td className="px-3 py-3 text-center text-slate-700 font-mono text-xs">{reliability}%</td>
@@ -635,9 +767,19 @@ export default function HeatmapPriorityPage() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-semibold text-slate-500 mb-1">Agentic Score</p>
-                  <p className="text-4xl font-black text-sponsor-blue tracking-tighter">{reviewOpp.total_score?.toFixed(1)}<span className="text-lg text-slate-400">/10</span></p>
-                  <p className="text-xs font-bold text-mit-red mt-2 uppercase bg-red-50 inline-block px-2 py-1 rounded">{reviewOpp.tier} - {reviewOpp.recommended_action_window}</p>
+                  <p className="text-sm font-semibold text-slate-500 mb-1 cursor-help" title={HEATMAP_GLOSSARY.agenticScore}>
+                    Agentic Score
+                  </p>
+                  <p className="text-4xl font-black text-sponsor-blue tracking-tighter cursor-help" title={HEATMAP_GLOSSARY.agenticScore}>
+                    {reviewOpp.total_score?.toFixed(1)}
+                    <span className="text-lg text-slate-400">/10</span>
+                  </p>
+                  <p
+                    className="text-xs font-bold text-mit-red mt-2 uppercase bg-red-50 inline-block px-2 py-1 rounded cursor-help"
+                    title={HEATMAP_GLOSSARY[TIER_TOOLTIP[reviewOpp.tier] ?? "tier"]}
+                  >
+                    {reviewOpp.tier} - {reviewOpp.recommended_action_window}
+                  </p>
                 </div>
               </div>
 
@@ -654,12 +796,70 @@ export default function HeatmapPriorityPage() {
                 <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2">Sub-Score Breakdown</p>
                   <div className="space-y-3">
-                    {reviewOpp.eus_score !== null && <div className="flex justify-between items-center"><span className="text-sm text-slate-600">Expiry Urgency (EUS)</span><span className="font-mono text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded">{reviewOpp.eus_score?.toFixed(1)}</span></div>}
-                    {reviewOpp.ius_score !== null && <div className="flex justify-between items-center"><span className="text-sm text-slate-600">Implement Urgency (IUS)</span><span className="font-mono text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded">{reviewOpp.ius_score?.toFixed(1)}</span></div>}
-                    {reviewOpp.fis_score !== null && <div className="flex justify-between items-center"><span className="text-sm text-slate-600">Financial Impact (FIS)</span><span className="font-mono text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded">{reviewOpp.fis_score?.toFixed(1)}</span></div>}
-                    {reviewOpp.es_score !== null && <div className="flex justify-between items-center"><span className="text-sm text-slate-600">Estimated Spend (ES)</span><span className="font-mono text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded">{reviewOpp.es_score?.toFixed(1)}</span></div>}
-                    {reviewOpp.rss_score !== null && <div className="flex justify-between items-center"><span className="text-sm text-slate-600">Supplier Risk (RSS)</span><span className="font-mono text-sm font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-100">{reviewOpp.rss_score?.toFixed(1)}</span></div>}
-                    {reviewOpp.csis_score !== null && <div className="flex justify-between items-center"><span className="text-sm text-slate-600">Category Spend (CSIS)</span><span className="font-mono text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded">{reviewOpp.csis_score?.toFixed(1)}</span></div>}
+                    {reviewOpp.eus_score != null && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-slate-600 cursor-help border-b border-dotted border-slate-300" title={HEATMAP_GLOSSARY.eus}>
+                          Expiry Urgency (EUS)
+                        </span>
+                        <span className="font-mono text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded">{reviewOpp.eus_score?.toFixed(1)}</span>
+                      </div>
+                    )}
+                    {reviewOpp.ius_score != null && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-slate-600 cursor-help border-b border-dotted border-slate-300" title={HEATMAP_GLOSSARY.ius}>
+                          Implement Urgency (IUS)
+                        </span>
+                        <span className="font-mono text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded">{reviewOpp.ius_score?.toFixed(1)}</span>
+                      </div>
+                    )}
+                    {reviewOpp.fis_score != null && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-slate-600 cursor-help border-b border-dotted border-slate-300" title={HEATMAP_GLOSSARY.fis}>
+                          Financial Impact (FIS)
+                        </span>
+                        <span className="font-mono text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded">{reviewOpp.fis_score?.toFixed(1)}</span>
+                      </div>
+                    )}
+                    {reviewOpp.es_score != null && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-slate-600 cursor-help border-b border-dotted border-slate-300" title={HEATMAP_GLOSSARY.es}>
+                          Estimated Spend (ES)
+                        </span>
+                        <span className="font-mono text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded">{reviewOpp.es_score?.toFixed(1)}</span>
+                      </div>
+                    )}
+                    {reviewOpp.rss_score != null && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-slate-600 cursor-help border-b border-dotted border-slate-300" title={HEATMAP_GLOSSARY.rss}>
+                          Supplier Risk (RSS)
+                        </span>
+                        <span className="font-mono text-sm font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-100">{reviewOpp.rss_score?.toFixed(1)}</span>
+                      </div>
+                    )}
+                    {reviewOpp.scs_score != null && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-slate-600 cursor-help border-b border-dotted border-slate-300" title={HEATMAP_GLOSSARY.scs}>
+                          Spend Concentration (SCS)
+                        </span>
+                        <span className="font-mono text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded">{reviewOpp.scs_score?.toFixed(1)}</span>
+                      </div>
+                    )}
+                    {reviewOpp.csis_score != null && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-slate-600 cursor-help border-b border-dotted border-slate-300" title={HEATMAP_GLOSSARY.csis}>
+                          Category Spend (CSIS)
+                        </span>
+                        <span className="font-mono text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded">{reviewOpp.csis_score?.toFixed(1)}</span>
+                      </div>
+                    )}
+                    {reviewOpp.sas_score != null && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-slate-600 cursor-help border-b border-dotted border-slate-300" title={HEATMAP_GLOSSARY.sas}>
+                          Strategic Alignment (SAS)
+                        </span>
+                        <span className="font-mono text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded">{reviewOpp.sas_score?.toFixed(1)}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 

@@ -1,6 +1,6 @@
-from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
-from typing import List, Optional
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field, field_validator
+from typing import List, Optional, Any, Dict
 from sqlmodel import select
 import threading
 import time
@@ -10,6 +10,8 @@ from backend.heatmap.services.case_bridge import get_case_bridge_service
 from backend.heatmap.run_pipeline_init import run_init
 from backend.heatmap.persistence.heatmap_database import heatmap_db
 from backend.heatmap.persistence.heatmap_models import Opportunity
+from backend.heatmap.context_builder import load_category_cards
+from backend.heatmap.services.intake_scoring import score_intake_payload, persist_intake_opportunity
 
 heatmap_router = APIRouter()
 _pipeline_lock = threading.Lock()
@@ -53,6 +55,111 @@ class PipelineStatusResponse(BaseModel):
     last_success: Optional[bool] = None
     last_error: Optional[str] = None
     opportunity_count: Optional[int] = None
+
+
+def _empty_str_to_none(v: Any) -> Any:
+    if v == "":
+        return None
+    return v
+
+
+class IntakeScoreFields(BaseModel):
+    category: str = Field(min_length=1)
+    subcategory: Optional[str] = None
+    supplier_name: Optional[str] = None
+    estimated_spend_usd: float = Field(ge=0)
+    implementation_timeline_months: float = Field(gt=0, le=120)
+    preferred_supplier_status: Optional[str] = None
+
+    @field_validator("subcategory", "supplier_name", "preferred_supplier_status", mode="before")
+    @classmethod
+    def _coerce_optional(cls, v: Any) -> Any:
+        return _empty_str_to_none(v)
+
+
+class IntakePreviewRequest(IntakeScoreFields):
+    pass
+
+
+class IntakePreviewResponse(BaseModel):
+    meta: Dict[str, Any]
+    scores: Dict[str, Optional[float]]
+    total_score: float
+    tier: str
+    justification: str
+
+
+class IntakeSubmitRequest(IntakeScoreFields):
+    request_title: Optional[str] = None
+    justification_summary_text: Optional[str] = None
+
+    @field_validator("request_title", "justification_summary_text", mode="before")
+    @classmethod
+    def _coerce_submit_optional(cls, v: Any) -> Any:
+        return _empty_str_to_none(v)
+
+
+class IntakeSubmitResponse(BaseModel):
+    success: bool
+    opportunity: Dict[str, Any]
+
+
+@heatmap_router.get("/intake/categories")
+def intake_categories():
+    cards = load_category_cards()
+    return {"categories": sorted(cards.keys())}
+
+
+@heatmap_router.post("/intake/preview", response_model=IntakePreviewResponse)
+def intake_preview(req: IntakePreviewRequest):
+    session = heatmap_db.get_db_session()
+    try:
+        meta, scores, total_r, tier, justification = score_intake_payload(
+            session,
+            category=req.category.strip(),
+            subcategory=req.subcategory,
+            supplier_name=req.supplier_name,
+            estimated_spend_usd=req.estimated_spend_usd,
+            implementation_timeline_months=req.implementation_timeline_months,
+            preferred_supplier_status=req.preferred_supplier_status,
+        )
+        return IntakePreviewResponse(
+            meta=meta,
+            scores=scores,
+            total_score=total_r,
+            tier=tier,
+            justification=justification,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    finally:
+        session.close()
+
+
+@heatmap_router.post("/intake", response_model=IntakeSubmitResponse)
+def intake_submit(req: IntakeSubmitRequest):
+    session = heatmap_db.get_db_session()
+    try:
+        opp = persist_intake_opportunity(
+            session,
+            request_title=req.request_title,
+            category=req.category.strip(),
+            subcategory=req.subcategory,
+            supplier_name=req.supplier_name,
+            estimated_spend_usd=req.estimated_spend_usd,
+            implementation_timeline_months=req.implementation_timeline_months,
+            preferred_supplier_status=req.preferred_supplier_status,
+            justification_summary_text=req.justification_summary_text,
+        )
+        return IntakeSubmitResponse(success=True, opportunity=opp.model_dump())
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    finally:
+        session.close()
+
 
 @heatmap_router.get("/opportunities")
 def list_opportunities():

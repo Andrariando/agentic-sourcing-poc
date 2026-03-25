@@ -45,8 +45,33 @@ class HeatmapDatabase(DatabaseInterface):
             Opportunity, OpportunitySignal, ReviewFeedback, 
             ScoringWeights, ScoringRun, AuditLog
         )
+        from sqlalchemy import text
         engine = get_engine()
         SQLModel.metadata.create_all(engine)
+        self._migrate_opportunity_columns(engine)
+
+    def _migrate_opportunity_columns(self, engine) -> None:
+        """SQLite: add newer Opportunity columns without Alembic."""
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            r = conn.execute(
+                text("SELECT name FROM sqlite_master WHERE type='table' AND name='opportunity'")
+            ).fetchone()
+            if not r:
+                return
+            cols = {row[1] for row in conn.execute(text("PRAGMA table_info(opportunity)")).fetchall()}
+            for name, typ in (
+                ("source", "TEXT"),
+                ("estimated_spend_usd", "REAL"),
+                ("implementation_timeline_months", "REAL"),
+                ("request_title", "TEXT"),
+                ("preferred_supplier_status", "TEXT"),
+            ):
+                if name not in cols:
+                    conn.execute(text(f"ALTER TABLE opportunity ADD COLUMN {name} {typ}"))
+                    conn.commit()
+            conn.execute(text("UPDATE opportunity SET source = 'batch' WHERE source IS NULL"))
+            conn.commit()
 
     def get_session(self) -> Generator[Session, None, None]:
         engine = get_engine()

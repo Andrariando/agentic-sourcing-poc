@@ -130,13 +130,15 @@ agentic-sourcing-poc/
 │   ├── rag/                     # Vector retrieval (ChromaDB)
 │   ├── persistence/             # Data lake (SQLite + SQLModel)
 │   ├── services/                # Business logic layer
-│   └── scripts/                 # Utility & seed scripts
-│
-├── heatmap/                     # Agentic Heatmap Engine
-│   ├── heatmap_graph.py         # LangGraph scoring pipeline
-│   ├── heatmap_database.py      # SQLModel persistence
-│   ├── case_bridge.py           # T1 → DTP case creation
-│   └── engine_runner.py         # Batch scoring orchestrator
+│   ├── scripts/                 # Utility & seed scripts
+│   └── heatmap/                 # Agentic Heatmap (separate SQLite + LangGraph)
+│       ├── agents/              # Pipeline agents + graph.py
+│       ├── persistence/         # heatmap_models, heatmap_database
+│       ├── services/            # feedback_service, case_bridge, intake_scoring
+│       ├── context_builder.py   # Spend/category context; FIS TCV vs ACV
+│       ├── heatmap_router.py    # /api/heatmap/* (incl. intake)
+│       ├── run_pipeline_init.py # Batch pipeline + DB (keeps intake rows)
+│       └── seed_synthetic_data.py
 │
 ├── shared/                      # Cross-cutting modules
 │   ├── schemas.py               # Pydantic schemas
@@ -145,6 +147,7 @@ agentic-sourcing-poc/
 └── data/                        # Databases & synthetic data
     ├── datalake.db              # SQLite data lake
     ├── heatmap.db               # Heatmap scoring database
+    ├── heatmap/                 # category_cards.json; heatmap/synthetic/*.csv (generated)
     ├── chroma_db/               # ChromaDB vector store
     └── cases_seed.json          # Pre-seeded case data
 ```
@@ -300,7 +303,14 @@ For detailed demo instructions, see [System Documentation - Demo & Testing](SYST
 |--------|----------|-------------|
 | GET | `/api/heatmap/opportunities` | List all scored opportunities (T1-T4) |
 | POST | `/api/heatmap/feedback` | Submit human override feedback |
-| POST | `/api/heatmap/run` | Trigger batch scoring engine |
+| POST | `/api/heatmap/approve` | Approve opportunities → legacy DTP cases (via case bridge) |
+| POST | `/api/heatmap/run` | Trigger batch scoring engine (background on API server) |
+| GET | `/api/heatmap/run/status` | Pipeline job status and last error |
+| GET | `/api/heatmap/intake/categories` | Category list from `category_cards.json` |
+| POST | `/api/heatmap/intake/preview` | PS_new preview (no DB write) |
+| POST | `/api/heatmap/intake` | Save new intake opportunity (`source=intake`; batch re-runs keep these rows) |
+
+**FIS / contract value:** default **TCV**; set env `HEATMAP_FIS_USE_ACV=1` to use **ACV** for batch scoring. See `SYSTEM_DOCUMENTATION.md` § Opportunity Heatmap.
 
 ---
 
@@ -323,7 +333,7 @@ Premium dark-mode glassmorphic design with Syne/DM Sans typography:
 - **Priority Heatmap** (`/heatmap`) — KPI stat cards, Table/Matrix toggle, Recharts scatter chart, KLI Outcome Matrix
 - **Case Copilot** (`/cases/[id]/copilot`) — 60/40 split-screen with evidence/artifacts on the left and chat + Decision Console on the right (Cursor-style workflow)
 - **Case Copilot (no case selected)** (`/cases/copilot`) — default split-shell empty state with links back to Case Dashboard/Heatmap
-- **Business Intake** (`/intake`) — New sourcing request form
+- **Business Intake** (`/intake`) — New sourcing request form with API-backed **PS_new** preview and submit
 - **KPI Dashboard** (`/kpi`) — Performance metrics
 
 ### Legacy DTP System (Streamlit)

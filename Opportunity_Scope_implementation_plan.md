@@ -102,7 +102,7 @@ Aggregates the scores, calculates the final `PS_contract` or `PS_new`, creates e
 Expose the backend logic so a frontend can consume it, and securely link approved cases to the legacy system without disturbing its existing logic.
 
 #### [NEW] `backend/heatmap/heatmap_router.py`
-FastAPI routes (`/api/heatmap/run`, `/api/heatmap/opportunities`, `/api/heatmap/approve`, `/api/heatmap/feedback`).
+FastAPI routes: `/api/heatmap/run`, `/api/heatmap/run/status`, `/api/heatmap/opportunities`, `/api/heatmap/approve`, `/api/heatmap/feedback`, plus **intake** — `GET /api/heatmap/intake/categories`, `POST /api/heatmap/intake/preview`, `POST /api/heatmap/intake` (persists `Opportunity` with `source=intake`). Batch re-runs replace only `source=batch` rows.
 
 #### [NEW] `backend/heatmap/services/case_bridge.py`
 The **only** touchpoint between the new Heatmap system and the legacy DTP system. On approval:
@@ -137,7 +137,7 @@ A standard Next.js 14+ app layout (App router, React, Tailwind CSS or Vanilla CS
 - **Hosting**: Prepared for deployment on Vercel. Connects to the local FastAPI backend during development via environment variables (`NEXT_PUBLIC_API_URL=http://localhost:8000`).
 
 #### Key Pages/Components for the New Heatmap System:
-1. **Business Intake Page (`/intake`)**: Form to capture "New Sourcing Requests". Shows live preview of scores (IUS, ES, CSIS, SAS) mimicking the `UI Reference`.
+1. **Business Intake Page (`/intake`)**: Form to capture "New Sourcing Requests". Live **PS_new** preview and submit call the FastAPI intake endpoints (same scoring helpers as the framework; see `SYSTEM_DOCUMENTATION.md`).
 2. **Prioritized List (`/heatmap`)**: Data table of all scored opportunities (Contracts and New Requests). Shows tier badges, value, and action buttons. 
 3. **KPI/KLI Dashboard (`/dashboard/heatmap`)**: Visualizations tracking AI reliability, cycle time reduction, and edit density.
 4. **Approval Flow Modal**: Allows bulk selection of opportunities to "Approve & Create Cases", hitting the `/api/heatmap/approve` backend route.

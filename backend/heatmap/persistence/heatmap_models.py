@@ -35,6 +35,13 @@ class Opportunity(SQLModel, table=True):
     status: str = Field(default="Pending") # Pending, Approved, Rejected
     last_refresh_ts: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+    # batch = CSV pipeline row; intake = POST /api/heatmap/intake
+    source: str = Field(default="batch")
+    estimated_spend_usd: Optional[float] = Field(default=None)
+    implementation_timeline_months: Optional[float] = Field(default=None)
+    request_title: Optional[str] = Field(default=None)
+    preferred_supplier_status: Optional[str] = Field(default=None)
+
 
 class OpportunitySignal(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

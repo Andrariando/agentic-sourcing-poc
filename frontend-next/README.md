@@ -19,7 +19,7 @@ The modern, premium frontend for the Procurement Agentic System. Built with Next
 |-------|-------------|
 | `/heatmap` | Sourcing Priority Heatmap — KPI stat cards, Table/Matrix toggle, Recharts scatter chart, Sourcing Opportunity Matrix (KLI) |
 | `/cases/[id]/copilot` | Case Copilot — 60/40 split-screen with triage panel, Context & AI Signals, Governance Console, Live Agentic Process Log, and chat panel |
-| `/intake` | Business Intake — New sourcing request form |
+| `/intake` | Business Intake — New sourcing request form; calls `/api/heatmap/intake/preview` (debounced) and `/api/heatmap/intake` |
 | `/kpi` | KPI Dashboard |
 
 ## Dependencies

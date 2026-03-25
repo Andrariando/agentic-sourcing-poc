@@ -1,0 +1,42 @@
+{
+  "IT Infrastructure": {
+    "default_preferred_status": "allowed",
+    "category_strategy_sas": 7.0,
+    "supplier_preferred_status": {
+      "CloudServe Group": "preferred",
+      "TechGlobal Inc": "allowed",
+      "SecureShield Tech": "preferred",
+      "NetSystems LLC": "nonpreferred",
+      "CyberGuard Ltd": "allowed",
+      "Infinite Computing": "straightpo",
+      "Endpoint Solutions Corp": "allowed",
+      "AlphaNetwork Services": "allowed",
+      "DeltaStorage Systems": "nonpreferred",
+      "DataCenter Partners": "allowed"
+    }
+  },
+  "Software": {
+    "default_preferred_status": "allowed",
+    "category_strategy_sas": 7.5,
+    "supplier_preferred_status": {
+      "NexusSoft LLC": "preferred",
+      "LicenseHub Global": "allowed",
+      "DevStack Partners": "preferred",
+      "AppMatrix Inc": "nonpreferred",
+      "SaaS Collective": "straightpo",
+      "CodeStream Ltd": "allowed"
+    }
+  },
+  "Hardware": {
+    "default_preferred_status": "allowed",
+    "category_strategy_sas": 7.0,
+    "supplier_preferred_status": {
+      "ProCompute Systems": "preferred",
+      "SiliconTrade Co": "allowed",
+      "RackMount Direct": "nonpreferred",
+      "OEM Alliance Group": "preferred",
+      "PeripheralWorks": "allowed",
+      "ChipSource International": "straightpo"
+    }
+  }
+}
