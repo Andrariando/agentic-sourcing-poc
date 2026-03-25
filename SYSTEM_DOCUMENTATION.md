@@ -1030,7 +1030,8 @@ Replaces the entire Streamlit UI with a unified Next.js 16 application (Tailwind
 | `/intake` | Heatmap | Business intake form with live agentic score preview |
 | `/dashboard/heatmap` | Heatmap | KLI metrics (cycle time, agent reliability, edit density) |
 | `/cases` | Legacy DTP | Case dashboard tracking DTP01–DTP06 progress |
-| `/cases/[id]/copilot` | Legacy DTP | Chat interface with the Legacy DTP Supervisor |
+| `/cases/[id]/copilot` | Legacy DTP | Cursor-style split: left evidence/artifacts, right chat + decision console |
+| `/cases/copilot` | Legacy DTP | No-case-selected default shell (context + disabled chat prompt) |
 
 **Theme**: MIT colorways (Cardinal Red `#A31F34`, Silver Gray `#8A8B8C`) and Sponsor colorways (Blue `#1a3cff`, Orange `#ff5c35`).
 
@@ -1054,4 +1055,45 @@ Replaces the entire Streamlit UI with a unified Next.js 16 application (Tailwind
 | `backend/heatmap/seed_synthetic_data.py` | Synthetic data generator |
 | `backend/persistence/db_interface.py` | Abstract DB interface (Azure SQL ready) |
 | `backend/rag/vector_store_interface.py` | Abstract Vector Store interface (Azure AI Search ready) |
+
+---
+
+## 🔄 16. Copilot Decision Sync + Synthetic Artifact Visibility (March 2026)
+
+### A. Cursor-Style Copilot Interaction Model
+
+The Next.js case copilot now uses a single action zone:
+
+- **Left panel**: read-only context (signals, supporting docs, decision status, activity log).
+- **Right panel**: active workspace (chat + Decision Console controls).
+
+This keeps "review" and "decide" conceptually linked while preserving artifact visibility.
+
+### B. Decision-to-Chat Reaction Loop
+
+When a user clicks **Approve** or **Request Revision** in the right panel:
+
+1. The UI calls the decision endpoint (`/api/decisions/approve` or `/api/decisions/reject`).
+2. On success, the UI appends an immediate "decision recorded" assistant message.
+3. The UI auto-posts a follow-up prompt to `/api/chat` with decision context.
+4. The returned assistant message is appended to the same thread ("what changed + what next").
+
+Result: chat visibly reacts to decisions in the same workflow, instead of requiring manual follow-up prompts.
+
+### C. Synthetic Artifacts Now Visible via `/api/documents`
+
+`backend/scripts/seed_it_demo_data.py` now seeds artifacts in two places:
+
+- **Chroma vector chunks** (for agent retrieval / grounding).
+- **`document_records` table** (for `/api/documents` UI listing).
+
+This removes the mismatch where artifacts were retrievable by agents but missing in document list views.
+
+### D. Files Updated
+
+| File | Change |
+|------|--------|
+| `frontend-next/src/app/cases/[id]/copilot/page.tsx` | Decision Console moved to chat side and decision-triggered chat follow-up behavior |
+| `frontend-next/src/app/cases/copilot/page.tsx` | New no-case-selected default shell route |
+| `backend/scripts/seed_it_demo_data.py` | Added synthetic document catalog reuse and `document_records` upsert |
 

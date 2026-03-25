@@ -56,6 +56,7 @@ export default function LegacyCaseCopilotPage() {
 
   const [caseDetails, setCaseDetails] = useState<any>(null);
   const [caseError, setCaseError] = useState<string | null>(null);
+  const [caseLoading, setCaseLoading] = useState(true);
   const [documents, setDocuments] = useState<any[]>([]);
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
@@ -81,18 +82,32 @@ export default function LegacyCaseCopilotPage() {
 
   // 1. Fetch Case Details & Chat History (poll only updates case meta — never resets chat)
   useEffect(() => {
+    if (!caseId) {
+      setCaseLoading(false);
+      return;
+    }
     initialChatHydrated.current = false;
+    setCaseLoading(true);
+    setCaseError(null);
 
     async function fetchCase(isPoll: boolean) {
       try {
         const url = `${getApiBaseUrl()}/api/cases/${caseId}`;
         const res = await apiFetch(url);
         if (!res.ok) {
-          if (!isPoll) setCaseError("Case not found or API error.");
+          if (!isPoll) {
+            setCaseError("Case not found or API error.");
+            setCaseDetails(null);
+            initialChatHydrated.current = false;
+            setMessages([]);
+          }
+          if (!isPoll) setCaseLoading(false);
           return;
         }
         const data = await res.json();
+        setCaseError(null);
         setCaseDetails(data);
+        if (!isPoll) setCaseLoading(false);
 
         if (isPoll || initialChatHydrated.current) return;
         initialChatHydrated.current = true;
@@ -111,7 +126,13 @@ export default function LegacyCaseCopilotPage() {
         setMessages([{ role: "assistant", content: buildAssistantWelcome(data) }]);
       } catch (err) {
         console.error("Failed to fetch case details:", err);
-        if (!isPoll) setCaseError("Network error attempting to fetch case.");
+        if (!isPoll) {
+          setCaseError("Network error attempting to fetch case.");
+          setCaseDetails(null);
+          initialChatHydrated.current = false;
+          setMessages([]);
+        }
+        if (!isPoll) setCaseLoading(false);
       }
     }
     
@@ -129,12 +150,10 @@ export default function LegacyCaseCopilotPage() {
       }
     }
 
-    if (caseId) {
-      fetchCase(false);
-      fetchDocs();
-      const interval = setInterval(() => fetchCase(true), 5000);
-      return () => clearInterval(interval);
-    }
+    fetchCase(false);
+    fetchDocs();
+    const interval = setInterval(() => fetchCase(true), 5000);
+    return () => clearInterval(interval);
   }, [caseId]);
 
   // Auto-scroll the process log
@@ -144,6 +163,7 @@ export default function LegacyCaseCopilotPage() {
 
   // 3. Handle Live Chat
   const handleSend = async () => {
+    if (!caseDetails) return;
     if (!input.trim()) return;
     const userMsg = input;
     setMessages(prev => [...prev, { role: "user", content: userMsg }]);
@@ -188,6 +208,7 @@ export default function LegacyCaseCopilotPage() {
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!caseDetails) return;
     if (!e.target.files || e.target.files.length === 0) return;
     const file = e.target.files[0];
     setIsUploading(true);
@@ -277,6 +298,32 @@ export default function LegacyCaseCopilotPage() {
       });
       if (res.ok) {
         setGovernanceApproved(true);
+        const decisionPrompt = `I approved ${displayStage} for case ${caseId}. SOC2 status: ${govSoc2 === "verified" ? "Yes, Verified" : govSoc2 || "Not set"}. Infrastructure threshold: ${govInfra === "meets" ? "Meets Thresholds" : govInfra || "Not set"}. Summarize what changed in state and tell me the next best action.`;
+        setMessages(prev => [...prev, { role: "assistant", content: `Decision recorded: **Approved ${displayStage}**. Syncing Copilot guidance…` }]);
+        setIsTyping(true);
+        try {
+          const chatUrl = `${getApiBaseUrl()}/api/chat`;
+          const followUp = await apiFetch(chatUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              case_id: caseId,
+              user_message: decisionPrompt,
+              use_tier_2: true
+            })
+          });
+          const chatData = await followUp.json();
+          const assistantFollowUp =
+            chatData?.assistant_message ||
+            [...(chatData?.messages || [])].reverse().find((m: any) => m.role === "assistant" || m.role === "ai")?.content ||
+            "Approval saved. I can now guide you through the next step.";
+          setMessages(prev => [...prev, { role: "assistant", content: assistantFollowUp }]);
+        } catch (chatErr) {
+          console.error("Decision follow-up chat failed:", chatErr);
+          setMessages(prev => [...prev, { role: "assistant", content: "Approval saved, but I couldn't fetch a follow-up response. Ask me 'what's next?' to continue." }]);
+        } finally {
+          setIsTyping(false);
+        }
       } else {
         let detail = res.statusText || `HTTP ${res.status}`;
         try {
@@ -295,7 +342,64 @@ export default function LegacyCaseCopilotPage() {
     }
   };
 
-  const displayName = caseDetails?.name || "Loading Case...";
+  const handleRequestRevision = async () => {
+    if (!hasLiveCase) return;
+    const reason = `Requesting revision at ${displayStage}: need updated recommendation before approval.`;
+    try {
+      const url = `${getApiBaseUrl()}/api/decisions/reject`;
+      const res = await apiFetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          case_id: caseId,
+          decision: "Reject",
+          reason
+        })
+      });
+      if (!res.ok) {
+        let detail = res.statusText || `HTTP ${res.status}`;
+        try {
+          const body = await res.json();
+          if (body?.detail) detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+        } catch {
+          /* ignore */
+        }
+        alert(`Could not request revision: ${detail}`);
+        return;
+      }
+      setMessages(prev => [...prev, { role: "assistant", content: `Decision recorded: **Revision requested for ${displayStage}**. Re-planning recommendations…` }]);
+      setIsTyping(true);
+      try {
+        const chatUrl = `${getApiBaseUrl()}/api/chat`;
+        const followUp = await apiFetch(chatUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            case_id: caseId,
+            user_message: `I requested revision for ${displayStage}. Re-plan and tell me the top 3 changes needed before approval.`,
+            use_tier_2: true
+          })
+        });
+        const chatData = await followUp.json();
+        const assistantFollowUp =
+          chatData?.assistant_message ||
+          [...(chatData?.messages || [])].reverse().find((m: any) => m.role === "assistant" || m.role === "ai")?.content ||
+          "Revision request saved. I can propose the missing updates.";
+        setMessages(prev => [...prev, { role: "assistant", content: assistantFollowUp }]);
+      } catch (chatErr) {
+        console.error("Revision follow-up chat failed:", chatErr);
+        setMessages(prev => [...prev, { role: "assistant", content: "Revision request saved, but I couldn't fetch follow-up guidance. Ask me to re-plan this stage." }]);
+      } finally {
+        setIsTyping(false);
+      }
+    } catch(err) {
+      console.error(err);
+      alert(`Network error.\n\nAPI base: ${getApiBaseUrl()}${apiConnectivityHint()}`);
+    }
+  };
+
+  const hasLiveCase = Boolean(caseDetails);
+  const displayName = caseDetails?.name || "Case";
   const displayCategory = caseDetails?.category_id || "Category";
   const displayStage = caseDetails?.dtp_stage || "DTP-01";
   
@@ -320,19 +424,6 @@ export default function LegacyCaseCopilotPage() {
   const focus = caseDetails?.copilot_focus;
   const suggestedChatPrompts: string[] = (focus?.suggested_chat_prompts as string[]) || [];
 
-  if (caseError) {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen bg-slate-50">
-        <AlertTriangle className="w-16 h-16 text-mit-red mb-4" />
-        <h1 className="text-2xl font-bold font-syne text-slate-800 mb-2">Case Not Found</h1>
-        <p className="text-slate-600 mb-6">{caseError}</p>
-        <button onClick={() => window.location.href = '/heatmap'} className="px-6 py-2 bg-sponsor-blue text-white rounded-lg font-bold">
-          Return to Dashboard
-        </button>
-      </div>
-    );
-  }
-
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden w-full m-0 p-0 font-sans">
       
@@ -340,26 +431,87 @@ export default function LegacyCaseCopilotPage() {
       <div className="w-[60%] flex flex-col h-full overflow-y-auto bg-slate-50/50 border-r border-slate-200">
         
         {/* Condensed Header */}
-        <div className="bg-sponsor-blue text-white p-6 sticky top-0 z-10 shadow-md flex justify-between items-center shrink-0">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight mb-1 font-syne">{displayName}</h1>
-            <div className="flex items-center gap-3 text-sm text-blue-100 font-medium">
-              <span>{caseId}</span>
-              <span>•</span>
-              <span className="bg-blue-800/50 px-2 py-0.5 rounded text-white flex items-center gap-1.5 border border-blue-400/30">
-                <Briefcase className="w-3.5 h-3.5" />
-                {displayCategory}
-              </span>
+        <div className="bg-sponsor-blue text-white p-6 sticky top-0 z-10 shadow-md flex flex-row flex-wrap gap-3 justify-between items-center shrink-0">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-2xl font-bold tracking-tight mb-1 font-syne">
+              {hasLiveCase ? displayName : caseLoading ? "Loading case…" : "Case Copilot"}
+            </h1>
+            <div className="flex items-center gap-3 text-sm text-blue-100 font-medium flex-wrap min-w-0">
+              {hasLiveCase ? (
+                <>
+                  <span className="truncate">{caseId}</span>
+                  <span className="shrink-0">•</span>
+                  <span className="bg-blue-800/50 px-2 py-0.5 rounded text-white flex items-center gap-1.5 border border-blue-400/30 shrink-0 max-w-full">
+                    <Briefcase className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">{displayCategory}</span>
+                  </span>
+                </>
+              ) : (
+                <span className="break-words">
+                  {caseLoading
+                    ? `Fetching ${caseId}…`
+                    : caseError
+                      ? `Could not load ${caseId}`
+                      : "Select a case from the dashboard"}
+                </span>
+              )}
             </div>
           </div>
-          <div className="text-right">
-            <span className="bg-sponsor-orange text-white px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest shadow-sm">
+          {hasLiveCase ? (
+            <span className="inline-flex shrink-0 items-center justify-center whitespace-nowrap bg-sponsor-orange text-white px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide shadow-sm self-center">
               In Progress
             </span>
-          </div>
+          ) : (
+            <span className="inline-flex shrink-0 items-center justify-center whitespace-nowrap bg-blue-900/60 text-blue-100 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide border border-blue-400/30 self-center">
+              {caseLoading ? "Loading" : "No case"}
+            </span>
+          )}
         </div>
 
         <motion.div variants={container} initial="hidden" animate="show" className="p-8 space-y-6 flex-1">
+          {!hasLiveCase ? (
+            caseLoading ? (
+              <div className="animate-pulse space-y-6" aria-hidden>
+                <div className="h-32 bg-slate-200 rounded-xl" />
+                <div className="h-48 bg-slate-200 rounded-xl" />
+                <div className="h-56 bg-slate-200 rounded-xl" />
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="bg-slate-50 border-b border-slate-200 p-6 flex gap-4 items-start">
+                  <div className="bg-slate-100 text-slate-500 p-3 rounded-lg shrink-0">
+                    <Briefcase className="w-6 h-6" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-slate-900 font-bold text-base font-syne">Case details</h3>
+                    <p className="text-slate-600 text-sm mt-2 leading-relaxed">
+                      {caseError
+                        ? `${caseError} The link may be wrong or the case was removed. Choose another case from the dashboard.`
+                        : "No case is loaded yet. Open the Case Dashboard and select a case to see the summary, stage, governance checklist, and Copilot context."}
+                    </p>
+                    {caseId ? (
+                      <p className="text-xs text-slate-500 mt-3 font-mono break-all">Requested ID: {caseId}</p>
+                    ) : null}
+                    <div className="mt-5 flex flex-wrap gap-3">
+                      <a
+                        href="/cases"
+                        className="inline-flex items-center justify-center px-5 py-2.5 bg-sponsor-blue text-white rounded-lg font-bold text-sm shadow-md hover:bg-blue-700 transition-colors"
+                      >
+                        Case Dashboard
+                      </a>
+                      <a
+                        href="/heatmap"
+                        className="inline-flex items-center justify-center px-5 py-2.5 bg-white text-slate-700 border-2 border-slate-200 rounded-lg font-bold text-sm hover:bg-slate-50 transition-colors"
+                      >
+                        Heatmap
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          ) : (
+            <>
           {/* Essential context only — what you need to understand the case */}
           <motion.div variants={item} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="bg-amber-50 border-b border-amber-200 p-4 flex gap-3 items-start">
@@ -418,7 +570,7 @@ export default function LegacyCaseCopilotPage() {
                   <li className="text-sm text-slate-400 italic py-2">None yet.</li>
                 )}
                 <li className="relative border-2 border-dashed border-slate-200 rounded-lg p-2 mt-2">
-                  <input type="file" onChange={handleFileUpload} disabled={isUploading} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                  <input type="file" onChange={handleFileUpload} disabled={isUploading || !hasLiveCase} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed" />
                   <span className="text-sm text-slate-500">{isUploading ? "Uploading…" : "Upload PDF / XLSX"}</span>
                 </li>
               </ul>
@@ -429,61 +581,37 @@ export default function LegacyCaseCopilotPage() {
             <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
               <h3 className="text-slate-800 font-bold text-[15px] flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-sponsor-blue" />
-                Governance · {displayStage}
+                Decision status · {displayStage}
               </h3>
             </div>
             <div className="p-6">
               <p className="text-sm text-slate-600 mb-4 leading-relaxed">
                 <strong>{displayStage}</strong>
                 {focus?.pending_questions?.length
-                  ? " — Discuss tradeoffs in Copilot first if you want, then record IT risk attestations below before approving."
-                  : " — Formal checklist for this stage looks complete; attest below if your process still requires it."}
+                  ? " — Discuss tradeoffs in Copilot and finalize your decision in the right panel."
+                  : " — Stage checklist looks complete; finalize approval in the right panel."}
               </p>
-              <p className="text-xs text-slate-500 mb-4">SOC2 and infrastructure gates apply before you confirm.</p>
+              <p className="text-xs text-slate-500 mb-4">Use this panel to review evidence; use Copilot panel to submit approval/revision.</p>
 
               {showEvalApproved ? (
                 <div className="bg-green-50 text-green-800 p-6 rounded-lg text-center border border-green-200">
                   <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-3" />
-                  <h4 className="font-bold text-lg mb-1">Evaluation Approved</h4>
-                  <p className="text-sm text-green-700">Recorded. Workflow will advance from {displayStage} when the backend processes this approval.</p>
+                  <h4 className="font-bold text-lg mb-1">Decision Submitted</h4>
+                  <p className="text-sm text-green-700">Approval recorded. Continue in chat while the workflow advances from {displayStage}.</p>
                 </div>
               ) : (
-                <div className="space-y-6">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Has InfoSec verified the SOC2 compliance? *</label>
-                    <div className="flex gap-4">
-                      <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                        <input type="radio" name="soc" checked={govSoc2 === "verified"} onChange={() => setGovSoc2("verified")} className="w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" />
-                        Yes, Verified
-                      </label>
-                      <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                        <input type="radio" name="soc" checked={govSoc2 === "pending"} onChange={() => setGovSoc2("pending")} className="w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" />
-                        Pending / Missing
-                      </label>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Does this supplier meet minimum IT Infrastructure thresholds? *</label>
-                    <div className="flex gap-4">
-                      <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                        <input type="radio" name="thresh" checked={govInfra === "meets"} onChange={() => setGovInfra("meets")} className="w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" />
-                        Meets Thresholds
-                      </label>
-                      <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                        <input type="radio" name="thresh" checked={govInfra === "exemption"} onChange={() => setGovInfra("exemption")} className="w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" />
-                        Does Not Meet (Requires Exemption)
-                      </label>
-                    </div>
-                  </div>
-                  
-                  <div className="flex gap-4 pt-4 border-t border-slate-100">
-                     <button onClick={handleApproveGovernance} className="flex-1 py-3 bg-sponsor-blue text-white rounded-lg font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-700 hover:-translate-y-0.5 transition-all">
-                       ✅ Confirm & Approve Eval
-                     </button>
-                     <button className="flex-1 py-3 bg-white text-slate-600 border-2 border-slate-200 rounded-lg font-bold hover:bg-slate-50 hover:text-slate-800 transition">
-                       ↩️ Request Revision
-                     </button>
-                  </div>
+                <div className="space-y-3 text-sm">
+                  <p className="text-slate-700">
+                    <span className="font-semibold">SOC2:</span>{" "}
+                    {govSoc2 === "verified" ? "Yes, Verified" : govSoc2 === "pending" ? "Pending / Missing" : "Not selected"}
+                  </p>
+                  <p className="text-slate-700">
+                    <span className="font-semibold">Infra threshold:</span>{" "}
+                    {govInfra === "meets" ? "Meets Thresholds" : govInfra === "exemption" ? "Does Not Meet (Requires Exemption)" : "Not selected"}
+                  </p>
+                  <p className="text-xs text-slate-500 pt-2 border-t border-slate-100">
+                    Select these attestations and submit your decision from the Copilot panel on the right.
+                  </p>
                 </div>
               )}
             </div>
@@ -511,6 +639,8 @@ export default function LegacyCaseCopilotPage() {
             </div>
           </details>
 
+            </>
+          )}
         </motion.div>
       </div>
 
@@ -525,10 +655,16 @@ export default function LegacyCaseCopilotPage() {
              </div>
              <div>
                <h2 className="text-lg font-bold text-slate-900 leading-tight">Case Copilot</h2>
-               <p className="text-xs text-slate-500 font-medium">{displayStage}{focus?.stage_title ? ` · ${focus.stage_title}` : ""}</p>
+               <p className="text-xs text-slate-500 font-medium">
+                 {hasLiveCase
+                   ? `${displayStage}${focus?.stage_title ? ` · ${focus.stage_title}` : ""}`
+                   : caseLoading
+                     ? "Loading…"
+                     : "Select a case to begin"}
+               </p>
              </div>
           </div>
-          {suggestedChatPrompts.length > 0 && (
+          {hasLiveCase && suggestedChatPrompts.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {suggestedChatPrompts.map((q, i) => (
                 <button
@@ -544,40 +680,120 @@ export default function LegacyCaseCopilotPage() {
           )}
         </header>
 
+        {/* Decision console lives with chat (Cursor-like flow) */}
+        {hasLiveCase && !caseLoading && (
+          <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/70 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-sponsor-blue" />
+                Decision Console
+              </h3>
+              <span className="text-[11px] text-slate-500 font-semibold uppercase tracking-wide">{displayStage}</span>
+            </div>
+            {showEvalApproved ? (
+              <div className="bg-green-50 text-green-800 p-3 rounded-lg border border-green-200 text-xs font-medium">
+                Decision submitted. Continue in chat for next actions while backend advances stage.
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+                    Has InfoSec verified the SOC2 compliance? *
+                  </label>
+                  <div className="flex gap-4">
+                    <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                      <input type="radio" name="soc-chat" checked={govSoc2 === "verified"} onChange={() => setGovSoc2("verified")} className="w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" />
+                      Yes, Verified
+                    </label>
+                    <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                      <input type="radio" name="soc-chat" checked={govSoc2 === "pending"} onChange={() => setGovSoc2("pending")} className="w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" />
+                      Pending / Missing
+                    </label>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+                    Does this supplier meet minimum IT Infrastructure thresholds? *
+                  </label>
+                  <div className="flex gap-4">
+                    <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                      <input type="radio" name="thresh-chat" checked={govInfra === "meets"} onChange={() => setGovInfra("meets")} className="w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" />
+                      Meets Thresholds
+                    </label>
+                    <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                      <input type="radio" name="thresh-chat" checked={govInfra === "exemption"} onChange={() => setGovInfra("exemption")} className="w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" />
+                      Does Not Meet
+                    </label>
+                  </div>
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button onClick={handleApproveGovernance} className="flex-1 py-2.5 bg-sponsor-blue text-white rounded-lg font-bold text-sm shadow hover:bg-blue-700 transition disabled:opacity-60" disabled={isTyping}>
+                    Confirm & Approve
+                  </button>
+                  <button onClick={handleRequestRevision} className="flex-1 py-2.5 bg-white text-slate-600 border border-slate-300 rounded-lg font-semibold text-sm hover:bg-slate-50 transition">
+                    Request Revision
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
         {/* Messages body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[url('https://www.transparenttextures.com/patterns/tiny-grid.png')]">
-          <div className="text-center pb-4">
-             <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-3 py-1 rounded-full uppercase tracking-widest border border-slate-200">Session Started</span>
-          </div>
-          
-          {messages.map((msg, i) => (
-            <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-              {msg.role === "assistant" && (
-                <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center mr-3 mt-1 shrink-0">
-                  <MessageSquare className="w-4 h-4 text-sponsor-blue" />
+          {caseLoading ? (
+            <div className="flex flex-col items-center justify-center min-h-[40%] text-slate-500 text-sm">Loading case…</div>
+          ) : !hasLiveCase ? (
+            <div className="flex flex-col items-center justify-center min-h-[40%] text-center text-slate-600 px-4">
+              <MessageSquare className="w-10 h-10 text-slate-300 mb-3 shrink-0" />
+              <p className="text-sm max-w-sm leading-relaxed">
+                Chat turns on once a case is loaded. Open the{" "}
+                <a href="/cases" className="text-sponsor-blue font-semibold underline underline-offset-2">
+                  Case Dashboard
+                </a>{" "}
+                and choose a case to open Copilot.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="text-center pb-4">
+                <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-3 py-1 rounded-full uppercase tracking-widest border border-slate-200">
+                  Session Started
+                </span>
+              </div>
+
+              {messages.map((msg, i) => (
+                <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                  {msg.role === "assistant" && (
+                    <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center mr-3 mt-1 shrink-0">
+                      <MessageSquare className="w-4 h-4 text-sponsor-blue" />
+                    </div>
+                  )}
+                  <div
+                    className={`max-w-[85%] p-4 text-[15px] leading-relaxed shadow-sm ${
+                      msg.role === "user"
+                        ? "bg-sponsor-blue text-white rounded-2xl rounded-tr-sm"
+                        : "bg-white border border-slate-200 text-slate-700 rounded-2xl rounded-tl-sm shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] break-words"
+                    }`}
+                  >
+                    {msg.role === "assistant" ? renderMessageContent(msg.content) : msg.content}
+                  </div>
+                </div>
+              ))}
+
+              {isTyping && (
+                <div className="flex justify-start">
+                  <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center mr-3 mt-1 shrink-0">
+                    <MessageSquare className="w-4 h-4 text-sponsor-blue" />
+                  </div>
+                  <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-sm shadow-sm p-4 flex gap-1 items-center">
+                    <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></div>
+                    <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:0.2s]"></div>
+                    <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:0.4s]"></div>
+                  </div>
                 </div>
               )}
-              <div className={`max-w-[85%] p-4 text-[15px] leading-relaxed shadow-sm ${
-                msg.role === "user" 
-                ? "bg-sponsor-blue text-white rounded-2xl rounded-tr-sm" 
-                : "bg-white border border-slate-200 text-slate-700 rounded-2xl rounded-tl-sm shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] break-words"
-              }`}>
-                {msg.role === "assistant" ? renderMessageContent(msg.content) : msg.content}
-              </div>
-            </div>
-          ))}
-
-          {isTyping && (
-             <div className="flex justify-start">
-                <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center mr-3 mt-1 shrink-0">
-                  <MessageSquare className="w-4 h-4 text-sponsor-blue" />
-                </div>
-                <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-sm shadow-sm p-4 flex gap-1 items-center">
-                   <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></div>
-                   <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:0.2s]"></div>
-                   <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:0.4s]"></div>
-                </div>
-             </div>
+            </>
           )}
         </div>
 
@@ -596,13 +812,13 @@ export default function LegacyCaseCopilotPage() {
                   handleSend(); 
                 }
               }}
-              disabled={isTyping}
+              disabled={isTyping || !hasLiveCase || caseLoading}
             />
             <button 
               id="send-btn"
               className="p-3 bg-sponsor-blue text-white rounded-lg hover:bg-blue-700 transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed m-0.5"
               onClick={handleSend}
-              disabled={!input.trim() || isTyping}
+              disabled={!input.trim() || isTyping || !hasLiveCase || caseLoading}
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
                 <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
@@ -611,7 +827,7 @@ export default function LegacyCaseCopilotPage() {
           </div>
           <p className="text-center text-[11px] text-slate-400 font-medium mt-3 flex items-center justify-center gap-1.5">
             <ShieldCheck className="w-3.5 h-3.5" />
-            AI-generated content. Validate with Governance Console before approving.
+            AI-generated content. Decide in the Copilot Decision Console and validate with policy controls.
           </p>
         </div>
 

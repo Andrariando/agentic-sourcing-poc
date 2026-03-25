@@ -321,7 +321,8 @@ For detailed demo instructions, see [System Documentation - Demo & Testing](SYST
 Premium dark-mode glassmorphic design with Syne/DM Sans typography:
 
 - **Priority Heatmap** (`/heatmap`) — KPI stat cards, Table/Matrix toggle, Recharts scatter chart, KLI Outcome Matrix
-- **Case Copilot** (`/cases/[id]/copilot`) — 60/40 split-screen with live triage, AI signals, Governance Console, Activity Log terminal, and chat panel
+- **Case Copilot** (`/cases/[id]/copilot`) — 60/40 split-screen with evidence/artifacts on the left and chat + Decision Console on the right (Cursor-style workflow)
+- **Case Copilot (no case selected)** (`/cases/copilot`) — default split-shell empty state with links back to Case Dashboard/Heatmap
 - **Business Intake** (`/intake`) — New sourcing request form
 - **KPI Dashboard** (`/kpi`) — Performance metrics
 
@@ -372,6 +373,11 @@ Seed via: `python backend/scripts/seed_it_demo_data.py`
 - **State-Aware Progression triggered by LLM**: The system proactively guides users through DTP stages (e.g., "Ready to move to Negotiation?").
 - **Persistence Fixes**: Robust state management ensures no context is lost during multi-turn decision flows.
 
+### Decision + Chat Synchronization (March 2026)
+- **Decision console in chat panel**: Approve/Revision actions are now performed from the right Copilot panel.
+- **Immediate Copilot reaction**: After approve/reject, the UI automatically sends a follow-up prompt to `/api/chat` so users get state-aware next-step guidance immediately.
+- **Left panel as context desk**: Governance on the left is now status/context while artifacts and logs remain visible for decision support.
+
 ### Bug Fixes
 - Fixed duplicate `process_message` method in ChatService
 - Fixed Pydantic/dict handling for AgentActionLog and BudgetState
@@ -388,6 +394,7 @@ Seed via: `python backend/scripts/seed_it_demo_data.py`
   - New comprehensive seed script with 5 cases
   - 16 suppliers with differentiated performance
   - 11 documents for RAG retrieval
+  - Seed now upserts synthetic `document_records` so `/api/documents` lists demo artifacts consistently (not only Chroma chunks)
 
 For detailed change log, see [SYSTEM_DOCUMENTATION.md](SYSTEM_DOCUMENTATION.md#recent-changes-january-2026).
 

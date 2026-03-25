@@ -528,18 +528,9 @@ def seed_suppliers(session: Session):
     print(f"  [OK] Seeded {len(suppliers)} suppliers across all categories.")
 
 
-def seed_documents(vector_store):
-    """Seed comprehensive text documents (Simulated RAG) - ALL CASES COVERED."""
-    print("Seeding documents (this may take a moment)...")
-    
-    # Reset to ensure valid state
-    try:
-        vector_store.reset()
-        print("  [OK] Reset vector store collection.")
-    except Exception as e:
-        print(f"  [Warning] Could not reset vector store: {e}")
-    
-    documents = [
+def _synthetic_documents():
+    """Central document catalog used for vector chunks + document_records."""
+    return [
         # ============================================================
         # CASE-001: TELECOM CONSOLIDATION DOCUMENTS
         # ============================================================
@@ -820,6 +811,49 @@ def seed_documents(vector_store):
             """
         }
     ]
+
+
+def upsert_document_records(session: Session) -> None:
+    """Ensure /api/documents shows synthetic artifacts used in demos."""
+    documents = _synthetic_documents()
+    existing = {d.document_id: d for d in session.exec(select(DocumentRecord)).all()}
+    now = datetime.now().isoformat()
+    for doc in documents:
+        row = existing.get(doc["id"])
+        payload = {
+            "filename": doc["name"],
+            "file_type": "txt",
+            "file_size_bytes": len(doc["content"].encode("utf-8")),
+            "document_type": doc["type"],
+            "category_id": doc.get("cat"),
+            "case_id": doc.get("case_id"),
+            "chunk_count": 1,
+            "embedding_model": "text-embedding-3-small",
+            "ingested_at": now,
+            "description": "Synthetic demo artifact"
+        }
+        if row:
+            for k, v in payload.items():
+                setattr(row, k, v)
+            session.add(row)
+        else:
+            session.add(DocumentRecord(document_id=doc["id"], **payload))
+    session.commit()
+    print(f"  [OK] Upserted {len(documents)} synthetic document records.")
+
+
+def seed_documents(vector_store):
+    """Seed comprehensive text documents (Simulated RAG) - ALL CASES COVERED."""
+    print("Seeding documents (this may take a moment)...")
+    
+    # Reset to ensure valid state
+    try:
+        vector_store.reset()
+        print("  [OK] Reset vector store collection.")
+    except Exception as e:
+        print(f"  [Warning] Could not reset vector store: {e}")
+    
+    documents = _synthetic_documents()
     for doc in documents:
         try:
             chunks = [doc["content"].strip()]
@@ -848,6 +882,7 @@ def main():
     with Session(engine) as session:
         seed_cases(session)
         seed_suppliers(session)
+        upsert_document_records(session)
     
     try:
         vector_store = get_vector_store()
