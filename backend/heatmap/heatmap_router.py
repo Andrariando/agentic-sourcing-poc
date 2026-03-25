@@ -12,6 +12,11 @@ from backend.heatmap.persistence.heatmap_database import heatmap_db
 from backend.heatmap.persistence.heatmap_models import Opportunity
 from backend.heatmap.context_builder import load_category_cards
 from backend.heatmap.services.intake_scoring import score_intake_payload, persist_intake_opportunity
+from backend.heatmap.services.heatmap_copilot import (
+    answer_heatmap_question,
+    assist_category_card_edit,
+    check_feedback_vs_policy,
+)
 
 heatmap_router = APIRouter()
 _pipeline_lock = threading.Lock()
@@ -102,6 +107,57 @@ class IntakeSubmitRequest(IntakeScoreFields):
 class IntakeSubmitResponse(BaseModel):
     success: bool
     opportunity: Dict[str, Any]
+
+
+class HeatmapQARequest(BaseModel):
+    question: str = Field(min_length=3, max_length=4000)
+
+
+class HeatmapQAResponse(BaseModel):
+    answer: str
+    used_llm: bool
+
+
+class PolicyCheckRequest(BaseModel):
+    feedback_text: str = Field(min_length=5, max_length=8000)
+    category: str = Field(min_length=1)
+    supplier_name: Optional[str] = None
+    current_tier: Optional[str] = None
+
+
+class CategoryCardsAssistRequest(BaseModel):
+    category: str = Field(min_length=1)
+    instruction: str = Field(min_length=10, max_length=4000)
+
+
+@heatmap_router.post("/qa", response_model=HeatmapQAResponse)
+def heatmap_qa(req: HeatmapQARequest):
+    session = heatmap_db.get_db_session()
+    try:
+        answer, used_llm = answer_heatmap_question(session, req.question.strip())
+        return HeatmapQAResponse(answer=answer, used_llm=used_llm)
+    finally:
+        session.close()
+
+
+@heatmap_router.post("/policy/check")
+def heatmap_policy_check(req: PolicyCheckRequest):
+    result, used_llm = check_feedback_vs_policy(
+        feedback_text=req.feedback_text.strip(),
+        category=req.category.strip(),
+        supplier_name=req.supplier_name.strip() if req.supplier_name else None,
+        current_tier=req.current_tier.strip() if req.current_tier else None,
+    )
+    return {"used_llm": used_llm, **result}
+
+
+@heatmap_router.post("/category-cards/assist")
+def heatmap_category_cards_assist(req: CategoryCardsAssistRequest):
+    payload, used_llm = assist_category_card_edit(
+        category=req.category.strip(),
+        instruction=req.instruction.strip(),
+    )
+    return {"used_llm": used_llm, **payload}
 
 
 @heatmap_router.get("/intake/categories")

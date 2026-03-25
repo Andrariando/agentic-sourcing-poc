@@ -1,7 +1,10 @@
 from datetime import datetime
 from uuid import uuid4
+
+from sqlmodel import select
+
 from backend.heatmap.persistence.heatmap_database import heatmap_db
-from backend.heatmap.persistence.heatmap_models import ReviewFeedback, AuditLog
+from backend.heatmap.persistence.heatmap_models import Opportunity, ReviewFeedback, AuditLog
 from backend.heatmap.persistence.heatmap_vector_store import get_heatmap_vector_store
 
 
@@ -41,23 +44,33 @@ class FeedbackService:
             
             # Refresh to get auto-generated ID
             session.refresh(feedback)
-            
-            # 2. Embed written feedback into Vector Store for AI Learning Memory
-            if comment:
-                vs = get_heatmap_vector_store()
-                metadata = {
-                    "opportunity_id": str(opportunity_id),
-                    "reason_code": reason,
-                    "reviewer_id": reviewer_id,
-                    "component": component
-                }
-                chunk_text = (
-                    f"Reviewer {reviewer_id} adjusted {component} by {adj_val} "
-                    f"because: {comment}"
-                )
-                # Use a stable unique ID for the vector store document
-                doc_id = f"feedback_{feedback.id or uuid4().hex}"
-                vs.add_chunks([chunk_text], doc_id, metadata)
+
+            stmt = select(Opportunity).where(Opportunity.id == opportunity_id)
+            opp = session.exec(stmt).first()
+
+            # 2. Embed human correction into Vector Store (always — not only when comment is non-empty)
+            vs = get_heatmap_vector_store()
+            metadata = {
+                "opportunity_id": str(opportunity_id),
+                "reason_code": reason,
+                "reviewer_id": reviewer_id,
+                "component": component,
+                "adjustment_type": adj_type,
+                "adjustment_value": float(adj_val),
+                "category": (opp.category if opp else "") or "",
+                "supplier_name": (opp.supplier_name or "") if opp else "",
+                "opportunity_tier": (opp.tier if opp else "") or "",
+            }
+            chunk_text = (
+                f"Human sourcing correction: category={(opp.category if opp else '')}, "
+                f"supplier={(opp.supplier_name or '') if opp else ''}, "
+                f"tier_before={(opp.tier if opp else '')}. "
+                f"Adjusted {component} via {adj_type} (value {adj_val}). "
+                f"Reason: {reason}. "
+                f"Detail: {comment or 'No additional comment.'}"
+            )
+            doc_id = f"feedback_{feedback.id or uuid4().hex}"
+            vs.add_chunks([chunk_text], doc_id, metadata)
             
             return True
         finally:

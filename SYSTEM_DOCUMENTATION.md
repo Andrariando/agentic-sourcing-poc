@@ -962,14 +962,19 @@ spend_agent → contract_agent → strategy_agent → risk_agent → supervisor 
 ```
 
 - Each agent appends its signal to the shared `HeatmapState`.
-- The `supervisor` aggregates all 4 signals using the weighted formula.
+- The `supervisor` aggregates all four signals using the weighted formula, then applies **review memory** (`feedback_memory.py`): retrieve similar past feedback from Chroma, optional LLM-suggested bounded **Δ** on the total, **`Learning:`** line on the justification, and **tier** derived from the adjusted total.
 - The `tick` node increments the index; the conditional edge loops or terminates.
 
 ### Human-in-the-Loop AI Learning
 
-1. **User Input**: Humans adjust scoring weights OR override total scores via the UI. They provide written feedback explaining why.
-2. **Storage**: Adjustments saved to `ReviewFeedback` table (SQLite). Written feedback embedded into `heatmap_documents` collection (ChromaDB).
-3. **Learning Loop**: Future scoring runs query ChromaDB for relevant historical feedback, allowing agents to "remember" past human context.
+1. **User input**: Humans adjust priority (tier) and optionally leave rationale via the heatmap **Review** flow. The API persists structured rows in **`ReviewFeedback`** (SQLite) and audit events.
+2. **Vector memory**: Every feedback submission also upserts text into the Chroma collection **`heatmap_documents`** (`backend/heatmap/persistence/heatmap_vector_store.py`). Embeddings use **`text-embedding-3-small`** when `OPENAI_API_KEY` is set (same pattern as LangChain `OpenAIEmbeddings`). Chunks include human-readable context plus metadata: `category`, `supplier_name`, `opportunity_tier`, `component`, `adjustment_type`, `adjustment_value`, `reason_code`, `opportunity_id` (`backend/heatmap/services/feedback_service.py`).
+3. **Review memory (applied scoring)**: After the deterministic **PS_contract** / **PS_new** total is computed, **`backend/heatmap/services/feedback_memory.py`** retrieves the top similar feedback snippets, then applies a **small bounded adjustment** to the total score (and recomputes **tier** from the adjusted total). A short **`| Learning: …`** sentence is appended to **`justification_summary`** so users see why the score shifted.
+   - **Batch pipeline**: Wired in **`supervisor_agent.py`** immediately after the weighted sum.
+   - **Intake preview & persist**: Wired in **`intake_scoring.py`** after `ps_new_components`. Preview responses expose **`meta.feedback_memory_delta`** (the additive delta on the 0–10 total). Component sub-scores (IUS, ES, etc.) remain the pre-memory values; only **total_score** / **tier** reflect the nudge.
+   - **LLM synthesis**: When snippets exist and `OPENAI_API_KEY` is set, **`gpt-4o-mini`** (override with **`HEATMAP_LEARNING_MODEL`**) returns strict JSON: `score_delta` (clamped to roughly **±0.6**) and `user_note`. If the API is unavailable or parsing fails, a **deterministic** fallback infers a small nudge from snippet text and metadata.
+   - **Disable learning**: Set **`HEATMAP_LEARNING=0`** (or `false` / `off`) to skip retrieval and LLM usage (baseline formula only).
+4. **Operational note**: With an empty Chroma collection there is **no** retrieval and **no** extra chat completion cost; costs accrue when historical feedback exists and new opportunities are scored.
 
 ### Business intake and opportunity provenance
 
@@ -992,8 +997,39 @@ spend_agent → contract_agent → strategy_agent → risk_agent → supervisor 
 | POST | `/api/heatmap/run` | Start heatmap scoring job in background (non-blocking) |
 | GET | `/api/heatmap/run/status` | Check scoring job status (`running`, success/error, timestamps, count) |
 | GET | `/api/heatmap/intake/categories` | List category keys from `category_cards.json` (sorted) |
-| POST | `/api/heatmap/intake/preview` | Compute **PS_new** for a candidate request without persisting (`meta`, `scores`, `total_score`, `tier`, `justification`) |
+| POST | `/api/heatmap/intake/preview` | Compute **PS_new** for a candidate request without persisting (`meta`, `scores`, `total_score`, `tier`, `justification`). **`meta.feedback_memory_delta`**: optional additive adjustment from **review memory**; justification may include **`\| Learning: …`**. |
 | POST | `/api/heatmap/intake` | Persist intake opportunity (`source=intake`); body includes `request_title`, `category`, optional `subcategory` / `supplier_name`, `estimated_spend_usd`, `implementation_timeline_months`, optional `preferred_supplier_status`, optional `justification_summary_text` |
+| POST | `/api/heatmap/qa` | **Heatmap copilot — explain only:** body `question`. Loads opportunity rows from DB + recent `ReviewFeedback` + Chroma snippets; LLM answers without changing scores (`used_llm` if OpenAI ran). |
+| POST | `/api/heatmap/policy/check` | **Suggestion only:** body `feedback_text`, `category`, optional `supplier_name`, `current_tier`. Compares text to `category_cards.json` via LLM JSON (`contradicts`, `severity`, `summary`, `suggestion`). |
+| POST | `/api/heatmap/category-cards/assist` | **Preview only:** body `category`, `instruction`. Returns `proposed_patch` JSON to merge manually into `data/heatmap/category_cards.json` (not auto-written). |
+
+### User experience impact: Heatmap copilot and review memory
+
+These capabilities change how users *feel* and work with the heatmap—not just what the API returns.
+
+#### Heatmap copilot (`/heatmap` panel + `/api/heatmap/qa`, `/policy/check`, `/category-cards/assist`)
+
+- **Q&A (“Why is X above Y?”)**  
+  - **Easier understanding:** Users get a short narrative tied to **current database rows** and recent feedback / similar vector snippets, instead of mentally diffing scores.  
+  - **Trust model:** Prompts require treating stored **totals and tiers as ground truth**; the LLM explains only.  
+  - **Without `OPENAI_API_KEY`:** Responses fall back to a **raw context excerpt**—usable for power users, less polished for general stakeholders.  
+  - **Hallucination risk:** If an entity is not in context, the model should say so; occasional drift is possible—UI copy should keep “explanation only” explicit.
+
+- **Policy check**  
+  - **Safer reviews:** Reviewers get a **suggestion** whether written rationale aligns with **`category_cards.json`** (preferred-supplier posture). Useful before escalations or audits.  
+  - **Non-blocking:** Does not auto-reject feedback or change scores—reduces anxiety without hard gates.
+
+- **Category-cards assist**  
+  - **Faster policy edits:** Admins describe changes in natural language and receive a **JSON patch to copy** into `category_cards.json`.  
+  - **Governance-friendly:** Nothing is auto-written to disk—no surprise scoring changes, at the cost of one manual merge step.
+
+#### Review memory (bounded score nudge + `Learning:` line)
+
+- **Adaptive feel:** Totals and tiers can **shift slightly** when similar past feedback exists; the **`| Learning: …`** sentence (and on intake, **`feedback_memory_delta`**) explains *why* in product language.  
+- **Possible surprise:** Users may ask why a number changed vs. last run; mitigated by visible learning text and delta metadata.  
+- **Intake nuance:** Component sub-scores (IUS, ES, CSIS, SAS) stay **pre-memory** values; **total_score** / **tier** reflect the nudge—advanced users should read the sidebar chip and justification as the source of truth for the final total.
+
+**Overall:** Copilot **reduces cognitive load** for reading the heatmap and supports **governance** on reviews and policy edits, while keeping **authority** with stored data and manual file updates. Review memory trades a little **predictability of the raw formula** for **visible adaptation** from human corrections.
 
 ### Deployment-Safe Runtime Mode (Render 512MB)
 
@@ -1050,8 +1086,8 @@ Replaces the entire Streamlit UI with a unified Next.js 16 application (Tailwind
 
 | Route | System | Description |
 |-------|--------|-------------|
-| `/heatmap` | Heatmap | Priority list with Tier badges and score breakdowns |
-| `/intake` | Heatmap | Business intake form; live **PS_new** preview and submit via `/api/heatmap/intake/preview` and `/api/heatmap/intake` |
+| `/heatmap` | Heatmap | Priority list with Tier badges and score breakdowns; **Heatmap copilot** panel (Q&A, policy check, category-cards assist) |
+| `/intake` | Heatmap | Business intake form; live **PS_new** preview/submit; optional **Review memory Δ** chip when **`feedback_memory_delta`** is non-zero |
 | `/dashboard/heatmap` | Heatmap | KLI metrics (cycle time, agent reliability, edit density) |
 | `/cases` | Legacy DTP | Case dashboard tracking DTP01–DTP06 progress |
 | `/cases/[id]/copilot` | Legacy DTP | Cursor-style split: left evidence/artifacts, right chat + decision console |
@@ -1069,11 +1105,13 @@ Replaces the entire Streamlit UI with a unified Next.js 16 application (Tailwind
 | `backend/heatmap/agents/contract_agent.py` | EUS / IUS scoring based on expiry dates |
 | `backend/heatmap/agents/strategy_agent.py` | SAS scoring |
 | `backend/heatmap/agents/risk_agent.py` | RSS scoring from supplier metrics |
-| `backend/heatmap/agents/supervisor_agent.py` | Weighted aggregation and tier classification |
+| `backend/heatmap/agents/supervisor_agent.py` | Weighted aggregation, tier classification, **review memory** nudge |
 | `backend/heatmap/persistence/heatmap_models.py` | SQLModel tables (Opportunity, ReviewFeedback, AuditLog, etc.) |
 | `backend/heatmap/persistence/heatmap_database.py` | SQLite connection (separate `heatmap.db`) |
 | `backend/heatmap/persistence/heatmap_vector_store.py` | ChromaDB collection for feedback memory |
-| `backend/heatmap/services/feedback_service.py` | Human feedback + vector embedding |
+| `backend/heatmap/services/feedback_service.py` | Human feedback + Chroma upsert (rich metadata for every submission) |
+| `backend/heatmap/services/feedback_memory.py` | Retrieve similar feedback, bounded score nudge + **Learning:** note (OpenAI JSON or heuristic fallback) |
+| `backend/heatmap/services/heatmap_copilot.py` | Explain-only Q&A, policy-vs-feedback check, category-cards assist (uses **`HEATMAP_COPILOT_MODEL`** or `HEATMAP_LEARNING_MODEL` fallback) |
 | `backend/heatmap/services/case_bridge.py` | Bridge to Legacy create_case() API |
 | `backend/heatmap/services/intake_scoring.py` | PS_new scoring + persist intake opportunities |
 | `backend/heatmap/context_builder.py` | Heatmap context (spend aggregates, category cards, FIS field, max TCV by category) |

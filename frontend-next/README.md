@@ -17,9 +17,9 @@ The modern, premium frontend for the Procurement Agentic System. Built with Next
 
 | Route | Description |
 |-------|-------------|
-| `/heatmap` | Sourcing Priority Heatmap — KPI stat cards, Table/Matrix toggle, Recharts scatter chart, Sourcing Opportunity Matrix (KLI) |
+| `/heatmap` | Sourcing Priority Heatmap — KPI stat cards, Table/Matrix toggle, Recharts scatter chart, KLI matrix, **Heatmap copilot** (explain-only Q&A, policy hint, category-cards assist). UX rationale: `SYSTEM_DOCUMENTATION.md` → *User experience impact: Heatmap copilot and review memory*. |
 | `/cases/[id]/copilot` | Case Copilot — 60/40 split-screen with triage panel, Context & AI Signals, Governance Console, Live Agentic Process Log, and chat panel |
-| `/intake` | Business Intake — New sourcing request form; calls `/api/heatmap/intake/preview` (debounced) and `/api/heatmap/intake` |
+| `/intake` | Business Intake — New sourcing request form; calls `/api/heatmap/intake/preview` (debounced) and `/api/heatmap/intake`. Shows **Review memory Δ** when the backend applies a post-PS_new nudge from past reviewer feedback (`meta.feedback_memory_delta`). |
 | `/kpi` | KPI Dashboard |
 
 ## Dependencies

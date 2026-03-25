@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { LayoutGrid, List, X, ExternalLink } from "lucide-react";
+import { LayoutGrid, List, X, ExternalLink, MessageCircle } from "lucide-react";
 import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { apiFetch } from "@/lib/api-fetch";
 import { getApiBaseUrl, apiConnectivityHint } from "@/lib/api-base";
@@ -28,6 +28,46 @@ export default function HeatmapPriorityPage() {
   const [feedbackTier, setFeedbackTier] = useState<string>("T1");
   const [feedbackReason, setFeedbackReason] = useState<string>("");
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+
+  const [copilotTab, setCopilotTab] = useState<"qa" | "policy" | "cards">("qa");
+  const [qaQuestion, setQaQuestion] = useState("");
+  const [qaAnswer, setQaAnswer] = useState<string | null>(null);
+  const [qaLoading, setQaLoading] = useState(false);
+  const [qaUsedLlm, setQaUsedLlm] = useState(false);
+  const [policyText, setPolicyText] = useState("");
+  const [policyCategory, setPolicyCategory] = useState("IT Infrastructure");
+  const [policySupplier, setPolicySupplier] = useState("");
+  const [policyTier, setPolicyTier] = useState("");
+  const [policyResult, setPolicyResult] = useState<{
+    contradicts?: boolean;
+    severity?: string;
+    summary?: string;
+    suggestion?: string;
+    used_llm?: boolean;
+  } | null>(null);
+  const [policyLoading, setPolicyLoading] = useState(false);
+  const [assistCategory, setAssistCategory] = useState("IT Infrastructure");
+  const [assistInstruction, setAssistInstruction] = useState("");
+  const [assistResult, setAssistResult] = useState<{
+    proposed_patch?: Record<string, unknown>;
+    notes?: string;
+    used_llm?: boolean;
+  } | null>(null);
+  const [assistLoading, setAssistLoading] = useState(false);
+  const [cardCategories, setCardCategories] = useState<string[]>(["IT Infrastructure", "Software", "Hardware"]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await apiFetch(`${getApiBaseUrl()}/api/heatmap/intake/categories`, { cache: "no-store" });
+        if (!r.ok) return;
+        const d = await r.json();
+        if (Array.isArray(d.categories) && d.categories.length > 0) setCardCategories(d.categories);
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     async function fetchData() {
@@ -260,6 +300,80 @@ export default function HeatmapPriorityPage() {
     }
   };
 
+  const submitHeatmapQA = async () => {
+    setQaLoading(true);
+    setQaAnswer(null);
+    try {
+      const res = await apiFetch(`${getApiBaseUrl()}/api/heatmap/qa`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: qaQuestion }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setQaAnswer(typeof data.detail === "string" ? data.detail : "Request failed.");
+        setQaUsedLlm(false);
+        return;
+      }
+      setQaAnswer(data.answer || "");
+      setQaUsedLlm(Boolean(data.used_llm));
+    } catch {
+      setQaAnswer(`Network error. API: ${getApiBaseUrl()}${apiConnectivityHint()}`);
+      setQaUsedLlm(false);
+    } finally {
+      setQaLoading(false);
+    }
+  };
+
+  const submitPolicyCheck = async () => {
+    setPolicyLoading(true);
+    setPolicyResult(null);
+    try {
+      const res = await apiFetch(`${getApiBaseUrl()}/api/heatmap/policy/check`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          feedback_text: policyText,
+          category: policyCategory,
+          supplier_name: policySupplier || undefined,
+          current_tier: policyTier || undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPolicyResult({ summary: typeof data.detail === "string" ? data.detail : "Request failed." });
+        return;
+      }
+      setPolicyResult(data);
+    } catch {
+      setPolicyResult({ summary: `Network error. ${getApiBaseUrl()}` });
+    } finally {
+      setPolicyLoading(false);
+    }
+  };
+
+  const submitAssistCategory = async () => {
+    setAssistLoading(true);
+    setAssistResult(null);
+    try {
+      const res = await apiFetch(`${getApiBaseUrl()}/api/heatmap/category-cards/assist`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category: assistCategory, instruction: assistInstruction }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setAssistResult({ notes: typeof data.detail === "string" ? data.detail : "Request failed." });
+        return;
+      }
+      setAssistResult(data);
+    } catch {
+      setAssistResult({ notes: `Network error. ${getApiBaseUrl()}` });
+    } finally {
+      setAssistLoading(false);
+    }
+  };
+
   // Prepare Chart Data with better numeric spread for the visual demo
   const chartData = opportunities.map(o => {
     // Generate a clean deterministic spread based on multiple sub-scores rather than just the saturated FIS score.
@@ -349,6 +463,202 @@ export default function HeatmapPriorityPage() {
             <h3 className="text-sm font-medium text-slate-500 mb-1">Total Pipeline Value</h3>
             <p className="text-3xl font-bold text-sponsor-blue">{loading ? "..." : pipelineValueText}</p>
             <div className="mt-3 w-full bg-slate-100 rounded-full h-1"><div className="bg-sponsor-blue h-1 rounded-full w-[72%]"></div></div>
+          </div>
+        </div>
+
+        {/* Heatmap copilot: explain-only Q&A, policy alignment, category_cards.json assist (preview) */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/80 flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <MessageCircle className="w-5 h-5 text-sponsor-blue shrink-0" />
+              <h2 className="text-lg font-bold text-slate-900">Heatmap copilot</h2>
+            </div>
+            <p className="text-xs text-slate-500 sm:flex-1">
+              Ask why rows rank as they do (scores stay truth). Check reviewer text vs category policy. Draft{" "}
+              <code className="text-slate-600">category_cards.json</code> edits — preview only.
+            </p>
+            <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs font-medium shrink-0">
+              {(
+                [
+                  ["qa", "Q&A"],
+                  ["policy", "Policy"],
+                  ["cards", "Cards"],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setCopilotTab(key)}
+                  className={`px-3 py-2 transition ${copilotTab === key ? "bg-sponsor-blue text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="p-5 space-y-4">
+            {copilotTab === "qa" && (
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-slate-700">
+                  Question <span className="text-slate-400 font-normal">(e.g. Why is supplier A above B?)</span>
+                </label>
+                <textarea
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm min-h-[88px] focus:ring-2 focus:ring-sponsor-blue/20"
+                  placeholder="Use names or IDs from the table. Answers use current DB rows + feedback; no rescoring."
+                  value={qaQuestion}
+                  onChange={(e) => setQaQuestion(e.target.value)}
+                />
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => void submitHeatmapQA()}
+                    disabled={qaLoading || qaQuestion.trim().length < 3}
+                    className="px-4 py-2 bg-sponsor-blue text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                  >
+                    {qaLoading ? "Thinking…" : "Explain"}
+                  </button>
+                  {qaUsedLlm && qaAnswer && (
+                    <span className="text-xs text-emerald-700">LLM explanation (grounded on context below)</span>
+                  )}
+                  {!qaUsedLlm && qaAnswer && (
+                    <span className="text-xs text-amber-700">Showing context only or offline mode</span>
+                  )}
+                </div>
+                {qaAnswer && (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">
+                    {qaAnswer}
+                  </div>
+                )}
+              </div>
+            )}
+            {copilotTab === "policy" && (
+              <div className="space-y-3">
+                <p className="text-xs text-slate-500">
+                  Suggestion only — does not change scores or files. Compares your text to{" "}
+                  <code className="text-slate-600">category_cards.json</code> for the category.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Category</label>
+                    <select
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                      value={policyCategory}
+                      onChange={(e) => setPolicyCategory(e.target.value)}
+                    >
+                      {cardCategories.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Supplier (optional)</label>
+                    <input
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                      value={policySupplier}
+                      onChange={(e) => setPolicySupplier(e.target.value)}
+                      placeholder="e.g. CloudServe Group"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Current tier (optional)</label>
+                    <input
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                      value={policyTier}
+                      onChange={(e) => setPolicyTier(e.target.value)}
+                      placeholder="T2"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Feedback / rationale text</label>
+                  <textarea
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm min-h-[100px]"
+                    value={policyText}
+                    onChange={(e) => setPolicyText(e.target.value)}
+                    placeholder="Paste reviewer rationale to check against preferred-supplier policy…"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void submitPolicyCheck()}
+                  disabled={policyLoading || policyText.trim().length < 5}
+                  className="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                >
+                  {policyLoading ? "Checking…" : "Check vs policy"}
+                </button>
+                {policyResult && (
+                  <div
+                    className={`rounded-lg border p-4 text-sm ${
+                      policyResult.contradicts ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-slate-50/80"
+                    }`}
+                  >
+                    <p className="font-semibold text-slate-800">
+                      {policyResult.contradicts ? "Possible misalignment" : "Alignment check"}
+                      {policyResult.severity && policyResult.severity !== "none" ? (
+                        <span className="font-normal text-slate-500"> — {policyResult.severity}</span>
+                      ) : null}
+                    </p>
+                    {policyResult.summary && <p className="mt-2 text-slate-700">{policyResult.summary}</p>}
+                    {policyResult.suggestion ? (
+                      <p className="mt-2 text-slate-600">
+                        <span className="font-medium">Suggestion:</span> {policyResult.suggestion}
+                      </p>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            )}
+            {copilotTab === "cards" && (
+              <div className="space-y-3">
+                <p className="text-xs text-slate-500">
+                  Proposed JSON patch for you to merge into <code className="text-slate-600">data/heatmap/category_cards.json</code>{" "}
+                  manually. Not saved automatically.
+                </p>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Category</label>
+                  <select
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm max-w-md"
+                    value={assistCategory}
+                    onChange={(e) => setAssistCategory(e.target.value)}
+                  >
+                    {cardCategories.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">What to change</label>
+                  <textarea
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm min-h-[100px]"
+                    value={assistInstruction}
+                    onChange={(e) => setAssistInstruction(e.target.value)}
+                    placeholder="e.g. Add Acme Corp as preferred in Software and set default to allowed…"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void submitAssistCategory()}
+                  disabled={assistLoading || assistInstruction.trim().length < 10}
+                  className="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                >
+                  {assistLoading ? "Drafting…" : "Suggest patch"}
+                </button>
+                {assistResult && (assistResult.proposed_patch || assistResult.notes) && (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-2 text-sm">
+                    {assistResult.notes && <p className="text-slate-700">{assistResult.notes}</p>}
+                    {assistResult.proposed_patch && Object.keys(assistResult.proposed_patch).length > 0 && (
+                      <pre className="text-xs bg-slate-900 text-slate-100 rounded p-3 overflow-x-auto">
+                        {JSON.stringify(assistResult.proposed_patch, null, 2)}
+                      </pre>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

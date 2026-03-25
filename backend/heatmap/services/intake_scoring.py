@@ -16,6 +16,7 @@ from backend.heatmap.scoring_framework import (
 )
 from backend.heatmap.context_builder import build_heatmap_context
 from backend.heatmap.persistence.heatmap_models import Opportunity
+from backend.heatmap.services.feedback_memory import apply_learning_nudge
 
 
 def tier_from_total(total: float) -> str:
@@ -119,10 +120,23 @@ def score_intake_payload(
         heatmap_context=ctx,
         weights=weights,
     )
+    mem_delta, mem_note, total_adj, tier_adj = apply_learning_nudge(
+        category=category,
+        subcategory=subcategory,
+        supplier_name=supplier_name,
+        is_new=True,
+        baseline_summary=justification,
+        base_total=total_r,
+    )
+    if mem_note:
+        justification = f"{justification} | Learning: {mem_note}"
+    total_r = total_adj
+    tier = tier_adj
     meta = {
         "max_estimated_spend_pipeline": max_pipeline,
         "category_spend_used": (ctx.get("category_spend_total") or {}).get(category),
         "fis_field_note": ctx.get("fis_contract_value_field"),
+        "feedback_memory_delta": mem_delta,
     }
     return meta, scores, total_r, tier, justification
 
@@ -176,7 +190,12 @@ def persist_intake_opportunity(
         implementation_timeline_months=float(implementation_timeline_months),
         request_title=request_title,
         preferred_supplier_status=preferred_supplier_status,
-        weights_used_json=str({"pipeline_max_estimated": meta["max_estimated_spend_pipeline"]}),
+        weights_used_json=str(
+            {
+                "pipeline_max_estimated": meta["max_estimated_spend_pipeline"],
+                "feedback_memory_delta": meta.get("feedback_memory_delta"),
+            }
+        ),
     )
     session.add(opp)
     session.commit()

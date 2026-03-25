@@ -309,8 +309,15 @@ For detailed demo instructions, see [System Documentation - Demo & Testing](SYST
 | GET | `/api/heatmap/intake/categories` | Category list from `category_cards.json` |
 | POST | `/api/heatmap/intake/preview` | PS_new preview (no DB write) |
 | POST | `/api/heatmap/intake` | Save new intake opportunity (`source=intake`; batch re-runs keep these rows) |
+| POST | `/api/heatmap/qa` | Heatmap copilot: natural-language explanations (scores unchanged) |
+| POST | `/api/heatmap/policy/check` | Compare feedback text to `category_cards.json` (suggestion) |
+| POST | `/api/heatmap/category-cards/assist` | Suggested JSON patch for category cards (manual merge) |
 
-**FIS / contract value:** default **TCV**; set env `HEATMAP_FIS_USE_ACV=1` to use **ACV** for batch scoring. See `SYSTEM_DOCUMENTATION.md` § Opportunity Heatmap.
+**FIS / contract value:** default **TCV**; set env `HEATMAP_FIS_USE_ACV=1` to use **ACV** for batch scoring.
+
+**Review memory (learn from feedback):** Human feedback is embedded into Chroma; batch scoring and intake preview apply a **bounded** total-score nudge via `feedback_memory.py` (optional **`gpt-4o-mini`** completion when `OPENAI_API_KEY` is set). Env: **`HEATMAP_LEARNING_MODEL`** (default `gpt-4o-mini`), **`HEATMAP_LEARNING=0`** to disable.
+
+**Heatmap copilot** (`heatmap_copilot.py` + `/api/heatmap/qa`, `/policy/check`, `/category-cards/assist`): explain-only Q&A over DB + feedback, policy hints, and draft category-card JSON — **does not** overwrite scores or files. Optional **`HEATMAP_COPILOT_MODEL`** (defaults to `HEATMAP_LEARNING_MODEL` then `gpt-4o-mini`). **How this affects users** (trust, fallbacks, review memory vs. explanations): see `SYSTEM_DOCUMENTATION.md` → **User experience impact: Heatmap copilot and review memory**.
 
 ---
 
@@ -330,7 +337,7 @@ For detailed demo instructions, see [System Documentation - Demo & Testing](SYST
 ### New Heatmap System (Next.js)
 Premium dark-mode glassmorphic design with Syne/DM Sans typography:
 
-- **Priority Heatmap** (`/heatmap`) — KPI stat cards, Table/Matrix toggle, Recharts scatter chart, KLI Outcome Matrix
+- **Priority Heatmap** (`/heatmap`) — KPI stat cards, Table/Matrix toggle, Recharts scatter chart, KLI Outcome Matrix, **Heatmap copilot** (Q&A, policy check, category-cards assist); see system doc **User experience impact** for how this shapes trust and workload
 - **Case Copilot** (`/cases/[id]/copilot`) — 60/40 split-screen with evidence/artifacts on the left and chat + Decision Console on the right (Cursor-style workflow)
 - **Case Copilot (no case selected)** (`/cases/copilot`) — default split-shell empty state with links back to Case Dashboard/Heatmap
 - **Business Intake** (`/intake`) — New sourcing request form with API-backed **PS_new** preview and submit

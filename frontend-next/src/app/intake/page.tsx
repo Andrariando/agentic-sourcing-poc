@@ -17,6 +17,7 @@ type PreviewResponse = {
     max_estimated_spend_pipeline?: number;
     category_spend_used?: number;
     fis_field_note?: string;
+    feedback_memory_delta?: number;
   };
   scores: Record<string, number | null | undefined>;
   total_score: number;
@@ -336,9 +337,19 @@ export default function BusinessIntakePage() {
 
             {preview ? (
               <>
-                <div className="flex items-end gap-2 mb-2">
+                <div className="flex items-end gap-2 mb-2 flex-wrap">
                   <span className="text-5xl font-bold tabular-nums">{preview.total_score.toFixed(2)}</span>
                   <span className="text-slate-400 mb-1">weighted</span>
+                  {typeof preview.meta?.feedback_memory_delta === "number" &&
+                    Math.abs(preview.meta.feedback_memory_delta) >= 0.01 && (
+                      <span
+                        className="text-xs font-medium px-2 py-1 rounded bg-emerald-900/60 text-emerald-200 border border-emerald-700/50 mb-1"
+                        title="Small adjustment from similar past reviewer feedback (Chroma + optional LLM). Sub-scores shown are pre-adjustment."
+                      >
+                        Review memory Δ{preview.meta.feedback_memory_delta >= 0 ? "+" : ""}
+                        {preview.meta.feedback_memory_delta.toFixed(2)}
+                      </span>
+                    )}
                 </div>
                 <p className="text-sm text-sponsor-orange font-semibold mb-4">
                   <span title={HEATMAP_GLOSSARY.tier} className="cursor-help border-b border-dotted border-orange-400/60">

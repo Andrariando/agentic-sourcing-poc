@@ -1,4 +1,6 @@
 from backend.heatmap.agents.state import HeatmapState, ScoredOpportunity
+from backend.heatmap.services.feedback_memory import apply_learning_nudge
+
 
 def process_supervisor(state: HeatmapState) -> dict:
     idx = state["current_index"]
@@ -30,7 +32,7 @@ def process_supervisor(state: HeatmapState) -> dict:
         
         total_score = (w_ius * ius) + (w_es * es) + (w_csis * csis) + (w_sas * sas)
         justification = (
-            f"New request scored {total_score:.1f}. "
+            f"New request scored {total_score:.2f}. "
             f"IUS({ius})*{w_ius} + ES({es})*{w_es} + CSIS({csis})*{w_csis} + SAS({sas})*{w_sas}"
         )
     else:
@@ -49,17 +51,21 @@ def process_supervisor(state: HeatmapState) -> dict:
         
         total_score = (w_eus * eus) + (w_fis * fis) + (w_rss * rss) + (w_scs * scs) + (w_sas * sas)
         justification = (
-            f"Contract scored {total_score:.1f}. "
+            f"Contract scored {total_score:.2f}. "
             f"EUS({eus})*{w_eus} + FIS({fis})*{w_fis} + RSS({rss})*{w_rss} + SCS({scs})*{w_scs} + SAS({sas})*{w_sas}"
         )
-        
-    # Tier mapping
-    if total_score >= 8.0:
-        tier = "T1"
-    elif total_score >= 6.0:
-        tier = "T2"
-    elif total_score >= 4.0:
-        tier = "T3"
+
+    base_total = round(total_score, 2)
+    _delta, mem_note, total_score, tier = apply_learning_nudge(
+        category=contract.get("category") or "",
+        subcategory=contract.get("subcategory"),
+        supplier_name=contract.get("supplier_name"),
+        is_new=is_new,
+        baseline_summary=justification,
+        base_total=base_total,
+    )
+    if mem_note:
+        justification = f"{justification} | Learning: {mem_note}"
         
     opp = ScoredOpportunity(
         contract_id=contract.get("contract_id"),
