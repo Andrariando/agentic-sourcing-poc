@@ -63,6 +63,7 @@ def process_supervisor(state: HeatmapState) -> dict:
         is_new=is_new,
         baseline_summary=justification,
         base_total=base_total,
+        weights=w,
     )
     if mem_note:
         justification = f"{justification} | Learning: {mem_note}"

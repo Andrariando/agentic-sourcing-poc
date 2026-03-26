@@ -962,19 +962,48 @@ spend_agent → contract_agent → strategy_agent → risk_agent → supervisor 
 ```
 
 - Each agent appends its signal to the shared `HeatmapState`.
-- The `supervisor` aggregates all four signals using the weighted formula, then applies **review memory** (`feedback_memory.py`): retrieve similar past feedback from Chroma, optional LLM-suggested bounded **Δ** on the total, **`Learning:`** line on the justification, and **tier** derived from the adjusted total.
+- The `supervisor` aggregates all four signals using the weighted formula, then applies two **optional AI layers**:
+  - **LLM interpreter fallbacks** (input robustness): when deterministic parsing fails for messy fields (example: missing/unparseable expiration date; messy preferred-supplier labels), the pipeline can call a small LLM “interpreter” that extracts/normalizes structured values. This is **fallback-only** and the extracted output is validated before use.
+  - **Review memory** (`feedback_memory.py`): retrieve similar past feedback from Chroma, optional LLM-suggested bounded learning adjustment (see below), **`Learning:`** line on the justification, and **tier** derived from the adjusted total.
 - The `tick` node increments the index; the conditional edge loops or terminates.
 
 ### Human-in-the-Loop AI Learning
 
 1. **User input**: Humans adjust priority (tier) and optionally leave rationale via the heatmap **Review** flow. The API persists structured rows in **`ReviewFeedback`** (SQLite) and audit events.
 2. **Vector memory**: Every feedback submission also upserts text into the Chroma collection **`heatmap_documents`** (`backend/heatmap/persistence/heatmap_vector_store.py`). Embeddings use **`text-embedding-3-small`** when `OPENAI_API_KEY` is set (same pattern as LangChain `OpenAIEmbeddings`). Chunks include human-readable context plus metadata: `category`, `supplier_name`, `opportunity_tier`, `component`, `adjustment_type`, `adjustment_value`, `reason_code`, `opportunity_id` (`backend/heatmap/services/feedback_service.py`).
-3. **Review memory (applied scoring)**: After the deterministic **PS_contract** / **PS_new** total is computed, **`backend/heatmap/services/feedback_memory.py`** retrieves the top similar feedback snippets, then applies a **small bounded adjustment** to the total score (and recomputes **tier** from the adjusted total). A short **`| Learning: …`** sentence is appended to **`justification_summary`** so users see why the score shifted.
+3. **Review memory (applied scoring)**: After the deterministic **PS_contract** / **PS_new** total is computed, **`backend/heatmap/services/feedback_memory.py`** retrieves the top similar feedback snippets, then applies a **small bounded learning adjustment** and recomputes **tier** from the adjusted total. A short **`| Learning: …`** sentence is appended to **`justification_summary`** so users see why the score shifted.
    - **Batch pipeline**: Wired in **`supervisor_agent.py`** immediately after the weighted sum.
    - **Intake preview & persist**: Wired in **`intake_scoring.py`** after `ps_new_components`. Preview responses expose **`meta.feedback_memory_delta`** (the additive delta on the 0–10 total). Component sub-scores (IUS, ES, etc.) remain the pre-memory values; only **total_score** / **tier** reflect the nudge.
-   - **LLM synthesis**: When snippets exist and `OPENAI_API_KEY` is set, **`gpt-4o-mini`** (override with **`HEATMAP_LEARNING_MODEL`**) returns strict JSON: `score_delta` (clamped to roughly **±0.6**) and `user_note`. If the API is unavailable or parsing fails, a **deterministic** fallback infers a small nudge from snippet text and metadata.
+   - **LLM synthesis**: When snippets exist and `OPENAI_API_KEY` is set, **`gpt-4o-mini`** (override with **`HEATMAP_LEARNING_MODEL`**) returns strict JSON with **component-level deltas** (bounded \(\pm 0.5\) each) and a `user_note`. The backend converts those component deltas into a single bounded **total delta** using the current scoring weights, clamps it (roughly **±0.6**), then applies it to the total. If the API is unavailable or parsing fails, a **deterministic** fallback infers a small nudge from snippet text and metadata.
    - **Disable learning**: Set **`HEATMAP_LEARNING=0`** (or `false` / `off`) to skip retrieval and LLM usage (baseline formula only).
 4. **Operational note**: With an empty Chroma collection there is **no** retrieval and **no** extra chat completion cost; costs accrue when historical feedback exists and new opportunities are scored.
+
+### LLM interpreter fallbacks (input robustness)
+
+The Heatmap scoring engine is intentionally deterministic, but real-world contract/supplier data is messy. To make the opportunity layer more “AI oriented” without letting an LLM take over scoring, the system includes a small **LLM interpreter** layer that runs **only when deterministic parsing fails**.
+
+**Implementation**
+- **Module**: `backend/heatmap/services/llm_interpreter.py`
+- **Model**: `HEATMAP_INTERPRETER_MODEL` (default `gpt-4o-mini`)
+- **Activation**: requires `OPENAI_API_KEY` and a parse failure / missing field.
+- **Output**: strict JSON in “JSON mode”, then server-side validation (format checks, confidence clamp).
+
+**What it does today**
+1. **Expiration date extraction** (EUS robustness)
+   - If `contract_details["Expiration Date"]` is missing or unparseable, the contract agent attempts to extract an ISO date (`YYYY-MM-DD`) from other metadata.
+   - **Wired in**: `backend/heatmap/agents/contract_agent.py` (existing contracts only).
+   - **Guardrails**: if the interpreter returns non-ISO or null, the system falls back to the previous safe default behavior (EUS=5, action_window="Unknown").
+
+2. **Preferred status normalization** (SAS robustness)
+   - If a record provides a messy `preferred_supplier_status` string, the strategy agent can normalize it to one of:
+     `preferred | allowed | nonpreferred | straightpo | unknown`
+   - **Wired in**: `backend/heatmap/agents/strategy_agent.py`
+   - The normalized token is then scored deterministically using `category_cards.json` + `SAS_BY_STATUS`.
+
+**Why this matters**
+- Keeps your **math model stable** (tiers remain explainable).
+- Uses the LLM where it’s strongest: **interpretation/normalization** of semi-structured fields.
+- Avoids over-reliance: if the LLM is unavailable, scoring still works (with defaults).
 
 ### Business intake and opportunity provenance
 

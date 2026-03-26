@@ -127,6 +127,7 @@ def score_intake_payload(
         is_new=True,
         baseline_summary=justification,
         base_total=total_r,
+        weights=weights,
     )
     if mem_note:
         justification = f"{justification} | Learning: {mem_note}"

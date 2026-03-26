@@ -32,6 +32,7 @@ export default function HeatmapPriorityPage() {
   // Optional Copilot Slide-over
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [copilotTab, setCopilotTab] = useState<"qa" | "policy" | "cards">("qa");
+  const [copilotRefQuery, setCopilotRefQuery] = useState("");
   const [qaQuestion, setQaQuestion] = useState("");
   const [qaAnswer, setQaAnswer] = useState<string | null>(null);
   const [qaLoading, setQaLoading] = useState(false);
@@ -903,6 +904,104 @@ export default function HeatmapPriorityPage() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/30">
+              {/* Quick reference so users can see IDs/names while writing questions */}
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-800">Opportunity quick reference</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Search by supplier, contract_id, request_id, or tier. Click a row to insert its ID into your question.
+                    </p>
+                  </div>
+                  <span className="text-[11px] text-slate-400 shrink-0">{opportunities.length} loaded</span>
+                </div>
+                <input
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                  value={copilotRefQuery}
+                  onChange={(e) => setCopilotRefQuery(e.target.value)}
+                  placeholder='e.g. "TechGlobal", "REQ-", "T1", "contract"'
+                />
+                <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-200">
+                  <table className="w-full text-left text-xs">
+                    <thead className="sticky top-0 bg-slate-50 border-b border-slate-200">
+                      <tr>
+                        <th className="px-3 py-2 font-semibold text-slate-600">Supplier / Request</th>
+                        <th className="px-3 py-2 font-semibold text-slate-600">Tier</th>
+                        <th className="px-3 py-2 font-semibold text-slate-600">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {opportunities
+                        .filter((o) => {
+                          const q = copilotRefQuery.trim().toLowerCase();
+                          if (!q) return true;
+                          const hay = [
+                            o.supplier_name,
+                            o.contract_id,
+                            o.request_id,
+                            o.tier,
+                            o.category,
+                            o.subcategory,
+                          ]
+                            .filter(Boolean)
+                            .join(" ")
+                            .toLowerCase();
+                          return hay.includes(q);
+                        })
+                        .slice(0, 12)
+                        .map((o) => (
+                          <tr
+                            key={`copilot-ref-${o.id}`}
+                            className="hover:bg-slate-50 cursor-pointer"
+                            onClick={() => {
+                              const tag = o.id != null ? `id=${o.id}` : (o.contract_id ? `contract_id=${o.contract_id}` : (o.request_id ? `request_id=${o.request_id}` : ""));
+                              if (!tag) return;
+                              setCopilotTab("qa");
+                              setQaQuestion((prev) => {
+                                const base = prev.trim();
+                                return base ? `${base}\n\n${tag}` : tag;
+                              });
+                            }}
+                            title="Click to insert id into Q&A"
+                          >
+                            <td className="px-3 py-2">
+                              <div className="font-medium text-slate-800 truncate max-w-[340px]">
+                                {o.supplier_name || "New Sourcing Request"}
+                              </div>
+                              <div className="font-mono text-[10px] text-slate-400">
+                                {o.contract_id || o.request_id || `id=${o.id}`}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2">
+                              <span
+                                className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                  o.tier === "T1"
+                                    ? "bg-red-100 text-mit-red"
+                                    : o.tier === "T2"
+                                      ? "bg-orange-100 text-orange-700"
+                                      : o.tier === "T3"
+                                        ? "bg-blue-100 text-blue-700"
+                                        : "bg-slate-100 text-slate-600"
+                                }`}
+                              >
+                                {o.tier}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 font-mono text-slate-700">{Number(o.total_score || 0).toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      {opportunities.length === 0 && (
+                        <tr>
+                          <td className="px-3 py-3 text-slate-500" colSpan={3}>
+                            No opportunities loaded yet.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
               <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs font-medium shrink-0 bg-white w-fit">
                 {(
                   [
