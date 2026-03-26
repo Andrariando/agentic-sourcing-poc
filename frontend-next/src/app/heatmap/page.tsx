@@ -29,6 +29,8 @@ export default function HeatmapPriorityPage() {
   const [feedbackReason, setFeedbackReason] = useState<string>("");
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
 
+  // Optional Copilot Slide-over
+  const [copilotOpen, setCopilotOpen] = useState(false);
   const [copilotTab, setCopilotTab] = useState<"qa" | "policy" | "cards">("qa");
   const [qaQuestion, setQaQuestion] = useState("");
   const [qaAnswer, setQaAnswer] = useState<string | null>(null);
@@ -55,6 +57,15 @@ export default function HeatmapPriorityPage() {
   } | null>(null);
   const [assistLoading, setAssistLoading] = useState(false);
   const [cardCategories, setCardCategories] = useState<string[]>(["IT Infrastructure", "Software", "Hardware"]);
+
+  useEffect(() => {
+    if (!copilotOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setCopilotOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [copilotOpen]);
 
   useEffect(() => {
     (async () => {
@@ -419,18 +430,29 @@ export default function HeatmapPriorityPage() {
             <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Sourcing Priority Heatmap</h1>
             <p className="text-slate-500 mt-2 text-sm">Agentic continuous evaluation of existing contracts and new requests.</p>
           </div>
-          <div className="flex items-center gap-3 bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
-            <button 
-              onClick={() => setViewMode('table')}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === 'table' ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
+              <button
+                onClick={() => setViewMode('table')}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === 'table' ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                <List className="w-4 h-4" /> Table
+              </button>
+              <button
+                onClick={() => setViewMode('heatmap')}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === 'heatmap' ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                <LayoutGrid className="w-4 h-4" /> Matrix
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCopilotOpen(true)}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-slate-200 shadow-sm text-sm font-medium text-slate-700 hover:bg-slate-50"
+              title="Open Heatmap Copilot (optional)"
             >
-              <List className="w-4 h-4" /> Table
-            </button>
-            <button 
-              onClick={() => setViewMode('heatmap')}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === 'heatmap' ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              <LayoutGrid className="w-4 h-4" /> Matrix
+              <MessageCircle className="w-4 h-4 text-sponsor-blue" />
+              Copilot
             </button>
           </div>
         </header>
@@ -466,201 +488,7 @@ export default function HeatmapPriorityPage() {
           </div>
         </div>
 
-        {/* Heatmap copilot: explain-only Q&A, policy alignment, category_cards.json assist (preview) */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/80 flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3">
-            <div className="flex items-center gap-2 min-w-0">
-              <MessageCircle className="w-5 h-5 text-sponsor-blue shrink-0" />
-              <h2 className="text-lg font-bold text-slate-900">Heatmap copilot</h2>
-            </div>
-            <p className="text-xs text-slate-500 sm:flex-1">
-              Ask why rows rank as they do (scores stay truth). Check reviewer text vs category policy. Draft{" "}
-              <code className="text-slate-600">category_cards.json</code> edits — preview only.
-            </p>
-            <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs font-medium shrink-0">
-              {(
-                [
-                  ["qa", "Q&A"],
-                  ["policy", "Policy"],
-                  ["cards", "Cards"],
-                ] as const
-              ).map(([key, label]) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setCopilotTab(key)}
-                  className={`px-3 py-2 transition ${copilotTab === key ? "bg-sponsor-blue text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="p-5 space-y-4">
-            {copilotTab === "qa" && (
-              <div className="space-y-3">
-                <label className="block text-sm font-medium text-slate-700">
-                  Question <span className="text-slate-400 font-normal">(e.g. Why is supplier A above B?)</span>
-                </label>
-                <textarea
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm min-h-[88px] focus:ring-2 focus:ring-sponsor-blue/20"
-                  placeholder="Use names or IDs from the table. Answers use current DB rows + feedback; no rescoring."
-                  value={qaQuestion}
-                  onChange={(e) => setQaQuestion(e.target.value)}
-                />
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => void submitHeatmapQA()}
-                    disabled={qaLoading || qaQuestion.trim().length < 3}
-                    className="px-4 py-2 bg-sponsor-blue text-white rounded-lg text-sm font-medium disabled:opacity-50"
-                  >
-                    {qaLoading ? "Thinking…" : "Explain"}
-                  </button>
-                  {qaUsedLlm && qaAnswer && (
-                    <span className="text-xs text-emerald-700">LLM explanation (grounded on context below)</span>
-                  )}
-                  {!qaUsedLlm && qaAnswer && (
-                    <span className="text-xs text-amber-700">Showing context only or offline mode</span>
-                  )}
-                </div>
-                {qaAnswer && (
-                  <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">
-                    {qaAnswer}
-                  </div>
-                )}
-              </div>
-            )}
-            {copilotTab === "policy" && (
-              <div className="space-y-3">
-                <p className="text-xs text-slate-500">
-                  Suggestion only — does not change scores or files. Compares your text to{" "}
-                  <code className="text-slate-600">category_cards.json</code> for the category.
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Category</label>
-                    <select
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-                      value={policyCategory}
-                      onChange={(e) => setPolicyCategory(e.target.value)}
-                    >
-                      {cardCategories.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Supplier (optional)</label>
-                    <input
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-                      value={policySupplier}
-                      onChange={(e) => setPolicySupplier(e.target.value)}
-                      placeholder="e.g. CloudServe Group"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Current tier (optional)</label>
-                    <input
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-                      value={policyTier}
-                      onChange={(e) => setPolicyTier(e.target.value)}
-                      placeholder="T2"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Feedback / rationale text</label>
-                  <textarea
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm min-h-[100px]"
-                    value={policyText}
-                    onChange={(e) => setPolicyText(e.target.value)}
-                    placeholder="Paste reviewer rationale to check against preferred-supplier policy…"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void submitPolicyCheck()}
-                  disabled={policyLoading || policyText.trim().length < 5}
-                  className="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-medium disabled:opacity-50"
-                >
-                  {policyLoading ? "Checking…" : "Check vs policy"}
-                </button>
-                {policyResult && (
-                  <div
-                    className={`rounded-lg border p-4 text-sm ${
-                      policyResult.contradicts ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-slate-50/80"
-                    }`}
-                  >
-                    <p className="font-semibold text-slate-800">
-                      {policyResult.contradicts ? "Possible misalignment" : "Alignment check"}
-                      {policyResult.severity && policyResult.severity !== "none" ? (
-                        <span className="font-normal text-slate-500"> — {policyResult.severity}</span>
-                      ) : null}
-                    </p>
-                    {policyResult.summary && <p className="mt-2 text-slate-700">{policyResult.summary}</p>}
-                    {policyResult.suggestion ? (
-                      <p className="mt-2 text-slate-600">
-                        <span className="font-medium">Suggestion:</span> {policyResult.suggestion}
-                      </p>
-                    ) : null}
-                  </div>
-                )}
-              </div>
-            )}
-            {copilotTab === "cards" && (
-              <div className="space-y-3">
-                <p className="text-xs text-slate-500">
-                  Proposed JSON patch for you to merge into <code className="text-slate-600">data/heatmap/category_cards.json</code>{" "}
-                  manually. Not saved automatically.
-                </p>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Category</label>
-                  <select
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm max-w-md"
-                    value={assistCategory}
-                    onChange={(e) => setAssistCategory(e.target.value)}
-                  >
-                    {cardCategories.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">What to change</label>
-                  <textarea
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm min-h-[100px]"
-                    value={assistInstruction}
-                    onChange={(e) => setAssistInstruction(e.target.value)}
-                    placeholder="e.g. Add Acme Corp as preferred in Software and set default to allowed…"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void submitAssistCategory()}
-                  disabled={assistLoading || assistInstruction.trim().length < 10}
-                  className="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-medium disabled:opacity-50"
-                >
-                  {assistLoading ? "Drafting…" : "Suggest patch"}
-                </button>
-                {assistResult && (assistResult.proposed_patch || assistResult.notes) && (
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-2 text-sm">
-                    {assistResult.notes && <p className="text-slate-700">{assistResult.notes}</p>}
-                    {assistResult.proposed_patch && Object.keys(assistResult.proposed_patch).length > 0 && (
-                      <pre className="text-xs bg-slate-900 text-slate-100 rounded p-3 overflow-x-auto">
-                        {JSON.stringify(assistResult.proposed_patch, null, 2)}
-                      </pre>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
+        {/* Heatmap copilot moved to optional slide-over (opened via header button). */}
 
         {/* View Router */}
         {viewMode === 'heatmap' ? (
@@ -1045,6 +873,226 @@ export default function HeatmapPriorityPage() {
         </div>
       </div>
 
+      {/* Optional Copilot Slide-over */}
+      {copilotOpen && (
+        <div className="fixed inset-0 z-50 overflow-hidden">
+          <div
+            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+            onClick={() => setCopilotOpen(false)}
+          />
+          <div className="fixed inset-y-0 right-0 w-full max-w-2xl bg-white shadow-2xl flex flex-col transform transition-transform border-l border-slate-200">
+            <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <div className="min-w-0">
+                <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                  <MessageCircle className="w-5 h-5 text-sponsor-blue shrink-0" />
+                  Heatmap copilot
+                </h2>
+                <p className="text-sm text-slate-500 mt-1">
+                  Optional. Explain rankings (scores stay truth), check feedback vs policy, draft{" "}
+                  <code className="text-slate-600">category_cards.json</code> patches (preview only).
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCopilotOpen(false)}
+                className="text-slate-400 hover:text-slate-600 transition bg-white p-2 rounded-full shadow-sm"
+                aria-label="Close copilot"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/30">
+              <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs font-medium shrink-0 bg-white w-fit">
+                {(
+                  [
+                    ["qa", "Q&A"],
+                    ["policy", "Policy"],
+                    ["cards", "Cards"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setCopilotTab(key)}
+                    className={`px-3 py-2 transition ${
+                      copilotTab === key ? "bg-sponsor-blue text-white" : "bg-white text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {copilotTab === "qa" && (
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-3">
+                  <label className="block text-sm font-medium text-slate-700">
+                    Question <span className="text-slate-400 font-normal">(e.g. Why is supplier A above B?)</span>
+                  </label>
+                  <textarea
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm min-h-[96px] focus:ring-2 focus:ring-sponsor-blue/20"
+                    placeholder="Use names or IDs from the table. Answers use current DB rows + feedback; no rescoring."
+                    value={qaQuestion}
+                    onChange={(e) => setQaQuestion(e.target.value)}
+                  />
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => void submitHeatmapQA()}
+                      disabled={qaLoading || qaQuestion.trim().length < 3}
+                      className="px-4 py-2 bg-sponsor-blue text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                    >
+                      {qaLoading ? "Thinking…" : "Explain"}
+                    </button>
+                    {qaUsedLlm && qaAnswer && (
+                      <span className="text-xs text-emerald-700">LLM explanation (grounded on context below)</span>
+                    )}
+                    {!qaUsedLlm && qaAnswer && (
+                      <span className="text-xs text-amber-700">Showing context only or offline mode</span>
+                    )}
+                  </div>
+                  {qaAnswer && (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">
+                      {qaAnswer}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {copilotTab === "policy" && (
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-3">
+                  <p className="text-xs text-slate-500">
+                    Suggestion only — does not change scores or files. Compares your text to{" "}
+                    <code className="text-slate-600">category_cards.json</code> for the category.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Category</label>
+                      <select
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                        value={policyCategory}
+                        onChange={(e) => setPolicyCategory(e.target.value)}
+                      >
+                        {cardCategories.map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Supplier (optional)</label>
+                      <input
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                        value={policySupplier}
+                        onChange={(e) => setPolicySupplier(e.target.value)}
+                        placeholder="e.g. CloudServe Group"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Current tier (optional)</label>
+                      <input
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                        value={policyTier}
+                        onChange={(e) => setPolicyTier(e.target.value)}
+                        placeholder="T2"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Feedback / rationale text</label>
+                    <textarea
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm min-h-[110px]"
+                      value={policyText}
+                      onChange={(e) => setPolicyText(e.target.value)}
+                      placeholder="Paste reviewer rationale to check against preferred-supplier policy…"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void submitPolicyCheck()}
+                    disabled={policyLoading || policyText.trim().length < 5}
+                    className="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                  >
+                    {policyLoading ? "Checking…" : "Check vs policy"}
+                  </button>
+                  {policyResult && (
+                    <div
+                      className={`rounded-lg border p-4 text-sm ${
+                        policyResult.contradicts ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-slate-50/80"
+                      }`}
+                    >
+                      <p className="font-semibold text-slate-800">
+                        {policyResult.contradicts ? "Possible misalignment" : "Alignment check"}
+                        {policyResult.severity && policyResult.severity !== "none" ? (
+                          <span className="font-normal text-slate-500"> — {policyResult.severity}</span>
+                        ) : null}
+                      </p>
+                      {policyResult.summary && <p className="mt-2 text-slate-700">{policyResult.summary}</p>}
+                      {policyResult.suggestion ? (
+                        <p className="mt-2 text-slate-600">
+                          <span className="font-medium">Suggestion:</span> {policyResult.suggestion}
+                        </p>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {copilotTab === "cards" && (
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-3">
+                  <p className="text-xs text-slate-500">
+                    Proposed JSON patch for you to merge into <code className="text-slate-600">data/heatmap/category_cards.json</code>{" "}
+                    manually. Not saved automatically.
+                  </p>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Category</label>
+                    <select
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm max-w-md"
+                      value={assistCategory}
+                      onChange={(e) => setAssistCategory(e.target.value)}
+                    >
+                      {cardCategories.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">What to change</label>
+                    <textarea
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm min-h-[110px]"
+                      value={assistInstruction}
+                      onChange={(e) => setAssistInstruction(e.target.value)}
+                      placeholder="e.g. Add Acme Corp as preferred in Software and set default to allowed…"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void submitAssistCategory()}
+                    disabled={assistLoading || assistInstruction.trim().length < 10}
+                    className="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                  >
+                    {assistLoading ? "Drafting…" : "Suggest patch"}
+                  </button>
+                  {assistResult && (assistResult.proposed_patch || assistResult.notes) && (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-2 text-sm">
+                      {assistResult.notes && <p className="text-slate-700">{assistResult.notes}</p>}
+                      {assistResult.proposed_patch && Object.keys(assistResult.proposed_patch).length > 0 && (
+                        <pre className="text-xs bg-slate-900 text-slate-100 rounded p-3 overflow-x-auto">
+                          {JSON.stringify(assistResult.proposed_patch, null, 2)}
+                        </pre>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Slide-over Feedback Modal - Rich Case Details Style */}
       {reviewOpp && (
         <div className="fixed inset-0 z-50 overflow-hidden">
@@ -1096,7 +1144,9 @@ export default function HeatmapPriorityPage() {
               {/* Justification Box */}
               <div className="bg-blue-50/50 p-6 rounded-xl border border-blue-100">
                 <p className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">AI Engine Justification</p>
-                <p className="text-sm text-slate-700 leading-relaxed italic border-l-4 border-sponsor-blue pl-4 py-1">"{reviewOpp.justification_summary}"</p>
+                <p className="text-sm text-slate-700 leading-relaxed italic border-l-4 border-sponsor-blue pl-4 py-1">
+                  &ldquo;{reviewOpp.justification_summary}&rdquo;
+                </p>
               </div>
 
               {/* Detailed Breakdown & Artifacts Grid */}
