@@ -6,15 +6,54 @@ This document provides a detailed technical deep-dive into the backend architect
 
 ---
 
-## 🏗️ 1. High-Level Architecture
+## 🏗️ 1. High-Level Architecture (Dual-System)
 
-The system follows a service-oriented architecture with a clear separation between governance, execution, and persistence.
+This repository contains **two independent systems** that share the same FastAPI process (`backend/main.py`) but are otherwise isolated by design.
 
-- **API Layer (FastAPI)**: The entry point for all frontend requests (`backend/main.py`).
-- **Service Layer (ChatService, CaseService)**: Orchestrates business logic and service interactions.
-- **Agent Layer (Supervisor & Worker Agents)**: The "brain" of the system, using LLMs to analyze data and generate artifacts.
-- **RAG Layer (Retriever, Vector Store)**: Handles document retrieval and grounding analysis.
-- **Persistence Layer (SQLite/ChromaDB)**: Stores case data, chat history, and document embeddings.
+### System A — Legacy DTP Copilot (DTP-01 → DTP-06)
+
+**Purpose**: end-to-end sourcing execution inside a “case” using chat + multi-agent workflows + artifacts + governance decisions.
+
+**Core layers**
+- **API Layer (FastAPI)**: `/api/cases/*`, `/api/chat`, `/api/decisions/*`, `/api/ingest/*`
+- **Service Layer**: `ChatService`, `CaseService`, `LLMResponder`, etc.
+- **Agent Layer**: Supervisor + specialist agents (DTP stages)
+- **RAG Layer**: retrieval over `sourcing_documents`
+- **Persistence Layer**: SQLite `data/datalake.db` + Chroma (legacy collection)
+
+### System B — Opportunity Heatmap (agentic scoring + intake)
+
+**Purpose**: continuously evaluate sourcing opportunities (renewals + new requests) and prioritize them using a deterministic scoring framework with optional LLM layers (explanations, policy check, bounded learning, interpreter fallbacks).
+
+**Core layers**
+- **API Layer (FastAPI)**: `/api/heatmap/*`
+- **Agent Layer**: LangGraph scoring pipeline in `backend/heatmap/agents/*`
+- **Vector memory layer**: Chroma collection `heatmap_documents` (review feedback memory + copilot snippets)
+- **Persistence Layer**: SQLite `data/heatmap.db`
+
+### What is shared vs isolated?
+
+**Shared**
+- One FastAPI process: `backend/main.py` on port 8000 (serves both API surfaces)
+- One Next.js app (optional): `frontend-next` can display both systems’ UIs
+
+**Isolated (by design)**
+- Databases:
+  - Legacy DTP: `data/datalake.db`
+  - Heatmap: `data/heatmap.db`
+- Vector stores:
+  - Legacy DTP: `sourcing_documents`
+  - Heatmap: `heatmap_documents`
+- Agents/state machines:
+  - Legacy: `backend/agents`, `backend/supervisor`, `backend/services/*`
+  - Heatmap: `backend/heatmap/*`
+
+### The only integration point
+
+The two systems share **no case state** and **no scoring state**. The single integration point is:
+- **Heatmap approve → create legacy case**: `POST /api/heatmap/approve` calls `backend/heatmap/services/case_bridge.py`, which invokes the legacy case-creation service.
+
+> **Note**: The Heatmap section later in this document repeats the same statement (and includes a diagram). This section is the “front door” summary.
 
 ### Running the System
 
@@ -22,7 +61,7 @@ The system follows a service-oriented architecture with a clear separation betwe
 # Terminal 1: Start Backend API (serves BOTH Legacy DTP + Heatmap APIs)
 python -m uvicorn backend.main:app --port 8000
 
-# Terminal 2: Start Next.js Frontend (replaces Streamlit)
+# Terminal 2: Start Next.js Frontend (unified UI for Heatmap + Cases)
 cd frontend-next && npm run dev
 
 # Generate Heatmap Synthetic Data (run once)
@@ -38,8 +77,8 @@ python backend/scripts/seed_it_demo_data.py
 
 What happens when a human asks something in the chat window?
 
-### Step 1: Frontend Submission
-The user types a message and clicks send. The Streamlit frontend (`frontend/pages/case_copilot.py`) sends a `POST` request via `APIClient` to `/api/chat` with:
+### Step 1: Frontend Submission (Legacy DTP system)
+The user types a message and clicks send. The **Legacy DTP UI** (Streamlit: `frontend/pages/case_copilot.py`, or Next.js cases UI: `frontend-next/src/app/cases/[id]/copilot/page.tsx`) sends a `POST` request to `/api/chat` with:
 - `case_id`: The unique identifier for the current procurement project.
 - `user_message`: The raw text input from the user.
 - `use_tier_2`: A flag indicating whether to use more advanced (and expensive) LLM models.

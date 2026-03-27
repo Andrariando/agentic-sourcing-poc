@@ -1,8 +1,11 @@
-# Procurement Agentic System — Enterprise POC
+# Procurement Agentic System — Dual-System Enterprise POC
 
-A **human-in-the-loop, multi-agent decision-support system** for procurement sourcing, built on the Dynamic Transaction Pipeline (DTP-01 to DTP-06) methodology.
+This repository contains **two independent procurement systems** that share a single FastAPI server (`backend/main.py`) but **do not share state**:
 
-> **Current Version** — Dual-Frontend System with 7 Official Agents, Artifact System & Agentic Sourcing Heatmap
+1. **Legacy DTP Copilot (DTP-01 → DTP-06)**: A human-in-the-loop, multi-agent decision-support system for end-to-end sourcing execution.
+2. **Opportunity Heatmap (agentic scoring + intake)**: A separate agentic system that continuously evaluates sourcing opportunities (renewals + new requests) and prioritizes them using a weighted scoring model with optional LLM support.
+
+> **Integration point**: The only bridge between the systems is **Heatmap → DTP case creation** via `backend/heatmap/services/case_bridge.py` (approving a heatmap opportunity creates a new legacy DTP case).
 
 ---
 
@@ -23,6 +26,13 @@ This project includes comprehensive documentation covering all aspects of the sy
   - Data models and schemas
   - UI/UX flow and components
   - Demo & testing instructions
+  - Dual-system architecture: Legacy DTP vs Opportunity Heatmap
+
+- **[BUSINESS_OVERVIEW.md](BUSINESS_OVERVIEW.md)** — Business translation + use cases
+  - What each system is for (Heatmap vs DTP Copilot)
+  - Defined use cases and success metrics
+  - Caveats / what this POC is (and is not)
+  - Azure-aligned path to production (security, data, AI services)
 
 - **[architecture.puml](architecture.puml)** — Visual architecture diagram (PlantUML)
   - Complete system architecture visualization
@@ -77,24 +87,44 @@ This project includes comprehensive documentation covering all aspects of the sy
 
 ---
 
-## 🏗️ Architecture
+## 🧭 Two systems in one repo
 
-### Official Agents (7 First-Class Modules)
+### System A: Legacy DTP Copilot (end-to-end workflow)
 
-### Official Agents: What They Think & Decide
+**What it is**: the original procurement copilot that runs the DTP methodology (DTP-01 to DTP-06). Users work inside a case, chat with the copilot, review artifacts, and approve/reject decisions.
 
-The system consists of **7 specialized agents**, each with a distinct "brain" (logic), data access, and decision responsibility.
+**Key API surface**:
+- `/api/cases/*`, `/api/chat`, `/api/decisions/*`, `/api/ingest/*`
 
-| Agent | DTP Stage | Thinking Process (Logic) | Key Decisions (Human Approval) |
-|-------|-----------|--------------------------|-------------------------------|
-| **Supervisor** | *All* | **Orchestrator**: Monitors case state, validates inputs, and decides which specialist agent to call. It acts as the "Manager" ensuring no steps are skipped. | Routing to next stage, Handling exceptions |
-| **Sourcing Signal** | DTP-01 | **Scanner**: "Do we have a problem/opportunity?"<br>1. Checks contract expiry dates<br>2. Detects spend anomalies (>15% variance)<br>3. Flags supplier risk (score < 6.0) | Create new case? (Y/N) |
-| **Strategy Agent** | DTP-01 | **Strategist**: "How should we approach this?"<br>1. Retrieves market reports & benchmarks<br>2. Analyzes supplier leverage<br>3. Recommends path: Renewal, RFP, or Renegotiation | Confirm Strategy (e.g., "Go to RFP") |
-| **RFx Draft Agent** | DTP-02 | **Author**: "What are our requirements?"<br>1. Pulls similar past RFPs (RAG)<br>2. Structures technical vs commercial requirements<br>3. Drafts full RFP document | Approve RFP release to market |
-| **Supplier Scoring** | DTP-03 | **Evaluator**: "Who is the best fit?"<br>1. Numerical scoring of proposals against weightings<br>2. identifying compliance gaps<br>3. Ranking suppliers (1st, 2nd, 3rd) | Shortslist/Finalist Selection |
-| **Negotiation Support** | DTP-04 | **Coach**: "How do we get the best deal?"<br>1. Analyzes proposal vs. market benchmark<br>2. Identifies specific trade-offs (Price vs Term)<br>3. Generates script/email for negotiation | strategies and counter-offers |
-| **Contract Support** | DTP-05 | **Paralegal**: "Are the terms safe?"<br>1. Extracts key clauses (Indemnity, SLA, Term)<br>2. Flags deviations from policy<br>3. Generates signature pack | Contract Signature |
-| **Implementation** | DTP-06 | **Planner**: "How do we realize value?"<br>1. Creates rollout schedule (Gantt logic)<br>2. Defines success KPIs<br>3. Assigns resource stakeholders | Activate Project |
+**Primary UI**:
+- Legacy Streamlit UI (`frontend/`) or Next.js case routes (`frontend-next/src/app/cases/*`)
+
+### System B: Opportunity Heatmap (scoring + intake + copilot)
+
+**What it is**: a separate agentic system that prioritizes opportunities using a deterministic scoring framework plus optional LLM layers (explanations, policy checks, bounded learning, fallback interpretation).
+
+**Key API surface**:
+- `/api/heatmap/*` (opportunities, run/status, feedback, approve bridge, intake, copilot endpoints)
+
+**Primary UI**:
+- Next.js heatmap routes (`frontend-next/src/app/heatmap`, `/intake`, `/dashboard/heatmap`)
+
+### What is shared vs isolated?
+
+**Shared**
+- One FastAPI process: `backend/main.py` on port 8000
+- One Next.js app (if used): `frontend-next`
+
+**Isolated (by design)**
+- Databases:
+  - Legacy DTP: `data/datalake.db`
+  - Heatmap: `data/heatmap.db`
+- Vector stores / memory:
+  - Legacy DTP: Chroma collection `sourcing_documents`
+  - Heatmap: Chroma collection `heatmap_documents`
+- Agents and state machines:
+  - Legacy: `backend/agents`, `backend/supervisor`, `backend/services/*`
+  - Heatmap: `backend/heatmap/*` (LangGraph scoring pipeline)
 
 ### Folder Structure
 
@@ -152,172 +182,101 @@ agentic-sourcing-poc/
     └── cases_seed.json          # Pre-seeded case data
 ```
 
-### System Flow
-
-```
-User Message → Supervisor (Intent Classification)
-                ↓
-         ActionPlan (agent + tasks)
-                ↓
-         Agent Execution (tasks → ArtifactPack)
-                ↓
-         Persist Artifacts → Update State (Supervisor only)
-                ↓
-         UI: Procurement Workbench (Artifacts + Next Actions)
-```
-
 ---
 
-## 🚀 Quick Start
+## 🚀 Quick Start (pick a track)
 
 ### Prerequisites
 - Python 3.9+
-- OpenAI API key
+- Node.js (for Next.js UI)
+- Optional: OpenAI API key (enables LLM features; both systems have fallbacks)
 
-### Installation
+### Install
 
 ```bash
-# Clone repository
-git clone https://github.com/Andrariando/agentic-sourcing-poc.git
-cd agentic-sourcing-poc
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Create .env file
-echo "OPENAI_API_KEY=your-key-here" > .env
+cd frontend-next && npm install
 ```
 
-### Running Locally
+### Start the shared backend (required for both systems)
 
 ```bash
-# Terminal 1: Start Backend (from project root)
 python -m uvicorn backend.main:app --reload --port 8000
+```
 
-# Terminal 2: Start Next.js Frontend (New Heatmap System)
+### Track 1: Heatmap-only demo (recommended quick path)
+
+```bash
+# (One-time) generate synthetic heatmap CSVs + seed/persist scored opportunities
+python backend/heatmap/seed_synthetic_data.py
+
+# Start Next.js UI
 cd frontend-next && npm run dev
+```
 
-# Terminal 3 (Optional): Start Legacy Streamlit Frontend
+Open:
+- Heatmap UI: `http://localhost:3000/heatmap`
+- Intake UI: `http://localhost:3000/intake`
+- API docs: `http://localhost:8000/docs`
+
+### Track 2: Legacy DTP demo (cases + chat + artifacts)
+
+```bash
+# (One-time) seed legacy cases + documents for RAG
+python backend/scripts/seed_it_demo_data.py
+
+# Optional legacy UI
 streamlit run frontend/app.py
 ```
 
-- **Backend API**: http://localhost:8000
-- **API Docs**: http://localhost:8000/docs
-- **Next.js UI**: http://localhost:3000 (New Heatmap System)
-- **Streamlit UI**: http://localhost:8501 (Legacy DTP System)
+Open:
+- Streamlit legacy UI: `http://localhost:8501`
+- Or use Next.js case routes under `http://localhost:3000/cases`
 
-### Seed Demo Data (IT & Corporate Services)
+### Track 3: Bridge demo (Heatmap → create DTP cases)
 
-```bash
-# Seed 10 realistic IT cases with DTP-ready data
-python backend/scripts/seed_it_demo_data.py
-```
-
-This creates **10 test cases covering DTP-01 to DTP-04** (Strategy through Negotiation):
-
-| Case ID | Name | Category | Stage | Description | Key Decision |
-|---------|------|----------|-------|-------------|--------------|
-| CASE-001 | IT Managed Services Renewal | IT_SERVICES | DTP-01 | Renewal with TechCorp, pricing above market | Review renewal terms vs market |
-| CASE-002 | End-User Hardware Refresh | HARDWARE | DTP-01 | 2,500 unit refresh (Dell vs HP/Lenovo) | Approve competitive RFP |
-| CASE-009 | Global Telecom Consolidation | TELECOM | DTP-01 | Consolidating 15 countries to 1-2 carriers | Strategic sourcing approval |
-| CASE-003 | Cloud Migration (AWS/Azure) | CLOUD | DTP-02 | Migrating 40% workloads to cloud | Approve technical requirements |
-| CASE-007 | SD-WAN Upgrade | NETWORK | DTP-02 | Replacing MPLS with SD-WAN | Approve vendor shortlist |
-| CASE-010 | DevOps Toolchain Standards | SOFTWARE | DTP-02 | Standardizing CI/CD (GitHub vs GitLab) | Approve evaluation matrix |
-| CASE-004 | Cybersecurity SOC Services | SECURITY | DTP-03 | Scoring proposals (SecureNet vs CyberGuard) | Select finalists for presentation |
-| CASE-008 | HRIS Platform Selection | SAAS | DTP-03 | Workday vs Oracle HCM evaluation | Confirm scoring results |
-| CASE-005 | Data Center Co-location | INFRASTRUCTURE | DTP-04 | Equinix negotiation (power rates) | Approve final terms |
-| CASE-006 | Microsoft EA Renewal | SOFTWARE | DTP-04 | E3 to E5 step-up, 15% uplift proposed | Authorize negotiation strategy |
-
-**Data Seeded**:
-- **16 suppliers** with differentiated performance (e.g., declining trends, risk flags)
-- **11 context-aware documents** in ChromaDB (Proposals, RFPs, Market Reports)
-- **SLA events** and spend anomalies to trigger specific agent behaviors
+1. Run **Track 1** (heatmap has opportunities)
+2. Approve one or more opportunities in Heatmap UI (calls `/api/heatmap/approve`)
+3. Navigate to the created case in the Legacy DTP UI (Next.js `/cases/[id]/copilot` or Streamlit dashboard)
 
 ---
 
-## 🎮 Demo Options
+## 📡 API Reference (by system)
 
-### Option A: Breadth Demo (10 Cases at Different Stages)
-Use `seed_it_demo_data.py` to show variety of cases across DTP-01 to DTP-04.
-- Best for: Showing system handles multiple parallel cases
-- Limitation: Each case is at a specific stage, not end-to-end
+### Legacy DTP
+- **Cases**: `GET /api/cases`, `GET /api/cases/{id}`, `POST /api/cases`
+- **Chat**: `POST /api/chat`
+- **Decisions**: `POST /api/decisions/approve`, `POST /api/decisions/reject`
+- **Ingestion**: `POST /api/ingest/document`, `POST /api/ingest/data`, etc.
 
-### Option B: Depth Demo (One Case End-to-End)
-Use `run_happy_path_demo.py` to show complete DTP-01 → DTP-06 workflow.
-- Best for: Showing complete procurement lifecycle
-- Creates: `CASE-DEMO-001` with full history and artifacts
-
-```bash
-# Option A: Breadth Demo
-python backend/scripts/seed_it_demo_data.py
-
-# Option B: Depth Demo
-python backend/scripts/run_happy_path_demo.py
-```
-
-For detailed demo instructions, see [System Documentation - Demo & Testing](SYSTEM_DOCUMENTATION.md#demo--testing).
-
----
-
-## 📡 API Reference
-
-### Case Management
+### Opportunity Heatmap
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/cases` | List all cases |
-| GET | `/api/cases/{id}` | Get case details |
-| POST | `/api/cases` | Create new case |
-
-### Copilot Chat
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/chat` | Send message to copilot (returns ArtifactPack) |
-
-### Human Decisions
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/decisions/approve` | Approve recommendation |
-| POST | `/api/decisions/reject` | Reject recommendation |
-
-### Document Ingestion (RAG)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/ingest/document` | Upload PDF/DOCX/TXT |
-| GET | `/api/documents` | List ingested documents |
-| DELETE | `/api/documents/{id}` | Delete document |
-
-### Structured Data Ingestion
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/ingest/data/preview` | Preview CSV/Excel |
-| POST | `/api/ingest/data` | Ingest to data lake |
-| GET | `/api/ingest/history` | View ingestion history |
-
-### System
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/health` | Health check |
-
-### Sourcing Heatmap System
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/heatmap/opportunities` | List all scored opportunities (T1-T4) |
+| GET | `/api/heatmap/opportunities` | List scored opportunities (T1–T4) |
+| POST | `/api/heatmap/run` | Trigger scoring pipeline (background) |
+| GET | `/api/heatmap/run/status` | Pipeline status |
 | POST | `/api/heatmap/feedback` | Submit human override feedback |
-| POST | `/api/heatmap/approve` | Approve opportunities → legacy DTP cases (via case bridge) |
-| POST | `/api/heatmap/run` | Trigger batch scoring engine (background on API server) |
-| GET | `/api/heatmap/run/status` | Pipeline job status and last error |
-| GET | `/api/heatmap/intake/categories` | Category list from `category_cards.json` |
+| POST | `/api/heatmap/approve` | **Bridge**: approve opportunities → create legacy DTP cases |
+| GET | `/api/heatmap/intake/categories` | Category keys from `category_cards.json` |
 | POST | `/api/heatmap/intake/preview` | PS_new preview (no DB write) |
-| POST | `/api/heatmap/intake` | Save new intake opportunity (`source=intake`; batch re-runs keep these rows) |
-| POST | `/api/heatmap/qa` | Heatmap copilot: natural-language explanations (scores unchanged) |
-| POST | `/api/heatmap/policy/check` | Compare feedback text to `category_cards.json` (suggestion) |
-| POST | `/api/heatmap/category-cards/assist` | Suggested JSON patch for category cards (manual merge) |
+| POST | `/api/heatmap/intake` | Persist intake opportunity |
+| POST | `/api/heatmap/qa` | Heatmap copilot: explain-only Q&A |
+| POST | `/api/heatmap/policy/check` | Feedback vs policy suggestion |
+| POST | `/api/heatmap/category-cards/assist` | Category cards patch suggestion |
 
-**FIS / contract value:** default **TCV**; set env `HEATMAP_FIS_USE_ACV=1` to use **ACV** for batch scoring.
+---
 
-**Review memory (learn from feedback):** Human feedback is embedded into Chroma; batch scoring and intake preview apply a **bounded** total-score nudge via `feedback_memory.py` (optional **`gpt-4o-mini`** completion when `OPENAI_API_KEY` is set). Env: **`HEATMAP_LEARNING_MODEL`** (default `gpt-4o-mini`), **`HEATMAP_LEARNING=0`** to disable.
+## 🔐 Environment Variables (high-signal)
 
-**Heatmap copilot** (`heatmap_copilot.py` + `/api/heatmap/qa`, `/policy/check`, `/category-cards/assist`): explain-only Q&A over DB + feedback, policy hints, and draft category-card JSON — **does not** overwrite scores or files. Optional **`HEATMAP_COPILOT_MODEL`** (defaults to `HEATMAP_LEARNING_MODEL` then `gpt-4o-mini`). **How this affects users** (trust, fallbacks, review memory vs. explanations): see `SYSTEM_DOCUMENTATION.md` → **User experience impact: Heatmap copilot and review memory**.
+### Shared
+- `OPENAI_API_KEY`: enables LLM-powered features; both systems have graceful fallbacks when unset.
+
+### Heatmap
+- `HEATMAP_FIS_USE_ACV=1`: use ACV instead of TCV for FIS in batch scoring
+- `HEATMAP_LEARNING=0`: disable review-memory learning layer
+- `HEATMAP_LEARNING_MODEL`: model for review-memory synthesis (default `gpt-4o-mini`)
+- `HEATMAP_COPILOT_MODEL`: model for heatmap copilot explanations (default falls back to learning model)
+- `HEATMAP_INTERPRETER_MODEL`: model for interpreter fallbacks (default `gpt-4o-mini`)
 
 ---
 
