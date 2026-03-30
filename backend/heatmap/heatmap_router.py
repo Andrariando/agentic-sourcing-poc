@@ -1,7 +1,9 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Any, Dict
-from sqlmodel import select
+from datetime import datetime, timezone
+from sqlmodel import select, func
+import json
 import threading
 import time
 
@@ -9,8 +11,9 @@ from backend.heatmap.services.feedback_service import get_feedback_service
 from backend.heatmap.services.case_bridge import get_case_bridge_service
 from backend.heatmap.run_pipeline_init import run_init
 from backend.heatmap.persistence.heatmap_database import heatmap_db
-from backend.heatmap.persistence.heatmap_models import Opportunity
-from backend.heatmap.context_builder import load_category_cards
+from backend.heatmap.persistence.heatmap_models import Opportunity, ReviewFeedback, AuditLog
+from backend.heatmap.context_builder import load_category_cards, category_cards_fingerprint
+from backend.heatmap.services.opportunity_enrichment import enrich_opportunity_dict
 from backend.heatmap.services.intake_scoring import score_intake_payload, persist_intake_opportunity
 from backend.heatmap.services.heatmap_copilot import (
     answer_heatmap_question,
@@ -27,6 +30,7 @@ _pipeline_status = {
     "last_success": None,
     "last_error": None,
     "opportunity_count": None,
+    "last_duration_sec": None,
 }
 
 class FeedbackRequest(BaseModel):
@@ -52,6 +56,7 @@ class ApproveOpportunitiesResponse(BaseModel):
     success: bool
     approved_count: int
     cases: dict[str, str]
+    already_linked: dict[str, bool] = Field(default_factory=dict)
 
 class PipelineStatusResponse(BaseModel):
     running: bool
@@ -60,6 +65,7 @@ class PipelineStatusResponse(BaseModel):
     last_success: Optional[bool] = None
     last_error: Optional[str] = None
     opportunity_count: Optional[int] = None
+    last_duration_sec: Optional[float] = None
 
 
 def _empty_str_to_none(v: Any) -> Any:
@@ -163,7 +169,10 @@ def heatmap_category_cards_assist(req: CategoryCardsAssistRequest):
 @heatmap_router.get("/intake/categories")
 def intake_categories():
     cards = load_category_cards()
-    return {"categories": sorted(cards.keys())}
+    return {
+        "categories": sorted(cards.keys()),
+        "category_cards_meta": category_cards_fingerprint(),
+    }
 
 
 @heatmap_router.post("/intake/preview", response_model=IntakePreviewResponse)
@@ -217,13 +226,130 @@ def intake_submit(req: IntakeSubmitRequest):
         session.close()
 
 
+def _feedback_counts_by_opportunity(session) -> Dict[int, int]:
+    rows = session.exec(
+        select(ReviewFeedback.opportunity_id, func.count(ReviewFeedback.id)).group_by(
+            ReviewFeedback.opportunity_id
+        )
+    ).all()
+    return {int(r[0]): int(r[1]) for r in rows}
+
+
+def _last_pipeline_audit_payload(session) -> Optional[Dict[str, Any]]:
+    row = session.exec(
+        select(AuditLog)
+        .where(AuditLog.event_type == "HEATMAP_PIPELINE_RUN")
+        .order_by(AuditLog.timestamp.desc())
+    ).first()
+    if not row or not row.new_value:
+        return None
+    try:
+        return json.loads(row.new_value)
+    except json.JSONDecodeError:
+        return None
+
+
 @heatmap_router.get("/opportunities")
-def list_opportunities():
+def list_opportunities(
+    enrich: bool = Query(
+        True,
+        description="Include data_quality_warnings and kli_metrics (feedback-derived).",
+    ),
+):
     session = heatmap_db.get_db_session()
     try:
         statement = select(Opportunity)
         results = session.exec(statement).all()
-        return {"opportunities": [opt.model_dump() for opt in results]}
+        cards = load_category_cards()
+        cat_keys = sorted(cards.keys())
+        fb_counts = _feedback_counts_by_opportunity(session) if enrich else {}
+        pipe = _last_pipeline_audit_payload(session) or {}
+        pipeline_meta = {
+            "duration_sec": pipe.get("duration_sec"),
+            "opportunity_count": pipe.get("opportunity_count"),
+            "agents_run": pipe.get("agents_run", 5),
+        }
+        if _pipeline_status.get("last_duration_sec") is not None:
+            pipeline_meta["duration_sec"] = _pipeline_status["last_duration_sec"]
+        if _pipeline_status.get("opportunity_count") is not None:
+            pipeline_meta["opportunity_count"] = _pipeline_status["opportunity_count"]
+
+        out: List[Dict[str, Any]] = []
+        for opt in results:
+            d = opt.model_dump(mode="json")
+            if enrich:
+                oid = int(opt.id) if opt.id is not None else 0
+                d = enrich_opportunity_dict(
+                    d,
+                    fb_counts.get(oid, 0),
+                    cat_keys,
+                    pipeline_meta,
+                )
+            out.append(d)
+        return {"opportunities": out}
+    finally:
+        session.close()
+
+
+@heatmap_router.get("/metrics/dashboard")
+def heatmap_dashboard_metrics():
+    """Aggregates for /dashboard/heatmap (feedback + pipeline audit + tier rollups)."""
+    session = heatmap_db.get_db_session()
+    try:
+        opps = session.exec(select(Opportunity)).all()
+        fb_raw = session.exec(select(func.count(ReviewFeedback.id))).one()
+        fb_total = int(fb_raw[0] if isinstance(fb_raw, (tuple, list)) else fb_raw)
+        tier_counts: Dict[str, int] = {}
+        pending = 0
+        approved = 0
+        ages: List[float] = []
+        for o in opps:
+            tier_counts[o.tier] = tier_counts.get(o.tier, 0) + 1
+            if o.status == "Pending":
+                pending += 1
+            elif o.status == "Approved":
+                approved += 1
+            if o.record_created_at and o.status == "Pending":
+                t = o.record_created_at
+                if t.tzinfo is None:
+                    t = t.replace(tzinfo=timezone.utc)
+                ages.append((datetime.now(timezone.utc) - t).total_seconds() / 86400.0)
+
+        median_age = None
+        if ages:
+            s = sorted(ages)
+            mid = len(s) // 2
+            median_age = s[mid] if len(s) % 2 else (s[mid - 1] + s[mid]) / 2.0
+
+        pipe = _last_pipeline_audit_payload(session)
+        last_pipe = None
+        if pipe:
+            last_pipe = {
+                "duration_sec": pipe.get("duration_sec"),
+                "opportunity_count": pipe.get("opportunity_count"),
+                "success": pipe.get("success"),
+                "finished_at": pipe.get("finished_at"),
+            }
+        if _pipeline_status.get("last_finished_at"):
+            last_pipe = last_pipe or {}
+            last_pipe["finished_at_epoch"] = _pipeline_status["last_finished_at"]
+            last_pipe["running"] = _pipeline_status.get("running")
+            last_pipe["last_success"] = _pipeline_status.get("last_success")
+
+        n_opp = len(opps)
+        avg_fb = (fb_total / n_opp) if n_opp else 0.0
+
+        return {
+            "opportunities_total": n_opp,
+            "feedback_rows_total": fb_total,
+            "pending_count": pending,
+            "approved_count": approved,
+            "tier_counts": tier_counts,
+            "median_pending_age_days": round(median_age, 2) if median_age is not None else None,
+            "feedback_per_opportunity_avg": round(avg_fb, 3),
+            "last_pipeline": last_pipe,
+            "pipeline_status": dict(_pipeline_status),
+        }
     finally:
         session.close()
 
@@ -264,11 +390,12 @@ def submit_feedback(req: FeedbackRequest):
 @heatmap_router.post("/approve", response_model=ApproveOpportunitiesResponse)
 def approve_opportunities(req: ApprovalRequest):
     svc = get_case_bridge_service()
-    count, case_map = svc.approve_opportunities(req.opportunity_ids, req.approver_id)
+    count, case_map, linked_flags = svc.approve_opportunities(req.opportunity_ids, req.approver_id)
     # JSON object keys must be strings
     cases_str = {str(k): v for k, v in case_map.items()}
+    linked_str = {str(k): v for k, v in linked_flags.items()}
     return ApproveOpportunitiesResponse(
-        success=True, approved_count=count, cases=cases_str
+        success=True, approved_count=count, cases=cases_str, already_linked=linked_str
     )
 
 @heatmap_router.post("/run")
@@ -293,15 +420,20 @@ def run_pipeline():
         }
 
     def _run_job():
+        t0 = time.time()
         try:
             _pipeline_status["running"] = True
-            _pipeline_status["last_started_at"] = time.time()
+            _pipeline_status["last_started_at"] = t0
             _pipeline_status["last_error"] = None
             run_init()
 
             session = heatmap_db.get_db_session()
             try:
-                _pipeline_status["opportunity_count"] = len(session.exec(select(Opportunity)).all())
+                n = len(session.exec(select(Opportunity)).all())
+                _pipeline_status["opportunity_count"] = n
+                dur = time.time() - t0
+                _pipeline_status["last_duration_sec"] = round(dur, 3)
+                # Success HEATMAP_PIPELINE_RUN audit is written inside run_init (demo seed) to avoid duplicates.
             finally:
                 session.close()
 
@@ -309,6 +441,30 @@ def run_pipeline():
         except Exception as e:
             _pipeline_status["last_success"] = False
             _pipeline_status["last_error"] = str(e)
+            try:
+                session = heatmap_db.get_db_session()
+                try:
+                    dur = time.time() - t0
+                    audit = AuditLog(
+                        event_type="HEATMAP_PIPELINE_RUN",
+                        entity_id="batch",
+                        new_value=json.dumps(
+                            {
+                                "duration_sec": round(dur, 3),
+                                "opportunity_count": _pipeline_status.get("opportunity_count"),
+                                "success": False,
+                                "error": str(e),
+                                "finished_at": time.time(),
+                            }
+                        ),
+                        user_id="pipeline",
+                    )
+                    session.add(audit)
+                    session.commit()
+                finally:
+                    session.close()
+            except Exception:
+                pass
         finally:
             _pipeline_status["running"] = False
             _pipeline_status["last_finished_at"] = time.time()

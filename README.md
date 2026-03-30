@@ -15,6 +15,8 @@ This project includes comprehensive documentation covering all aspects of the sy
 
 ### Core Documentation
 
+- **[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)** — Consolidated roadmap: review themes, quick wins, KPI/KLI implementation tracks, suggested order
+- **[TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md)** — Comprehensive technical reference (dual-system architecture, all API routes, packages, frontends, data stores)
 - **[SYSTEM_DOCUMENTATION.md](SYSTEM_DOCUMENTATION.md)** — Complete technical documentation
   - Architecture overview and design philosophy
   - Intent classification system (hybrid rule-based + LLM)

@@ -34,6 +34,7 @@ class Opportunity(SQLModel, table=True):
     confidence_level: str = Field(default="High")
     status: str = Field(default="Pending") # Pending, Approved, Rejected
     last_refresh_ts: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    record_created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     # batch = CSV pipeline row; intake = POST /api/heatmap/intake
     source: str = Field(default="batch")

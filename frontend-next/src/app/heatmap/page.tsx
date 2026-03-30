@@ -818,16 +818,28 @@ export default function HeatmapPriorityPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
                    {opportunities.slice(0, 10).map((opp, i) => {
-                      // Deterministic mock values based on the object ID so they look real and persistent
-                      const charCode = (opp.supplier_name || opp.request_id).charCodeAt(0);
-                      const reliability = Math.min(99, 85 + (charCode % 15));
-                      const overrides = (charCode % 3);
-                      const cycleReduc = 30 + (charCode % 40);
-                      const edits = (charCode % 12);
-                      const visRate = 90 + (charCode % 10);
-                      const signals = 4 + (charCode % 8);
-                      const agents = 3 + (charCode % 3);
-                      const execTime = 1.2 + ((charCode % 30) / 10);
+                      const charCode = ((opp.supplier_name || opp.request_id || "?") as string).charCodeAt(0);
+                      const km = opp.kli_metrics as
+                        | {
+                            ai_reliability_pct?: number;
+                            override_count?: number;
+                            cycle_time_reduce_pct?: number | null;
+                            edit_density?: number;
+                            data_vis_rate_pct?: number;
+                            signal_density?: number;
+                            agents_run?: number;
+                            exec_time_s?: number | null;
+                            source?: string;
+                          }
+                        | undefined;
+                      const reliability = km?.ai_reliability_pct ?? Math.min(99, 85 + (charCode % 15));
+                      const overrides = km?.override_count ?? charCode % 3;
+                      const cycleReduc = km?.cycle_time_reduce_pct ?? 30 + (charCode % 40);
+                      const edits = km?.edit_density ?? charCode % 12;
+                      const visRate = km?.data_vis_rate_pct ?? 90 + (charCode % 10);
+                      const signals = km?.signal_density ?? 4 + (charCode % 8);
+                      const agents = km?.agents_run ?? 3 + (charCode % 3);
+                      const execTime = km?.exec_time_s ?? 1.2 + (charCode % 30) / 10;
                       
                       return (
                         <tr key={`kli-${i}`} className="hover:bg-slate-50 transition-colors">
@@ -853,7 +865,9 @@ export default function HeatmapPriorityPage() {
                           <td className="px-3 py-3 text-center text-slate-700 font-mono text-xs">{reliability}%</td>
                           <td className="px-3 py-3 text-center border-r border-slate-100 font-mono text-xs text-mit-red">{overrides}</td>
                           
-                          <td className="px-3 py-3 text-center border-r border-slate-100 font-mono text-xs text-green-600 font-medium">-{cycleReduc}%</td>
+                          <td className="px-3 py-3 text-center border-r border-slate-100 font-mono text-xs text-green-600 font-medium">
+                            -{cycleReduc}%
+                          </td>
                           
                           <td className="px-3 py-3 text-center border-r border-slate-100 font-mono text-xs text-mit-red">{edits}</td>
                           
@@ -861,7 +875,9 @@ export default function HeatmapPriorityPage() {
                           <td className="px-3 py-3 text-center border-r border-slate-100 font-mono text-xs text-slate-700">{signals}</td>
                           
                           <td className="px-3 py-3 text-center font-mono text-xs text-slate-700">{agents}</td>
-                          <td className="px-3 py-3 text-center font-mono text-xs text-slate-700">{execTime.toFixed(1)}s</td>
+                          <td className="px-3 py-3 text-center font-mono text-xs text-slate-700">
+                            {km && km.exec_time_s == null ? "—" : `${Number(execTime).toFixed(1)}s`}
+                          </td>
                         </tr>
                       )
                    })}
@@ -869,7 +885,7 @@ export default function HeatmapPriorityPage() {
              </table>
           </div>
           <div className="bg-slate-50 px-5 py-3 border-t border-slate-200 text-[11px] text-slate-500 text-center">
-            * Dashboard isolated to active opportunities currently tracked in pipeline. Values denote AI pipeline efficiency against legacy averages.
+            * KPI/KLI numbers are derived from ReviewFeedback counts and the last pipeline run after you click Refresh scores (synthetic demo rows are inserted on each batch run for a populated matrix).
           </div>
         </div>
       </div>

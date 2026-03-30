@@ -18,3 +18,6 @@ ENABLE_ROUTING_LOGS = os.getenv("ENABLE_ROUTING_LOGS", "true").lower() == "true"
 
 # Use ClarifierAgent for uncertain intents instead of defaulting
 ENABLE_CLARIFIER_FALLBACK = os.getenv("ENABLE_CLARIFIER_FALLBACK", "true").lower() == "true"
+
+# Below this confidence (0–1), ask a disambiguation question instead of routing
+INTENT_CONFIDENCE_THRESHOLD = float(os.getenv("INTENT_CONFIDENCE_THRESHOLD", "0.55"))

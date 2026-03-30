@@ -1,8 +1,9 @@
 import csv
 import random
+import time
 from pathlib import Path
 
-from sqlmodel import Session, delete
+from sqlmodel import Session, delete, select
 
 from backend.heatmap.seed_synthetic_data import generate_supplier_metrics, generate_contracts, generate_spend, DATA_DIR
 from backend.heatmap.agents.state import HeatmapState
@@ -16,7 +17,8 @@ from backend.heatmap.context_builder import (
     fis_contract_value_field,
 )
 from backend.heatmap.persistence.heatmap_database import heatmap_db, get_engine
-from backend.heatmap.persistence.heatmap_models import Opportunity
+from backend.heatmap.persistence.heatmap_models import Opportunity, ReviewFeedback
+from backend.heatmap.services.seed_kpi_demo_data import seed_demo_feedback_and_pipeline_audit
 
 
 def run_init():
@@ -88,6 +90,7 @@ def run_init():
     heatmap_context["fis_contract_value_field"] = fis_key
 
     print(f"Loaded {len(contracts)} opportunities. Executing Multi-Agent Pipeline...")
+    t_pipeline = time.time()
 
     initial_state: HeatmapState = {
         "contracts": contracts,
@@ -106,6 +109,11 @@ def run_init():
     print("Engine finished. Committing to SQLite database...")
     heatmap_db.init_db()
     with Session(get_engine()) as session:
+        old_ids = session.exec(select(Opportunity.id).where(Opportunity.source == "batch")).all()
+        for row in old_ids:
+            oid = row[0] if isinstance(row, (tuple, list)) else row
+            if oid is not None:
+                session.exec(delete(ReviewFeedback).where(ReviewFeedback.opportunity_id == oid))
         session.exec(delete(Opportunity).where(Opportunity.source == "batch"))
         session.commit()
 
@@ -146,6 +154,15 @@ def run_init():
             )
             session.add(db_opp)
         session.commit()
+
+        duration_sec = max(0.001, time.time() - t_pipeline)
+        n_demo = seed_demo_feedback_and_pipeline_audit(
+            session,
+            pipeline_duration_sec=duration_sec,
+            opportunity_count=len(final_state["scored_opportunities"]),
+        )
+        if n_demo:
+            print(f"Demo KPI/KLI: inserted {n_demo} synthetic ReviewFeedback rows + pipeline audit log.")
     print(f"Success! {len(final_state['scored_opportunities'])} scored opportunities saved to heatmap.db")
 
 

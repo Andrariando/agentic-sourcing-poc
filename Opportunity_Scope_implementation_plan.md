@@ -1,5 +1,7 @@
 # IT Infrastructure Sourcing Opportunity Heatmap — Implementation Plan
 
+> **See also**: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for cross-cutting roadmap (data quality, concurrency, intent safety, KPI/KLI, pilot backlog). This document remains the **phased build plan** for the heatmap feature itself.
+
 Build a second, independent agentic system (left side of the architecture) that identifies, scores, and ranks renewal and new sourcing opportunities for IT Infrastructure contracts, and feeds approved opportunities into the existing case system (right side) flowing through DTP01 to DTP06.
 
 ---

@@ -5,9 +5,11 @@ Used by batch pipeline and intake preview/submit.
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import os
 from collections import defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 
 from backend.heatmap.seed_synthetic_data import DATA_DIR
@@ -28,6 +30,26 @@ def load_category_cards() -> dict:
         with open(CATEGORY_CARDS_PATH, encoding="utf-8") as f:
             return json.load(f)
     return {"IT Infrastructure": {"default_preferred_status": "allowed", "category_strategy_sas": 7.0}}
+
+
+def category_cards_fingerprint() -> dict:
+    """Version metadata for category_cards.json (ops: detect stale policy config)."""
+    if not CATEGORY_CARDS_PATH.is_file():
+        return {
+            "path": str(CATEGORY_CARDS_PATH),
+            "sha256": None,
+            "mtime_iso": None,
+            "bytes": 0,
+        }
+    raw = CATEGORY_CARDS_PATH.read_bytes()
+    mtime = CATEGORY_CARDS_PATH.stat().st_mtime
+    mtime_iso = datetime.fromtimestamp(mtime, tz=timezone.utc).isoformat()
+    return {
+        "path": str(CATEGORY_CARDS_PATH),
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "mtime_iso": mtime_iso,
+        "bytes": len(raw),
+    }
 
 
 def load_supplier_metrics_map() -> dict[str, dict]:

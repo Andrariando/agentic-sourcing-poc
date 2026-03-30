@@ -112,7 +112,9 @@ Respond with JSON only:
     "needs_data": true/false,   // Do we need more info from user?
     "missing_info": "string",   // If needs_data, what's missing?
     "can_answer_directly": true/false,  // TRUE if this is a QUESTION we can answer
-    "intent_summary": "string"  // One sentence summary
+    "intent_summary": "string",  // One sentence summary
+    "confidence": 0.0-1.0,      // Your confidence in this classification
+    "ambiguous": true/false     // True if the message could be read multiple ways
 }}
 
 IMPORTANT: If the user is ASKING a question (what, why, how, which, etc.), set can_answer_directly=true and needs_agent=false.
@@ -133,6 +135,10 @@ Respond with valid JSON only, no explanation."""
                 content = content[:-3]
                 
             result = json.loads(content.strip())
+            if "confidence" not in result:
+                result["confidence"] = 0.85
+            if "ambiguous" not in result:
+                result["ambiguous"] = False
             logger.info(f"[LLMResponder] Intent analysis: {result}")
             return result
         except Exception as e:
@@ -151,7 +157,9 @@ Respond with valid JSON only, no explanation."""
                     "needs_data": False,
                     "missing_info": "",
                     "can_answer_directly": True,
-                    "intent_summary": "Fallback: Question detected"
+                    "intent_summary": "Fallback: Question detected",
+                    "confidence": 0.6,
+                    "ambiguous": True,
                 }
             return {
                 "needs_agent": True,
@@ -162,7 +170,9 @@ Respond with valid JSON only, no explanation."""
                 "needs_data": False,
                 "missing_info": "",
                 "can_answer_directly": False,
-                "intent_summary": "Fallback: Default to agent"
+                "intent_summary": "Fallback: Default to agent",
+                "confidence": 0.5,
+                "ambiguous": True,
             }
     
     def generate_response(

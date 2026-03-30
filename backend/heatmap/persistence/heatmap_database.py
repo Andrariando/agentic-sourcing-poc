@@ -66,11 +66,19 @@ class HeatmapDatabase(DatabaseInterface):
                 ("implementation_timeline_months", "REAL"),
                 ("request_title", "TEXT"),
                 ("preferred_supplier_status", "TEXT"),
+                ("record_created_at", "TIMESTAMP"),
             ):
                 if name not in cols:
                     conn.execute(text(f"ALTER TABLE opportunity ADD COLUMN {name} {typ}"))
                     conn.commit()
             conn.execute(text("UPDATE opportunity SET source = 'batch' WHERE source IS NULL"))
+            conn.commit()
+            conn.execute(
+                text(
+                    "UPDATE opportunity SET record_created_at = last_refresh_ts "
+                    "WHERE record_created_at IS NULL"
+                )
+            )
             conn.commit()
 
     def get_session(self) -> Generator[Session, None, None]:

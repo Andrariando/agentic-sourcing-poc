@@ -125,15 +125,16 @@ class CaseBridgeService:
 
     def approve_opportunities(
         self, opportunity_ids: List[int], approver_id: str
-    ) -> Tuple[int, Dict[int, str]]:
+    ) -> Tuple[int, Dict[int, str], Dict[int, bool]]:
         """
         Bridge approved opportunities to legacy cases.
-        Returns (approved_count_this_call, mapping opportunity_id -> case_id).
+        Returns (approved_count_this_call, mapping opportunity_id -> case_id, already_linked flags).
         Skips opportunities already bridged (audit log) to avoid duplicates on double-submit.
         """
         session = heatmap_db.get_db_session()
         approved_count = 0
         cases: dict[int, str] = {}
+        already_linked: dict[int, bool] = {}
 
         try:
             for opp_id in opportunity_ids:
@@ -147,6 +148,7 @@ class CaseBridgeService:
                         opp.status = "Approved"
                         session.add(opp)
                     cases[opp_id] = existing
+                    already_linked[opp_id] = True
                     continue
 
                 # Marked approved in UI or manually, but no audit row — do not create another case.
@@ -168,6 +170,7 @@ class CaseBridgeService:
                     session.add(audit)
                     approved_count += 1
                     cases[opp_id] = case_id
+                    already_linked[opp_id] = False
 
                 except Exception as e:
                     print(f"Failed to bridge opportunity {opp_id} to legacy system: {e}")
@@ -176,7 +179,7 @@ class CaseBridgeService:
         finally:
             session.close()
 
-        return approved_count, cases
+        return approved_count, cases, already_linked
 
 
 def get_case_bridge_service() -> CaseBridgeService:
