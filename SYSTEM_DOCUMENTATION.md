@@ -1055,6 +1055,14 @@ The Heatmap scoring engine is intentionally deterministic, but real-world contra
 
 `data/heatmap/category_cards.json` holds per-category metadata for **SAS**: `default_preferred_status`, optional `category_strategy_sas`, and `supplier_preferred_status` (supplier name → preferred tier). Loaded via `backend/heatmap/context_builder.py` for both the batch pipeline and intake.
 
+**Unstructured policy → structured patch (demo)**  
+- **`POST /api/heatmap/category-cards/extract`** accepts `category` + `raw_text` and returns a **deterministic** `proposed_patch` (line-based hints for default status, SAS number, supplier lines like `Supplier: preferred`).  
+- **`POST /api/heatmap/category-cards/extract-upload`** accepts the same as multipart: `category` + `file` (plain text, max 500KB).  
+- **`POST /api/heatmap/category-cards/apply`** merges the patch into `category_cards.json` via `backend/heatmap/services/category_cards_store.py` (atomic write; `supplier_preferred_status` keys merge with existing).  
+- **`POST /api/heatmap/category-cards/apply-and-rerun`** applies the patch and starts **`POST /api/heatmap/run`**’s background job so **batch** opportunities are re-scored. Intake rows already in `heatmap.db` keep stored scores until re-submitted or until you rely on preview with fresh file reads.
+
+**UI**: Next.js heatmap copilot **Category cards** tab supports file upload, LLM assist (`/category-cards/assist`), and **Apply patch & re-score opportunities** (`apply-and-rerun`).
+
 ### API Routes
 
 | Method | Path | Description |
@@ -1069,13 +1077,17 @@ The Heatmap scoring engine is intentionally deterministic, but real-world contra
 | POST | `/api/heatmap/intake` | Persist intake opportunity (`source=intake`); body includes `request_title`, `category`, optional `subcategory` / `supplier_name`, `estimated_spend_usd`, `implementation_timeline_months`, optional `preferred_supplier_status`, optional `justification_summary_text` |
 | POST | `/api/heatmap/qa` | **Heatmap copilot — explain only:** body `question`. Loads opportunity rows from DB + recent `ReviewFeedback` + Chroma snippets; LLM answers without changing scores (`used_llm` if OpenAI ran). |
 | POST | `/api/heatmap/policy/check` | **Suggestion only:** body `feedback_text`, `category`, optional `supplier_name`, `current_tier`. Compares text to `category_cards.json` via LLM JSON (`contradicts`, `severity`, `summary`, `suggestion`). |
-| POST | `/api/heatmap/category-cards/assist` | **Preview only:** body `category`, `instruction`. Returns `proposed_patch` JSON to merge manually into `data/heatmap/category_cards.json` (not auto-written). |
+| POST | `/api/heatmap/category-cards/assist` | **Preview only:** body `category`, `instruction`. LLM returns `proposed_patch` (requires `OPENAI_API_KEY`). |
+| POST | `/api/heatmap/category-cards/extract` | **Preview only:** body `category`, `raw_text`. Deterministic extract → `proposed_patch`. |
+| POST | `/api/heatmap/category-cards/extract-upload` | **Preview only:** multipart `category` + `file` (text). Same extract as above. |
+| POST | `/api/heatmap/category-cards/apply` | Merge `proposed_patch` into `category_cards.json` on disk. |
+| POST | `/api/heatmap/category-cards/apply-and-rerun` | Apply patch + start batch scoring pipeline (refresh batch opportunity tiers/scores). |
 
 ### User experience impact: Heatmap copilot and review memory
 
 These capabilities change how users *feel* and work with the heatmap—not just what the API returns.
 
-#### Heatmap copilot (`/heatmap` panel + `/api/heatmap/qa`, `/policy/check`, `/category-cards/assist`)
+#### Heatmap copilot (`/heatmap` panel + `/api/heatmap/qa`, `/policy/check`, `/category-cards/*`)
 
 - **Q&A (“Why is X above Y?”)**  
   - **Easier understanding:** Users get a short narrative tied to **current database rows** and recent feedback / similar vector snippets, instead of mentally diffing scores.  
@@ -1087,9 +1099,10 @@ These capabilities change how users *feel* and work with the heatmap—not just 
   - **Safer reviews:** Reviewers get a **suggestion** whether written rationale aligns with **`category_cards.json`** (preferred-supplier posture). Useful before escalations or audits.  
   - **Non-blocking:** Does not auto-reject feedback or change scores—reduces anxiety without hard gates.
 
-- **Category-cards assist**  
-  - **Faster policy edits:** Admins describe changes in natural language and receive a **JSON patch to copy** into `category_cards.json`.  
-  - **Governance-friendly:** Nothing is auto-written to disk—no surprise scoring changes, at the cost of one manual merge step.
+- **Category-cards assist / extract / apply**  
+  - **Assist:** Natural-language instruction → LLM `proposed_patch` (preview).  
+  - **Extract / upload:** Unstructured policy text → deterministic `proposed_patch` (or upload `.txt`).  
+  - **Apply & re-score:** Optional one-step **write to `category_cards.json`** + **batch pipeline** so the opportunity list reflects new SAS-related scoring (demo path; production should add approval audit).
 
 #### Review memory (bounded score nudge + `Learning:` line)
 
@@ -1097,7 +1110,7 @@ These capabilities change how users *feel* and work with the heatmap—not just 
 - **Possible surprise:** Users may ask why a number changed vs. last run; mitigated by visible learning text and delta metadata.  
 - **Intake nuance:** Component sub-scores (IUS, ES, CSIS, SAS) stay **pre-memory** values; **total_score** / **tier** reflect the nudge—advanced users should read the sidebar chip and justification as the source of truth for the final total.
 
-**Overall:** Copilot **reduces cognitive load** for reading the heatmap and supports **governance** on reviews and policy edits, while keeping **authority** with stored data and manual file updates. Review memory trades a little **predictability of the raw formula** for **visible adaptation** from human corrections.
+**Overall:** Copilot **reduces cognitive load** for reading the heatmap and supports **governance** on reviews and policy edits. Category-card changes can remain preview-only or be **applied** explicitly for demos. Review memory trades a little **predictability of the raw formula** for **visible adaptation** from human corrections.
 
 ### Deployment-Safe Runtime Mode (Render 512MB)
 

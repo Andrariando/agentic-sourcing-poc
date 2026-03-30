@@ -2,6 +2,8 @@
 API smoke tests for heatmap KPI/KLI, intake meta, approve idempotency, metrics dashboard.
 Run from repo root: pytest tests/test_heatmap_api.py -q
 """
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -91,3 +93,78 @@ def test_data_quality_warnings_helper():
         category_cards_keys=["IT Infrastructure"],
     )
     assert any("category" in x.lower() for x in w)
+
+
+def test_category_cards_extract_from_unstructured_text(client: TestClient):
+    raw_text = """
+    Default supplier status: allowed
+    Category Strategy SAS = 8.5
+    Azure: preferred
+    LegacyVendor - non preferred
+    """
+    r = client.post(
+        "/api/heatmap/category-cards/extract",
+        json={"category": "IT Infrastructure", "raw_text": raw_text},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["used_llm"] is False
+    assert data["category"] == "IT Infrastructure"
+    patch = data["proposed_patch"]
+    assert patch["default_preferred_status"] == "allowed"
+    assert patch["category_strategy_sas"] == pytest.approx(8.5)
+    assert patch["supplier_preferred_status"]["Azure"] == "preferred"
+    assert patch["supplier_preferred_status"]["LegacyVendor"] == "nonpreferred"
+
+
+def test_category_cards_extract_requires_meaningful_text(client: TestClient):
+    r = client.post(
+        "/api/heatmap/category-cards/extract",
+        json={"category": "IT Infrastructure", "raw_text": "too short"},
+    )
+    assert r.status_code == 422
+
+
+def test_category_cards_extract_upload_multipart(client: TestClient):
+    body = b"""Default supplier status: allowed
+Category Strategy SAS = 8.0
+WidgetCo: preferred
+"""
+    r = client.post(
+        "/api/heatmap/category-cards/extract-upload",
+        data={"category": "Software"},
+        files={"file": ("policy.txt", body, "text/plain")},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data.get("filename") == "policy.txt"
+    assert data["proposed_patch"]["default_preferred_status"] == "allowed"
+    assert data["proposed_patch"]["supplier_preferred_status"]["WidgetCo"] == "preferred"
+
+
+def test_apply_category_cards_patch_merge_tmp_path(tmp_path):
+    from backend.heatmap.services.category_cards_store import apply_category_cards_patch
+
+    p = tmp_path / "category_cards.json"
+    p.write_text(
+        json.dumps(
+            {
+                "Software": {
+                    "default_preferred_status": "allowed",
+                    "category_strategy_sas": 7.5,
+                    "supplier_preferred_status": {"NexusSoft LLC": "preferred"},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    out = apply_category_cards_patch(
+        "Software",
+        {"category_strategy_sas": 8.0, "supplier_preferred_status": {"NewCo": "allowed"}},
+        cards_path=p,
+    )
+    assert out["merged_card"]["category_strategy_sas"] == 8.0
+    assert out["merged_card"]["supplier_preferred_status"]["NexusSoft LLC"] == "preferred"
+    assert out["merged_card"]["supplier_preferred_status"]["NewCo"] == "allowed"
+    reloaded = json.loads(p.read_text(encoding="utf-8"))
+    assert reloaded["Software"]["category_strategy_sas"] == 8.0

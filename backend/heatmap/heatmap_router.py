@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Any, Dict
 from datetime import datetime, timezone
@@ -18,8 +18,10 @@ from backend.heatmap.services.intake_scoring import score_intake_payload, persis
 from backend.heatmap.services.heatmap_copilot import (
     answer_heatmap_question,
     assist_category_card_edit,
+    assist_category_card_from_unstructured,
     check_feedback_vs_policy,
 )
+from backend.heatmap.services.category_cards_store import apply_category_cards_patch
 
 heatmap_router = APIRouter()
 _pipeline_lock = threading.Lock()
@@ -136,6 +138,94 @@ class CategoryCardsAssistRequest(BaseModel):
     instruction: str = Field(min_length=10, max_length=4000)
 
 
+class CategoryCardsUnstructuredRequest(BaseModel):
+    category: str = Field(min_length=1)
+    raw_text: str = Field(min_length=20, max_length=50000)
+
+
+class CategoryCardsApplyRequest(BaseModel):
+    category: str = Field(min_length=1)
+    proposed_patch: Dict[str, Any] = Field(default_factory=dict)
+
+
+def _start_heatmap_pipeline_background() -> Dict[str, Any]:
+    """Start batch scoring in a background thread; same behavior as POST /run."""
+    if _pipeline_status["running"]:
+        return {
+            "success": True,
+            "queued": False,
+            "running": True,
+            "message": "Pipeline already running. Reuse current job.",
+        }
+
+    started = _pipeline_lock.acquire(blocking=False)
+    if not started:
+        return {
+            "success": True,
+            "queued": False,
+            "running": True,
+            "message": "Pipeline lock busy. Reuse current job.",
+        }
+
+    def _run_job():
+        t0 = time.time()
+        try:
+            _pipeline_status["running"] = True
+            _pipeline_status["last_started_at"] = t0
+            _pipeline_status["last_error"] = None
+            run_init()
+
+            session = heatmap_db.get_db_session()
+            try:
+                n = len(session.exec(select(Opportunity)).all())
+                _pipeline_status["opportunity_count"] = n
+                dur = time.time() - t0
+                _pipeline_status["last_duration_sec"] = round(dur, 3)
+            finally:
+                session.close()
+
+            _pipeline_status["last_success"] = True
+        except Exception as e:
+            _pipeline_status["last_success"] = False
+            _pipeline_status["last_error"] = str(e)
+            try:
+                session = heatmap_db.get_db_session()
+                try:
+                    dur = time.time() - t0
+                    audit = AuditLog(
+                        event_type="HEATMAP_PIPELINE_RUN",
+                        entity_id="batch",
+                        new_value=json.dumps(
+                            {
+                                "duration_sec": round(dur, 3),
+                                "opportunity_count": _pipeline_status.get("opportunity_count"),
+                                "success": False,
+                                "error": str(e),
+                                "finished_at": time.time(),
+                            }
+                        ),
+                        user_id="pipeline",
+                    )
+                    session.add(audit)
+                    session.commit()
+                finally:
+                    session.close()
+            except Exception:
+                pass
+        finally:
+            _pipeline_status["running"] = False
+            _pipeline_status["last_finished_at"] = time.time()
+            _pipeline_lock.release()
+
+    threading.Thread(target=_run_job, daemon=True).start()
+    return {
+        "success": True,
+        "queued": True,
+        "running": True,
+        "message": "Scoring pipeline started in background.",
+    }
+
+
 @heatmap_router.post("/qa", response_model=HeatmapQAResponse)
 def heatmap_qa(req: HeatmapQARequest):
     session = heatmap_db.get_db_session()
@@ -164,6 +254,63 @@ def heatmap_category_cards_assist(req: CategoryCardsAssistRequest):
         instruction=req.instruction.strip(),
     )
     return {"used_llm": used_llm, **payload}
+
+
+@heatmap_router.post("/category-cards/extract")
+def heatmap_category_cards_extract(req: CategoryCardsUnstructuredRequest):
+    payload, used_llm = assist_category_card_from_unstructured(
+        category=req.category.strip(),
+        raw_text=req.raw_text.strip(),
+    )
+    return {"used_llm": used_llm, **payload}
+
+
+_MAX_UPLOAD_BYTES = 500_000
+
+
+@heatmap_router.post("/category-cards/extract-upload")
+async def heatmap_category_cards_extract_upload(
+    category: str = Form(...),
+    file: UploadFile = File(...),
+):
+    """Read uploaded text file and run the same unstructured extract as /category-cards/extract."""
+    raw = await file.read()
+    if len(raw) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large (max 500KB).")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        text = raw.decode("utf-8", errors="replace")
+    payload, used_llm = assist_category_card_from_unstructured(
+        category=category.strip(),
+        raw_text=text,
+    )
+    return {"used_llm": used_llm, **payload, "filename": file.filename or "upload"}
+
+
+@heatmap_router.post("/category-cards/apply")
+def heatmap_category_cards_apply(req: CategoryCardsApplyRequest):
+    """Merge proposed_patch into data/heatmap/category_cards.json (human-approved demo step)."""
+    try:
+        result = apply_category_cards_patch(req.category.strip(), req.proposed_patch)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@heatmap_router.post("/category-cards/apply-and-rerun")
+def heatmap_category_cards_apply_and_rerun(req: CategoryCardsApplyRequest):
+    """Apply patch to category_cards.json, then start batch pipeline so opportunity scores refresh."""
+    try:
+        apply_result = apply_category_cards_patch(req.category.strip(), req.proposed_patch)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    pipeline = _start_heatmap_pipeline_background()
+    return {**apply_result, "pipeline": pipeline}
 
 
 @heatmap_router.get("/intake/categories")
@@ -402,81 +549,7 @@ def approve_opportunities(req: ApprovalRequest):
 def run_pipeline():
     # Lightweight mode for low-memory hosts (e.g. Render 512MB):
     # run scoring in background and return immediately.
-    if _pipeline_status["running"]:
-        return {
-            "success": True,
-            "queued": False,
-            "running": True,
-            "message": "Pipeline already running. Reuse current job.",
-        }
-
-    started = _pipeline_lock.acquire(blocking=False)
-    if not started:
-        return {
-            "success": True,
-            "queued": False,
-            "running": True,
-            "message": "Pipeline lock busy. Reuse current job.",
-        }
-
-    def _run_job():
-        t0 = time.time()
-        try:
-            _pipeline_status["running"] = True
-            _pipeline_status["last_started_at"] = t0
-            _pipeline_status["last_error"] = None
-            run_init()
-
-            session = heatmap_db.get_db_session()
-            try:
-                n = len(session.exec(select(Opportunity)).all())
-                _pipeline_status["opportunity_count"] = n
-                dur = time.time() - t0
-                _pipeline_status["last_duration_sec"] = round(dur, 3)
-                # Success HEATMAP_PIPELINE_RUN audit is written inside run_init (demo seed) to avoid duplicates.
-            finally:
-                session.close()
-
-            _pipeline_status["last_success"] = True
-        except Exception as e:
-            _pipeline_status["last_success"] = False
-            _pipeline_status["last_error"] = str(e)
-            try:
-                session = heatmap_db.get_db_session()
-                try:
-                    dur = time.time() - t0
-                    audit = AuditLog(
-                        event_type="HEATMAP_PIPELINE_RUN",
-                        entity_id="batch",
-                        new_value=json.dumps(
-                            {
-                                "duration_sec": round(dur, 3),
-                                "opportunity_count": _pipeline_status.get("opportunity_count"),
-                                "success": False,
-                                "error": str(e),
-                                "finished_at": time.time(),
-                            }
-                        ),
-                        user_id="pipeline",
-                    )
-                    session.add(audit)
-                    session.commit()
-                finally:
-                    session.close()
-            except Exception:
-                pass
-        finally:
-            _pipeline_status["running"] = False
-            _pipeline_status["last_finished_at"] = time.time()
-            _pipeline_lock.release()
-
-    threading.Thread(target=_run_job, daemon=True).start()
-    return {
-        "success": True,
-        "queued": True,
-        "running": True,
-        "message": "Scoring pipeline started in background.",
-    }
+    return _start_heatmap_pipeline_background()
 
 @heatmap_router.get("/run/status", response_model=PipelineStatusResponse)
 def run_pipeline_status():

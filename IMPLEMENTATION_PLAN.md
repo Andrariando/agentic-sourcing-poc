@@ -18,7 +18,7 @@ These themes address gaps between a **solo-analyst POC** and a **team production
 | **Outcome feedback** | Bridge is one-way (Heatmap → DTP); realized savings / cycle time / award outcomes do not recalibrate heatmap. | Capture outcome events and feed evaluation / future model calibration. |
 | **Multi-user / concurrency** | No assignment or locking; duplicate approvals can create duplicate cases. | Claim/assign model, idempotent approve UX, optimistic concurrency. |
 | **Intent routing** | Chat flow depends on LLM classification; misroutes can stall or skip steps. | Confidence thresholds, clarify prompts, structured audit logs. |
-| **Category strategy config** | `category_cards.json` is manual and can go stale. | Versioning, editor workflow, audit of changes. |
+| **Category strategy config** | `category_cards.json` is manual and can go stale. | Versioning, editor workflow, audit of changes. **Partial (March 2026):** API exposes `category_cards_meta` fingerprint; unstructured text → patch extract; apply / apply-and-rerun for demos (see [TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md) §7.8). |
 | **Artifact verification** | Binary VERIFIED/UNVERIFIED is thin vs source quality and freshness. | Stronger evidence metadata over time. |
 | **Notifications** | Pull-only UI; T1 and pending approvals can stall unnoticed. | Webhooks / email / Teams in later phases. |
 
@@ -68,7 +68,8 @@ High leverage vs effort; several need only copy + small API/UI changes.
 | QW2 | **Surface data-quality flags** — simple rules (missing expiry, default risk, unknown category, zero spend); `warnings[]` on opportunity or list API | Small backend helper + optional badges |
 | QW3 | **Approve UX hardening** — disable button after submit; refresh opportunities; show “already linked to CASE-…” when bridged | Mostly frontend; pairs with server idempotency |
 | QW4 | **Intent “clarify” path** — if classification is low-confidence or conflicting, force one disambiguation prompt | `chat_service` + prompt branch |
-| QW5 | **Category cards version in API** — e.g. `category_cards_version` on `/api/heatmap/intake/categories` or context | Tiny backend change |
+| QW5 | **Category cards version in API** — `category_cards_meta` (SHA-256, mtime) on `GET /api/heatmap/intake/categories` | **Done** — see `category_cards_fingerprint()` in `context_builder.py` |
+| QW8 | **Unstructured category policy → scoring (demo)** — extract patch from text/upload, optional apply + batch re-run | **Done** — `/api/heatmap/category-cards/extract*`, `/apply`, `/apply-and-rerun`; UI on heatmap copilot **Category cards** tab |
 | QW6 | **Routing audit grep** — one structured log line per chat turn for intent + trace | Small logging change |
 | QW7 | **Pilot / demo checklist in README** — seed data, pipeline run, env vars, known concurrency limits | Documentation only |
 
@@ -134,6 +135,7 @@ Glossary tooltips (KPI vs KLI) are real; the **numbers are not** tied to telemet
 | §2 roadmap | Same + Azure subsection in BUSINESS_OVERVIEW |
 | §3 Quick wins | Prior “quick win” engineering list |
 | §4–7 KPI/KLI | Heatmap UI audit (`page.tsx`, `dashboard/heatmap/page.tsx`) |
+| Category cards ingest / apply | [TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md) §7.2, §7.8; [SYSTEM_DOCUMENTATION.md](SYSTEM_DOCUMENTATION.md) §Category cards + API table |
 | Original heatmap build phases | [Opportunity_Scope_implementation_plan.md](Opportunity_Scope_implementation_plan.md) |
 
 ---

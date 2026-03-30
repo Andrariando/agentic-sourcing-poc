@@ -57,6 +57,14 @@ export default function HeatmapPriorityPage() {
     used_llm?: boolean;
   } | null>(null);
   const [assistLoading, setAssistLoading] = useState(false);
+  const [uploadExtract, setUploadExtract] = useState<{
+    proposed_patch?: Record<string, unknown>;
+    notes?: string;
+    filename?: string;
+  } | null>(null);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [pendingPatch, setPendingPatch] = useState<Record<string, unknown> | null>(null);
+  const [applyLoading, setApplyLoading] = useState(false);
   const [cardCategories, setCardCategories] = useState<string[]>(["IT Infrastructure", "Software", "Hardware"]);
 
   useEffect(() => {
@@ -379,10 +387,84 @@ export default function HeatmapPriorityPage() {
         return;
       }
       setAssistResult(data);
+      if (data.proposed_patch && Object.keys(data.proposed_patch).length > 0) {
+        setPendingPatch(data.proposed_patch as Record<string, unknown>);
+      }
     } catch {
       setAssistResult({ notes: `Network error. ${getApiBaseUrl()}` });
     } finally {
       setAssistLoading(false);
+    }
+  };
+
+  const onPolicyFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploadLoading(true);
+    setUploadExtract(null);
+    try {
+      const fd = new FormData();
+      fd.append("category", assistCategory);
+      fd.append("file", file);
+      const res = await apiFetch(`${getApiBaseUrl()}/api/heatmap/category-cards/extract-upload`, {
+        method: "POST",
+        body: fd,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setUploadExtract({
+          notes: typeof data.detail === "string" ? data.detail : "Upload extract failed.",
+        });
+        return;
+      }
+      setUploadExtract(data);
+      if (data.proposed_patch && Object.keys(data.proposed_patch).length > 0) {
+        setPendingPatch(data.proposed_patch as Record<string, unknown>);
+      }
+    } catch {
+      setUploadExtract({ notes: `Network error. ${getApiBaseUrl()}` });
+    } finally {
+      setUploadLoading(false);
+    }
+  };
+
+  const applyPatchAndRescore = async () => {
+    if (!pendingPatch || Object.keys(pendingPatch).length === 0) return;
+    setApplyLoading(true);
+    try {
+      const res = await apiFetch(`${getApiBaseUrl()}/api/heatmap/category-cards/apply-and-rerun`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category: assistCategory, proposed_patch: pendingPatch }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(typeof data.detail === "string" ? data.detail : "Apply failed.");
+        return;
+      }
+      alert(
+        "Category cards updated and scoring pipeline started. Refresh the list in a few seconds when the run finishes."
+      );
+      setTimeout(() => {
+        void (async () => {
+          try {
+            const url = `${getApiBaseUrl()}/api/heatmap/opportunities`;
+            const r = await apiFetch(url, { cache: "no-store" });
+            const j = await r.json();
+            if (j.opportunities) {
+              const sorted = j.opportunities.sort((a: any, b: any) => b.total_score - a.total_score);
+              setOpportunities(sorted);
+            }
+          } catch {
+            /* ignore */
+          }
+        })();
+      }, 8000);
+    } catch {
+      alert("Network error.");
+    } finally {
+      setApplyLoading(false);
     }
   };
 
@@ -1157,8 +1239,8 @@ export default function HeatmapPriorityPage() {
               {copilotTab === "cards" && (
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-3">
                   <p className="text-xs text-slate-500">
-                    Proposed JSON patch for you to merge into <code className="text-slate-600">data/heatmap/category_cards.json</code>{" "}
-                    manually. Not saved automatically.
+                    Upload a policy document (plain text) or describe changes below. The system extracts a structured patch,
+                    then you can <strong>apply it and re-run scoring</strong> so opportunity tiers update (SAS from category cards).
                   </p>
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">Category</label>
@@ -1175,7 +1257,24 @@ export default function HeatmapPriorityPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">What to change</label>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Upload policy (.txt / paste into a file)</label>
+                    <input
+                      type="file"
+                      accept=".txt,text/plain"
+                      onChange={(e) => void onPolicyFileSelected(e)}
+                      disabled={uploadLoading}
+                      className="block w-full text-sm text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-slate-100 file:text-slate-700"
+                    />
+                    {uploadLoading && <p className="text-xs text-slate-500 mt-1">Reading file…</p>}
+                    {uploadExtract?.filename && (
+                      <p className="text-xs text-slate-600 mt-1">Read: {uploadExtract.filename}</p>
+                    )}
+                    {uploadExtract?.notes && !uploadExtract.proposed_patch && (
+                      <p className="text-xs text-amber-800 mt-2">{uploadExtract.notes}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Or: what to change (LLM assist)</label>
                     <textarea
                       className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm min-h-[110px]"
                       value={assistInstruction}
@@ -1189,7 +1288,7 @@ export default function HeatmapPriorityPage() {
                     disabled={assistLoading || assistInstruction.trim().length < 10}
                     className="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-medium disabled:opacity-50"
                   >
-                    {assistLoading ? "Drafting…" : "Suggest patch"}
+                    {assistLoading ? "Drafting…" : "Suggest patch (LLM)"}
                   </button>
                   {assistResult && (assistResult.proposed_patch || assistResult.notes) && (
                     <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-2 text-sm">
@@ -1199,6 +1298,33 @@ export default function HeatmapPriorityPage() {
                           {JSON.stringify(assistResult.proposed_patch, null, 2)}
                         </pre>
                       )}
+                    </div>
+                  )}
+                  {uploadExtract?.proposed_patch && Object.keys(uploadExtract.proposed_patch).length > 0 && (
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-4 space-y-2 text-sm">
+                      <p className="font-medium text-emerald-900">Extracted from upload</p>
+                      <pre className="text-xs bg-slate-900 text-slate-100 rounded p-3 overflow-x-auto">
+                        {JSON.stringify(uploadExtract.proposed_patch, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                  {pendingPatch && Object.keys(pendingPatch).length > 0 && (
+                    <div className="rounded-lg border border-sponsor-blue/30 bg-slate-50 p-4 space-y-3">
+                      <p className="text-sm font-medium text-slate-800">Pending patch (applies to category: {assistCategory})</p>
+                      <pre className="text-xs bg-slate-900 text-slate-100 rounded p-3 overflow-x-auto max-h-40">
+                        {JSON.stringify(pendingPatch, null, 2)}
+                      </pre>
+                      <button
+                        type="button"
+                        onClick={() => void applyPatchAndRescore()}
+                        disabled={applyLoading}
+                        className="px-4 py-2 bg-sponsor-blue text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                      >
+                        {applyLoading ? "Applying…" : "Apply patch & re-score opportunities"}
+                      </button>
+                      <p className="text-xs text-slate-500">
+                        Writes to <code className="text-slate-600">category_cards.json</code> and starts the batch pipeline. Intake previews pick up changes immediately; batch rows refresh after the run completes.
+                      </p>
                     </div>
                   )}
                 </div>

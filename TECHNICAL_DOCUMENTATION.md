@@ -298,8 +298,12 @@ Score and rank **opportunities** (batch contracts + intake requests) using a **d
 |--------|------|-------------|
 | POST | `/api/heatmap/qa` | Heatmap copilot Q&A (`HeatmapQARequest` → answer + `used_llm`) |
 | POST | `/api/heatmap/policy/check` | Feedback vs `category_cards.json` alignment |
-| POST | `/api/heatmap/category-cards/assist` | Suggested JSON patch for category cards |
-| GET | `/api/heatmap/intake/categories` | List categories from category cards |
+| POST | `/api/heatmap/category-cards/assist` | LLM-suggested JSON patch for category cards (preview; requires `OPENAI_API_KEY`) |
+| POST | `/api/heatmap/category-cards/extract` | Deterministic extract: body `category`, `raw_text` → `proposed_patch` (unstructured policy text → structured fields) |
+| POST | `/api/heatmap/category-cards/extract-upload` | Same as extract, but `multipart/form-data`: `category` + `file` (plain text, max 500KB) |
+| POST | `/api/heatmap/category-cards/apply` | Merge `proposed_patch` into `data/heatmap/category_cards.json` (atomic write; supplier map merges) |
+| POST | `/api/heatmap/category-cards/apply-and-rerun` | Apply patch, then start the batch scoring pipeline (same background job as `POST /run`) so **batch** opportunity scores refresh |
+| GET | `/api/heatmap/intake/categories` | List categories from category cards + `category_cards_meta` (SHA-256 fingerprint) |
 | POST | `/api/heatmap/intake/preview` | PS_new preview + meta (including `feedback_memory_delta`) |
 | POST | `/api/heatmap/intake` | Persist intake opportunity (`source=intake`) |
 | GET | `/api/heatmap/opportunities` | List scored opportunities |
@@ -338,7 +342,8 @@ Tiers: T1 ≥ 8.0, T2 ≥ 6.0, T3 ≥ 4.0, else T4.
 | `services/intake_scoring.py` | PS_new for intake; persists `Opportunity` rows |
 | `services/feedback_service.py` | Persist `ReviewFeedback` + upsert Chroma chunks for learning |
 | `services/feedback_memory.py` | Retrieve similar feedback; bounded learning nudge (LLM JSON + heuristic fallback) |
-| `services/heatmap_copilot.py` | Q&A, policy check, category-cards assist (OpenAI JSON mode where applicable) |
+| `services/heatmap_copilot.py` | Q&A, policy check, category-cards assist, unstructured text → patch extract (OpenAI where applicable) |
+| `services/category_cards_store.py` | Merge validated patches into `category_cards.json` (atomic write) |
 | `services/llm_interpreter.py` | Fallback extraction/normalization (expiry ISO, preferred status tokens) |
 | `services/case_bridge.py` | Map approved opportunities → `create_case()` in legacy system |
 
@@ -357,6 +362,12 @@ Tiers: T1 ≥ 8.0, T2 ≥ 6.0, T3 ≥ 4.0, else T4.
 | `run_pipeline_init.py` | Generate/load synthetic CSVs, run graph, persist **batch** opportunities (preserves `source=intake`) |
 | `seed_synthetic_data.py` | CLI to generate synthetic data / seed run |
 | `context_builder.py` | Aggregates spend/category context; FIS field selection (TCV vs ACV via env) |
+
+### 7.8 Category cards: unstructured policy → scoring
+
+- **Source of truth on disk**: `data/heatmap/category_cards.json` (drives **SAS** via `strategy_agent` / intake scoring).
+- **Demo flow**: paste or upload plain-text policy notes → `extract` or `extract-upload` → review `proposed_patch` → `apply` or `apply-and-rerun`. The latter reloads cards in `run_init()` and recomputes **batch** rows; **intake** preview/submit reads the updated file on the next request without a pipeline run.
+- **PDF/Word**: not parsed server-side; export to `.txt` for upload, or paste text into extract.
 
 ---
 

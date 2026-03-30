@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlmodel import Session, select
@@ -332,3 +333,109 @@ Rules:
         return {"category": category, "proposed_patch": patch, "notes": notes}, True
     except Exception as e:
         return {"category": category, "proposed_patch": {}, "notes": f"Assist failed: {e!s}"}, False
+
+
+_STATUS_PATTERN = re.compile(
+    r"\b(preferred|allowed|non[\s\-_]?preferred|straight[\s\-_]?to[\s\-_]?po|straightpo)\b",
+    re.IGNORECASE,
+)
+_SAS_PATTERN = re.compile(
+    r"\b(?:category[_\s-]*strategy[_\s-]*sas|sas|strategy score)\b[^0-9-]{0,24}(-?\d+(?:\.\d+)?)",
+    re.IGNORECASE,
+)
+
+
+def _clip_sas(value: float) -> float:
+    return max(0.0, min(10.0, float(value)))
+
+
+def _extract_patch_from_unstructured_text(raw_text: str) -> Dict[str, Any]:
+    """
+    Quick-win deterministic parser for freeform category policy notes.
+    Recognizes:
+      - default status hints
+      - category_strategy_sas numeric hint
+      - per-supplier status lines
+    """
+    text = (raw_text or "").strip()
+    if not text:
+        return {}
+
+    patch: Dict[str, Any] = {}
+    supplier_map: Dict[str, str] = {}
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+
+    for line in lines:
+        # Parse common line forms:
+        # "Supplier X: preferred", "Supplier X - allowed", "Supplier X = non preferred"
+        if ":" in line:
+            left, right = line.split(":", 1)
+        elif " - " in line:
+            left, right = line.split(" - ", 1)
+        elif "=" in line:
+            left, right = line.split("=", 1)
+        else:
+            left, right = "", line
+
+        m_status = _STATUS_PATTERN.search(right)
+        if m_status:
+            status = _norm_pref_token(m_status.group(1))
+            left_clean = left.strip(" -*\t")
+            left_l = left_clean.lower()
+            if left_clean and "default" not in left_l and "supplier default" not in left_l:
+                supplier_map[left_clean] = status
+            elif "default" in line.lower():
+                patch["default_preferred_status"] = status
+
+        m_sas = _SAS_PATTERN.search(line)
+        if m_sas:
+            try:
+                patch["category_strategy_sas"] = _clip_sas(float(m_sas.group(1)))
+            except ValueError:
+                pass
+
+    # Additional default hints in paragraph text.
+    if "default_preferred_status" not in patch:
+        low = text.lower()
+        if "default" in low:
+            m = _STATUS_PATTERN.search(text)
+            if m:
+                patch["default_preferred_status"] = _norm_pref_token(m.group(1))
+
+    if supplier_map:
+        patch["supplier_preferred_status"] = supplier_map
+    return _validate_category_patch(patch)
+
+
+def assist_category_card_from_unstructured(
+    *,
+    category: str,
+    raw_text: str,
+) -> Tuple[Dict[str, Any], bool]:
+    """
+    Build a category_cards-style patch from unstructured text.
+    Returns payload and used_llm (always False for deterministic quick-win path).
+    """
+    category = (category or "").strip()
+    raw_text = (raw_text or "").strip()
+    if len(category) < 1:
+        return {"category": category, "proposed_patch": {}, "notes": "Category is required."}, False
+    if len(raw_text) < 20:
+        return {
+            "category": category,
+            "proposed_patch": {},
+            "notes": "Provide more policy text (at least 20 chars) for extraction.",
+        }, False
+
+    patch = _extract_patch_from_unstructured_text(raw_text)
+    if not patch:
+        return {
+            "category": category,
+            "proposed_patch": {},
+            "notes": "No structured policy signals detected; refine text with supplier:status or SAS hints.",
+        }, False
+    return {
+        "category": category,
+        "proposed_patch": patch,
+        "notes": "Extracted from unstructured text. Review before merging into category_cards.json.",
+    }, False

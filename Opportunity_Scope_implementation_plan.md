@@ -104,7 +104,7 @@ Aggregates the scores, calculates the final `PS_contract` or `PS_new`, creates e
 Expose the backend logic so a frontend can consume it, and securely link approved cases to the legacy system without disturbing its existing logic.
 
 #### [NEW] `backend/heatmap/heatmap_router.py`
-FastAPI routes: `/api/heatmap/run`, `/api/heatmap/run/status`, `/api/heatmap/opportunities`, `/api/heatmap/approve`, `/api/heatmap/feedback`, plus **intake** — `GET /api/heatmap/intake/categories`, `POST /api/heatmap/intake/preview`, `POST /api/heatmap/intake` (persists `Opportunity` with `source=intake`). Batch re-runs replace only `source=batch` rows.
+FastAPI routes: `/api/heatmap/run`, `/api/heatmap/run/status`, `/api/heatmap/opportunities`, `/api/heatmap/approve`, `/api/heatmap/feedback`, plus **intake** — `GET /api/heatmap/intake/categories`, `POST /api/heatmap/intake/preview`, `POST /api/heatmap/intake` (persists `Opportunity` with `source=intake`). Batch re-runs replace only `source=batch` rows. **Category cards (demo):** `POST /api/heatmap/category-cards/extract`, `/extract-upload`, `/apply`, `/apply-and-rerun` (plus copilot `qa`, `policy/check`, `assist`) — see `TECHNICAL_DOCUMENTATION.md` §7.2.
 
 #### [NEW] `backend/heatmap/services/case_bridge.py`
 The **only** touchpoint between the new Heatmap system and the legacy DTP system. On approval:

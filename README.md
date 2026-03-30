@@ -106,7 +106,7 @@ This project includes comprehensive documentation covering all aspects of the sy
 **What it is**: a separate agentic system that prioritizes opportunities using a deterministic scoring framework plus optional LLM layers (explanations, policy checks, bounded learning, fallback interpretation).
 
 **Key API surface**:
-- `/api/heatmap/*` (opportunities, run/status, feedback, approve bridge, intake, copilot endpoints)
+- `/api/heatmap/*` (opportunities, run/status, feedback, approve bridge, intake, copilot, **category-cards** extract/upload/apply/apply-and-rerun)
 
 **Primary UI**:
 - Next.js heatmap routes (`frontend-next/src/app/heatmap`, `/intake`, `/dashboard/heatmap`)
