@@ -50,6 +50,8 @@ def create_agent_log(
 
 def add_log_to_state(state: PipelineState, log: AgentActionLog) -> PipelineState:
     """Add log entry to state's activity_log"""
+    if "activity_log" not in state or state["activity_log"] is None:
+        state["activity_log"] = []
     state["activity_log"].append(log)
     return state
 

@@ -97,6 +97,7 @@ This project includes comprehensive documentation covering all aspects of the sy
 
 **Key API surface**:
 - `/api/cases/*`, `/api/chat`, `/api/decisions/*`, `/api/ingest/*`
+- Artifact download: `GET /api/cases/{case_id}/artifacts/{artifact_id}/export?export_format=docx|pdf` (Word/PDF from stored agent artifacts)
 
 **Primary UI**:
 - Legacy Streamlit UI (`frontend/`) or Next.js case routes (`frontend-next/src/app/cases/*`)

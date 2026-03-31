@@ -927,6 +927,38 @@ def process_chat_message(case_id: str, message: str, client, chat_history: list)
         })
 
 
+def _artifact_export_buttons(client, case_id: str, art: Dict[str, Any]) -> None:
+    """Word/PDF download for a stored artifact (legacy API + integrated mode)."""
+    aid = art.get("artifact_id")
+    if not aid:
+        return
+    c1, c2 = st.columns(2)
+    with c1:
+        try:
+            data, mime, fname = client.export_artifact_document(case_id, aid, "docx")
+            st.download_button(
+                label="Download Word",
+                data=data,
+                file_name=fname,
+                mime=mime,
+                key=f"ex_docx_{case_id}_{aid}",
+            )
+        except Exception as e:
+            st.caption(f"Word export unavailable: {e}")
+    with c2:
+        try:
+            data, mime, fname = client.export_artifact_document(case_id, aid, "pdf")
+            st.download_button(
+                label="Download PDF",
+                data=data,
+                file_name=fname,
+                mime=mime,
+                key=f"ex_pdf_{case_id}_{aid}",
+            )
+        except Exception as e:
+            st.caption(f"PDF export unavailable: {e}")
+
+
 def render_artifacts_panel_full_width(case, client) -> None:
     """
     Render full-width Artifacts Panel at the bottom.
@@ -977,22 +1009,22 @@ def render_artifacts_panel_full_width(case, client) -> None:
     agent_name = case.latest_agent_name
     
     with tabs[0]:  # Signals
-        _render_signals_artifacts(case, output, agent_name, all_artifacts)
+        _render_signals_artifacts(case, client, output, agent_name, all_artifacts)
     
     with tabs[1]:  # Scoring
-        _render_scoring_artifacts(case, output, agent_name, all_artifacts)
+        _render_scoring_artifacts(case, client, output, agent_name, all_artifacts)
     
     with tabs[2]:  # RFx Drafts
-        _render_rfx_artifacts(case, output, agent_name, all_artifacts)
+        _render_rfx_artifacts(case, client, output, agent_name, all_artifacts)
     
     with tabs[3]:  # Negotiation
-        _render_negotiation_artifacts(case, output, agent_name, all_artifacts)
+        _render_negotiation_artifacts(case, client, output, agent_name, all_artifacts)
     
     with tabs[4]:  # Contract
-        _render_contract_artifacts(case, output, agent_name, all_artifacts)
+        _render_contract_artifacts(case, client, output, agent_name, all_artifacts)
     
     with tabs[5]:  # Implementation
-        _render_implementation_artifacts(case, output, agent_name, all_artifacts)
+        _render_implementation_artifacts(case, client, output, agent_name, all_artifacts)
     
     with tabs[6]:  # History
         _render_activity_history(case)
@@ -1001,7 +1033,7 @@ def render_artifacts_panel_full_width(case, client) -> None:
         _render_audit_history_from_packs(artifact_packs, case)
 
 
-def _render_signals_artifacts(case, output, agent_name, all_artifacts):
+def _render_signals_artifacts(case, client, output, agent_name, all_artifacts):
     """Render signals tab content."""
     # Filter artifacts that belong in Decision Console or Case Summary
     signals_artifacts = [a for a in all_artifacts if get_artifact_placement(a.get("type")) in [ArtifactPlacement.DECISION_CONSOLE, ArtifactPlacement.CASE_SUMMARY]]
@@ -1013,6 +1045,7 @@ def _render_signals_artifacts(case, output, agent_name, all_artifacts):
             st.markdown(f"#### {art.get('title')}")
             content = art.get("content_text") or str(art.get("content", ""))
             st.markdown(content)
+            _artifact_export_buttons(client, case.case_id, art)
             
             # Show grounding if available
             if art.get("grounded_in"):
@@ -1024,7 +1057,7 @@ def _render_signals_artifacts(case, output, agent_name, all_artifacts):
         st.info("No signals detected yet. Ask the copilot: \"Scan for sourcing signals\"")
 
 
-def _render_scoring_artifacts(case, output, agent_name, all_artifacts):
+def _render_scoring_artifacts(case, client, output, agent_name, all_artifacts):
     """Render scoring tab content."""
     # Filter for Supplier Compare section
     scoring_artifacts = [a for a in all_artifacts if get_artifact_placement(a.get("type")) == ArtifactPlacement.SUPPLIER_COMPARE]
@@ -1063,12 +1096,13 @@ def _render_scoring_artifacts(case, output, agent_name, all_artifacts):
                     """, unsafe_allow_html=True)
             else:
                 st.markdown(art.get("content_text") or str(art.get("content", "")))
+            _artifact_export_buttons(client, case.case_id, art)
             st.markdown("---")
     else:
         st.info("No supplier scores available yet. Ask the copilot: \"Score suppliers\"")
 
 
-def _render_rfx_artifacts(case, output, agent_name, all_artifacts):
+def _render_rfx_artifacts(case, client, output, agent_name, all_artifacts):
     """Render RFx drafts tab content."""
     # RFx artifacts usually in Decision Console or Activity Log
     rfx_artifacts = [a for a in all_artifacts if "RFX" in a.get("type", "")]
@@ -1077,11 +1111,12 @@ def _render_rfx_artifacts(case, output, agent_name, all_artifacts):
         for art in rfx_artifacts:
             with st.expander(f"📄 {art.get('title')}"):
                 st.markdown(art.get("content_text") or str(art.get("content", "")))
+                _artifact_export_buttons(client, case.case_id, art)
     else:
         st.info("No RFx drafts created yet. Ask the copilot: \"Draft RFx\"")
 
 
-def _render_negotiation_artifacts(case, output, agent_name, all_artifacts):
+def _render_negotiation_artifacts(case, client, output, agent_name, all_artifacts):
     """Render negotiation tab content."""
     neg_artifacts = [a for a in all_artifacts if any(t in a.get("type", "") for t in ["NEGOTIATION", "LEVERAGE", "TARGET_TERMS"])]
     
@@ -1089,12 +1124,13 @@ def _render_negotiation_artifacts(case, output, agent_name, all_artifacts):
         for art in neg_artifacts:
             st.markdown(f"#### {art.get('title')}")
             st.markdown(art.get("content_text") or str(art.get("content", "")))
+            _artifact_export_buttons(client, case.case_id, art)
             st.markdown("---")
     else:
         st.info("No negotiation plan created yet. Ask the copilot: \"Prepare negotiation plan\"")
 
 
-def _render_contract_artifacts(case, output, agent_name, all_artifacts):
+def _render_contract_artifacts(case, client, output, agent_name, all_artifacts):
     """Render contract tab content."""
     # Contract artifacts in Risk Panel
     contract_artifacts = [a for a in all_artifacts if get_artifact_placement(a.get("type")) == ArtifactPlacement.RISK_PANEL]
@@ -1103,12 +1139,13 @@ def _render_contract_artifacts(case, output, agent_name, all_artifacts):
         for art in contract_artifacts:
             st.markdown(f"#### {art.get('title')}")
             st.markdown(art.get("content_text") or str(art.get("content", "")))
+            _artifact_export_buttons(client, case.case_id, art)
             st.markdown("---")
     else:
         st.info("No contract analysis available yet. Ask the copilot: \"Review contract\"")
 
 
-def _render_implementation_artifacts(case, output, agent_name, all_artifacts):
+def _render_implementation_artifacts(case, client, output, agent_name, all_artifacts):
     """Render implementation tab content."""
     # Implementation artifacts in Timeline
     impl_artifacts = [a for a in all_artifacts if get_artifact_placement(a.get("type")) == ArtifactPlacement.TIMELINE]
@@ -1117,6 +1154,7 @@ def _render_implementation_artifacts(case, output, agent_name, all_artifacts):
         for art in impl_artifacts:
             st.markdown(f"#### {art.get('title')}")
             st.markdown(art.get("content_text") or str(art.get("content", "")))
+            _artifact_export_buttons(client, case.case_id, art)
             st.markdown("---")
     else:
         st.info("No implementation plan ready yet. Ask the copilot: \"Draft implementation plan\"")

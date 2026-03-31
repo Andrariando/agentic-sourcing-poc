@@ -8,7 +8,7 @@ Supports two modes:
 The mode is auto-detected based on backend availability.
 """
 import requests
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 from io import BytesIO
 import os
 
@@ -269,6 +269,56 @@ class APIClient:
             return data if isinstance(data, list) else []
         except:
             return []
+    
+    def export_artifact_document(
+        self, case_id: str, artifact_id: str, export_format: str = "docx"
+    ) -> Tuple[bytes, str, str]:
+        """
+        Export one artifact as Word or PDF.
+
+        Returns:
+            (file_bytes, mime_type, filename)
+        """
+        fmt = (export_format or "docx").lower().strip()
+        if fmt not in ("docx", "pdf"):
+            raise APIError("export_format must be docx or pdf", 400)
+
+        if self._integrated_mode:
+            self._init_services()
+            from backend.services.artifact_document_export import (
+                build_artifact_docx_bytes,
+                build_artifact_pdf_bytes,
+                export_filename,
+            )
+
+            case = self._case_service.get_case(case_id)
+            if not case:
+                raise APIError("Case not found", 404)
+            art = self._case_service.get_artifact(case_id, artifact_id)
+            if not art:
+                raise APIError("Artifact not found", 404)
+            name = case.name or case_id
+            if fmt == "docx":
+                data = build_artifact_docx_bytes(art, case_id, name)
+                return (
+                    data,
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    export_filename(art, "docx"),
+                )
+            data = build_artifact_pdf_bytes(art, case_id, name)
+            return data, "application/pdf", export_filename(art, "pdf")
+
+        url = self._url(f"/api/cases/{case_id}/artifacts/{artifact_id}/export")
+        response = requests.get(url, params={"export_format": fmt}, timeout=120)
+        if response.status_code != 200:
+            raise APIError(response.text or "Export failed", response.status_code)
+        cd = response.headers.get("Content-Disposition") or ""
+        fname = "artifact." + fmt
+        if "filename=" in cd:
+            part = cd.split("filename=")[-1].strip().strip('"')
+            if part:
+                fname = part
+        return response.content, response.headers.get("content-type", "application/octet-stream"), fname
     
     def create_case(
         self,

@@ -150,7 +150,9 @@ class IntentRouter:
         # Simple greeting check (no LLM needed)
         if any(re.search(p, message_lower) for p in cls.GREETING_PATTERNS):
             if len(message_lower.split()) <= 5:
-                return UserIntent.STATUS
+                # Greetings should not be treated as "status updates" in fallback.
+                # They are better handled as a lightweight EXPLAIN guidance message.
+                return UserIntent.EXPLAIN
         
         # Simple status check
         if any(re.search(p, message_lower) for p in cls.STATUS_PATTERNS):

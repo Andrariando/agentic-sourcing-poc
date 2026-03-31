@@ -1648,7 +1648,7 @@ def process_human_decision(state: PipelineState) -> PipelineState:
         log = create_agent_log(
             case_id=case_summary.case_id,
             dtp_stage=state["dtp_stage"],
-            trigger_source=state["trigger_source"],
+            trigger_source=state.get("trigger_source") or getattr(case_summary, "trigger_source", None) or "User",
             agent_name="Human",
             task_name="Approve Decision",
             model_used="N/A (Human Decision)",
@@ -1693,7 +1693,7 @@ def process_human_decision(state: PipelineState) -> PipelineState:
         log = create_agent_log(
             case_id=case_summary.case_id,
             dtp_stage=state["dtp_stage"],
-            trigger_source=state["trigger_source"],
+            trigger_source=state.get("trigger_source") or getattr(case_summary, "trigger_source", None) or "User",
             agent_name="Human",
             task_name="Request Revision (Reject)",
             model_used="N/A (Human Decision)",

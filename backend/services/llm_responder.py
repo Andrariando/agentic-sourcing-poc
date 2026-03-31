@@ -7,9 +7,17 @@ This service is the core of the GPT-like experience. It:
 3. Decides when to call agents vs answer directly
 4. Asks for more data when needed
 5. Maintains conversation context
+
+Tuning (env):
+- LLM_PROMPT_CONTEXT_CHARS: max chars for case summary/findings in intent analysis (default 4000)
+- LLM_HISTORY_LAST_N: conversation turns in prompts (default 12)
+- LLM_HISTORY_MSG_CHARS: max chars per history message (default 2000)
+- LLM_AGENT_OUTPUT_MAX_CHARS: max chars when formatting agent output for the reply (default 14000)
+- LLM_RESPONSE_MAX_TOKENS: max tokens for the main chat model completion (default 3072)
 """
 import json
 import logging
+import os
 from typing import Any, Dict, List, Optional, Union
 from datetime import datetime
 
@@ -21,6 +29,13 @@ from shared.copilot_focus import format_copilot_focus_for_prompt
 logger = logging.getLogger(__name__)
 
 
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
 class LLMResponder:
     """
     Generates natural, ChatGPT-like responses using LLM.
@@ -29,7 +44,8 @@ class LLMResponder:
     """
     
     def __init__(self, model: str = "gpt-4o-mini", temperature: float = 0.7):
-        self.llm = ChatOpenAI(model=model, temperature=temperature)
+        _rt = _env_int("LLM_RESPONSE_MAX_TOKENS", 3072)
+        self.llm = ChatOpenAI(model=model, temperature=temperature, max_tokens=_rt)
         self.analysis_llm = ChatOpenAI(model=model, temperature=0)  # Deterministic for analysis
     
     def analyze_intent(
@@ -55,13 +71,22 @@ class LLMResponder:
         """
         history_text = self._format_history(conversation_history) if conversation_history else "No prior conversation."
         
+        _ctx = _env_int("LLM_PROMPT_CONTEXT_CHARS", 4000)
+        summary = str(case_context.get("summary", "") or "")
+        findings = str(case_context.get("key_findings", []) or "")
+        human_decisions = str(case_context.get("human_decision", {}) or {})
+        summary = summary[:_ctx] + ("…" if len(summary) > _ctx else "")
+        findings = findings[:_ctx] + ("…" if len(findings) > _ctx else "")
+        human_decisions = human_decisions[:_ctx] + ("…" if len(human_decisions) > _ctx else "")
+
         prompt = f"""You are analyzing a user message in a procurement copilot system.
 
 CASE CONTEXT:
 - Case ID: {case_context.get('case_id', 'Unknown')}
 - Name: {case_context.get('case_name', '')}
-- Summary: {case_context.get('summary', '')[:500]}...
-- Key Findings: {str(case_context.get('key_findings', []))[:500]}...
+- Summary: {summary}
+- Key Findings: {findings}
+- Human Decisions: {human_decisions}
 - DTP Stage: {case_context.get('dtp_stage', 'DTP-01')}
 - Category: {case_context.get('category_id', 'Unknown')}
 - Status: {case_context.get('status', 'Unknown')}
@@ -195,9 +220,11 @@ You help users with sourcing decisions, supplier evaluation, negotiations, and c
 
 PERSONALITY:
 - Be conversational and natural, like ChatGPT
-- Be concise but informative (short paragraphs; avoid long bullet dumps unless asked)
+- When there is substantive AGENT OUTPUT/ANALYSIS, give a **clear, structured answer**: use short headings if helpful, connect dots for the user, and explain implications—not just a terse recap.
+- For simple questions, stay focused; avoid long bullet dumps unless the user asks for detail.
 - Never use templated or robotic language
 - If something went wrong, acknowledge it honestly
+- **Remember the thread**: if CONVERSATION HISTORY is present, treat it as ground truth for what was already said or decided; don't contradict earlier agreements without flagging a change.
 - Proactively help: if the STAGE COACH section lists open decisions, name tradeoffs, compare options in plain language, then ask ONE clear follow-up question OR offer 2–3 numbered choices—don't wait for the user to guess.
 - If you don't have enough information, ask for it naturally (don't draft an email)
 - NEVER generate a "Subject:" line or email template unless explicitly asked to draft an email.
@@ -218,6 +245,7 @@ RULES:
 - Name: {case_context.get('case_name', 'Unknown')}
 - Summary: {case_context.get('summary', '')}
 - Key Findings: {str(case_context.get('key_findings', []))}
+- Human Decisions: {str(case_context.get('human_decision', {}) or {})[:1200]}
 - DTP Stage: {case_context.get('dtp_stage', 'DTP-01')}
 - Category: {case_context.get('category_id', 'Unknown')}
 - Status: {case_context.get('status', 'Unknown')}
@@ -308,16 +336,22 @@ Generate a friendly, specific request for the missing information. Be conversati
         if not history:
             return ""
         
+        n = _env_int("LLM_HISTORY_LAST_N", 12)
+        cap = _env_int("LLM_HISTORY_MSG_CHARS", 2000)
         formatted = []
-        for msg in history[-5:]:  # Last 5 messages for context
+        for msg in history[-n:]:
             role = msg.get("role", "unknown").upper()
-            content = msg.get("content", "")[:500]  # Truncate long messages
+            content = str(msg.get("content", "") or "")
+            if len(content) > cap:
+                content = content[:cap] + "…"
             formatted.append(f"{role}: {content}")
         
         return "\n".join(formatted)
     
     def _format_agent_output(self, output: Any) -> str:
         """Format agent output for prompt."""
+        _max = _env_int("LLM_AGENT_OUTPUT_MAX_CHARS", 14000)
+
         if output is None:
             return "No analysis available."
         
@@ -350,19 +384,22 @@ Generate a friendly, specific request for the missing information. Be conversati
                     formatted.append(f"Completeness: {output['completeness']}%")
             
             else:
-                # Generic formatting
-                for key, value in list(output.items())[:5]:
-                    if value and not key.startswith("_"):
-                        formatted.append(f"{key}: {str(value)[:100]}")
-            
-            return "\n".join(formatted) if formatted else str(output)[:500]
+                # Generic: prefer readable JSON for richer narrative context
+                try:
+                    blob = json.dumps(output, indent=2, ensure_ascii=False, default=str)
+                except (TypeError, ValueError):
+                    blob = str(output)
+                if len(blob) > _max:
+                    blob = blob[:_max] + "\n…(truncated)"
+                return blob
         
         elif hasattr(output, "model_dump"):
             # Pydantic model
             return self._format_agent_output(output.model_dump())
         
         else:
-            return str(output)[:500]
+            s = str(output)
+            return s if len(s) <= _max else s[:_max] + "…"
 
 
 # Singleton instance

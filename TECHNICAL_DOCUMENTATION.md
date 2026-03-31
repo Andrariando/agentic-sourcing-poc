@@ -152,6 +152,7 @@ All routes below are defined on `app` except **`/api/heatmap/*`**, which is moun
 | GET | `/api/cases` | List cases (filters: `status`, `dtp_stage`, `category_id`, `limit`) |
 | GET | `/api/cases/{case_id}` | Full case detail for copilot UI |
 | POST | `/api/cases` | Create case (`CreateCaseRequest`) |
+| GET | `/api/cases/{case_id}/artifacts/{artifact_id}/export` | Download stored artifact as **Word** (`export_format=docx`) or **PDF** (`export_format=pdf`); see `backend/services/artifact_document_export.py`. Streamlit case copilot shows **Download Word / PDF** per artifact. |
 
 ### 5.3 Chat (Legacy DTP)
 

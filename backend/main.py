@@ -5,11 +5,13 @@ This is the ONLY entry point for the frontend.
 All business logic, agents, and data access go through this API.
 """
 import os
+from io import BytesIO
 from typing import Optional, List
 from datetime import datetime
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -19,6 +21,11 @@ load_dotenv()
 
 # Import services
 from backend.services.case_service import get_case_service
+from backend.services.artifact_document_export import (
+    build_artifact_docx_bytes,
+    build_artifact_pdf_bytes,
+    export_filename,
+)
 from backend.services.chat_service import get_chat_service
 from backend.services.ingestion_service import get_ingestion_service
 from backend.persistence.database import init_db
@@ -132,6 +139,49 @@ async def get_case(case_id: str):
         raise HTTPException(status_code=404, detail="Case not found")
     
     return case
+
+
+@app.get("/api/cases/{case_id}/artifacts/{artifact_id}/export")
+async def export_artifact_document(
+    case_id: str,
+    artifact_id: str,
+    export_format: str = Query("docx", description="Export format: docx or pdf"),
+):
+    """
+    Download a single artifact as Word (.docx) or PDF.
+
+    Works for RFx packs (structured sections), other agent artifacts (summary + JSON),
+    and any stored `Artifact` row.
+    """
+    fmt = (export_format or "docx").lower().strip()
+    if fmt not in ("docx", "pdf"):
+        raise HTTPException(status_code=400, detail="export_format must be docx or pdf")
+
+    service = get_case_service()
+    case = service.get_case(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+    artifact = service.get_artifact(case_id, artifact_id)
+    if not artifact:
+        raise HTTPException(status_code=404, detail="Artifact not found")
+
+    try:
+        if fmt == "docx":
+            data = build_artifact_docx_bytes(artifact, case_id, case.name or case_id)
+            media = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            fname = export_filename(artifact, "docx")
+        else:
+            data = build_artifact_pdf_bytes(artifact, case_id, case.name or case_id)
+            media = "application/pdf"
+            fname = export_filename(artifact, "pdf")
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+    return StreamingResponse(
+        BytesIO(data),
+        media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
 
 
 @app.post("/api/cases", response_model=CreateCaseResponse)

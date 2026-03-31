@@ -218,6 +218,11 @@ class ChatService:
     def __init__(self):
         self.case_service = get_case_service()
         self.supervisor = SupervisorAgent()
+
+        # Token budget for "remembered context" injected into the LLM and agents.
+        # This is intentionally larger than the original 1500 default so users can say
+        # "based on what we've decided so far" and still be grounded.
+        self.max_conversation_tokens = int(os.getenv("MAX_CONVERSATION_TOKENS_FOR_AGENTS", "3000"))
         
         # Feature flag for conversation memory
         # Enable conversation memory by default for better ChatGPT-like experience
@@ -296,7 +301,7 @@ class ChatService:
                 conversation_history = self.conversation_manager.get_relevant_context(
                     case_id=case_id,
                     current_message=user_message,
-                    max_tokens=1500
+                    max_tokens=self.max_conversation_tokens
                 )
             except Exception as e:
                 logger.warning(f"Failed to retrieve conversation context: {e}")
@@ -323,6 +328,7 @@ class ChatService:
             "dtp_stage": state.get("dtp_stage", "DTP-01"),
             "category_id": state.get("category_id", "Unknown"),
             "status": state.get("status", "In Progress"),
+            "human_decision": state.get("human_decision") or {},
             "latest_agent_output": state.get("latest_agent_output"),
             "latest_agent_name": state.get("latest_agent_name"),
             "waiting_for_human": state.get("waiting_for_human", False),
@@ -917,7 +923,7 @@ class ChatService:
                     conversation_history = self.conversation_manager.get_relevant_context(
                         case_id=case_id,
                         current_message=message,
-                        max_tokens=1500
+                        max_tokens=self.max_conversation_tokens
                     )
                 except Exception as e:
                     logger.warning(f"Failed to retrieve conversation context: {e}")
@@ -1456,7 +1462,7 @@ class ChatService:
                 if self.conversation_manager and self.enable_conversation_memory:
                     try:
                         conversation_history = self.conversation_manager.get_relevant_context(
-                            case_id, message, max_tokens=1500
+                        case_id, message, max_tokens=self.max_conversation_tokens
                         )
                     except Exception:
                         pass
@@ -1545,6 +1551,11 @@ class ChatService:
         # (The graph supervisor usually decides, but we can nudge it)
         if "latest_agent_name" not in state:
              state["latest_agent_name"] = action_plan.agent_name
+
+        # Ensure specialist agents receive the remembered/relevant subset of
+        # conversation context (instead of the entire chat_history list).
+        if history is not None and ("conversation_history" not in state or not state.get("conversation_history")):
+            state["conversation_history"] = history
              
         return self.process_message_langgraph(
             case_id=case_id,
@@ -1654,11 +1665,13 @@ class ChatService:
                 recommended_action=workflow_state.get("recommended_action")
             )
             
-        # Map chat history to simplified format for Agents if needed
+        # Map chat history to simplified format for Agents if needed.
+        # If we already injected a remembered subset into `conversation_history`,
+        # prefer that (it is token-budgeted and more relevant).
         # PipelineState expects List[Dict[str, str]]
-        if "chat_history" in workflow_state:
+        if "chat_history" in workflow_state and (not workflow_state.get("conversation_history")):
             workflow_state["conversation_history"] = [
-                {"role": m.get("role"), "content": m.get("content")} 
+                {"role": m.get("role"), "content": m.get("content")}
                 for m in workflow_state["chat_history"]
             ]
             
