@@ -39,9 +39,6 @@ export default function RootLayout({
                 <Link href="/intake" className="flex items-center px-3 py-2 text-sm font-medium rounded-md hover:bg-slate-800 hover:text-white transition-colors">
                   Business Intake
                 </Link>
-                <Link href="/dashboard/heatmap" className="flex items-center px-3 py-2 text-sm font-medium rounded-md hover:bg-slate-800 hover:text-white transition-colors">
-                  KPI Dashboard
-                </Link>
               </div>
             </div>
 

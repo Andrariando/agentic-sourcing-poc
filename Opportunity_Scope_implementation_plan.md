@@ -140,9 +140,8 @@ A standard Next.js 14+ app layout (App router, React, Tailwind CSS or Vanilla CS
 
 #### Key Pages/Components for the New Heatmap System:
 1. **Business Intake Page (`/intake`)**: Form to capture "New Sourcing Requests". Live **PS_new** preview and submit call the FastAPI intake endpoints (same scoring helpers as the framework; see `SYSTEM_DOCUMENTATION.md`).
-2. **Prioritized List (`/heatmap`)**: Data table of all scored opportunities (Contracts and New Requests). Shows tier badges, value, and action buttons. 
-3. **KPI/KLI Dashboard (`/dashboard/heatmap`)**: Visualizations tracking AI reliability, cycle time reduction, and edit density.
-4. **Approval Flow Modal**: Allows bulk selection of opportunities to "Approve & Create Cases", hitting the `/api/heatmap/approve` backend route.
+2. **Prioritized List (`/heatmap`)**: Data table of all scored opportunities (Contracts and New Requests). Shows tier badges, value, action buttons, scatter matrix, and **Sourcing Opportunity Matrix** (KPI/KLI-style columns from enriched `/api/heatmap/opportunities`). Aggregates remain available via `GET /api/heatmap/metrics/dashboard`.
+3. **Approval Flow Modal**: Allows bulk selection of opportunities to "Approve & Create Cases", hitting the `/api/heatmap/approve` backend route.
 
 #### Key Pages/Components for the Legacy DTP System:
 1. **Case Dashboard (`/cases`)**: Replaces `case_dashboard.py`. Displays all active legacy cases natively in the new Next.js styling, tracking progress through DTP01 to DTP06.

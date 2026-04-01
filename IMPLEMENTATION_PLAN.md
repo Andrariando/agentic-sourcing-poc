@@ -79,10 +79,9 @@ High leverage vs effort; several need only copy + small API/UI changes.
 
 | Surface | Status |
 |---------|--------|
-| **Heatmap “Sourcing Opportunity Matrix”** (KPI/KLI columns) | **Not functional** — deterministic mock values from `supplier_name` / `request_id` (see `frontend-next/src/app/heatmap/page.tsx`) |
-| **`/dashboard/heatmap`** | **Not functional** — static numbers and placeholder charts |
+| **Heatmap “Sourcing Opportunity Matrix”** (KPI/KLI columns) | **Partially functional** — backend `kli_metrics` on `/api/heatmap/opportunities?enrich=true`; UI falls back to deterministic values if enrichment missing (see `page.tsx`) |
 
-Glossary tooltips (KPI vs KLI) are real; the **numbers are not** tied to telemetry.
+The standalone **`/dashboard/heatmap`** Next.js page was **removed** (it was static placeholders). Use the matrix on **`/heatmap`** or **`GET /api/heatmap/metrics/dashboard`** for rollups.
 
 ---
 
@@ -103,7 +102,7 @@ Glossary tooltips (KPI vs KLI) are real; the **numbers are not** tied to telemet
 | KM1 | **Persist pipeline telemetry** — per-opportunity or per-run: LangGraph duration, node list, timestamps in `AuditLog` or `heatmap_run_metrics` | Enables Agents Run / Exec Time |
 | KM2 | **Dashboard aggregates** — replace static cards with rollups (feedback rate, avg time from `run/status` history if stored, approvals per week) | Requires stored events or daily rollups |
 | KM3 | **Cycle time** — anchor timestamps: opportunity created → approved → `case_bridge` creates case | Needs consistent event recording |
-| KM4 | **Charts** — replace placeholders with data from KM2 (simple bar/line from API) | Frontend + API |
+| KM4 | **Charts** — optional dedicated dashboard page consuming KM2 (simple bar/line from API); matrix on `/heatmap` already shows per-row KPI/KLI | Frontend + API |
 
 ---
 
@@ -134,7 +133,7 @@ Glossary tooltips (KPI vs KLI) are real; the **numbers are not** tied to telemet
 | Strategic themes | User assessment + [BUSINESS_OVERVIEW.md](BUSINESS_OVERVIEW.md) |
 | §2 roadmap | Same + Azure subsection in BUSINESS_OVERVIEW |
 | §3 Quick wins | Prior “quick win” engineering list |
-| §4–7 KPI/KLI | Heatmap UI audit (`page.tsx`, `dashboard/heatmap/page.tsx`) |
+| §4–7 KPI/KLI | Heatmap UI (`heatmap/page.tsx`), `/api/heatmap/metrics/dashboard` |
 | Category cards ingest / apply | [TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md) §7.2, §7.8; [SYSTEM_DOCUMENTATION.md](SYSTEM_DOCUMENTATION.md) §Category cards + API table |
 | Original heatmap build phases | [Opportunity_Scope_implementation_plan.md](Opportunity_Scope_implementation_plan.md) |
 

@@ -1169,7 +1169,6 @@ Replaces the entire Streamlit UI with a unified Next.js 16 application (Tailwind
 |-------|--------|-------------|
 | `/heatmap` | Heatmap | Priority list with Tier badges and score breakdowns; **Heatmap copilot** panel (Q&A, policy check, category-cards assist) |
 | `/intake` | Heatmap | Business intake form; live **PS_new** preview/submit; optional **Review memory Δ** chip when **`feedback_memory_delta`** is non-zero |
-| `/dashboard/heatmap` | Heatmap | KLI metrics (cycle time, agent reliability, edit density) |
 | `/cases` | Legacy DTP | Case dashboard tracking DTP01–DTP06 progress |
 | `/cases/[id]/copilot` | Legacy DTP | Cursor-style split: left evidence/artifacts, right chat + decision console |
 | `/cases/copilot` | Legacy DTP | No-case-selected default shell (context + disabled chat prompt) |

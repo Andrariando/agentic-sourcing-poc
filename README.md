@@ -110,7 +110,7 @@ This project includes comprehensive documentation covering all aspects of the sy
 - `/api/heatmap/*` (opportunities, run/status, feedback, approve bridge, intake, copilot, **category-cards** extract/upload/apply/apply-and-rerun)
 
 **Primary UI**:
-- Next.js heatmap routes (`frontend-next/src/app/heatmap`, `/intake`, `/dashboard/heatmap`)
+- Next.js heatmap routes (`frontend-next/src/app/heatmap`, `/intake`)
 
 ### What is shared vs isolated?
 

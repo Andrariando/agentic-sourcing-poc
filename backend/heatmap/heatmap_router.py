@@ -440,7 +440,7 @@ def list_opportunities(
 
 @heatmap_router.get("/metrics/dashboard")
 def heatmap_dashboard_metrics():
-    """Aggregates for /dashboard/heatmap (feedback + pipeline audit + tier rollups)."""
+    """Aggregates for heatmap KPI rollups (feedback + pipeline audit + tier counts)."""
     session = heatmap_db.get_db_session()
     try:
         opps = session.exec(select(Opportunity)).all()
