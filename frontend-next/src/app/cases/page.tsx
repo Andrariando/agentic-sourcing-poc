@@ -13,7 +13,7 @@ interface CaseSummary {
   status: string;
 }
 
-export default function LegacyCaseDashboard() {
+export default function CaseDashboardPage() {
   const [cases, setCases] = useState<CaseSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -41,7 +41,7 @@ export default function LegacyCaseDashboard() {
         <header className="flex justify-between items-end mb-8">
           <div>
             <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Active Sourcing Cases</h1>
-            <p className="text-slate-500 mt-2 text-sm">Legacy DTP Management System.</p>
+            <p className="text-slate-500 mt-2 text-sm">Case management workflow.</p>
           </div>
         </header>
 

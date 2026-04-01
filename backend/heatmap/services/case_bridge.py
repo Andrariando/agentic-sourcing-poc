@@ -13,7 +13,7 @@ from backend.heatmap.persistence.heatmap_models import Opportunity, AuditLog
 
 class CaseBridgeService:
     """
-    Bridge between the NEW Heatmap System and the LEGACY DTP Case System.
+    Bridge between Opportunity Prioritization and Case Management systems.
     This is the ONLY touchpoint between the two agentic systems.
     """
 
@@ -84,7 +84,7 @@ class CaseBridgeService:
             contract_id=opp.contract_id or template.contract_id,
             supplier_id=opp.supplier_id or opp.supplier_name or template.supplier_id,
             trigger_source="OpportunityHeatmap",
-            dtp_stage=template.dtp_stage or "DTP-01",
+            dtp_stage="DTP-01",
             status="In Progress",
             name=self._bridged_case_title(opp, template),
             summary_text=template.summary_text or f"Sourced from priority heatmap – {opp.category}",
@@ -95,9 +95,9 @@ class CaseBridgeService:
             latest_artifact_pack_id=None,
             artifact_index=None,
             next_actions_cache=None,
-            human_decision=template.human_decision,
-            activity_log=template.activity_log,
-            chat_history=template.chat_history,
+            human_decision=None,
+            activity_log=None,
+            chat_history=None,
             created_at=now,
             updated_at=now,
         )
@@ -127,7 +127,7 @@ class CaseBridgeService:
         self, opportunity_ids: List[int], approver_id: str
     ) -> Tuple[int, Dict[int, str], Dict[int, bool]]:
         """
-        Bridge approved opportunities to legacy cases.
+        Bridge approved opportunities to case management.
         Returns (approved_count_this_call, mapping opportunity_id -> case_id, already_linked flags).
         Skips opportunities already bridged (audit log) to avoid duplicates on double-submit.
         """

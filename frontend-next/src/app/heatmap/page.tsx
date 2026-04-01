@@ -80,6 +80,12 @@ export default function HeatmapPriorityPage() {
   const [pendingPatch, setPendingPatch] = useState<Record<string, unknown> | null>(null);
   const [applyLoading, setApplyLoading] = useState(false);
   const [cardCategories, setCardCategories] = useState<string[]>(["IT Infrastructure", "Software", "Hardware"]);
+  const activeOpportunities = opportunities.filter((o) => o.status !== "Approved");
+
+  const rankOpportunities = (rows: any[]) =>
+    rows
+      .filter((o) => o.status !== "Approved")
+      .sort((a: any, b: any) => b.total_score - a.total_score);
 
   useEffect(() => {
     if (!copilotOpen) return;
@@ -112,10 +118,7 @@ export default function HeatmapPriorityPage() {
         const res = await apiFetch(url, { cache: 'no-store' });
         const data = await res.json();
         
-        if (data.opportunities) {
-          const sorted = data.opportunities.sort((a: any, b: any) => b.total_score - a.total_score);
-          setOpportunities(sorted);
-        }
+        if (data.opportunities) setOpportunities(rankOpportunities(data.opportunities));
       } catch (err) {
         console.error("Failed to fetch opportunities", err);
       } finally {
@@ -126,13 +129,13 @@ export default function HeatmapPriorityPage() {
   }, []);
 
   // Compute Dashboard Stats
-  const totalMonitored = opportunities.length;
-  const tier1 = opportunities.filter((o) => o.tier === "T1").length;
-  const tier2 = opportunities.filter((o) => o.tier === "T2").length;
-  const tier3 = opportunities.filter((o) => o.tier === "T3").length;
+  const totalMonitored = activeOpportunities.length;
+  const tier1 = activeOpportunities.filter((o) => o.tier === "T1").length;
+  const tier2 = activeOpportunities.filter((o) => o.tier === "T2").length;
+  const tier3 = activeOpportunities.filter((o) => o.tier === "T3").length;
   
   // Calculate total pipeline value
-  const totalValue = opportunities.reduce((acc, curr) => {
+  const totalValue = activeOpportunities.reduce((acc, curr) => {
     // Check various possible value fields
     const val = curr.estimated_spend || curr.es_value || curr.total_contract_value || 0;
     return acc + Number(val);
@@ -151,7 +154,7 @@ export default function HeatmapPriorityPage() {
   // Selection Logic
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
-      setSelectedIds(new Set(opportunities.map(o => o.id as number)));
+      setSelectedIds(new Set(activeOpportunities.map(o => o.id as number)));
     } else {
       setSelectedIds(new Set());
     }
@@ -193,10 +196,10 @@ export default function HeatmapPriorityPage() {
           }
           return o;
         });
-        setOpportunities(updated);
+        setOpportunities(rankOpportunities(updated));
         setReviewOpp(null);
 
-        // Tier 1: single bridge into legacy — same path as "Approve Selected" (one case per opportunity).
+        // Tier 1: single bridge into case management — same path as "Approve Selected" (one case per opportunity).
         if (feedbackTier === "T1") {
           try {
             const approveUrl = `${getApiBaseUrl()}/api/heatmap/approve`;
@@ -217,14 +220,7 @@ export default function HeatmapPriorityPage() {
           } catch (e) {
             console.error(e);
           }
-          // Fallback: seeded demo cases (no new row) if approve did not return an id.
-          const cat = reviewOpp.category?.toUpperCase() || "";
-          let caseId = "CASE-001";
-          if (cat.includes("CLOUD") || cat.includes("INFRASTRUCTURE")) caseId = "CASE-002";
-          else if (cat.includes("SAAS")) caseId = "CASE-003";
-          else if (cat.includes("SOFTWARE") || cat.includes("IT")) caseId = "CASE-004";
-          else if (cat.includes("SECURITY")) caseId = "CASE-006";
-          window.location.href = `/cases/${caseId}/copilot`;
+          alert("Review saved. Approval succeeded but no case id was returned; open Case Dashboard to continue.");
         }
       } else {
         alert("Feedback submission failed. Please verify backend payload compatibility.");
@@ -238,12 +234,12 @@ export default function HeatmapPriorityPage() {
 
   const handlePushToCasework = async () => {
     // Check if any non-T1 is selected
-    const selectedOpps = opportunities.filter(o => selectedIds.has(o.id as number));
+    const selectedOpps = activeOpportunities.filter(o => selectedIds.has(o.id as number));
     if (selectedOpps.length === 0) return;
 
     const nonT1 = selectedOpps.some(o => o.tier !== 'T1');
     if (nonT1) {
-      alert("Error: Only Tier 1 (Critical) opportunities can be pushed directly to the Legacy Case Dashboard. Please review and approve lower tier items first.");
+      alert("Error: Only Tier 1 (Critical) opportunities can be pushed directly to Case Dashboard. Please review and approve lower tier items first.");
       return;
     }
 
@@ -275,9 +271,7 @@ export default function HeatmapPriorityPage() {
         const oppRes = await apiFetch(oppUrl, { cache: "no-store" });
         const oppJson = await oppRes.json();
         if (oppJson.opportunities) {
-          setOpportunities(
-            oppJson.opportunities.sort((a: any, b: any) => b.total_score - a.total_score)
-          );
+          setOpportunities(rankOpportunities(oppJson.opportunities));
         }
       } else {
         alert("Failed to push to casework. Please try again.");
@@ -319,10 +313,7 @@ export default function HeatmapPriorityPage() {
 
       const oppRes = await apiFetch(oppUrl, { cache: "no-store" });
       const data = await oppRes.json();
-      if (data.opportunities) {
-        const sorted = data.opportunities.sort((a: any, b: any) => b.total_score - a.total_score);
-        setOpportunities(sorted);
-      }
+      if (data.opportunities) setOpportunities(rankOpportunities(data.opportunities));
     } catch (err) {
       console.error(err);
       const msg = err instanceof Error ? err.message : String(err);
@@ -467,8 +458,7 @@ export default function HeatmapPriorityPage() {
             const r = await apiFetch(url, { cache: "no-store" });
             const j = await r.json();
             if (j.opportunities) {
-              const sorted = j.opportunities.sort((a: any, b: any) => b.total_score - a.total_score);
-              setOpportunities(sorted);
+              setOpportunities(rankOpportunities(j.opportunities));
             }
           } catch {
             /* ignore */
@@ -484,7 +474,7 @@ export default function HeatmapPriorityPage() {
 
   // Matrix axes must match row type: renewals use FIS + EUS/RSS (and SCS for spread);
   // new requests use ES + CSIS on X and IUS on Y (PS_new does not populate FIS/EUS/RSS).
-  const chartData = opportunities.map((o) => {
+  const chartData = activeOpportunities.map((o) => {
     const isNewRequest = Boolean(o.request_id) && !o.contract_id;
     let x: number;
     let y: number;
@@ -698,7 +688,7 @@ export default function HeatmapPriorityPage() {
                       <input 
                         type="checkbox" 
                         className="rounded border-slate-300 w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" 
-                        checked={selectedIds.size === opportunities.length && opportunities.length > 0}
+                        checked={selectedIds.size === activeOpportunities.length && activeOpportunities.length > 0}
                         onChange={handleSelectAll}
                       />
                     </th>
@@ -734,7 +724,7 @@ export default function HeatmapPriorityPage() {
                       </td>
                     </tr>
                   ) : (
-                    opportunities.map((opp) => {
+                    activeOpportunities.map((opp) => {
                       const id = opp.id;
                       const isSelected = selectedIds.has(id);
                       return (
@@ -956,7 +946,7 @@ export default function HeatmapPriorityPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
-                   {opportunities.slice(0, 10).map((opp, i) => {
+                   {activeOpportunities.slice(0, 10).map((opp, i) => {
                       const charCode = ((opp.supplier_name || opp.request_id || "?") as string).charCodeAt(0);
                       const km = opp.kli_metrics as
                         | {

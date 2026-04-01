@@ -50,7 +50,7 @@ function isGovernanceCompleteOnServer(caseDetails: any): boolean {
   );
 }
 
-export default function LegacyCaseCopilotPage() {
+export default function CaseCopilotPage() {
   const params = useParams();
   const caseId = params.id as string;
 
@@ -61,6 +61,7 @@ export default function LegacyCaseCopilotPage() {
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
   const [governanceApproved, setGovernanceApproved] = useState(false);
+  const [decisionConsoleOpen, setDecisionConsoleOpen] = useState(false);
   const [govSoc2, setGovSoc2] = useState<"verified" | "pending" | "">("");
   const [govInfra, setGovInfra] = useState<"meets" | "exemption" | "">("");
   const [isTyping, setIsTyping] = useState(false);
@@ -73,6 +74,10 @@ export default function LegacyCaseCopilotPage() {
       setGovernanceApproved(false);
     }
   }, [caseDetails?.case_id, caseDetails?.dtp_stage, caseDetails?.human_decision]);
+
+  useEffect(() => {
+    setDecisionConsoleOpen(false);
+  }, [caseDetails?.case_id, caseDetails?.dtp_stage]);
 
   const showEvalApproved =
     (caseDetails && isGovernanceCompleteOnServer(caseDetails)) || governanceApproved;
@@ -298,6 +303,7 @@ export default function LegacyCaseCopilotPage() {
       });
       if (res.ok) {
         setGovernanceApproved(true);
+        setDecisionConsoleOpen(false);
         const decisionPrompt = `I approved ${displayStage} for case ${caseId}. SOC2 status: ${govSoc2 === "verified" ? "Yes, Verified" : govSoc2 || "Not set"}. Infrastructure threshold: ${govInfra === "meets" ? "Meets Thresholds" : govInfra || "Not set"}. Summarize what changed in state and tell me the next best action.`;
         setMessages(prev => [...prev, { role: "assistant", content: `Decision recorded: **Approved ${displayStage}**. Syncing Copilot guidance…` }]);
         setIsTyping(true);
@@ -368,6 +374,7 @@ export default function LegacyCaseCopilotPage() {
         return;
       }
       setMessages(prev => [...prev, { role: "assistant", content: `Decision recorded: **Revision requested for ${displayStage}**. Re-planning recommendations…` }]);
+      setDecisionConsoleOpen(false);
       setIsTyping(true);
       try {
         const chatUrl = `${getApiBaseUrl()}/api/chat`;
@@ -682,59 +689,77 @@ export default function LegacyCaseCopilotPage() {
 
         {/* Decision console lives with chat (Cursor-like flow) */}
         {hasLiveCase && !caseLoading && (
-          <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/70 space-y-4">
+          <div className="px-6 py-3 border-b border-slate-100 bg-slate-50/70">
             <div className="flex items-center justify-between gap-3">
-              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-sponsor-blue" />
-                Decision Console
-              </h3>
-              <span className="text-[11px] text-slate-500 font-semibold uppercase tracking-wide">{displayStage}</span>
-            </div>
-            {showEvalApproved ? (
-              <div className="bg-green-50 text-green-800 p-3 rounded-lg border border-green-200 text-xs font-medium">
-                Decision submitted. Continue in chat for next actions while backend advances stage.
+              <div className="flex items-center gap-2 min-w-0">
+                <ShieldCheck className="w-4 h-4 text-sponsor-blue shrink-0" />
+                <h3 className="text-sm font-bold text-slate-800">Decision Console</h3>
+                <span className="text-[11px] text-slate-500 font-semibold uppercase tracking-wide">{displayStage}</span>
               </div>
-            ) : (
-              <>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">
-                    Has InfoSec verified the SOC2 compliance? *
-                  </label>
-                  <div className="flex gap-4">
-                    <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
-                      <input type="radio" name="soc-chat" checked={govSoc2 === "verified"} onChange={() => setGovSoc2("verified")} className="w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" />
-                      Yes, Verified
-                    </label>
-                    <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
-                      <input type="radio" name="soc-chat" checked={govSoc2 === "pending"} onChange={() => setGovSoc2("pending")} className="w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" />
-                      Pending / Missing
-                    </label>
+              <button
+                type="button"
+                onClick={() => setDecisionConsoleOpen((v) => !v)}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 transition"
+              >
+                {decisionConsoleOpen ? "Hide" : "Open"} Decision Console
+              </button>
+            </div>
+
+            {!decisionConsoleOpen && (
+              <p className="text-xs text-slate-500 mt-2">
+                Continue the conversation first. Open Decision Console when you are ready to submit approval or request revision.
+              </p>
+            )}
+
+            {decisionConsoleOpen && (
+              <div className="space-y-4 mt-3 pt-3 border-t border-slate-200">
+                {showEvalApproved ? (
+                  <div className="bg-green-50 text-green-800 p-3 rounded-lg border border-green-200 text-xs font-medium">
+                    Decision submitted. Continue in chat for next actions while backend advances stage.
                   </div>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">
-                    Does this supplier meet minimum IT Infrastructure thresholds? *
-                  </label>
-                  <div className="flex gap-4">
-                    <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
-                      <input type="radio" name="thresh-chat" checked={govInfra === "meets"} onChange={() => setGovInfra("meets")} className="w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" />
-                      Meets Thresholds
-                    </label>
-                    <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
-                      <input type="radio" name="thresh-chat" checked={govInfra === "exemption"} onChange={() => setGovInfra("exemption")} className="w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" />
-                      Does Not Meet
-                    </label>
-                  </div>
-                </div>
-                <div className="flex gap-3 pt-2">
-                  <button onClick={handleApproveGovernance} className="flex-1 py-2.5 bg-sponsor-blue text-white rounded-lg font-bold text-sm shadow hover:bg-blue-700 transition disabled:opacity-60" disabled={isTyping}>
-                    Confirm & Approve
-                  </button>
-                  <button onClick={handleRequestRevision} className="flex-1 py-2.5 bg-white text-slate-600 border border-slate-300 rounded-lg font-semibold text-sm hover:bg-slate-50 transition">
-                    Request Revision
-                  </button>
-                </div>
-              </>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+                        Has InfoSec verified the SOC2 compliance? *
+                      </label>
+                      <div className="flex gap-4">
+                        <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                          <input type="radio" name="soc-chat" checked={govSoc2 === "verified"} onChange={() => setGovSoc2("verified")} className="w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" />
+                          Yes, Verified
+                        </label>
+                        <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                          <input type="radio" name="soc-chat" checked={govSoc2 === "pending"} onChange={() => setGovSoc2("pending")} className="w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" />
+                          Pending / Missing
+                        </label>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+                        Does this supplier meet minimum IT Infrastructure thresholds? *
+                      </label>
+                      <div className="flex gap-4">
+                        <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                          <input type="radio" name="thresh-chat" checked={govInfra === "meets"} onChange={() => setGovInfra("meets")} className="w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" />
+                          Meets Thresholds
+                        </label>
+                        <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                          <input type="radio" name="thresh-chat" checked={govInfra === "exemption"} onChange={() => setGovInfra("exemption")} className="w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" />
+                          Does Not Meet
+                        </label>
+                      </div>
+                    </div>
+                    <div className="flex gap-3 pt-2">
+                      <button onClick={handleApproveGovernance} className="flex-1 py-2.5 bg-sponsor-blue text-white rounded-lg font-bold text-sm shadow hover:bg-blue-700 transition disabled:opacity-60" disabled={isTyping}>
+                        Confirm & Approve
+                      </button>
+                      <button onClick={handleRequestRevision} className="flex-1 py-2.5 bg-white text-slate-600 border border-slate-300 rounded-lg font-semibold text-sm hover:bg-slate-50 transition">
+                        Request Revision
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             )}
           </div>
         )}

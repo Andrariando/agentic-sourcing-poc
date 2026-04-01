@@ -35,7 +35,7 @@ const PREFERRED_OPTIONS: { value: string; label: string }[] = [
   { value: "straightpo", label: "Straight to PO" },
 ];
 
-export default function BusinessIntakePage() {
+export default function SourcingIntakePage() {
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
   const [formData, setFormData] = useState({
     title: "",
