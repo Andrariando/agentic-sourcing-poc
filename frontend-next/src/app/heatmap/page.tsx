@@ -1566,8 +1566,8 @@ export default function HeatmapPriorityPage() {
               </div>
 
               {/* Human Feedback Section + History */}
-              <div className="grid grid-cols-3 gap-4">
-                <div className="col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+              <div className="space-y-4">
+                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                   <p className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-3 mb-5 flex items-center gap-2">
                     <ExternalLink className="w-4 h-4 text-slate-400" />
                     Human-in-the-Loop Override
@@ -1598,8 +1598,8 @@ export default function HeatmapPriorityPage() {
                   </div>
                 </div>
 
-                <div className="col-span-1 bg-white p-6 rounded-xl border border-slate-200 shadow-sm max-h-72 overflow-y-auto">
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
+                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">
                     Feedback History
                   </p>
                   {feedbackHistoryLoading && (
@@ -1611,7 +1611,7 @@ export default function HeatmapPriorityPage() {
                     </p>
                   )}
                   {!feedbackHistoryLoading && feedbackHistory && feedbackHistory.length > 0 && (
-                    <ul className="space-y-3 text-xs text-slate-600">
+                    <ul className="space-y-3 text-xs text-slate-600 max-h-56 overflow-y-auto pr-1">
                       {feedbackHistory.map((fb) => (
                         <li key={fb.id} className="border-b border-slate-100 pb-2 last:border-b-0 last:pb-0">
                           <div className="flex items-center justify-between gap-2">
