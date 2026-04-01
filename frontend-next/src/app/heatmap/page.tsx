@@ -28,6 +28,20 @@ export default function HeatmapPriorityPage() {
   const [feedbackTier, setFeedbackTier] = useState<string>("T1");
   const [feedbackReason, setFeedbackReason] = useState<string>("");
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [feedbackHistory, setFeedbackHistory] = useState<
+    | {
+        id: number;
+        reviewer_id: string;
+        timestamp: string;
+        adjustment_type: string;
+        adjustment_value: number;
+        reason_code: string;
+        comment_text?: string | null;
+        component_affected: string;
+      }[]
+    | null
+  >(null);
+  const [feedbackHistoryLoading, setFeedbackHistoryLoading] = useState(false);
 
   // Optional Copilot Slide-over
   const [copilotOpen, setCopilotOpen] = useState(false);
@@ -823,7 +837,27 @@ export default function HeatmapPriorityPage() {
                               </span>
                             ) : (
                               <button 
-                                onClick={() => { setReviewOpp(opp); setFeedbackTier(opp.tier); setFeedbackReason(""); }}
+                                onClick={async () => {
+                                  setReviewOpp(opp);
+                                  setFeedbackTier(opp.tier);
+                                  setFeedbackReason("");
+                                  setFeedbackHistory(null);
+                                  setFeedbackHistoryLoading(true);
+                                  try {
+                                    const url = `${getApiBaseUrl()}/api/heatmap/feedback/history?opportunity_id=${opp.id}`;
+                                    const r = await apiFetch(url, { cache: "no-store" });
+                                    if (!r.ok) {
+                                      setFeedbackHistory([]);
+                                    } else {
+                                      const rows = (await r.json()) as any[];
+                                      setFeedbackHistory(Array.isArray(rows) ? rows : []);
+                                    }
+                                  } catch {
+                                    setFeedbackHistory([]);
+                                  } finally {
+                                    setFeedbackHistoryLoading(false);
+                                  }
+                                }}
                                 className="text-sponsor-blue hover:text-blue-800 text-sm font-medium bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded transition"
                               >
                                 Review
@@ -1531,35 +1565,78 @@ export default function HeatmapPriorityPage() {
                 </div>
               </div>
 
-              {/* Human Feedback Section component */}
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                <p className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-3 mb-5 flex items-center gap-2">
-                  <ExternalLink className="w-4 h-4 text-slate-400" />
-                  Human-in-the-Loop Override
-                </p>
-                <div className="grid grid-cols-3 gap-6">
-                  <div className="col-span-1 border-r border-slate-100 pr-6">
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Adjust Priority</label>
-                    <select 
-                      className="w-full border border-slate-300 rounded-lg shadow-sm py-2.5 px-3 text-sm focus:ring-2 focus:ring-sponsor-blue/20 focus:border-sponsor-blue font-medium bg-slate-50 cursor-pointer"
-                      value={feedbackTier} 
-                      onChange={(e) => setFeedbackTier(e.target.value)}
-                    >
-                      <option value="T1">T1 - Critical</option>
-                      <option value="T2">T2 - Immediate</option>
-                      <option value="T3">T3 - Monitor</option>
-                      <option value="T4">T4 - Low Priority</option>
-                    </select>
+              {/* Human Feedback Section + History */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                  <p className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-3 mb-5 flex items-center gap-2">
+                    <ExternalLink className="w-4 h-4 text-slate-400" />
+                    Human-in-the-Loop Override
+                  </p>
+                  <div className="grid grid-cols-3 gap-6">
+                    <div className="col-span-1 border-r border-slate-100 pr-6">
+                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Adjust Priority</label>
+                      <select 
+                        className="w-full border border-slate-300 rounded-lg shadow-sm py-2.5 px-3 text-sm focus:ring-2 focus:ring-sponsor-blue/20 focus:border-sponsor-blue font-medium bg-slate-50 cursor-pointer"
+                        value={feedbackTier} 
+                        onChange={(e) => setFeedbackTier(e.target.value)}
+                      >
+                        <option value="T1">T1 - Critical</option>
+                        <option value="T2">T2 - Immediate</option>
+                        <option value="T3">T3 - Monitor</option>
+                        <option value="T4">T4 - Low Priority</option>
+                      </select>
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Rationale & Next Steps</label>
+                      <textarea 
+                        className="w-full border border-slate-300 rounded-lg shadow-sm py-3 px-4 text-sm focus:ring-2 focus:ring-sponsor-blue/20 focus:border-sponsor-blue min-h-[100px] placeholder-slate-400 bg-slate-50"
+                        placeholder="e.g., 'We decided to consolidate this supplier last week, pushing to Q3 instead. Downgrading to Tier 3 monitor.'"
+                        value={feedbackReason}
+                        onChange={(e) => setFeedbackReason(e.target.value)}
+                      />
+                    </div>
                   </div>
-                  <div className="col-span-2">
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Rationale & Next Steps</label>
-                    <textarea 
-                      className="w-full border border-slate-300 rounded-lg shadow-sm py-3 px-4 text-sm focus:ring-2 focus:ring-sponsor-blue/20 focus:border-sponsor-blue min-h-[100px] placeholder-slate-400 bg-slate-50"
-                      placeholder="e.g., 'We decided to consolidate this supplier last week, pushing to Q3 instead. Downgrading to Tier 3 monitor.'"
-                      value={feedbackReason}
-                      onChange={(e) => setFeedbackReason(e.target.value)}
-                    />
-                  </div>
+                </div>
+
+                <div className="col-span-1 bg-white p-6 rounded-xl border border-slate-200 shadow-sm max-h-72 overflow-y-auto">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
+                    Feedback History
+                  </p>
+                  {feedbackHistoryLoading && (
+                    <p className="text-xs text-slate-500">Loading prior reviews…</p>
+                  )}
+                  {!feedbackHistoryLoading && (feedbackHistory == null || feedbackHistory.length === 0) && (
+                    <p className="text-xs text-slate-400">
+                      No prior feedback logged for this opportunity yet. Your review will become the first audit entry.
+                    </p>
+                  )}
+                  {!feedbackHistoryLoading && feedbackHistory && feedbackHistory.length > 0 && (
+                    <ul className="space-y-3 text-xs text-slate-600">
+                      {feedbackHistory.map((fb) => (
+                        <li key={fb.id} className="border-b border-slate-100 pb-2 last:border-b-0 last:pb-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold">{fb.reviewer_id}</span>
+                            <span className="text-[10px] text-slate-400">
+                              {new Date(fb.timestamp).toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="mt-0.5 text-[11px] text-slate-500">
+                            {fb.component_affected} · {fb.adjustment_type} {fb.adjustment_value}
+                          </div>
+                          {fb.reason_code && (
+                            <div className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-400">
+                              {fb.reason_code}
+                            </div>
+                          )}
+                          {fb.comment_text && (
+                            <p className="mt-1 text-[11px] text-slate-600 line-clamp-3">
+                              “{fb.comment_text}”
+                            </p>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </div>
             </div>

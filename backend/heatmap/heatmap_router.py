@@ -49,6 +49,18 @@ class FeedbackRequest(BaseModel):
     suggested_tier: Optional[str] = None
     feedback_notes: Optional[str] = None
 
+
+class FeedbackHistoryItem(BaseModel):
+    id: int
+    reviewer_id: str
+    timestamp: datetime
+    adjustment_type: str
+    adjustment_value: float
+    reason_code: str
+    comment_text: Optional[str]
+    component_affected: str
+
+
 class ApprovalRequest(BaseModel):
     opportunity_ids: List[int]
     approver_id: str
@@ -497,6 +509,43 @@ def heatmap_dashboard_metrics():
             "last_pipeline": last_pipe,
             "pipeline_status": dict(_pipeline_status),
         }
+    finally:
+        session.close()
+
+
+@heatmap_router.get("/feedback/history", response_model=List[FeedbackHistoryItem])
+def heatmap_feedback_history(
+    opportunity_id: int = Query(..., description="Opportunity id to fetch feedback for"),
+    limit: int = Query(50, ge=1, le=200, description="Maximum number of feedback rows to return"),
+):
+    """
+    Per-opportunity feedback history for the heatmap review modal.
+    Returned in reverse chronological order (most recent first).
+    """
+    session = heatmap_db.get_db_session()
+    try:
+        stmt = (
+            select(ReviewFeedback)
+            .where(ReviewFeedback.opportunity_id == opportunity_id)
+            .order_by(ReviewFeedback.timestamp.desc())
+            .limit(limit)
+        )
+        rows = session.exec(stmt).all()
+        out: List[FeedbackHistoryItem] = []
+        for r in rows:
+            out.append(
+                FeedbackHistoryItem(
+                    id=int(r.id),  # type: ignore[arg-type]
+                    reviewer_id=r.reviewer_id,
+                    timestamp=r.timestamp,
+                    adjustment_type=r.adjustment_type,
+                    adjustment_value=float(r.adjustment_value),
+                    reason_code=r.reason_code,
+                    comment_text=r.comment_text,
+                    component_affected=r.component_affected,
+                )
+            )
+        return out
     finally:
         session.close()
 
