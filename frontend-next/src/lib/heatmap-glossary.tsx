@@ -27,9 +27,9 @@ export const HEATMAP_GLOSSARY = {
   kpi: "KPI — Key Performance Indicator: pipeline efficiency metric in the outcomes matrix.",
   kli: "KLI — Learning / intervention lens: tracks overrides, edits, and similar human-in-the-loop signals.",
   chartAxisX:
-    "Horizontal axis: financial impact for renewals uses FIS; for new requests uses ES (both 0–10 sub-scores).",
+    "Horizontal axis: renewals blend FIS with SCS; new requests blend ES with CSIS (all 0–10 sub-scores).",
   chartAxisY:
-    "Vertical axis: urgency / risk blend — EUS when the contract has an expiry; RSS captures supplier risk (0–10).",
+    "Vertical axis: renewals blend EUS and RSS; new requests use IUS (implementation urgency).",
   agenticScore:
     "Total weighted score (0–10) from the scoring engine before human tier override; combines the visible sub-scores.",
 } as const;

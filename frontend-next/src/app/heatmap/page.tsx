@@ -468,17 +468,31 @@ export default function HeatmapPriorityPage() {
     }
   };
 
-  // Prepare Chart Data with better numeric spread for the visual demo
-  const chartData = opportunities.map(o => {
-    // Generate a clean deterministic spread based on multiple sub-scores rather than just the saturated FIS score.
-    const spreadX = (o.fis_score || 5) * 0.6 + (o.csis_score || 5) * 0.4;
-    const spreadY = (o.eus_score || 5) * 0.5 + (o.rss_score || 5) * 0.5;
+  // Matrix axes must match row type: renewals use FIS + EUS/RSS (and SCS for spread);
+  // new requests use ES + CSIS on X and IUS on Y (PS_new does not populate FIS/EUS/RSS).
+  const chartData = opportunities.map((o) => {
+    const isNewRequest = Boolean(o.request_id) && !o.contract_id;
+    let x: number;
+    let y: number;
+    if (isNewRequest) {
+      const es = o.es_score ?? 0;
+      const csis = o.csis_score ?? 0;
+      x = es * 0.65 + csis * 0.35;
+      y = o.ius_score ?? 0;
+    } else {
+      const fis = o.fis_score ?? 0;
+      const scs = o.scs_score ?? 0;
+      x = fis * 0.65 + scs * 0.35;
+      const eus = o.eus_score ?? 0;
+      const rss = o.rss_score ?? 0;
+      y = eus * 0.5 + rss * 0.5;
+    }
 
     return {
       ...o,
-      x: Number(spreadX.toFixed(1)),
-      y: Number(spreadY.toFixed(1)),
-      z: (o.total_score * 15) // visual radius size
+      x: Number(Math.min(10, Math.max(0, x)).toFixed(1)),
+      y: Number(Math.min(10, Math.max(0, y)).toFixed(1)),
+      z: o.total_score * 15, // visual radius size
     };
   });
 
@@ -578,17 +592,20 @@ export default function HeatmapPriorityPage() {
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <h2 className="font-semibold text-slate-800 mb-1">Strategic Impact vs Urgency Matrix</h2>
             <p className="text-xs text-slate-500 mb-4 leading-relaxed max-w-3xl">
-              Axis keys — horizontal: <HeatmapAbbr term="fis">FIS</HeatmapAbbr> / <HeatmapAbbr term="es">ES</HeatmapAbbr>
-              . Vertical: <HeatmapAbbr term="eus">EUS</HeatmapAbbr> / <HeatmapAbbr term="rss">RSS</HeatmapAbbr>. Renewals use{" "}
-              <HeatmapAbbr term="psContract">PS_contract</HeatmapAbbr>; new requests use{" "}
-              <HeatmapAbbr term="psNew">PS_new</HeatmapAbbr>.
+              Plotted position matches each row&apos;s score family. Renewals (
+              <HeatmapAbbr term="psContract">PS_contract</HeatmapAbbr>): horizontal{" "}
+              <HeatmapAbbr term="fis">FIS</HeatmapAbbr> blended with <HeatmapAbbr term="scs">SCS</HeatmapAbbr>; vertical{" "}
+              <HeatmapAbbr term="eus">EUS</HeatmapAbbr> and <HeatmapAbbr term="rss">RSS</HeatmapAbbr>. New requests (
+              <HeatmapAbbr term="psNew">PS_new</HeatmapAbbr>): horizontal <HeatmapAbbr term="es">ES</HeatmapAbbr> with{" "}
+              <HeatmapAbbr term="csis">CSIS</HeatmapAbbr>; vertical <HeatmapAbbr term="ius">IUS</HeatmapAbbr>. The table is sorted
+              by total score; the &quot;top-right&quot; corner is not the same as rank #1.
             </p>
             <div className="w-full h-[500px]">
               <ResponsiveContainer width="100%" height="100%">
                 <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                  <XAxis type="number" dataKey="x" name="Impact" tick={{fontSize: 12, fill: '#64748b'}} label={{ value: 'Financial Impact Score (FIS / ES) →', position: 'bottom', fill: '#64748b', fontSize: 13 }} domain={[0, 10]} />
-                  <YAxis type="number" dataKey="y" name="Urgency" tick={{fontSize: 12, fill: '#64748b'}} label={{ value: 'Urgency & Risk Score (EUS / RSS) →', angle: -90, position: 'left', fill: '#64748b', fontSize: 13 }} domain={[0, 10]} />
+                  <XAxis type="number" dataKey="x" name="Impact" tick={{fontSize: 12, fill: '#64748b'}} label={{ value: 'Financial impact (FIS+SCS / ES+CSIS) →', position: 'bottom', fill: '#64748b', fontSize: 12 }} domain={[0, 10]} />
+                  <YAxis type="number" dataKey="y" name="Urgency" tick={{fontSize: 12, fill: '#64748b'}} label={{ value: 'Urgency & risk (EUS+RSS / IUS) →', angle: -90, position: 'left', fill: '#64748b', fontSize: 12 }} domain={[0, 10]} />
                   <ZAxis type="number" dataKey="z" range={[60, 400]} name="Volume" />
                   <Tooltip content={<CustomTooltip />} cursor={{ strokeDasharray: '3 3' }} />
                   <Scatter name="Opportunities" data={chartData} onClick={(data) => setReviewOpp(data.payload)}>
@@ -876,7 +893,13 @@ export default function HeatmapPriorityPage() {
                      </th>
                      {/* O2 */}
                      <th className="px-2 py-2 text-center border-r border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-700 leading-tight">
-                       <span className="block text-sponsor-blue mb-0.5 cursor-help" title={HEATMAP_GLOSSARY.kpi}>KPI</span> Cycle Time Reduce
+                       <span className="block text-sponsor-blue mb-0.5 cursor-help" title={HEATMAP_GLOSSARY.kpi}>KPI</span>
+                       <span
+                         className="cursor-help"
+                         title="Percent time not spent vs a synthetic analyst baseline (HEATMAP_HUMAN_BASELINE_SCORE_HOURS). System time = last_refresh_ts − record_created_at, or pipeline wall time ÷ N when both are equal."
+                       >
+                         Time saved vs baseline
+                       </span>
                      </th>
                      {/* O3 */}
                      <th className="px-2 py-2 text-center border-r border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-700 leading-tight">
@@ -906,6 +929,10 @@ export default function HeatmapPriorityPage() {
                             ai_reliability_pct?: number;
                             override_count?: number;
                             cycle_time_reduce_pct?: number | null;
+                            cycle_time_scoring_sec?: number | null;
+                            cycle_time_human_baseline_sec?: number | null;
+                            cycle_time_method?: string;
+                            cycle_time_assumption?: string;
                             edit_density?: number;
                             data_vis_rate_pct?: number;
                             signal_density?: number;
@@ -916,7 +943,13 @@ export default function HeatmapPriorityPage() {
                         | undefined;
                       const reliability = km?.ai_reliability_pct ?? Math.min(99, 85 + (charCode % 15));
                       const overrides = km?.override_count ?? charCode % 3;
-                      const cycleReduc = km?.cycle_time_reduce_pct ?? 30 + (charCode % 40);
+                      const cycleFallback = 30 + (charCode % 40);
+                      const cycleReduc =
+                        km == null
+                          ? cycleFallback
+                          : km.cycle_time_reduce_pct != null && km.cycle_time_reduce_pct !== undefined
+                            ? km.cycle_time_reduce_pct
+                            : null;
                       const edits = km?.edit_density ?? charCode % 12;
                       const visRate = km?.data_vis_rate_pct ?? 90 + (charCode % 10);
                       const signals = km?.signal_density ?? 4 + (charCode % 8);
@@ -947,8 +980,19 @@ export default function HeatmapPriorityPage() {
                           <td className="px-3 py-3 text-center text-slate-700 font-mono text-xs">{reliability}%</td>
                           <td className="px-3 py-3 text-center border-r border-slate-100 font-mono text-xs text-mit-red">{overrides}</td>
                           
-                          <td className="px-3 py-3 text-center border-r border-slate-100 font-mono text-xs text-green-600 font-medium">
-                            -{cycleReduc}%
+                          <td
+                            className="px-3 py-3 text-center border-r border-slate-100 font-mono text-xs font-medium text-green-600"
+                            title={
+                              km?.cycle_time_assumption
+                                ? `${km.cycle_time_assumption} Method: ${km.cycle_time_method ?? ""}.`
+                                : undefined
+                            }
+                          >
+                            {cycleReduc == null ? (
+                              <span className="text-slate-400">—</span>
+                            ) : (
+                              <>{Number(cycleReduc).toFixed(1)}%</>
+                            )}
                           </td>
                           
                           <td className="px-3 py-3 text-center border-r border-slate-100 font-mono text-xs text-mit-red">{edits}</td>
@@ -966,8 +1010,10 @@ export default function HeatmapPriorityPage() {
                 </tbody>
              </table>
           </div>
-          <div className="bg-slate-50 px-5 py-3 border-t border-slate-200 text-[11px] text-slate-500 text-center">
-            * KPI/KLI numbers are derived from ReviewFeedback counts and the last pipeline run after you click Refresh scores (synthetic demo rows are inserted on each batch run for a populated matrix).
+          <div className="bg-slate-50 px-5 py-3 border-t border-slate-200 text-[11px] text-slate-500 text-center leading-snug">
+            * KPI/KLI mix feedback counts, data-quality flags, scoring breadth, and pipeline telemetry. &quot;Time saved vs
+            baseline&quot; compares system scoring time (created → last refresh, or pipeline seconds ÷ opportunities) to a
+            configurable synthetic analyst baseline (<code className="text-slate-600">HEATMAP_HUMAN_BASELINE_SCORE_HOURS</code>, default 6h); replace with real manual triage benchmarks when you have them. Demo feedback rows are re-seeded on batch runs.
           </div>
         </div>
       </div>
