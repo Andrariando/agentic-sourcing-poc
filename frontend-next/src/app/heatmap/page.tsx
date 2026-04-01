@@ -1576,7 +1576,7 @@ export default function HeatmapPriorityPage() {
                 disabled={feedbackSubmitting}
                 className="flex-[2] px-4 py-3 bg-sponsor-blue text-white rounded-lg font-bold text-sm hover:bg-blue-700 transition shadow-lg disabled:opacity-50"
               >
-                {feedbackSubmitting ? 'Submitting to Agent Memory...' : 'Approve & Train Engine'}
+                {feedbackSubmitting ? 'Saving Review and Applying Decision...' : 'Save Review and Apply Decision'}
               </button>
             </div>
           </div>
