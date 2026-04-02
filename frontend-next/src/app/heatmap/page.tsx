@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   LayoutGrid,
   List,
@@ -44,6 +44,45 @@ function normalizeWeightGroup(w: Record<string, number>, keys: readonly string[]
   if (s < 1e-9) return copy;
   for (const k of keys) copy[k] = Math.max(0.01, (copy[k] ?? 0) / s);
   return copy;
+}
+
+/** Match backend tier bands (intake_scoring / learned_weights). */
+function tierFromMathTotal(total: number): string {
+  if (total >= 8) return "T1";
+  if (total >= 6) return "T2";
+  if (total >= 4) return "T3";
+  return "T4";
+}
+
+/**
+ * Weighted PS_new / PS_contract total from component scores × normalized slider weights.
+ * Same linear formula as the supervisor; does not include category-card overlay or learning nudge.
+ */
+function previewScoreFromWeights(
+  opp: Record<string, unknown>,
+  weights: Record<string, number> | null,
+  isNewRequest: boolean
+): { total: number; mathTier: string } | null {
+  if (!weights || !opp) return null;
+  const keys = isNewRequest ? PS_NEW_WEIGHT_KEYS : PS_CONTRACT_WEIGHT_KEYS;
+  const w = normalizeWeightGroup({ ...weights }, keys);
+  let raw = 0;
+  if (isNewRequest) {
+    raw =
+      (w.w_ius ?? 0) * Number(opp.ius_score ?? 0) +
+      (w.w_es ?? 0) * Number(opp.es_score ?? 0) +
+      (w.w_csis ?? 0) * Number(opp.csis_score ?? 0) +
+      (w.w_sas_new ?? 0) * Number(opp.sas_score ?? 0);
+  } else {
+    raw =
+      (w.w_eus ?? 0) * Number(opp.eus_score ?? 0) +
+      (w.w_fis ?? 0) * Number(opp.fis_score ?? 0) +
+      (w.w_rss ?? 0) * Number(opp.rss_score ?? 0) +
+      (w.w_scs ?? 0) * Number(opp.scs_score ?? 0) +
+      (w.w_sas_contract ?? 0) * Number(opp.sas_score ?? 0);
+  }
+  const total = Math.round(Math.min(10, Math.max(0, raw)) * 100) / 100;
+  return { total, mathTier: tierFromMathTotal(total) };
 }
 
 export default function HeatmapPriorityPage() {
@@ -620,6 +659,23 @@ export default function HeatmapPriorityPage() {
       z: o.total_score * 15, // visual radius size
     };
   });
+
+  const weightAdjustPreview = useMemo(() => {
+    if (!reviewOpp || !scoringWeights) return null;
+    const isNew = reviewOpp.contract_id == null || reviewOpp.contract_id === "";
+    const preview = previewScoreFromWeights(reviewOpp, scoringWeights, isNew);
+    if (!preview) return null;
+    const currentTotal = Number(reviewOpp.total_score);
+    const delta =
+      !Number.isNaN(currentTotal)
+        ? Math.round((preview.total - currentTotal) * 100) / 100
+        : null;
+    return {
+      ...preview,
+      delta,
+      currentTotal: Number.isNaN(currentTotal) ? null : currentTotal,
+    };
+  }, [reviewOpp, scoringWeights]);
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
@@ -1588,6 +1644,37 @@ export default function HeatmapPriorityPage() {
                         </div>
                       ))}
                     </div>
+                    {weightAdjustPreview && (
+                      <div className="mt-4 rounded-lg border border-indigo-100 bg-indigo-50/90 p-4">
+                        <p className="text-[11px] font-bold uppercase tracking-wide text-indigo-900 mb-2">
+                          Preview before save (weighted formula)
+                        </p>
+                        <p className="text-sm text-slate-800">
+                          With the sliders above and the component scores in this modal, the linear score would be about{" "}
+                          <strong className="text-indigo-900">{weightAdjustPreview.total.toFixed(2)}</strong>
+                          /10 → math tier <strong>{weightAdjustPreview.mathTier}</strong>
+                        </p>
+                        {weightAdjustPreview.currentTotal != null && (
+                          <p className="text-xs text-slate-600 mt-2">
+                            Current row total: {weightAdjustPreview.currentTotal.toFixed(2)}/10
+                            {weightAdjustPreview.delta != null && (
+                              <>
+                                {" "}
+                                (
+                                {weightAdjustPreview.delta > 0 ? "+" : ""}
+                                {weightAdjustPreview.delta.toFixed(2)} vs current)
+                              </>
+                            )}
+                          </p>
+                        )}
+                        <p className="text-[11px] text-slate-500 mt-3 leading-snug">
+                          This does not include category policy weights from{" "}
+                          <code className="text-[10px] bg-white/80 px-1 rounded">category_cards.json</code> or the
+                          feedback-memory learning nudge — those can shift the stored total after save. The tier you pick
+                          below is still recorded as your decision.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
 
