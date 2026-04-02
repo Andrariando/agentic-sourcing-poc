@@ -51,6 +51,7 @@ from shared.schemas import (
 from shared.constants import UserIntent, UserGoal
 from shared.decision_definitions import DTP_DECISIONS
 from shared.case_context_derive import merge_derived_case_context
+from shared.supplier_master_catalog import compact_catalog_for_llm, supplier_master_catalog_count
 
 # Import new official agents
 from backend.agents import (
@@ -332,12 +333,26 @@ class ChatService:
             "latest_agent_output": state.get("latest_agent_output"),
             "latest_agent_name": state.get("latest_agent_name"),
             "waiting_for_human": state.get("waiting_for_human", False),
+            # Full 28-row demo catalog so the LLM can reason about suitability beyond the category slice alone
+            "enterprise_supplier_catalog": compact_catalog_for_llm(),
+            "enterprise_supplier_catalog_count": supplier_master_catalog_count(),
         }
         detail = self.case_service.get_case(case_id)
-        if detail and getattr(detail, "copilot_focus", None):
-            ctx = detail.copilot_focus
+        if detail:
+            ctx = getattr(detail, "copilot_focus", None)
             if isinstance(ctx, dict):
                 case_context["copilot_focus"] = ctx
+            pool = getattr(detail, "category_supplier_pool", None) or []
+            if pool:
+                case_context["category_supplier_pool"] = [
+                    {
+                        "supplier_id": r.supplier_id,
+                        "supplier_name": r.supplier_name,
+                        "overall_score": r.overall_score,
+                        "dtp02_fit": r.dtp02_fit,
+                    }
+                    for r in pool
+                ]
         
         # 5. Use LLM to analyze intent
         responder = get_llm_responder()

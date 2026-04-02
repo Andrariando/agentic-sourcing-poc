@@ -13,6 +13,7 @@ function navCls(active: boolean): string {
 export default function SidebarNav() {
   const pathname = usePathname();
   const onHeatmap = pathname === "/heatmap";
+  const onHeatmapMatrix = pathname === "/heatmap/matrix";
   const onIntake = pathname === "/intake";
   const onCases = pathname === "/cases";
   const onCopilot = pathname?.startsWith("/cases/");
@@ -24,6 +25,9 @@ export default function SidebarNav() {
         <div className="space-y-1">
           <Link href="/heatmap" className={navCls(onHeatmap)}>
             Priority List
+          </Link>
+          <Link href="/heatmap/matrix" className={navCls(onHeatmapMatrix)}>
+            Opportunity Matrix
           </Link>
           <Link href="/intake" className={navCls(onIntake)}>
             Sourcing Intake

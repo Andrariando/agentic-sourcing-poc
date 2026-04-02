@@ -29,6 +29,7 @@ from backend.persistence.models import (
     SupplierPerformance, SpendMetric, SLAEvent, CaseState, DocumentRecord
 )
 from backend.rag.vector_store import get_vector_store
+from shared.supplier_master_catalog import SUPPLIER_MASTER_CATALOG
 
 
 
@@ -108,13 +109,13 @@ def _pillar_case_dicts():
                     "Technical Requirements": "Must support lift-and-shift initially with refactoring roadmap. SOC2 compliance required.",
                     "Evaluation Criteria": "Pricing (30%), Migration Velocity (35%), Support SLA (20%), Training (15%)."
                 },
-                "explanation": "I have drafted the RFP based on the AWS vs Azure capability matrix in the knowledge base.",
+                "explanation": "I have drafted the RFP based on the AWS vs Azure capability matrix in the knowledge base. Supplier targets come from the shared CLOUD catalog (see case category pool), not a one-off list.",
                 "missing_information": ["Target completion date for migration"]
             }),
             "waiting_for_human": False,
             "chat_history": json.dumps([
                 {"role": "user", "content": "Draft the RFP for the Cloud Migration. Focus on comparing AWS and Azure for our VMware lift-and-shift."},
-                {"role": "assistant", "content": "I have drafted the RFP sections, weighting Migration Velocity at 35% given your previous urgency on data center exit. Please review the draft and let me know if it is ready to publish."}
+                {"role": "assistant", "content": "I have drafted the RFP sections, weighting Migration Velocity at 35% given your previous urgency on data center exit. The **supplier panel on the left** pulls every **CLOUD** supplier from our enterprise catalog and ranks them into primary / secondary / included RFx targets (deterministic demo tiers from KPI scores). Add another optional name if you want to simulate discovery outside the catalog—then tell me when you're ready to confirm the list or issue the RFx."}
             ]),
             "activity_log": json.dumps([
                 {"timestamp": "2026-02-26T00:05:00", "agent_name": "RFxDraft", "task_name": "Create RFP Draft", "output_summary": "Generated RFP sections comparing AWS and Azure migration velocity."}
@@ -426,106 +427,40 @@ def upsert_pillar_cases(session: Session) -> None:
 
 
 def seed_suppliers(session: Session):
-    """Seed comprehensive list of IT Suppliers - ALL CATEGORIES."""
+    """Seed IT suppliers from ``shared.supplier_master_catalog`` (single enterprise catalog)."""
     print("Seeding IT suppliers...")
-    
-    suppliers = [
-        # ============================================================
-        # IT Services (CASE-001)
-        # ============================================================
-        {"id": "SUP-IT-01", "name": "TechCorp Solutions", "cat": "IT_SERVICES", "score": 7.8, "trend": "stable"},
-        {"id": "SUP-IT-02", "name": "Global Systems Inc", "cat": "IT_SERVICES", "score": 6.5, "trend": "declining"},
-        # NEW: Additional IT Services suppliers for competitive landscape
-        {"id": "SUP-IT-03", "name": "Accenture", "cat": "IT_SERVICES", "score": 8.2, "trend": "stable"},
-        {"id": "SUP-IT-04", "name": "Infosys", "cat": "IT_SERVICES", "score": 7.9, "trend": "improving"},
-        
-        # ============================================================
-        # Hardware (CASE-002)
-        # ============================================================
-        {"id": "SUP-HW-01", "name": "Dell Technologies", "cat": "HARDWARE", "score": 8.5, "trend": "stable"},
-        {"id": "SUP-HW-02", "name": "HP Inc", "cat": "HARDWARE", "score": 8.0, "trend": "improving"},
-        {"id": "SUP-HW-03", "name": "Lenovo", "cat": "HARDWARE", "score": 7.5, "trend": "stable"},
-        
-        # ============================================================
-        # Cloud (CASE-003, CASE-011)
-        # ============================================================
-        {"id": "SUP-CL-01", "name": "AWS", "cat": "CLOUD", "score": 9.0, "trend": "stable"},
-        {"id": "SUP-CL-02", "name": "Microsoft Azure", "cat": "CLOUD", "score": 8.8, "trend": "improving"},
-        
-        # ============================================================
-        # Security (CASE-004, CASE-012)
-        # ============================================================
-        {"id": "SUP-SEC-01", "name": "SecureNet Defense", "cat": "SECURITY", "score": 9.2, "trend": "stable"},
-        {"id": "SUP-SEC-02", "name": "CyberGuard AI", "cat": "SECURITY", "score": 7.5, "trend": "improving"},
-        {"id": "SUP-SEC-03", "name": "Global InfoSec", "cat": "SECURITY", "score": 8.1, "trend": "stable"},
-
-        # ============================================================
-        # Infrastructure (CASE-005)
-        # ============================================================
-        {"id": "SUP-DC-01", "name": "Equinix", "cat": "INFRASTRUCTURE", "score": 8.9, "trend": "stable"},
-        {"id": "SUP-DC-02", "name": "Digital Realty", "cat": "INFRASTRUCTURE", "score": 8.5, "trend": "stable"},
-        
-        # ============================================================
-        # Telecom (CASE-009)
-        # ============================================================
-        {"id": "SUP-TEL-01", "name": "AT&T Business", "cat": "TELECOM", "score": 7.2, "trend": "declining"},
-        {"id": "SUP-TEL-02", "name": "Verizon Business", "cat": "TELECOM", "score": 7.5, "trend": "stable"},
-        # NEW: Additional telecom for global consolidation
-        {"id": "SUP-TEL-03", "name": "BT Global", "cat": "TELECOM", "score": 7.0, "trend": "stable"},
-        
-        # ============================================================
-        # Software (CASE-006, CASE-010)
-        # ============================================================
-        {"id": "SUP-SW-01", "name": "Microsoft", "cat": "SOFTWARE", "score": 8.5, "trend": "stable"},
-        {"id": "SUP-SW-02", "name": "GitLab", "cat": "SOFTWARE", "score": 8.2, "trend": "improving"},
-        # NEW: Additional SOFTWARE suppliers for DevOps case
-        {"id": "SUP-SW-03", "name": "GitHub", "cat": "SOFTWARE", "score": 9.1, "trend": "stable"},
-        {"id": "SUP-SW-04", "name": "Jenkins (CloudBees)", "cat": "SOFTWARE", "score": 7.5, "trend": "declining"},
-        
-        # ============================================================
-        # NETWORK - NEW CATEGORY (CASE-007 SD-WAN)
-        # ============================================================
-        {"id": "SUP-NET-01", "name": "Cisco Viptela", "cat": "NETWORK", "score": 8.7, "trend": "stable"},
-        {"id": "SUP-NET-02", "name": "VMware VeloCloud", "cat": "NETWORK", "score": 8.3, "trend": "improving"},
-        {"id": "SUP-NET-03", "name": "Palo Alto Prisma", "cat": "NETWORK", "score": 8.5, "trend": "stable"},
-        
-        # ============================================================
-        # SAAS - NEW CATEGORY (CASE-008 HRIS)
-        # ============================================================
-        {"id": "SUP-SAAS-01", "name": "Workday", "cat": "SAAS", "score": 9.0, "trend": "stable"},
-        {"id": "SUP-SAAS-02", "name": "Oracle HCM Cloud", "cat": "SAAS", "score": 8.2, "trend": "stable"},
-        {"id": "SUP-SAAS-03", "name": "SAP SuccessFactors", "cat": "SAAS", "score": 7.8, "trend": "declining"},
-    ]
     
     # Clear old performance data
     session.exec(delete(SupplierPerformance))
     
     current_date = datetime.now()
     
-    for s in suppliers:
+    for s in SUPPLIER_MASTER_CATALOG:
         # Generate 6 months of data
         for i in range(6):
-            date = (current_date - timedelta(days=30*i)).isoformat()
-            # Add some jitter
-            score = s["score"]
-            if i > 0 and s["trend"] == "declining": score += 0.2 * i  # Was better before
-            if i > 0 and s["trend"] == "improving": score -= 0.1 * i  # Was worse before
+            date = (current_date - timedelta(days=30 * i)).isoformat()
+            score = float(s["baseline_score"])
+            trend = s["trend"]
+            if i > 0 and trend == "declining":
+                score += 0.2 * i  # Was better before
+            if i > 0 and trend == "improving":
+                score -= 0.1 * i  # Was worse before
             
             perf = SupplierPerformance(
-                supplier_id=s["id"],
-                supplier_name=s["name"],
-                category_id=s["cat"],
+                supplier_id=s["supplier_id"],
+                supplier_name=s["supplier_name"],
+                category_id=s["category_id"],
                 overall_score=min(10, max(1, score)),
                 measurement_date=date,
                 quality_score=score,
                 delivery_score=score,
                 responsiveness_score=score,
-                risk_level="low" if score > 7 else "medium"
+                risk_level="low" if score > 7 else "medium",
             )
             session.add(perf)
             
     session.commit()
-    print(f"  [OK] Seeded {len(suppliers)} suppliers across all categories.")
+    print(f"  [OK] Seeded {len(SUPPLIER_MASTER_CATALOG)} supplier profiles across all categories.")
 
 
 def _synthetic_documents():

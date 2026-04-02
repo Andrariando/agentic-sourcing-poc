@@ -17,6 +17,19 @@ from shared.constants import (
 # CASE SCHEMAS
 # ============================================================
 
+class CategorySupplierPoolRow(BaseModel):
+    """
+    One supplier in the enterprise catalog slice for a case category (demo KPIs from supplier_performance
+    or master catalog fallback). ``dtp02_fit`` is a deterministic RFx-targeting hint (primary/secondary/included).
+    """
+    supplier_id: str
+    supplier_name: Optional[str] = None
+    category_id: str
+    overall_score: float
+    risk_level: Optional[str] = None
+    dtp02_fit: str = "included"  # primary | secondary | included
+
+
 class CaseSummary(BaseModel):
     """Compact case summary for list views."""
     case_id: str
@@ -56,6 +69,8 @@ class CaseDetail(BaseModel):
     chat_history: Optional[Any] = None  # Pre-seeded chat history (JSON string or list)
     # Stage-aware hints for copilot UI + prompts (from DTP_DECISIONS + human_decision)
     copilot_focus: Optional[Dict[str, Any]] = None
+    # Suppliers in ``category_id`` from the shared enterprise catalog (latest performance or catalog fallback)
+    category_supplier_pool: List[CategorySupplierPoolRow] = Field(default_factory=list)
 
 
 class CaseListResponse(BaseModel):
@@ -63,6 +78,13 @@ class CaseListResponse(BaseModel):
     cases: List[CaseSummary]
     total_count: int
     filters_applied: Dict[str, Any] = Field(default_factory=dict)
+
+
+class SupplierPoolResponse(BaseModel):
+    """Suppliers for a category (same payload shape as ``CaseDetail.category_supplier_pool``)."""
+    category_id: str
+    suppliers: List[CategorySupplierPoolRow]
+    total_count: int
 
 
 class CreateCaseRequest(BaseModel):

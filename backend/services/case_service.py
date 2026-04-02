@@ -16,6 +16,7 @@ from backend.persistence.models import (
 from backend.supervisor.state import StateManager, SupervisorState
 from shared.case_context_derive import merge_derived_case_context
 from shared.copilot_focus import build_copilot_focus
+from backend.services.supplier_pool import get_category_supplier_pool
 from shared.schemas import (
     CaseSummary, CaseDetail, Artifact, ArtifactPack, 
     NextAction, RiskItem, GroundingReference,
@@ -109,6 +110,7 @@ class CaseService:
         
         human_decision = json.loads(case.human_decision) if case.human_decision else None
         copilot_focus = build_copilot_focus(case.dtp_stage, human_decision)
+        category_supplier_pool = get_category_supplier_pool(case.category_id)
         
         return CaseDetail(
             case_id=case.case_id,
@@ -130,6 +132,7 @@ class CaseService:
             human_decision=human_decision,
             chat_history=case.chat_history,  # Pass through as-is (JSON string or None)
             copilot_focus=copilot_focus,
+            category_supplier_pool=category_supplier_pool,
         )
     
     def create_case(

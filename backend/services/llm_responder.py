@@ -36,6 +36,22 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _format_category_supplier_pool_for_prompt(pool: Any) -> str:
+    if not pool or not isinstance(pool, list):
+        return "—"
+    lines: List[str] = []
+    for row in pool[:32]:
+        if not isinstance(row, dict):
+            continue
+        name = row.get("supplier_name") or row.get("supplier_id") or "?"
+        sid = row.get("supplier_id")
+        label = f"{name} ({sid})" if sid and sid != name else str(name)
+        lines.append(
+            f"  - {label}: score {row.get('overall_score')} · {row.get('dtp02_fit')}"
+        )
+    return "\n".join(lines) if lines else "—"
+
+
 class LLMResponder:
     """
     Generates natural, ChatGPT-like responses using LLM.
@@ -95,6 +111,13 @@ CASE CONTEXT:
 
 STAGE COACH (use to stay relevant; prefer guiding the user through these decisions before suggesting heavy agent runs):
 {format_copilot_focus_for_prompt(case_context.get("copilot_focus")) or "—"}
+
+CATEGORY SUPPLIER POOL (enterprise catalog for this case's category; dtp02_fit = deterministic RFx focus hint — primary/secondary/included):
+{_format_category_supplier_pool_for_prompt(case_context.get("category_supplier_pool"))}
+
+ENTERPRISE SUPPLIER CATALOG (COMPLETE demo master list — {case_context.get("enterprise_supplier_catalog_count", "?")} suppliers; tab-separated: supplier_id, supplier_name, category_id, baseline_demo_score, trend):
+When the user asks which suppliers fit this procurement, use this list together with Case Category, Summary, and Key Findings. Prefer suppliers whose category_id matches the case category; only suggest cross-category names with a brief explicit rationale (e.g., adjacent capability).
+{case_context.get("enterprise_supplier_catalog") or "—"}
 
 CONVERSATION HISTORY:
 {history_text}
@@ -252,6 +275,12 @@ RULES:
 
 STAGE COACH (prioritize helping with any open decisions here):
 {coach_block or "—"}
+
+CATEGORY SUPPLIER POOL (for DTP-02 / RFx discussions; same enterprise catalog slice as the UI):
+{_format_category_supplier_pool_for_prompt(case_context.get("category_supplier_pool"))}
+
+ENTERPRISE SUPPLIER CATALOG (all {case_context.get("enterprise_supplier_catalog_count", "?")} demo suppliers; use for suitability / who-belongs questions):
+{case_context.get("enterprise_supplier_catalog") or "—"}
 
 {f"CONVERSATION HISTORY:{chr(10)}{history_text}" if history_text else ""}
 

@@ -37,8 +37,10 @@ from shared.schemas import (
     DecisionRequest, DecisionResponse,
     DocumentIngestResponse, DocumentListResponse,
     DataIngestResponse, DataPreviewResponse,
-    HealthCheckResponse
+    HealthCheckResponse,
+    SupplierPoolResponse,
 )
+from backend.services.supplier_pool import get_category_supplier_pool
 from shared.constants import DocumentType, DataType
 
 
@@ -139,6 +141,16 @@ async def get_case(case_id: str):
         raise HTTPException(status_code=404, detail="Case not found")
     
     return case
+
+
+@app.get("/api/suppliers", response_model=SupplierPoolResponse)
+async def list_suppliers_for_category(category_id: str = Query(..., description="Category id, e.g. CLOUD, TELECOM")):
+    """Enterprise supplier catalog slice for a category (same data as ``CaseDetail.category_supplier_pool``)."""
+    cid = (category_id or "").strip()
+    if not cid:
+        raise HTTPException(status_code=400, detail="category_id is required")
+    rows = get_category_supplier_pool(cid)
+    return SupplierPoolResponse(category_id=cid, suppliers=rows, total_count=len(rows))
 
 
 @app.get("/api/cases/{case_id}/artifacts/{artifact_id}/export")

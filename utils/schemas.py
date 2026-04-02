@@ -270,6 +270,8 @@ class RFxDraft(BaseModel):
     completeness_check: Dict[str, bool] = Field(default_factory=dict)  # Rule-based completeness checks
     template_source: str = ""  # Which template was used
     explanation: str = ""  # LLM explanation of intent and adaptations
+    # DTP-02 demo / planning: suppliers before RFx issue (optional; seed and UI may populate)
+    shortlisted_suppliers: List[Dict[str, Any]] = Field(default_factory=list)
     # PHASE 3: Constraint acknowledgments
     constraint_acknowledgments: List[str] = Field(default_factory=list, description="Explicit acknowledgments of user constraints that shaped this draft")
 

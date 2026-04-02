@@ -2,11 +2,70 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
-import { CheckCircle2, AlertTriangle, FileText, ShieldCheck, ChevronRight, MessageSquare, Briefcase, Clock, Terminal } from "lucide-react";
+import { CheckCircle2, AlertTriangle, FileText, ShieldCheck, ChevronRight, MessageSquare, Briefcase, Clock, Terminal, Activity, Users, UserPlus } from "lucide-react";
 import { motion } from "framer-motion";
-import { buildDecisionDataForStage } from "@/lib/dtp-approve-defaults";
 import { apiFetch } from "@/lib/api-fetch";
-import { getApiBaseUrl, apiConnectivityHint } from "@/lib/api-base";
+import { getApiBaseUrl } from "@/lib/api-base";
+import { getMockCasePerformanceInsight } from "@/lib/mock-case-performance";
+import { buildDecisionDataForStage } from "@/lib/dtp-approve-defaults";
+
+/** Normalize common LLM quirks so chat reads cleanly before Markdown pass. */
+function normalizeAssistantText(text: string): string {
+  return text
+    .replace(/(Cancel request)\s+(Tell me)/gi, "$1\n\n$2")
+    .replace(/\s*(\*Options:\*)/g, "\n\n$1");
+}
+
+/**
+ * Inline **bold** and *italic* (subset of Markdown). Assistant messages use this from the LLM;
+ * React does not parse Markdown when rendering raw strings.
+ */
+function parseInlineMarkdown(text: string): React.ReactNode {
+  const parts: React.ReactNode[] = [];
+  let key = 0;
+  const re = /(\*\*[\s\S]+?\*\*|\*[^*\n]+\*)/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) {
+      parts.push(text.slice(last, m.index));
+    }
+    const full = m[1];
+    if (full.startsWith("**")) {
+      parts.push(
+        <strong key={`md-${key++}`} className="font-semibold text-slate-900">
+          {full.slice(2, -2)}
+        </strong>
+      );
+    } else {
+      parts.push(
+        <em key={`md-${key++}`} className="italic text-slate-800">
+          {full.slice(1, -1)}
+        </em>
+      );
+    }
+    last = re.lastIndex;
+  }
+  if (last < text.length) {
+    parts.push(text.slice(last));
+  }
+  return parts.length === 0 ? text : <>{parts}</>;
+}
+
+function parseSimpleMarkdown(text: string): React.ReactNode {
+  const normalized = normalizeAssistantText(text);
+  const lines = normalized.split("\n");
+  return (
+    <>
+      {lines.map((line, lineIdx) => (
+        <React.Fragment key={`ln-${lineIdx}`}>
+          {lineIdx > 0 ? <br /> : null}
+          {parseInlineMarkdown(line)}
+        </React.Fragment>
+      ))}
+    </>
+  );
+}
 
 function readDecisionAnswer(val: unknown): string | undefined {
   if (val == null) return undefined;
@@ -17,6 +76,86 @@ function readDecisionAnswer(val: unknown): string | undefined {
   }
   if (typeof val === "string" && val) return val;
   return undefined;
+}
+
+/** RFx focus tier: from API ``dtp02_fit`` (deterministic) or legacy shortlist seed. */
+type Dtp02ShortlistRole = "primary" | "secondary" | "included" | "user-added";
+
+type Dtp02ShortlistRow = {
+  supplier_id: string;
+  supplier_name: string;
+  riskLabel: string;
+  fitLabel: string;
+  roleKey: Dtp02ShortlistRole;
+  notes?: string;
+};
+
+function shortlistRoleFromLegacyRaw(o: Record<string, unknown>): Dtp02ShortlistRole {
+  const r = String(o.shortlist_role ?? o.dtp02_fit ?? "").toLowerCase();
+  if (r === "user-added") return "user-added";
+  if (r === "optional" || o.optional === true) return "secondary";
+  if (r === "secondary" || r === "included" || r === "primary") return r as Dtp02ShortlistRole;
+  if (r === "core") return "primary";
+  return "included";
+}
+
+function normalizeDtp02ShortlistRows(rawList: unknown): Dtp02ShortlistRow[] {
+  if (!Array.isArray(rawList)) return [];
+  return rawList.map((raw, idx) => {
+    const o = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+    const sid = o.supplier_id != null && String(o.supplier_id) ? String(o.supplier_id) : `SL-${idx}`;
+    const name =
+      o.supplier_name != null && String(o.supplier_name)
+        ? String(o.supplier_name)
+        : o.name != null && String(o.name)
+          ? String(o.name)
+          : "Supplier";
+    const scoreRaw = o.overall_score ?? o.score;
+    const fitLabel =
+      typeof scoreRaw === "number" && !Number.isNaN(scoreRaw) ? `${Number(scoreRaw).toFixed(1)} / 10` : "—";
+    const notes =
+      typeof o.notes === "string"
+        ? o.notes
+        : Array.isArray(o.strengths)
+          ? String(o.strengths[0] ?? "")
+          : undefined;
+    const risk =
+      o.risk_level != null && String(o.risk_level) ? String(o.risk_level) : "—";
+    return {
+      supplier_id: sid,
+      supplier_name: name,
+      riskLabel: risk,
+      fitLabel,
+      roleKey: shortlistRoleFromLegacyRaw(o),
+      notes: notes || undefined,
+    };
+  });
+}
+
+function categoryPoolApiToRows(pool: unknown): Dtp02ShortlistRow[] {
+  if (!Array.isArray(pool)) return [];
+  return pool.map((raw, idx) => {
+    const o = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+    const sid = o.supplier_id != null && String(o.supplier_id) ? String(o.supplier_id) : `POOL-${idx}`;
+    const name =
+      o.supplier_name != null && String(o.supplier_name) ? String(o.supplier_name) : sid;
+    const fitNum = o.overall_score;
+    const fitLabel =
+      typeof fitNum === "number" && !Number.isNaN(fitNum) ? `${fitNum.toFixed(1)} / 10` : "—";
+    const risk = o.risk_level != null && String(o.risk_level) ? String(o.risk_level) : "—";
+    const fit = String(o.dtp02_fit ?? "included").toLowerCase();
+    const roleKey: Dtp02ShortlistRole =
+      fit === "primary" || fit === "secondary" || fit === "included" ? (fit as Dtp02ShortlistRole) : "included";
+    const cid = o.category_id != null && String(o.category_id) ? String(o.category_id) : "";
+    return {
+      supplier_id: sid,
+      supplier_name: name,
+      riskLabel: risk,
+      fitLabel,
+      roleKey,
+      notes: cid ? `Enterprise catalog · ${cid}` : undefined,
+    };
+  });
 }
 
 function buildAssistantWelcome(data: any): string {
@@ -39,15 +178,14 @@ function buildAssistantWelcome(data: any): string {
   return msg;
 }
 
-/** Copilot governance SOC2 / infra attestations saved by /api/decisions/approve */
-function isGovernanceCompleteOnServer(caseDetails: any): boolean {
+/** True when this stage's structured answers exist on the server (from chat or legacy console). */
+function isStageDecisionRecordedOnServer(caseDetails: any): boolean {
   const stage = caseDetails?.dtp_stage;
   if (!stage || !caseDetails?.human_decision?.[stage]) return false;
+  const expected = buildDecisionDataForStage(stage, caseDetails?.supplier_id);
+  if (!expected) return false;
   const row = caseDetails.human_decision[stage];
-  return Boolean(
-    readDecisionAnswer(row.governance_soc2_status) &&
-      readDecisionAnswer(row.governance_infra_status)
-  );
+  return Object.keys(expected).every((k) => readDecisionAnswer(row[k]));
 }
 
 export default function CaseCopilotPage() {
@@ -60,27 +198,24 @@ export default function CaseCopilotPage() {
   const [documents, setDocuments] = useState<any[]>([]);
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
-  const [governanceApproved, setGovernanceApproved] = useState(false);
-  const [decisionConsoleOpen, setDecisionConsoleOpen] = useState(false);
-  const [govSoc2, setGovSoc2] = useState<"verified" | "pending" | "">("");
-  const [govInfra, setGovInfra] = useState<"meets" | "exemption" | "">("");
   const [isTyping, setIsTyping] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
   const initialChatHydrated = useRef(false);
 
-  useEffect(() => {
-    if (caseDetails && !isGovernanceCompleteOnServer(caseDetails)) {
-      setGovernanceApproved(false);
-    }
-  }, [caseDetails?.case_id, caseDetails?.dtp_stage, caseDetails?.human_decision]);
+  /** Demo-only rows added in the UI (not persisted). Resets per case. */
+  const [demoAddedShortlistRows, setDemoAddedShortlistRows] = useState<Dtp02ShortlistRow[]>([]);
+  const [optionalSupplierName, setOptionalSupplierName] = useState("");
+  const [optionalSupplierRegion, setOptionalSupplierRegion] = useState("");
 
   useEffect(() => {
-    setDecisionConsoleOpen(false);
-  }, [caseDetails?.case_id, caseDetails?.dtp_stage]);
+    setDemoAddedShortlistRows([]);
+    setOptionalSupplierName("");
+    setOptionalSupplierRegion("");
+  }, [caseId]);
 
-  const showEvalApproved =
-    (caseDetails && isGovernanceCompleteOnServer(caseDetails)) || governanceApproved;
+  /** Stage checklist satisfied on server (answers recorded for current DTP stage). */
+  const stageDecisionComplete = Boolean(caseDetails && isStageDecisionRecordedOnServer(caseDetails));
 
   const container: any = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1 } } };
   const item: any = { hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } } };
@@ -245,164 +380,33 @@ export default function CaseCopilotPage() {
     // If the message contains [Bracketed Actions], render them as clickable action chips
     const actionRegex = /\[(.*?)\]/g;
     const matches = Array.from(content.matchAll(actionRegex));
-    
-    if (matches.length === 0) return content;
-    
-    const cleanContent = content.replace(actionRegex, '').trim();
-    
+
+    if (matches.length === 0) {
+      return <div className="break-words">{parseSimpleMarkdown(content)}</div>;
+    }
+
+    const cleanContent = content.replace(actionRegex, "").trim();
+
     return (
       <div className="flex flex-col gap-3">
-        <span>{cleanContent}</span>
+        <div className="break-words">{parseSimpleMarkdown(cleanContent)}</div>
         <div className="flex flex-wrap gap-2 mt-1">
-           {matches.map((match, idx) => (
-             <button 
-               key={idx} 
-               onClick={() => { setInput(match[1]); setTimeout(() => document.getElementById("send-btn")?.click(), 100); }}
-               className="bg-white text-sponsor-blue border border-sponsor-blue/30 px-3 py-1.5 rounded-full text-[11px] font-bold tracking-wide hover:bg-sponsor-blue hover:text-white transition-colors shadow-sm"
-             >
-               ⚡ {match[1]}
-             </button>
-           ))}
+          {matches.map((match, idx) => (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => {
+                setInput(match[1]);
+                setTimeout(() => document.getElementById("send-btn")?.click(), 100);
+              }}
+              className="bg-white text-sponsor-blue border border-sponsor-blue/30 px-3 py-1.5 rounded-full text-[11px] font-bold tracking-wide hover:bg-sponsor-blue hover:text-white transition-colors shadow-sm"
+            >
+              ⚡ {match[1]}
+            </button>
+          ))}
         </div>
       </div>
     );
-  };
-
-  // 4. Governance Approval
-  const handleApproveGovernance = async () => {
-    if (govSoc2 !== "verified" || govInfra !== "meets") {
-      alert("Please confirm SOC2 verification and that IT infrastructure meets thresholds before approving.");
-      return;
-    }
-
-    const stage = caseDetails?.dtp_stage || "DTP-01";
-    const stagePayload = buildDecisionDataForStage(stage, caseDetails?.supplier_id);
-    if (!stagePayload) {
-      alert(`No decision schema for stage ${stage}. Check API / case state.`);
-      return;
-    }
-
-    const decision_data = {
-      ...stagePayload,
-      governance_soc2_status: govSoc2 === "verified" ? "Yes, Verified" : govSoc2,
-      governance_infra_status: govInfra === "meets" ? "Meets Thresholds" : govInfra,
-    };
-
-    try {
-      const url = `${getApiBaseUrl()}/api/decisions/approve`;
-        
-      const res = await apiFetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          case_id: caseId,
-          decision: "Approve",
-          reason: "Approved via Next.js Copilot UI",
-          decision_data,
-        })
-      });
-      if (res.ok) {
-        setGovernanceApproved(true);
-        setDecisionConsoleOpen(false);
-        const decisionPrompt = `I approved ${displayStage} for case ${caseId}. SOC2 status: ${govSoc2 === "verified" ? "Yes, Verified" : govSoc2 || "Not set"}. Infrastructure threshold: ${govInfra === "meets" ? "Meets Thresholds" : govInfra || "Not set"}. Summarize what changed in state and tell me the next best action.`;
-        setMessages(prev => [...prev, { role: "assistant", content: `Decision recorded: **Approved ${displayStage}**. Syncing Copilot guidance…` }]);
-        setIsTyping(true);
-        try {
-          const chatUrl = `${getApiBaseUrl()}/api/chat`;
-          const followUp = await apiFetch(chatUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              case_id: caseId,
-              user_message: decisionPrompt,
-              use_tier_2: true
-            })
-          });
-          const chatData = await followUp.json();
-          const assistantFollowUp =
-            chatData?.assistant_message ||
-            [...(chatData?.messages || [])].reverse().find((m: any) => m.role === "assistant" || m.role === "ai")?.content ||
-            "Approval saved. I can now guide you through the next step.";
-          setMessages(prev => [...prev, { role: "assistant", content: assistantFollowUp }]);
-        } catch (chatErr) {
-          console.error("Decision follow-up chat failed:", chatErr);
-          setMessages(prev => [...prev, { role: "assistant", content: "Approval saved, but I couldn't fetch a follow-up response. Ask me 'what's next?' to continue." }]);
-        } finally {
-          setIsTyping(false);
-        }
-      } else {
-        let detail = res.statusText || `HTTP ${res.status}`;
-        try {
-          const body = await res.json();
-          if (body?.detail) {
-            detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
-          }
-        } catch {
-          /* ignore */
-        }
-        alert(`Could not approve: ${detail}`);
-      }
-    } catch(err) {
-      console.error(err);
-      alert(`Network error.\n\nAPI base: ${getApiBaseUrl()}${apiConnectivityHint()}`);
-    }
-  };
-
-  const handleRequestRevision = async () => {
-    if (!hasLiveCase) return;
-    const reason = `Requesting revision at ${displayStage}: need updated recommendation before approval.`;
-    try {
-      const url = `${getApiBaseUrl()}/api/decisions/reject`;
-      const res = await apiFetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          case_id: caseId,
-          decision: "Reject",
-          reason
-        })
-      });
-      if (!res.ok) {
-        let detail = res.statusText || `HTTP ${res.status}`;
-        try {
-          const body = await res.json();
-          if (body?.detail) detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
-        } catch {
-          /* ignore */
-        }
-        alert(`Could not request revision: ${detail}`);
-        return;
-      }
-      setMessages(prev => [...prev, { role: "assistant", content: `Decision recorded: **Revision requested for ${displayStage}**. Re-planning recommendations…` }]);
-      setDecisionConsoleOpen(false);
-      setIsTyping(true);
-      try {
-        const chatUrl = `${getApiBaseUrl()}/api/chat`;
-        const followUp = await apiFetch(chatUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            case_id: caseId,
-            user_message: `I requested revision for ${displayStage}. Re-plan and tell me the top 3 changes needed before approval.`,
-            use_tier_2: true
-          })
-        });
-        const chatData = await followUp.json();
-        const assistantFollowUp =
-          chatData?.assistant_message ||
-          [...(chatData?.messages || [])].reverse().find((m: any) => m.role === "assistant" || m.role === "ai")?.content ||
-          "Revision request saved. I can propose the missing updates.";
-        setMessages(prev => [...prev, { role: "assistant", content: assistantFollowUp }]);
-      } catch (chatErr) {
-        console.error("Revision follow-up chat failed:", chatErr);
-        setMessages(prev => [...prev, { role: "assistant", content: "Revision request saved, but I couldn't fetch follow-up guidance. Ask me to re-plan this stage." }]);
-      } finally {
-        setIsTyping(false);
-      }
-    } catch(err) {
-      console.error(err);
-      alert(`Network error.\n\nAPI base: ${getApiBaseUrl()}${apiConnectivityHint()}`);
-    }
   };
 
   const hasLiveCase = Boolean(caseDetails);
@@ -430,6 +434,42 @@ export default function CaseCopilotPage() {
   const topFindings = keyFindings.slice(0, 3);
   const focus = caseDetails?.copilot_focus;
   const suggestedChatPrompts: string[] = (focus?.suggested_chat_prompts as string[]) || [];
+  const perfInsight = hasLiveCase
+    ? getMockCasePerformanceInsight({
+        caseId,
+        name: displayName,
+        categoryId: displayCategory,
+        dtpStage: displayStage,
+        triggerSource,
+        supplierId,
+      })
+    : null;
+
+  const poolFromCase = categoryPoolApiToRows(caseDetails?.category_supplier_pool);
+  const legacyAgentShortlist = normalizeDtp02ShortlistRows(strategyOutput?.shortlisted_suppliers);
+  const dtp02ShortlistBase =
+    poolFromCase.length > 0 ? poolFromCase : legacyAgentShortlist;
+  const dtp02ShortlistRows: Dtp02ShortlistRow[] = [...dtp02ShortlistBase, ...demoAddedShortlistRows];
+  const showDtp02ShortlistCard = hasLiveCase && displayStage === "DTP-02";
+
+  const addDemoOptionalSupplier = () => {
+    const name = optionalSupplierName.trim();
+    if (!name) return;
+    const region = optionalSupplierRegion.trim() || "TBD";
+    setDemoAddedShortlistRows((prev) => [
+      ...prev,
+      {
+        supplier_id: `DEMO-OPT-${Date.now()}`,
+        supplier_name: name,
+        riskLabel: region,
+        fitLabel: "—",
+        roleKey: "user-added",
+        notes: "Added for demo — not in seeded catalog; confirm before RFx.",
+      },
+    ]);
+    setOptionalSupplierName("");
+    setOptionalSupplierRegion("");
+  };
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden w-full m-0 p-0 font-sans">
@@ -530,7 +570,14 @@ export default function CaseCopilotPage() {
                 <p className="text-amber-900/90 text-sm mt-1 leading-relaxed">{summaryText}</p>
                 <p className="text-xs text-amber-800/80 mt-2">
                   <span className="font-semibold">Supplier:</span> {supplierId} · <span className="font-semibold">Trigger:</span> {triggerSource} · <span className="font-semibold">Suggested move:</span> {recommendedAction}
-                  {strategyConfidence ? ` (${strategyConfidence} confidence)` : ""}
+                  {strategyConfidence ? (
+                    <span
+                      className="cursor-help border-b border-dotted border-amber-800/50"
+                      title="From this case’s saved Strategy output: latest_agent_output.confidence (0–1 in the database), set by the Strategy agent rules, LLM step, or seed data. Copilot chat may phrase a different % — trust the saved field when they disagree."
+                    >
+                      {" "}· Strategy model confidence: {strategyConfidence}
+                    </span>
+                  ) : null}
                 </p>
               </div>
             </div>
@@ -553,6 +600,152 @@ export default function CaseCopilotPage() {
               )}
             </div>
           </motion.div>
+
+          {showDtp02ShortlistCard && (
+            <motion.div variants={item} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+              <div className="bg-slate-50 border-b border-slate-200 p-4 flex flex-wrap items-center justify-between gap-3">
+                <h3 className="text-slate-800 font-bold text-sm flex items-center gap-2">
+                  <Users className="w-4 h-4 text-sponsor-blue" />
+                  Supplier shortlist · DTP-02
+                </h3>
+                <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 bg-white border border-slate-200 px-2 py-1 rounded">
+                  Demo — RFx targeting
+                </span>
+              </div>
+              <div className="p-4 space-y-4">
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  Everyone here is drawn from the <span className="font-semibold text-slate-800">same enterprise supplier catalog</span>, filtered by this case&apos;s category (<span className="font-mono text-xs">{displayCategory}</span>
+                  ). RFx focus (primary / secondary / included) is a deterministic demo tier from KPI scores—mirroring how an agent would prioritize who to invite before RFx. Use{" "}
+                  <span className="font-semibold text-slate-800">Add optional supplier</span> to simulate a name not yet in the catalog.
+                </p>
+                <div className="overflow-x-auto rounded-lg border border-slate-100">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="bg-slate-50 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                        <th className="px-3 py-2">Supplier</th>
+                        <th className="px-3 py-2">Risk</th>
+                        <th className="px-3 py-2">KPI</th>
+                        <th className="px-3 py-2">RFx focus</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dtp02ShortlistRows.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="px-3 py-6 text-center text-slate-500 italic">
+                            No suppliers in catalog for this category yet — add an optional supplier below to simulate discovery.
+                          </td>
+                        </tr>
+                      ) : (
+                        dtp02ShortlistRows.map((row) => {
+                          const badge =
+                            row.roleKey === "primary"
+                              ? "bg-blue-50 text-blue-800 border-blue-200"
+                              : row.roleKey === "secondary"
+                                ? "bg-amber-50 text-amber-900 border-amber-200"
+                                : row.roleKey === "included"
+                                  ? "bg-slate-50 text-slate-700 border-slate-200"
+                                  : "bg-violet-50 text-violet-900 border-violet-200";
+                          const roleLabel =
+                            row.roleKey === "primary"
+                              ? "Primary"
+                              : row.roleKey === "secondary"
+                                ? "Secondary"
+                                : row.roleKey === "included"
+                                  ? "Included"
+                                  : "You added";
+                          return (
+                            <tr key={`${row.supplier_id}-${row.supplier_name}`} className="border-t border-slate-100 align-top">
+                              <td className="px-3 py-2.5">
+                                <span className="font-semibold text-slate-900">{row.supplier_name}</span>
+                                <p className="text-[10px] font-mono text-slate-400 mt-0.5">{row.supplier_id}</p>
+                                {row.notes ? (
+                                  <p className="text-[11px] text-slate-500 mt-1 leading-snug max-w-md">{row.notes}</p>
+                                ) : null}
+                              </td>
+                              <td className="px-3 py-2.5 text-slate-700 whitespace-nowrap capitalize">{row.riskLabel}</td>
+                              <td className="px-3 py-2.5 text-slate-700 whitespace-nowrap">{row.fitLabel}</td>
+                              <td className="px-3 py-2.5">
+                                <span className={`inline-flex text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded border ${badge}`}>
+                                  {roleLabel}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:items-end rounded-lg bg-slate-50/80 border border-slate-100 p-3">
+                  <div className="flex-1 min-w-[140px]">
+                    <label className="block text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">Optional supplier name</label>
+                    <input
+                      type="text"
+                      value={optionalSupplierName}
+                      onChange={(e) => setOptionalSupplierName(e.target.value)}
+                      placeholder="e.g. Oracle Cloud Infrastructure"
+                      className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-sm text-slate-900 placeholder:text-slate-400"
+                    />
+                  </div>
+                  <div className="w-full sm:w-40">
+                    <label className="block text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">Note / region</label>
+                    <input
+                      type="text"
+                      value={optionalSupplierRegion}
+                      onChange={(e) => setOptionalSupplierRegion(e.target.value)}
+                      placeholder="e.g. NA · EU"
+                      className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-sm text-slate-900 placeholder:text-slate-400"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addDemoOptionalSupplier}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-md bg-sponsor-blue text-white px-3 py-2 text-xs font-bold shadow-sm hover:bg-blue-700 transition-colors sm:shrink-0"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    Add optional supplier
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400 leading-snug">
+                  Catalog rows come from <span className="font-mono">GET /api/cases/…</span> as <span className="font-mono">category_supplier_pool</span> (latest KPI per supplier for this case&apos;s category). Added rows stay in this session only until you refresh.
+                </p>
+              </div>
+            </motion.div>
+          )}
+
+          {perfInsight && (
+            <motion.div variants={item} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+              <div className="bg-slate-50 border-b border-slate-200 p-4 flex items-center justify-between gap-3">
+                <h3 className="text-slate-800 font-bold text-sm flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-sponsor-blue" />
+                  Recent performance &amp; insight
+                </h3>
+                {perfInsight.handoffTag ? (
+                  <span className="text-[10px] font-bold uppercase tracking-wide bg-amber-100 text-amber-900 px-2 py-1 rounded">
+                    {perfInsight.handoffTag}
+                  </span>
+                ) : null}
+              </div>
+              <div className="p-4 space-y-4">
+                <p className="text-[11px] text-slate-500">{perfInsight.period}</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {perfInsight.kpis.map((k, i) => (
+                    <div key={i} className="rounded-lg border border-slate-100 bg-slate-50/80 p-3">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 leading-tight mb-1">{k.label}</p>
+                      <p className="text-lg font-bold text-slate-900">{k.value}</p>
+                      {k.hint ? <p className="text-[10px] text-slate-500 mt-0.5">{k.hint}</p> : null}
+                    </div>
+                  ))}
+                </div>
+                <ul className="space-y-2 text-sm text-slate-700 list-disc pl-5">
+                  {perfInsight.bullets.map((b, i) => (
+                    <li key={i}>{b}</li>
+                  ))}
+                </ul>
+                <p className="text-[10px] text-slate-400 leading-snug border-t border-slate-100 pt-3">{perfInsight.sourceNote}</p>
+              </div>
+            </motion.div>
+          )}
 
           <details className="bg-white rounded-xl border border-slate-200 shadow-sm group">
             <summary className="cursor-pointer list-none flex items-center gap-2 px-4 py-3 font-bold text-sm text-slate-800 border-b border-slate-100">
@@ -595,30 +788,32 @@ export default function CaseCopilotPage() {
               <p className="text-sm text-slate-600 mb-4 leading-relaxed">
                 <strong>{displayStage}</strong>
                 {focus?.pending_questions?.length
-                  ? " — Discuss tradeoffs in Copilot and finalize your decision in the right panel."
-                  : " — Stage checklist looks complete; finalize approval in the right panel."}
+                  ? " — Answer step-by-step in **Copilot chat** (same window as the conversation). When prompts are satisfied, say **yes** or **approve** to lock the stage."
+                  : " — Open questions look resolved in chat; say **approve** if you are ready to advance."}
               </p>
-              <p className="text-xs text-slate-500 mb-4">Use this panel to review evidence; use Copilot panel to submit approval/revision.</p>
+              <p className="text-xs text-slate-500 mb-4">
+                Use this panel for evidence and context; all formal decisions run through chat—try **reject** or **request revision** if you need a new pass.
+              </p>
 
-              {showEvalApproved ? (
+              {stageDecisionComplete ? (
                 <div className="bg-green-50 text-green-800 p-6 rounded-lg text-center border border-green-200">
                   <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-3" />
-                  <h4 className="font-bold text-lg mb-1">Decision Submitted</h4>
-                  <p className="text-sm text-green-700">Approval recorded. Continue in chat while the workflow advances from {displayStage}.</p>
+                  <h4 className="font-bold text-lg mb-1">Stage answers recorded</h4>
+                  <p className="text-sm text-green-700">
+                    This stage&apos;s checklist is saved on the server. Continue in chat; the workflow may advance after approval.
+                  </p>
                 </div>
               ) : (
-                <div className="space-y-3 text-sm">
-                  <p className="text-slate-700">
-                    <span className="font-semibold">SOC2:</span>{" "}
-                    {govSoc2 === "verified" ? "Yes, Verified" : govSoc2 === "pending" ? "Pending / Missing" : "Not selected"}
-                  </p>
-                  <p className="text-slate-700">
-                    <span className="font-semibold">Infra threshold:</span>{" "}
-                    {govInfra === "meets" ? "Meets Thresholds" : govInfra === "exemption" ? "Does Not Meet (Requires Exemption)" : "Not selected"}
-                  </p>
-                  <p className="text-xs text-slate-500 pt-2 border-t border-slate-100">
-                    Select these attestations and submit your decision from the Copilot panel on the right.
-                  </p>
+                <div className="space-y-3 text-sm text-slate-700">
+                  {focus?.pending_questions?.length ? (
+                    <ul className="list-disc pl-5 space-y-2">
+                      {(focus.pending_questions as { text?: string }[]).map((pq, i) => (
+                        <li key={i}>{pq.text || "Pending question"}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>No open checklist items from the coach—if you are happy with the recommendation, send <span className="font-semibold">approve</span> in chat.</p>
+                  )}
                 </div>
               )}
             </div>
@@ -686,83 +881,6 @@ export default function CaseCopilotPage() {
             </div>
           )}
         </header>
-
-        {/* Decision console lives with chat (Cursor-like flow) */}
-        {hasLiveCase && !caseLoading && (
-          <div className="px-6 py-3 border-b border-slate-100 bg-slate-50/70">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 min-w-0">
-                <ShieldCheck className="w-4 h-4 text-sponsor-blue shrink-0" />
-                <h3 className="text-sm font-bold text-slate-800">Decision Console</h3>
-                <span className="text-[11px] text-slate-500 font-semibold uppercase tracking-wide">{displayStage}</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setDecisionConsoleOpen((v) => !v)}
-                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 transition"
-              >
-                {decisionConsoleOpen ? "Hide" : "Open"} Decision Console
-              </button>
-            </div>
-
-            {!decisionConsoleOpen && (
-              <p className="text-xs text-slate-500 mt-2">
-                Continue the conversation first. Open Decision Console when you are ready to submit approval or request revision.
-              </p>
-            )}
-
-            {decisionConsoleOpen && (
-              <div className="space-y-4 mt-3 pt-3 border-t border-slate-200">
-                {showEvalApproved ? (
-                  <div className="bg-green-50 text-green-800 p-3 rounded-lg border border-green-200 text-xs font-medium">
-                    Decision submitted. Continue in chat for next actions while backend advances stage.
-                  </div>
-                ) : (
-                  <>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">
-                        Has InfoSec verified the SOC2 compliance? *
-                      </label>
-                      <div className="flex gap-4">
-                        <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
-                          <input type="radio" name="soc-chat" checked={govSoc2 === "verified"} onChange={() => setGovSoc2("verified")} className="w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" />
-                          Yes, Verified
-                        </label>
-                        <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
-                          <input type="radio" name="soc-chat" checked={govSoc2 === "pending"} onChange={() => setGovSoc2("pending")} className="w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" />
-                          Pending / Missing
-                        </label>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">
-                        Does this supplier meet minimum IT Infrastructure thresholds? *
-                      </label>
-                      <div className="flex gap-4">
-                        <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
-                          <input type="radio" name="thresh-chat" checked={govInfra === "meets"} onChange={() => setGovInfra("meets")} className="w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" />
-                          Meets Thresholds
-                        </label>
-                        <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
-                          <input type="radio" name="thresh-chat" checked={govInfra === "exemption"} onChange={() => setGovInfra("exemption")} className="w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" />
-                          Does Not Meet
-                        </label>
-                      </div>
-                    </div>
-                    <div className="flex gap-3 pt-2">
-                      <button onClick={handleApproveGovernance} className="flex-1 py-2.5 bg-sponsor-blue text-white rounded-lg font-bold text-sm shadow hover:bg-blue-700 transition disabled:opacity-60" disabled={isTyping}>
-                        Confirm & Approve
-                      </button>
-                      <button onClick={handleRequestRevision} className="flex-1 py-2.5 bg-white text-slate-600 border border-slate-300 rounded-lg font-semibold text-sm hover:bg-slate-50 transition">
-                        Request Revision
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Messages body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[url('https://www.transparenttextures.com/patterns/tiny-grid.png')]">
@@ -852,7 +970,7 @@ export default function CaseCopilotPage() {
           </div>
           <p className="text-center text-[11px] text-slate-400 font-medium mt-3 flex items-center justify-center gap-1.5">
             <ShieldCheck className="w-3.5 h-3.5" />
-            AI-generated content. Decide in the Copilot Decision Console and validate with policy controls.
+            AI-generated content. Confirm decisions in chat; validate material choices with your policy owners.
           </p>
         </div>
 
