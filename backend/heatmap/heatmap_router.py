@@ -12,7 +12,11 @@ from backend.heatmap.services.case_bridge import get_case_bridge_service
 from backend.heatmap.run_pipeline_init import run_init
 from backend.heatmap.persistence.heatmap_database import heatmap_db
 from backend.heatmap.persistence.heatmap_models import Opportunity, ReviewFeedback, AuditLog
-from backend.heatmap.context_builder import load_category_cards, category_cards_fingerprint
+from backend.heatmap.context_builder import (
+    load_category_cards,
+    category_cards_fingerprint,
+    iter_category_card_names,
+)
 from backend.heatmap.services.opportunity_enrichment import enrich_opportunity_dict
 from backend.heatmap.services.intake_scoring import score_intake_payload, persist_intake_opportunity
 from backend.heatmap.services.heatmap_copilot import (
@@ -48,6 +52,19 @@ class FeedbackRequest(BaseModel):
     original_tier: Optional[str] = None
     suggested_tier: Optional[str] = None
     feedback_notes: Optional[str] = None
+    # Optional: absolute weight edits (normalized server-side per PS_new / PS_contract group)
+    scoring_weight_overrides: Optional[Dict[str, float]] = None
+    weight_adjustments: Optional[Dict[str, float]] = None
+
+
+class ScoringWeightsResponse(BaseModel):
+    weights: Dict[str, float]
+    defaults: Dict[str, float]
+
+
+class ScoringWeightsUpdateRequest(BaseModel):
+    weights: Optional[Dict[str, float]] = None
+    deltas: Optional[Dict[str, float]] = None
 
 
 class FeedbackHistoryItem(BaseModel):
@@ -329,7 +346,7 @@ def heatmap_category_cards_apply_and_rerun(req: CategoryCardsApplyRequest):
 def intake_categories():
     cards = load_category_cards()
     return {
-        "categories": sorted(cards.keys()),
+        "categories": iter_category_card_names(cards),
         "category_cards_meta": category_cards_fingerprint(),
     }
 
@@ -420,7 +437,7 @@ def list_opportunities(
         statement = select(Opportunity)
         results = session.exec(statement).all()
         cards = load_category_cards()
-        cat_keys = sorted(cards.keys())
+        cat_keys = iter_category_card_names(cards)
         fb_counts = _feedback_counts_by_opportunity(session) if enrich else {}
         pipe = _last_pipeline_audit_payload(session) or {}
         pipeline_meta = {
@@ -572,7 +589,7 @@ def submit_feedback(req: FeedbackRequest):
         adjustment_value = 0.0
 
     svc = get_feedback_service()
-    success = svc.submit_feedback(
+    success, opp_snap = svc.submit_feedback(
         req.opportunity_id,
         reviewer_id,
         adjustment_type,
@@ -580,8 +597,56 @@ def submit_feedback(req: FeedbackRequest):
         reason_code,
         comment_text,
         component_affected,
+        suggested_tier=req.suggested_tier,
+        weight_adjustments=req.weight_adjustments,
+        scoring_weight_overrides=req.scoring_weight_overrides,
+        tier_before=req.original_tier,
     )
-    return {"success": success}
+    return {"success": success, "opportunity": opp_snap}
+
+
+@heatmap_router.get("/scoring-weights", response_model=ScoringWeightsResponse)
+def heatmap_scoring_weights_get():
+    from backend.heatmap.services.learned_weights import (
+        DEFAULT_WEIGHTS_FLAT,
+        load_learned_weights,
+        normalize_full,
+    )
+
+    session = heatmap_db.get_db_session()
+    try:
+        w = normalize_full(load_learned_weights(session))
+        return ScoringWeightsResponse(weights=w, defaults=dict(DEFAULT_WEIGHTS_FLAT))
+    finally:
+        session.close()
+
+
+@heatmap_router.put("/scoring-weights", response_model=ScoringWeightsResponse)
+def heatmap_scoring_weights_put(req: ScoringWeightsUpdateRequest):
+    from backend.heatmap.services.learned_weights import (
+        DEFAULT_WEIGHTS_FLAT,
+        load_learned_weights,
+        merge_weight_edits,
+        normalize_full,
+        save_learned_weights,
+    )
+
+    session = heatmap_db.get_db_session()
+    try:
+        if req.weights is None and req.deltas is None:
+            w = normalize_full(load_learned_weights(session))
+            return ScoringWeightsResponse(weights=w, defaults=dict(DEFAULT_WEIGHTS_FLAT))
+        if req.weights is not None:
+            merged = normalize_full(req.weights)
+        else:
+            base = load_learned_weights(session)
+            merged = merge_weight_edits(base, None, req.deltas)
+        save_learned_weights(session, merged)
+        session.commit()
+        w = normalize_full(load_learned_weights(session))
+        return ScoringWeightsResponse(weights=w, defaults=dict(DEFAULT_WEIGHTS_FLAT))
+    finally:
+        session.close()
 
 @heatmap_router.post("/approve", response_model=ApproveOpportunitiesResponse)
 def approve_opportunities(req: ApprovalRequest):

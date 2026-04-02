@@ -44,6 +44,48 @@ def test_intake_categories_has_card_fingerprint(client: TestClient):
     assert data["category_cards_meta"].get("sha256")
 
 
+def test_intake_categories_lists_real_categories_not_file_docs(client: TestClient):
+    r = client.get("/api/heatmap/intake/categories")
+    assert r.status_code == 200
+    cats = r.json()["categories"]
+    assert "_documentation" not in cats
+    assert all(not str(c).startswith("_") for c in cats)
+    assert "IT Infrastructure" in cats
+
+
+def test_category_scoring_mix_renormalizes_renewal_block():
+    from backend.heatmap.category_scoring_mix import apply_category_scoring_overlay
+    from backend.heatmap.services.learned_weights import DEFAULT_WEIGHTS_FLAT, normalize_full
+
+    base = normalize_full(dict(DEFAULT_WEIGHTS_FLAT))
+    card = {
+        "scoring_mix": {
+            "existing_contract_renewal": {
+                "supplier_risk_RSS": 0.5,
+                "expiry_urgency_EUS": 0.2,
+                "financial_impact_FIS": 0.1,
+                "spend_concentration_SCS": 0.1,
+                "strategic_alignment_SAS": 0.1,
+            }
+        }
+    }
+    out = apply_category_scoring_overlay(base, card)
+    renew_sum = sum(
+        out[k] for k in ("w_eus", "w_fis", "w_rss", "w_scs", "w_sas_contract")
+    )
+    assert renew_sum == pytest.approx(1.0, abs=0.02)
+    assert out["w_rss"] > DEFAULT_WEIGHTS_FLAT["w_rss"]
+
+
+def test_validate_scoring_mix_rejects_unknown_weight_key():
+    from backend.heatmap.category_scoring_mix import validate_scoring_mix_for_patch
+
+    with pytest.raises(ValueError, match="Unknown weight key"):
+        validate_scoring_mix_for_patch(
+            {"new_sourcing_request": {"implementation_typo_IUS": 1.0}}
+        )
+
+
 def test_metrics_dashboard_shape(client: TestClient):
     r = client.get("/api/heatmap/metrics/dashboard")
     assert r.status_code == 200

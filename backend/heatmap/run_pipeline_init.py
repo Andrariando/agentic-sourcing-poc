@@ -19,6 +19,7 @@ from backend.heatmap.context_builder import (
 from backend.heatmap.persistence.heatmap_database import heatmap_db, get_engine
 from backend.heatmap.persistence.heatmap_models import Opportunity, ReviewFeedback
 from backend.heatmap.services.seed_kpi_demo_data import seed_demo_feedback_and_pipeline_audit
+from backend.heatmap.services.learned_weights import load_learned_weights, weights_for_supervisor_state
 
 
 def run_init():
@@ -92,6 +93,9 @@ def run_init():
     print(f"Loaded {len(contracts)} opportunities. Executing Multi-Agent Pipeline...")
     t_pipeline = time.time()
 
+    with Session(get_engine()) as _w_sess:
+        merged_w = weights_for_supervisor_state(load_learned_weights(_w_sess))
+
     initial_state: HeatmapState = {
         "contracts": contracts,
         "spend_signals": [],
@@ -100,7 +104,7 @@ def run_init():
         "risk_signals": [],
         "scored_opportunities": [],
         "current_index": 0,
-        "weights": {},
+        "weights": merged_w,
         "heatmap_context": heatmap_context,
     }
 

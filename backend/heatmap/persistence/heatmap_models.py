@@ -95,3 +95,10 @@ class AuditLog(SQLModel, table=True):
     new_value: Optional[str] = Field(default=None)
     user_id: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class HeatmapLearnedWeights(SQLModel, table=True):
+    """Singleton row (id=1): merged PS_new + PS_contract weights learned from feedback."""
+    id: int = Field(primary_key=True)  # always 1
+    weights_json: str = Field(default="{}")
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

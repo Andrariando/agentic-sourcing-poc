@@ -17,6 +17,7 @@ from backend.heatmap.scoring_framework import (
 from backend.heatmap.context_builder import build_heatmap_context
 from backend.heatmap.persistence.heatmap_models import Opportunity
 from backend.heatmap.services.feedback_memory import apply_learning_nudge
+from backend.heatmap.services.learned_weights import merge_intake_ps_new_weights
 
 
 def tier_from_total(total: float) -> str:
@@ -111,6 +112,9 @@ def score_intake_payload(
     candidate = max(float(estimated_spend_usd), 0.0)
     max_pipeline = max(existing_max, candidate, 1.0)
     ctx = build_heatmap_context(max_estimated_spend_pipeline=max_pipeline)
+    raw_card = (ctx.get("category_cards") or {}).get(category)
+    category_card = raw_card if isinstance(raw_card, dict) else None
+    merged_w = merge_intake_ps_new_weights(session, weights, category_card=category_card)
     scores, total_r, tier, justification = ps_new_components(
         category=category,
         supplier_name=supplier_name,
@@ -118,7 +122,7 @@ def score_intake_payload(
         implementation_timeline_months=float(implementation_timeline_months),
         preferred_supplier_status=preferred_supplier_status,
         heatmap_context=ctx,
-        weights=weights,
+        weights=merged_w,
     )
     mem_delta, mem_note, total_adj, tier_adj = apply_learning_nudge(
         category=category,
@@ -127,7 +131,7 @@ def score_intake_payload(
         is_new=True,
         baseline_summary=justification,
         base_total=total_r,
-        weights=weights,
+        weights=merged_w,
     )
     if mem_note:
         justification = f"{justification} | Learning: {mem_note}"
@@ -138,6 +142,7 @@ def score_intake_payload(
         "category_spend_used": (ctx.get("category_spend_total") or {}).get(category),
         "fis_field_note": ctx.get("fis_contract_value_field"),
         "feedback_memory_delta": mem_delta,
+        "weights_used": merged_w,
     }
     return meta, scores, total_r, tier, justification
 
@@ -195,6 +200,7 @@ def persist_intake_opportunity(
             {
                 "pipeline_max_estimated": meta["max_estimated_spend_pipeline"],
                 "feedback_memory_delta": meta.get("feedback_memory_delta"),
+                "ps_new_weights": meta.get("weights_used"),
             }
         ),
     )

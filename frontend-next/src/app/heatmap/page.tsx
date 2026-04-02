@@ -15,6 +15,30 @@ const TIER_TOOLTIP: Record<string, HeatmapGlossaryKey> = {
   T4: "t4",
 };
 
+const PS_NEW_WEIGHT_KEYS = ["w_ius", "w_es", "w_csis", "w_sas_new"] as const;
+const PS_CONTRACT_WEIGHT_KEYS = ["w_eus", "w_fis", "w_rss", "w_scs", "w_sas_contract"] as const;
+
+const WEIGHT_LABELS: Record<string, string> = {
+  w_ius: "IUS — implementation urgency",
+  w_es: "ES — estimated spend",
+  w_csis: "CSIS — category spend importance",
+  w_sas_new: "SAS — strategic alignment (new)",
+  w_eus: "EUS — expiry urgency",
+  w_fis: "FIS — financial impact",
+  w_rss: "RSS — supplier risk",
+  w_scs: "SCS — spend concentration",
+  w_sas_contract: "SAS — strategic alignment (renewal)",
+};
+
+function normalizeWeightGroup(w: Record<string, number>, keys: readonly string[]) {
+  const copy = { ...w };
+  let s = 0;
+  for (const k of keys) s += Math.max(0, copy[k] ?? 0);
+  if (s < 1e-9) return copy;
+  for (const k of keys) copy[k] = Math.max(0.01, (copy[k] ?? 0) / s);
+  return copy;
+}
+
 export default function HeatmapPriorityPage() {
   const [opportunities, setOpportunities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,6 +67,7 @@ export default function HeatmapPriorityPage() {
     | null
   >(null);
   const [feedbackHistoryLoading, setFeedbackHistoryLoading] = useState(false);
+  const [scoringWeights, setScoringWeights] = useState<Record<string, number> | null>(null);
 
   // Optional Copilot Slide-over
   const [copilotOpen, setCopilotOpen] = useState(false);
@@ -168,6 +193,35 @@ export default function HeatmapPriorityPage() {
     setSelectedIds(nextSet);
   };
 
+  const openReviewModal = async (opp: any) => {
+    setReviewOpp(opp);
+    setFeedbackTier(opp.tier);
+    setFeedbackReason("");
+    setFeedbackHistory(null);
+    setFeedbackHistoryLoading(true);
+    setScoringWeights(null);
+    try {
+      const base = getApiBaseUrl();
+      const [histRes, wRes] = await Promise.all([
+        apiFetch(`${base}/api/heatmap/feedback/history?opportunity_id=${opp.id}`, { cache: "no-store" }),
+        apiFetch(`${base}/api/heatmap/scoring-weights`, { cache: "no-store" }),
+      ]);
+      if (!histRes.ok) setFeedbackHistory([]);
+      else {
+        const rows = (await histRes.json()) as any[];
+        setFeedbackHistory(Array.isArray(rows) ? rows : []);
+      }
+      if (wRes.ok) {
+        const wd = (await wRes.json()) as { weights?: Record<string, number> };
+        if (wd.weights && typeof wd.weights === "object") setScoringWeights({ ...wd.weights });
+      }
+    } catch {
+      setFeedbackHistory([]);
+    } finally {
+      setFeedbackHistoryLoading(false);
+    }
+  };
+
   // Feedback Submission Logic
   const submitFeedback = async () => {
     if (!reviewOpp) return;
@@ -175,12 +229,26 @@ export default function HeatmapPriorityPage() {
     try {
       const url = `${getApiBaseUrl()}/api/heatmap/feedback`;
 
+      const isNewRequest = reviewOpp.contract_id == null || reviewOpp.contract_id === "";
+      const wkeys = isNewRequest ? PS_NEW_WEIGHT_KEYS : PS_CONTRACT_WEIGHT_KEYS;
+      const scoring_weight_overrides =
+        scoringWeights != null
+          ? wkeys.reduce(
+              (acc, k) => {
+                acc[k] = scoringWeights[k] ?? 0;
+                return acc;
+              },
+              {} as Record<string, number>
+            )
+          : undefined;
+
       const payload = {
         opportunity_id: reviewOpp.id,
         user_id: "human-manager",
         original_tier: reviewOpp.tier,
         suggested_tier: feedbackTier,
-        feedback_notes: feedbackReason
+        feedback_notes: feedbackReason,
+        ...(scoring_weight_overrides ? { scoring_weight_overrides } : {}),
       };
 
       const res = await apiFetch(url, {
@@ -190,10 +258,17 @@ export default function HeatmapPriorityPage() {
       });
       
       if (res.ok) {
-        // Optimistic UI update (tier / notes); server-side Approved only after /approve.
-        const updated = opportunities.map(o => {
+        const data = (await res.json().catch(() => ({}))) as {
+          opportunity?: { tier?: string; total_score?: number };
+        };
+        const snap = data.opportunity;
+        const updated = opportunities.map((o) => {
           if (o.id === reviewOpp.id) {
-            return { ...o, tier: feedbackTier };
+            return {
+              ...o,
+              tier: snap?.tier ?? feedbackTier,
+              total_score: snap?.total_score ?? o.total_score,
+            };
           }
           return o;
         });
@@ -613,7 +688,7 @@ export default function HeatmapPriorityPage() {
                   <YAxis type="number" dataKey="y" name="Urgency" tick={{fontSize: 12, fill: '#64748b'}} label={{ value: 'Urgency & risk (EUS+RSS / IUS) →', angle: -90, position: 'left', fill: '#64748b', fontSize: 12 }} domain={[0, 10]} />
                   <ZAxis type="number" dataKey="z" range={[60, 400]} name="Volume" />
                   <Tooltip content={<CustomTooltip />} cursor={{ strokeDasharray: '3 3' }} />
-                  <Scatter name="Opportunities" data={chartData} onClick={(data) => setReviewOpp(data.payload)}>
+                  <Scatter name="Opportunities" data={chartData} onClick={(data) => { void openReviewModal(data.payload); }}>
                     {chartData.map((entry, index) => {
                       let fill = "#64748b"; // T4
                       if (entry.tier === "T1") fill = "#ef4444";
@@ -827,27 +902,9 @@ export default function HeatmapPriorityPage() {
                                 Reviewed <ExternalLink className="w-3 h-3"/>
                               </span>
                             ) : (
-                              <button 
-                                onClick={async () => {
-                                  setReviewOpp(opp);
-                                  setFeedbackTier(opp.tier);
-                                  setFeedbackReason("");
-                                  setFeedbackHistory(null);
-                                  setFeedbackHistoryLoading(true);
-                                  try {
-                                    const url = `${getApiBaseUrl()}/api/heatmap/feedback/history?opportunity_id=${opp.id}`;
-                                    const r = await apiFetch(url, { cache: "no-store" });
-                                    if (!r.ok) {
-                                      setFeedbackHistory([]);
-                                    } else {
-                                      const rows = (await r.json()) as any[];
-                                      setFeedbackHistory(Array.isArray(rows) ? rows : []);
-                                    }
-                                  } catch {
-                                    setFeedbackHistory([]);
-                                  } finally {
-                                    setFeedbackHistoryLoading(false);
-                                  }
+                              <button
+                                onClick={() => {
+                                  void openReviewModal(opp);
                                 }}
                                 className="text-sponsor-blue hover:text-blue-800 text-sm font-medium bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded transition"
                               >
@@ -1151,9 +1208,12 @@ export default function HeatmapPriorityPage() {
 
               {copilotTab === "cards" && (
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-3">
-                  <p className="text-xs text-slate-500">
-                    Upload a policy document (plain text) or describe changes below. The system extracts a structured patch,
-                    then you can <strong>apply it and re-run scoring</strong> so opportunity tiers update (SAS from category cards).
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Upload a policy document (plain text) or describe changes below. The system extracts a structured patch into{" "}
+                    <code className="text-slate-600">data/heatmap/category_cards.json</code>, then you can{" "}
+                    <strong>apply and re-run scoring</strong>. That file holds preferred-supplier rules and optional{" "}
+                    <strong>scoring_mix</strong> (human-readable weight labels per category for new requests vs renewals — see{" "}
+                    <code className="text-slate-600">_documentation</code> at the top of the JSON).
                   </p>
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">Category</label>
@@ -1430,6 +1490,53 @@ export default function HeatmapPriorityPage() {
                     </div>
                   </div>
                 </div>
+
+                {scoringWeights && reviewOpp && (
+                  <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                    <p className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-3 mb-2">
+                      Scoring weights (global average — like connection weights)
+                    </p>
+                    <p className="text-xs text-slate-500 mb-4">
+                      Adjust the mix for{" "}
+                      {reviewOpp.contract_id == null || reviewOpp.contract_id === ""
+                        ? "new requests (PS_new)"
+                        : "renewals (PS_contract)"}
+                      . Values renormalize to 100%. Your tier choice still applies a small learning nudge toward that band.
+                    </p>
+                    <div className="space-y-3">
+                      {(reviewOpp.contract_id == null || reviewOpp.contract_id === ""
+                        ? PS_NEW_WEIGHT_KEYS
+                        : PS_CONTRACT_WEIGHT_KEYS
+                      ).map((k) => (
+                        <div key={k}>
+                          <div className="flex justify-between text-xs font-medium text-slate-600 mb-1">
+                            <span>{WEIGHT_LABELS[k] ?? k}</span>
+                            <span>{((scoringWeights[k] ?? 0) * 100).toFixed(1)}%</span>
+                          </div>
+                          <input
+                            type="range"
+                            min={1}
+                            max={99}
+                            step={1}
+                            value={Math.min(99, Math.max(1, Math.round((scoringWeights[k] ?? 0.2) * 100)))}
+                            onChange={(e) => {
+                              const v = Number(e.target.value) / 100;
+                              const keys =
+                                reviewOpp.contract_id == null || reviewOpp.contract_id === ""
+                                  ? PS_NEW_WEIGHT_KEYS
+                                  : PS_CONTRACT_WEIGHT_KEYS;
+                              setScoringWeights((prev) => {
+                                if (!prev) return prev;
+                                return normalizeWeightGroup({ ...prev, [k]: v }, keys);
+                              });
+                            }}
+                            className="w-full accent-[#2563eb]"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">

@@ -1,4 +1,5 @@
 {
+  "_documentation": "HOW TO READ THIS FILE — Category policy for the sourcing heatmap.\n\n• Each top-level key whose name does NOT start with an underscore (_) is one sourcing CATEGORY (e.g. IT Infrastructure).\n• The underscore key _documentation is only for people; the app ignores keys starting with _ when listing categories.\n• Inside a category you normally have:\n    – default_preferred_status, category_strategy_sas, supplier_preferred_status → affect Strategic Alignment (SAS).\n    – scoring_mix (optional) → how MUCH each factor matters when computing the 0–10 priority score for that category.\n• scoring_mix has two blocks:\n    – new_sourcing_request → weights for intakes / requests with no contract yet.\n    – existing_contract_renewal → weights for renewals / existing contracts.\n• Under each block, use the long field names (they include the metric code in CAPITALS).\n• Numbers are shares of the formula (like percentages that should add to 1). If they don’t, the engine renormalizes.\n• You can also add plain_english under scoring_mix: a short sentence for your team; it is not used in math.\n",
   "IT Infrastructure": {
     "default_preferred_status": "allowed",
     "category_strategy_sas": 7.0,
@@ -13,6 +14,22 @@
       "AlphaNetwork Services": "allowed",
       "DeltaStorage Systems": "nonpreferred",
       "DataCenter Partners": "allowed"
+    },
+    "scoring_mix": {
+      "plain_english": "Default balance for infrastructure: urgency and spend matter a bit more than category-wide spend shape.",
+      "new_sourcing_request": {
+        "implementation_urgency_IUS": 0.30,
+        "estimated_spend_ES": 0.30,
+        "category_spend_importance_CSIS": 0.25,
+        "strategic_alignment_SAS": 0.15
+      },
+      "existing_contract_renewal": {
+        "expiry_urgency_EUS": 0.30,
+        "financial_impact_FIS": 0.25,
+        "supplier_risk_RSS": 0.20,
+        "spend_concentration_SCS": 0.15,
+        "strategic_alignment_SAS": 0.10
+      }
     }
   },
   "Software": {
@@ -25,6 +42,22 @@
       "AppMatrix Inc": "nonpreferred",
       "SaaS Collective": "straightpo",
       "CodeStream Ltd": "allowed"
+    },
+    "scoring_mix": {
+      "plain_english": "Software: tilt toward financial impact and strategic fit on renewals; new requests still stress timeline and spend.",
+      "new_sourcing_request": {
+        "implementation_urgency_IUS": 0.32,
+        "estimated_spend_ES": 0.28,
+        "category_spend_importance_CSIS": 0.22,
+        "strategic_alignment_SAS": 0.18
+      },
+      "existing_contract_renewal": {
+        "expiry_urgency_EUS": 0.26,
+        "financial_impact_FIS": 0.28,
+        "supplier_risk_RSS": 0.18,
+        "spend_concentration_SCS": 0.15,
+        "strategic_alignment_SAS": 0.13
+      }
     }
   },
   "Hardware": {
@@ -37,6 +70,22 @@
       "OEM Alliance Group": "preferred",
       "PeripheralWorks": "allowed",
       "ChipSource International": "straightpo"
+    },
+    "scoring_mix": {
+      "plain_english": "Hardware: emphasize supplier risk and concentration; useful when supply continuity is the main story.",
+      "new_sourcing_request": {
+        "implementation_urgency_IUS": 0.28,
+        "estimated_spend_ES": 0.28,
+        "category_spend_importance_CSIS": 0.22,
+        "strategic_alignment_SAS": 0.22
+      },
+      "existing_contract_renewal": {
+        "expiry_urgency_EUS": 0.25,
+        "financial_impact_FIS": 0.22,
+        "supplier_risk_RSS": 0.28,
+        "spend_concentration_SCS": 0.17,
+        "strategic_alignment_SAS": 0.08
+      }
     }
   }
 }

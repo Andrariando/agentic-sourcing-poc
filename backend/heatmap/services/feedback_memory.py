@@ -137,7 +137,7 @@ def _llm_nudge(
             "w_ius": float(w.get("w_ius", 0.30)),
             "w_es": float(w.get("w_es", 0.30)),
             "w_csis": float(w.get("w_csis", 0.25)),
-            "w_sas": float(w.get("w_sas", 0.15)),
+            "w_sas": float(w.get("w_sas_new", w.get("w_sas", 0.15))),
         }
     else:
         comp_keys = ["eus", "fis", "rss", "scs", "sas"]
@@ -146,7 +146,7 @@ def _llm_nudge(
             "w_fis": float(w.get("w_fis", 0.25)),
             "w_rss": float(w.get("w_rss", 0.20)),
             "w_scs": float(w.get("w_scs", 0.15)),
-            "w_sas": float(w.get("w_sas", 0.10)),
+            "w_sas": float(w.get("w_sas_contract", w.get("w_sas", 0.10))),
         }
 
     prompt = f"""You help a sourcing prioritization heatmap learn from how humans corrected past scores.

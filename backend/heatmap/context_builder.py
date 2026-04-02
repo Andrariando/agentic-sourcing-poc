@@ -32,6 +32,18 @@ def load_category_cards() -> dict:
     return {"IT Infrastructure": {"default_preferred_status": "allowed", "category_strategy_sas": 7.0}}
 
 
+def iter_category_card_names(cards: dict) -> list[str]:
+    """
+    Names of sourcing categories in category_cards.json.
+
+    Keys starting with `_` are reserved for file-level documentation only
+    (humans read them; the engine ignores them as categories).
+    """
+    return sorted(
+        k for k in (cards or {}) if isinstance(k, str) and k and not str(k).startswith("_")
+    )
+
+
 def category_cards_fingerprint() -> dict:
     """Version metadata for category_cards.json (ops: detect stale policy config)."""
     if not CATEGORY_CARDS_PATH.is_file():

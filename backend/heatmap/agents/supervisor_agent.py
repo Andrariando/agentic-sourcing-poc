@@ -1,5 +1,7 @@
 from backend.heatmap.agents.state import HeatmapState, ScoredOpportunity
+from backend.heatmap.category_scoring_mix import apply_category_scoring_overlay
 from backend.heatmap.services.feedback_memory import apply_learning_nudge
+from backend.heatmap.services.learned_weights import normalize_full
 
 
 def process_supervisor(state: HeatmapState) -> dict:
@@ -12,7 +14,9 @@ def process_supervisor(state: HeatmapState) -> dict:
     s_risk = state["risk_signals"][idx]
     
     is_new = contract.get("contract_id") is None
-    w = state.get("weights", {})
+    w_global = normalize_full(state.get("weights", {}))
+    card = contract.get("category_strategy") or {}
+    w = apply_category_scoring_overlay(w_global, card)
     
     total_score = 0.0
     tier = "T4"
@@ -23,7 +27,7 @@ def process_supervisor(state: HeatmapState) -> dict:
         w_ius = w.get("w_ius", 0.30)
         w_es = w.get("w_es", 0.30)
         w_csis = w.get("w_csis", 0.25)
-        w_sas = w.get("w_sas", 0.15)
+        w_sas = w.get("w_sas_new", w.get("w_sas", 0.15))
         
         ius = s_contract.get("ius_score") or 0.0
         es = s_spend.get("es_score") or 0.0
@@ -41,7 +45,7 @@ def process_supervisor(state: HeatmapState) -> dict:
         w_fis = w.get("w_fis", 0.25)
         w_rss = w.get("w_rss", 0.20)
         w_scs = w.get("w_scs", 0.15)
-        w_sas = w.get("w_sas", 0.10)
+        w_sas = w.get("w_sas_contract", w.get("w_sas", 0.10))
         
         eus = s_contract.get("eus_score") or 0.0
         fis = s_spend.get("fis_score") or 0.0

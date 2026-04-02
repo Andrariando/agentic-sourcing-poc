@@ -196,6 +196,12 @@ def _validate_category_patch(obj: Any) -> Dict[str, Any]:
         for k, val in obj["supplier_preferred_status"].items():
             sp[str(k)] = _norm_pref_token(str(val))
         out["supplier_preferred_status"] = sp
+    if "scoring_mix" in obj:
+        from backend.heatmap.category_scoring_mix import validate_scoring_mix_for_patch
+
+        sm = validate_scoring_mix_for_patch(obj["scoring_mix"])
+        if sm is not None:
+            out["scoring_mix"] = sm
     return out
 
 
@@ -308,13 +314,31 @@ Provide ONLY valid JSON with this shape:
   "proposed_patch": {{
     "default_preferred_status": "<optional>",
     "category_strategy_sas": <optional number 0-10>,
-    "supplier_preferred_status": {{ "<Supplier Name>": "preferred|allowed|nonpreferred|straightpo" }}
+    "supplier_preferred_status": {{ "<Supplier Name>": "preferred|allowed|nonpreferred|straightpo" }},
+    "scoring_mix": {{
+      "plain_english": "<optional note for humans; ignored by scoring>",
+      "new_sourcing_request": {{
+        "implementation_urgency_IUS": 0.30,
+        "estimated_spend_ES": 0.30,
+        "category_spend_importance_CSIS": 0.25,
+        "strategic_alignment_SAS": 0.15
+      }},
+      "existing_contract_renewal": {{
+        "expiry_urgency_EUS": 0.30,
+        "financial_impact_FIS": 0.25,
+        "supplier_risk_RSS": 0.20,
+        "spend_concentration_SCS": 0.15,
+        "strategic_alignment_SAS": 0.10
+      }}
+    }}
   }},
   "notes": "<brief explanation of changes; mention any manual review needed>"
 }}
 
 Rules:
 - Include ONLY keys that should change; omit keys that stay as-is.
+- scoring_mix: block names must be exactly "new_sourcing_request" and/or "existing_contract_renewal" (or aliases contract, new_request, ps_new, ps_contract, renewal). Weight key names must match the examples (human-readable suffixes _IUS, _ES, etc.).
+- Percentages are shares of the formula for that row type; they should sum to about 1.0 (server renormalizes).
 - Supplier names must be concrete strings.
 - Prefer conservative policy wording in notes if unsure."""
 

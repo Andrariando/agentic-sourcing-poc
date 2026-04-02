@@ -42,8 +42,13 @@ class HeatmapDatabase(DatabaseInterface):
 
     def init_db(self) -> None:
         from backend.heatmap.persistence.heatmap_models import (
-            Opportunity, OpportunitySignal, ReviewFeedback, 
-            ScoringWeights, ScoringRun, AuditLog
+            Opportunity,
+            OpportunitySignal,
+            ReviewFeedback,
+            ScoringWeights,
+            ScoringRun,
+            AuditLog,
+            HeatmapLearnedWeights,
         )
         from sqlalchemy import text
         engine = get_engine()
