@@ -1236,11 +1236,35 @@ export default function HeatmapPriorityPage() {
               )}
 
               {copilotTab === "policy" && (
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-3">
-                  <p className="text-xs text-slate-500">
-                    Suggestion only — does not change scores or files. Compares your text to{" "}
-                    <code className="text-slate-600">category_cards.json</code> for the category.
-                  </p>
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-4">
+                  <div className="space-y-2 text-xs leading-relaxed">
+                    <p className="text-slate-600">
+                      <strong className="text-slate-800">What this does:</strong> Paste reviewer or sourcing rationale and see whether
+                      the wording aligns with this category’s official preferred-supplier rules in{" "}
+                      <code className="text-slate-700">category_cards.json</code>. Useful before you publish notes, escalate, or file
+                      audit text—so narrative matches the policy the heatmap uses.
+                    </p>
+                    <p className="font-medium text-slate-700">How to use it</p>
+                    <ol className="list-decimal list-inside space-y-1 text-slate-600">
+                      <li>
+                        Choose the <strong className="font-medium text-slate-700">category</strong> whose policy block should be used.
+                      </li>
+                      <li>
+                        Optionally add <strong className="font-medium text-slate-700">supplier</strong> and <strong className="font-medium text-slate-700">current tier</strong> so the check can use that context.
+                      </li>
+                      <li>
+                        Paste the full <strong className="font-medium text-slate-700">feedback or rationale</strong> (at least a short paragraph; very short snippets are rejected).
+                      </li>
+                      <li>
+                        Click <strong className="font-medium text-slate-700">Check vs policy</strong> and read the summary. Treat the output as a draft review aid, not a formal decision.
+                      </li>
+                    </ol>
+                    <p className="text-slate-500">
+                      <strong className="text-slate-600">Suggestion only</strong> — does not change scores, tiers, or any files. Full
+                      analysis needs <code className="text-slate-600">OPENAI_API_KEY</code> on the server; if it’s missing, you’ll see a
+                      message that automatic checks aren’t available.
+                    </p>
+                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-slate-600 mb-1">Category</label>
