@@ -35,6 +35,7 @@ class FeedbackService:
         suggested_tier: Optional[str] = None,
         weight_adjustments: Optional[Dict[str, float]] = None,
         scoring_weight_overrides: Optional[Dict[str, float]] = None,
+        tier_before: Optional[str] = None,
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         session = heatmap_db.get_db_session()
 
