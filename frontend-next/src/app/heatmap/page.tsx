@@ -1,8 +1,15 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import Link from "next/link";
-import { LayoutGrid, List, X, ExternalLink, MessageCircle, Table2 } from "lucide-react";
+import {
+  LayoutGrid,
+  List,
+  X,
+  ExternalLink,
+  MessageCircle,
+  CheckCircle2,
+  AlertCircle,
+} from "lucide-react";
 import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { apiFetch } from "@/lib/api-fetch";
 import { getApiBaseUrl, apiConnectivityHint } from "@/lib/api-base";
@@ -68,6 +75,10 @@ export default function HeatmapPriorityPage() {
   >(null);
   const [feedbackHistoryLoading, setFeedbackHistoryLoading] = useState(false);
   const [scoringWeights, setScoringWeights] = useState<Record<string, number> | null>(null);
+  const [reviewSaveNotice, setReviewSaveNotice] = useState<{
+    kind: "success" | "error";
+    message: string;
+  } | null>(null);
 
   // Optional Copilot Slide-over
   const [copilotOpen, setCopilotOpen] = useState(false);
@@ -121,6 +132,13 @@ export default function HeatmapPriorityPage() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [copilotOpen]);
+
+  useEffect(() => {
+    if (!reviewSaveNotice) return;
+    const ms = reviewSaveNotice.kind === "success" ? 8000 : 12000;
+    const t = window.setTimeout(() => setReviewSaveNotice(null), ms);
+    return () => window.clearTimeout(t);
+  }, [reviewSaveNotice]);
 
   useEffect(() => {
     (async () => {
@@ -273,6 +291,13 @@ export default function HeatmapPriorityPage() {
           return o;
         });
         setOpportunities(rankOpportunities(updated));
+
+        const scorePart =
+          snap?.total_score != null && !Number.isNaN(Number(snap.total_score))
+            ? ` Priority score is now ${Number(snap.total_score).toFixed(1)}/10.`
+            : "";
+        const baseSavedMsg = `Review saved for ${reviewOpp.supplier_name || "this opportunity"} (tier ${feedbackTier}).${scorePart} Your feedback is stored in the audit log.`;
+
         setReviewOpp(null);
 
         // Tier 1: single bridge into case management — same path as "Approve Selected" (one case per opportunity).
@@ -290,19 +315,39 @@ export default function HeatmapPriorityPage() {
             const approveData = await approveRes.json();
             const caseId = approveData.cases?.[String(reviewOpp.id)];
             if (caseId) {
-              window.location.href = `/cases/${caseId}/copilot`;
+              setReviewSaveNotice({
+                kind: "success",
+                message: `${baseSavedMsg} Opening the case workspace…`,
+              });
+              window.setTimeout(() => {
+                window.location.href = `/cases/${caseId}/copilot`;
+              }, 400);
               return;
             }
           } catch (e) {
             console.error(e);
           }
-          alert("Review saved. Approval succeeded but no case id was returned; open Case Dashboard to continue.");
+          setReviewSaveNotice({
+            kind: "success",
+            message: `${baseSavedMsg} No case link was returned — open Case Dashboard to continue.`,
+          });
+          return;
         }
+
+        setReviewSaveNotice({ kind: "success", message: baseSavedMsg });
       } else {
-        alert("Feedback submission failed. Please verify backend payload compatibility.");
+        const errBody = await res.text().catch(() => "");
+        setReviewSaveNotice({
+          kind: "error",
+          message: `Review was not saved (server ${res.status}). ${errBody ? errBody.slice(0, 200) : "Try again or check the API."}`,
+        });
       }
     } catch (e) {
       console.error(e);
+      setReviewSaveNotice({
+        kind: "error",
+        message: "Could not reach the server. Your review was not saved — check your connection and try again.",
+      });
     } finally {
       setFeedbackSubmitting(false);
     }
@@ -601,6 +646,33 @@ export default function HeatmapPriorityPage() {
 
   return (
     <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-50 min-h-screen relative">
+      {reviewSaveNotice && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={`fixed top-4 left-1/2 z-[70] max-w-lg w-[calc(100%-2rem)] -translate-x-1/2 rounded-xl border px-4 py-3 shadow-lg flex items-start gap-3 ${
+            reviewSaveNotice.kind === "success"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-950"
+              : "border-red-200 bg-red-50 text-red-950"
+          }`}
+        >
+          {reviewSaveNotice.kind === "success" ? (
+            <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-600 mt-0.5" aria-hidden />
+          ) : (
+            <AlertCircle className="w-5 h-5 shrink-0 text-red-600 mt-0.5" aria-hidden />
+          )}
+          <p className="text-sm font-medium leading-snug flex-1 min-w-0">{reviewSaveNotice.message}</p>
+          <button
+            type="button"
+            className="shrink-0 rounded-lg p-1 text-slate-500 hover:bg-black/5 hover:text-slate-800"
+            onClick={() => setReviewSaveNotice(null)}
+            aria-label="Dismiss notification"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto space-y-6 pb-20">
         <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 gap-4">
           <div>
@@ -921,25 +993,6 @@ export default function HeatmapPriorityPage() {
             </div>
           </div>
         )}
-
-        {/* --- SOURCING OPPORTUNITY MATRIX (full table on dedicated page) --- */}
-        <div className="mt-12 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="p-6 flex flex-wrap items-center justify-between gap-4">
-            <div className="min-w-0">
-              <h2 className="text-lg font-bold text-slate-900 tracking-tight">Sourcing Opportunity Matrix</h2>
-              <p className="text-sm text-slate-500 mt-1">
-                Per-opportunity KPI/KLI grid for all five Agentic Outcomes — moved to its own page for readability.
-              </p>
-            </div>
-            <Link
-              href="/heatmap/matrix"
-              className="inline-flex items-center gap-2 shrink-0 px-4 py-2.5 rounded-lg bg-sponsor-blue text-white text-sm font-bold shadow hover:bg-blue-700 transition-colors"
-            >
-              <Table2 className="w-4 h-4" />
-              Open matrix
-            </Link>
-          </div>
-        </div>
       </div>
 
       {/* Optional Copilot Slide-over */}
