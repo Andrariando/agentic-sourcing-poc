@@ -38,6 +38,34 @@ const WEIGHT_LABELS: Record<string, string> = {
   w_sas_contract: "SAS — strategic alignment (renewal)",
 };
 
+/** Common override reasons — map to PS_new / PS_contract components and governance. */
+const PRIORITY_OVERRIDE_REASONS: { id: string; label: string }[] = [
+  { id: "ius_eus", label: "Urgency / timing (IUS or EUS) doesn’t match business reality" },
+  { id: "es_fis", label: "Spend or financial scale (ES or FIS) is understated or overstated" },
+  { id: "csis_scs_rss", label: "Category importance, risk, or concentration (CSIS, RSS, SCS) feels wrong" },
+  { id: "sas", label: "Strategic alignment (SAS) doesn’t reflect supplier or category strategy" },
+  { id: "weighted_total", label: "Weighted total (PS_new or PS_contract) doesn’t reflect holistic risk / priority" },
+  { id: "category_policy", label: "Category card / preferred-supplier policy should override the numeric rank" },
+  { id: "data_quality", label: "Input data quality issue (stale fields, wrong supplier context, etc.)" },
+  { id: "strategic_exception", label: "Executive or strategic exception not captured by the model" },
+  { id: "other", label: "Others (explain below)" },
+];
+
+function buildPriorityOverrideNotes(reasonKeys: string[], freeText: string): string {
+  const labels = reasonKeys
+    .map((id) => PRIORITY_OVERRIDE_REASONS.find((r) => r.id === id)?.label)
+    .filter(Boolean) as string[];
+  const head =
+    labels.length > 0
+      ? `Reasons for priority adjustment:\n${labels.map((l) => `• ${l}`).join("\n")}\n\n`
+      : "";
+  const tail = freeText.trim();
+  if (!head && !tail) return "(No rationale provided)";
+  if (!tail) return head.trimEnd();
+  if (!head) return tail;
+  return `${head}Additional notes:\n${tail}`;
+}
+
 function normalizeWeightGroup(w: Record<string, number>, keys: readonly string[]) {
   const copy = { ...w };
   let s = 0;
@@ -104,6 +132,8 @@ export default function HeatmapPriorityPage() {
   // Review Modal State
   const [reviewOpp, setReviewOpp] = useState<any | null>(null);
   const [feedbackTier, setFeedbackTier] = useState<string>("T1");
+  /** Selected reason ids from PRIORITY_OVERRIDE_REASONS (multi-select). */
+  const [feedbackReasonKeys, setFeedbackReasonKeys] = useState<string[]>([]);
   const [feedbackReason, setFeedbackReason] = useState<string>("");
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [feedbackHistory, setFeedbackHistory] = useState<
@@ -269,6 +299,7 @@ export default function HeatmapPriorityPage() {
     setReviewOpp(opp);
     setFeedbackTier(opp.tier);
     setFeedbackReason("");
+    setFeedbackReasonKeys([]);
     setFeedbackHistory(null);
     setFeedbackHistoryLoading(true);
     setScoringWeights(null);
@@ -302,6 +333,14 @@ export default function HeatmapPriorityPage() {
   // Feedback Submission Logic
   const submitFeedback = async () => {
     if (!reviewOpp) return;
+    if (feedbackReasonKeys.length === 0 && feedbackReason.trim().length < 8) {
+      window.alert("Select at least one reason for the adjustment, or enter a short rationale in the text box (or both).");
+      return;
+    }
+    if (feedbackReasonKeys.includes("other") && feedbackReason.trim().length < 8) {
+      window.alert('When "Others" is selected, add a bit more detail in the additional notes box.');
+      return;
+    }
     setFeedbackSubmitting(true);
     try {
       const url = `${getApiBaseUrl()}/api/heatmap/feedback`;
@@ -319,12 +358,14 @@ export default function HeatmapPriorityPage() {
             )
           : undefined;
 
+      const combinedNotes = buildPriorityOverrideNotes(feedbackReasonKeys, feedbackReason);
+
       const payload = {
         opportunity_id: reviewOpp.id,
         user_id: "human-manager",
         original_tier: reviewOpp.tier,
         suggested_tier: feedbackTier,
-        feedback_notes: feedbackReason,
+        feedback_notes: combinedNotes,
         ...(scoring_weight_overrides ? { scoring_weight_overrides } : {}),
       };
 
@@ -1089,9 +1130,10 @@ export default function HeatmapPriorityPage() {
                   <MessageCircle className="w-5 h-5 text-sponsor-blue shrink-0" />
                   Heatmap copilot
                 </h2>
-                <p className="text-sm text-slate-500 mt-1">
-                  Optional. Explain rankings (scores stay truth), check feedback vs policy, draft{" "}
-                  <code className="text-slate-600">category_cards.json</code> patches (preview only).
+                <p className="text-sm text-slate-500 mt-1 leading-relaxed">
+                  Optional. Ask how rows are ranked (scores stay as shown), check whether your notes fit category policy,
+                  or preview updates to category sourcing rules — nothing here overwrites the heatmap until you apply
+                  changes elsewhere.
                 </p>
               </div>
               <button
@@ -1625,8 +1667,8 @@ export default function HeatmapPriorityPage() {
                     <ExternalLink className="w-4 h-4 text-slate-400" />
                     Human-in-the-Loop Override
                   </p>
-                  <div className="grid grid-cols-3 gap-6">
-                    <div className="col-span-1 border-r border-slate-100 pr-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:border-r lg:border-slate-100 lg:pr-6">
                       <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Adjust Priority</label>
                       <select 
                         className="w-full border border-slate-300 rounded-lg shadow-sm py-2.5 px-3 text-sm focus:ring-2 focus:ring-sponsor-blue/20 focus:border-sponsor-blue font-medium bg-slate-50 cursor-pointer"
@@ -1639,14 +1681,51 @@ export default function HeatmapPriorityPage() {
                         <option value="T4">Lowest — Defer</option>
                       </select>
                     </div>
-                    <div className="col-span-2">
-                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Rationale & Next Steps</label>
-                      <textarea 
-                        className="w-full border border-slate-300 rounded-lg shadow-sm py-3 px-4 text-sm focus:ring-2 focus:ring-sponsor-blue/20 focus:border-sponsor-blue min-h-[100px] placeholder-slate-400 bg-slate-50"
-                        placeholder="e.g., 'We decided to consolidate this supplier last week, pushing to Q3 instead. Downgrading to Low (monitor) priority.'"
-                        value={feedbackReason}
-                        onChange={(e) => setFeedbackReason(e.target.value)}
-                      />
+                    <div className="lg:col-span-2 space-y-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
+                          Rationale & Next Steps
+                        </label>
+                        <p className="text-xs text-slate-500 mb-3">
+                          Why does this row deserve a different priority than the scored rank? Options align with{" "}
+                          <strong className="text-slate-600">PS_new</strong> (IUS, ES, CSIS, SAS) and{" "}
+                          <strong className="text-slate-600">PS_contract</strong> (EUS, FIS, RSS, SCS, SAS). Select all that
+                          apply.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2.5 mb-1">
+                          {PRIORITY_OVERRIDE_REASONS.map((r) => (
+                            <label
+                              key={r.id}
+                              className="flex items-start gap-2.5 text-sm text-slate-700 cursor-pointer leading-snug"
+                            >
+                              <input
+                                type="checkbox"
+                                className="mt-0.5 rounded border-slate-300 text-sponsor-blue focus:ring-sponsor-blue shrink-0"
+                                checked={feedbackReasonKeys.includes(r.id)}
+                                onChange={() => {
+                                  setFeedbackReasonKeys((prev) =>
+                                    prev.includes(r.id) ? prev.filter((k) => k !== r.id) : [...prev, r.id]
+                                  );
+                                }}
+                              />
+                              <span>{r.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-1.5">Additional notes</label>
+                        <textarea 
+                          className="w-full border border-slate-300 rounded-lg shadow-sm py-3 px-4 text-sm focus:ring-2 focus:ring-sponsor-blue/20 focus:border-sponsor-blue min-h-[96px] placeholder-slate-400 bg-slate-50"
+                          placeholder={
+                            feedbackReasonKeys.includes("other")
+                              ? "Describe the “other” reason (required when Others is checked)…"
+                              : "Optional: stakeholders, timing, links to incidents, or next steps…"
+                          }
+                          value={feedbackReason}
+                          onChange={(e) => setFeedbackReason(e.target.value)}
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>

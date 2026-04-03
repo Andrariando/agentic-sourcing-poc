@@ -28,14 +28,6 @@ type PreviewResponse = {
 
 const DEFAULT_CATEGORIES = ["IT Infrastructure", "Software", "Hardware"];
 
-const PREFERRED_OPTIONS: { value: string; label: string }[] = [
-  { value: "", label: "Use category card / supplier lookup" },
-  { value: "preferred", label: "Preferred" },
-  { value: "allowed", label: "Allowed" },
-  { value: "nonpreferred", label: "Non-preferred" },
-  { value: "straightpo", label: "Straight to PO" },
-];
-
 export default function SourcingIntakePage() {
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
   const [formData, setFormData] = useState({
@@ -46,7 +38,6 @@ export default function SourcingIntakePage() {
     justification: "",
     estimated_spend: 250_000,
     implementation_timeline_months: 6,
-    preferred_supplier_status: "",
   });
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -91,7 +82,7 @@ export default function SourcingIntakePage() {
           supplier_name: formData.supplier_name || null,
           estimated_spend_usd: formData.estimated_spend,
           implementation_timeline_months: formData.implementation_timeline_months,
-          preferred_supplier_status: formData.preferred_supplier_status || null,
+          preferred_supplier_status: null,
         }),
       });
       if (!res.ok) {
@@ -120,7 +111,6 @@ export default function SourcingIntakePage() {
     formData.supplier_name,
     formData.estimated_spend,
     formData.implementation_timeline_months,
-    formData.preferred_supplier_status,
   ]);
 
   useEffect(() => {
@@ -146,7 +136,7 @@ export default function SourcingIntakePage() {
           supplier_name: formData.supplier_name || null,
           estimated_spend_usd: formData.estimated_spend,
           implementation_timeline_months: formData.implementation_timeline_months,
-          preferred_supplier_status: formData.preferred_supplier_status || null,
+          preferred_supplier_status: null,
           justification_summary_text: formData.justification || null,
         }),
       });
@@ -241,23 +231,13 @@ export default function SourcingIntakePage() {
                 className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-sponsor-blue outline-none"
                 value={formData.supplier_name}
                 onChange={(e) => setFormData({ ...formData, supplier_name: e.target.value })}
-                placeholder="Matches category-card preferred mapping when set"
+                placeholder="e.g. CloudServe Group"
               />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Preferred supplier status override</label>
-              <select
-                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-sponsor-blue outline-none bg-white"
-                value={formData.preferred_supplier_status}
-                onChange={(e) => setFormData({ ...formData, preferred_supplier_status: e.target.value })}
-              >
-                {PREFERRED_OPTIONS.map((o) => (
-                  <option key={o.value || "default"} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
+              <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                <HeatmapAbbr term="sas">SAS</HeatmapAbbr> (strategic alignment) uses{" "}
+                <code className="text-[11px] bg-slate-100 px-1 rounded">category_cards.json</code> for this category: supplier
+                name matches a preferred tier when listed; otherwise the category default applies.
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
