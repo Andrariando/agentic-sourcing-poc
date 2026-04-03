@@ -16,33 +16,37 @@ export default function SidebarNav() {
   const onHeatmapMatrix = pathname === "/heatmap/matrix";
   const onIntake = pathname === "/intake";
   const onCases = pathname === "/cases";
-  const onCopilot = pathname?.startsWith("/cases/");
+  const onS2cPerformance = pathname === "/s2c/performance";
 
   return (
     <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-8 mt-2">
       <div>
-        <h2 className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Opportunity Prioritization</h2>
+        <h2 className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+          Opportunity Prioritization
+        </h2>
         <div className="space-y-1">
           <Link href="/heatmap" className={navCls(onHeatmap)}>
-            Priority List
+            Sourcing Priority List
           </Link>
           <Link href="/heatmap/matrix" className={navCls(onHeatmapMatrix)}>
-            Opportunity Matrix
+            Performance Dashboard
           </Link>
           <Link href="/intake" className={navCls(onIntake)}>
-            Sourcing Intake
+            Sourcing Intake Form (New Request)
           </Link>
         </div>
       </div>
 
       <div>
-        <h2 className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Case Management</h2>
+        <h2 className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+          Source-to-Contract (S2C) Execution
+        </h2>
         <div className="space-y-1">
           <Link href="/cases" className={navCls(onCases)}>
-            Case Dashboard
+            S2C Case Dashboard
           </Link>
-          <Link href="/cases/copilot" className={navCls(onCopilot)}>
-            Case Copilot
+          <Link href="/s2c/performance" className={navCls(onS2cPerformance)}>
+            S2C Performance Dashboard
           </Link>
         </div>
       </div>

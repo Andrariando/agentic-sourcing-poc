@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { apiFetch } from "@/lib/api-fetch";
 import { getApiBaseUrl, apiConnectivityHint } from "@/lib/api-base";
 import { HeatmapAbbr, HEATMAP_GLOSSARY, type HeatmapGlossaryKey } from "@/lib/heatmap-glossary";
+import { heatmapTierLabel } from "@/lib/heatmap-tier-display";
 
 const TIER_GLOSS: Record<string, HeatmapGlossaryKey> = {
   T1: "t1",
@@ -184,7 +185,7 @@ export default function SourcingIntakePage() {
           onSubmit={handleSubmit}
         >
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">New Business Request</h1>
+            <h1 className="text-2xl font-bold text-slate-900">Sourcing Intake Form (New Request)</h1>
             <p className="text-slate-500 text-sm mt-1 leading-relaxed">
               Submit a new sourcing requirement. Scores use the same{" "}
               <HeatmapAbbr term="psNew">PS_new</HeatmapAbbr> framework as the heatmap (
@@ -353,9 +354,9 @@ export default function SourcingIntakePage() {
                 </div>
                 <p className="text-sm text-sponsor-orange font-semibold mb-4">
                   <span title={HEATMAP_GLOSSARY.tier} className="cursor-help border-b border-dotted border-orange-400/60">
-                    Tier
+                    Priority
                   </span>{" "}
-                  <HeatmapAbbr term={TIER_GLOSS[preview.tier] ?? "tier"}>{preview.tier}</HeatmapAbbr>
+                  <HeatmapAbbr term={TIER_GLOSS[preview.tier] ?? "tier"}>{heatmapTierLabel(preview.tier)}</HeatmapAbbr>
                   {" · "}
                   <span title="Max of estimated spend across intake requests (no contract) used as the ES denominator.">
                     Pipeline max est. spend

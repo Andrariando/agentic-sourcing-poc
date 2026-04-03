@@ -19,19 +19,20 @@ export const HEATMAP_GLOSSARY = {
   acv: "ACV — Annual Contract Value: yearly value of the agreement (optional config via HEATMAP_FIS_USE_ACV).",
   tcv: "TCV — Total Contract Value: full value over the contract term (default for FIS in batch scoring).",
   tier:
-    "Tier — Priority band from the total score: T1 most urgent through T4 lowest; drives review and approval routing.",
-  t1: "Tier 1 — Critical (score ≥ 8.0): immediate sourcing action.",
-  t2: "Tier 2 — High (6.0–7.99): plan within the quarter.",
-  t3: "Tier 3 — Medium (4.0–5.99): monitor.",
-  t4: "Tier 4 — Low (score < 4.0): defer unless capacity allows.",
-  kpi: "KPI — Key Performance Indicator: pipeline efficiency metric in the outcomes matrix.",
-  kli: "KLI — Learning / intervention lens: tracks overrides, edits, and similar human-in-the-loop signals.",
+    "Priority band from total score: High is most urgent through Lowest; drives review and approval routing.",
+  t1: "High priority — score ≥ 8.0: immediate / critical sourcing action.",
+  t2: "Medium priority — 6.0–7.99: benchmark / plan within the quarter.",
+  t3: "Low priority — 4.0–5.99: monitor.",
+  t4: "Lowest priority — score < 4.0: defer unless capacity allows.",
+  kpi: "KPI — Key Performance Indicator: how well the process or model is performing on outcomes (time, quality, savings, etc.).",
+  kli:
+    "KLI — Key Learning Indicator: signals about human trust, calibration, and friction — e.g. edit density on AI/draft outputs, override rate, rework loops, and how often people change recommended numbers or gates. High friction often means teach the model, fix the playbook, or clarify policy — not only that something was “late.”",
   chartAxisX:
     "Horizontal axis: renewals blend FIS with SCS; new requests blend ES with CSIS (all 0–10 sub-scores).",
   chartAxisY:
     "Vertical axis: renewals blend EUS and RSS; new requests use IUS (implementation urgency).",
   agenticScore:
-    "Total weighted score (0–10) from the scoring engine before human tier override; combines the visible sub-scores.",
+    "Total weighted score (0–10) from the scoring engine before human priority override; combines the visible sub-scores.",
 } as const;
 
 export type HeatmapGlossaryKey = keyof typeof HEATMAP_GLOSSARY;

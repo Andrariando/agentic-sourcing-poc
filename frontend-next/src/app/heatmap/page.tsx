@@ -14,6 +14,7 @@ import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, Res
 import { apiFetch } from "@/lib/api-fetch";
 import { getApiBaseUrl, apiConnectivityHint } from "@/lib/api-base";
 import { HeatmapAbbr, HEATMAP_GLOSSARY, type HeatmapGlossaryKey } from "@/lib/heatmap-glossary";
+import { heatmapTierLabel } from "@/lib/heatmap-tier-display";
 
 const TIER_TOOLTIP: Record<string, HeatmapGlossaryKey> = {
   T1: "t1",
@@ -44,6 +45,12 @@ function normalizeWeightGroup(w: Record<string, number>, keys: readonly string[]
   if (s < 1e-9) return copy;
   for (const k of keys) copy[k] = Math.max(0.01, (copy[k] ?? 0) / s);
   return copy;
+}
+
+/** Maps a 0–1 weight to horizontal position on a range input with min=1, max=99. */
+function weightToSliderTrackPercent(weight: number | undefined): number {
+  const sliderVal = Math.min(99, Math.max(1, Math.round((weight ?? 0.2) * 100)));
+  return ((sliderVal - 1) / 98) * 100;
 }
 
 /** Match backend tier bands (intake_scoring / learned_weights). */
@@ -114,6 +121,8 @@ export default function HeatmapPriorityPage() {
   >(null);
   const [feedbackHistoryLoading, setFeedbackHistoryLoading] = useState(false);
   const [scoringWeights, setScoringWeights] = useState<Record<string, number> | null>(null);
+  /** Snapshot of API weights for this review session — anchor for the red benchmark markers. */
+  const [baselineScoringWeights, setBaselineScoringWeights] = useState<Record<string, number> | null>(null);
   const [reviewSaveNotice, setReviewSaveNotice] = useState<{
     kind: "success" | "error";
     message: string;
@@ -171,6 +180,12 @@ export default function HeatmapPriorityPage() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [copilotOpen]);
+
+  useEffect(() => {
+    if (reviewOpp) return;
+    setScoringWeights(null);
+    setBaselineScoringWeights(null);
+  }, [reviewOpp]);
 
   useEffect(() => {
     if (!reviewSaveNotice) return;
@@ -257,6 +272,7 @@ export default function HeatmapPriorityPage() {
     setFeedbackHistory(null);
     setFeedbackHistoryLoading(true);
     setScoringWeights(null);
+    setBaselineScoringWeights(null);
     try {
       const base = getApiBaseUrl();
       const [histRes, wRes] = await Promise.all([
@@ -270,7 +286,11 @@ export default function HeatmapPriorityPage() {
       }
       if (wRes.ok) {
         const wd = (await wRes.json()) as { weights?: Record<string, number> };
-        if (wd.weights && typeof wd.weights === "object") setScoringWeights({ ...wd.weights });
+        if (wd.weights && typeof wd.weights === "object") {
+          const snap = { ...wd.weights };
+          setScoringWeights(snap);
+          setBaselineScoringWeights({ ...snap });
+        }
       }
     } catch {
       setFeedbackHistory([]);
@@ -335,11 +355,11 @@ export default function HeatmapPriorityPage() {
           snap?.total_score != null && !Number.isNaN(Number(snap.total_score))
             ? ` Priority score is now ${Number(snap.total_score).toFixed(1)}/10.`
             : "";
-        const baseSavedMsg = `Review saved for ${reviewOpp.supplier_name || "this opportunity"} (tier ${feedbackTier}).${scorePart} Your feedback is stored in the audit log.`;
+        const baseSavedMsg = `Review saved for ${reviewOpp.supplier_name || "this opportunity"} (priority ${heatmapTierLabel(feedbackTier)}).${scorePart} Your feedback is stored in the audit log.`;
 
         setReviewOpp(null);
 
-        // Tier 1: single bridge into case management — same path as "Approve Selected" (one case per opportunity).
+        // High priority: single bridge into case management — same path as "Approve Selected" (one case per opportunity).
         if (feedbackTier === "T1") {
           try {
             const approveUrl = `${getApiBaseUrl()}/api/heatmap/approve`;
@@ -368,7 +388,7 @@ export default function HeatmapPriorityPage() {
           }
           setReviewSaveNotice({
             kind: "success",
-            message: `${baseSavedMsg} No case link was returned — open Case Dashboard to continue.`,
+            message: `${baseSavedMsg} No case link was returned — open S2C Case Dashboard to continue.`,
           });
           return;
         }
@@ -399,7 +419,9 @@ export default function HeatmapPriorityPage() {
 
     const nonT1 = selectedOpps.some(o => o.tier !== 'T1');
     if (nonT1) {
-      alert("Error: Only Tier 1 (Critical) opportunities can be pushed directly to Case Dashboard. Please review and approve lower tier items first.");
+      alert(
+        "Error: Only High priority (Immediate) opportunities can be pushed directly to the S2C Case Dashboard. Please review and approve lower-priority items first."
+      );
       return;
     }
 
@@ -423,7 +445,7 @@ export default function HeatmapPriorityPage() {
           `Success! ${linked} opportunity(ies) linked to case(s)` +
             (data.approved_count ? ` (${data.approved_count} newly created). ` : ". ") +
             (ids ? `Case ID(s): ${ids}. ` : "") +
-            "Open the Case Dashboard to continue."
+            "Open the S2C Case Dashboard to continue."
         );
         setSelectedIds(new Set());
         // Refresh list so server-side Approved status matches the UI.
@@ -689,7 +711,7 @@ export default function HeatmapPriorityPage() {
               className="text-xs font-semibold px-2 py-0.5 rounded bg-slate-100 cursor-help"
               title={HEATMAP_GLOSSARY[TIER_TOOLTIP[data.tier] ?? "tier"]}
             >
-              {data.tier}
+              {heatmapTierLabel(data.tier)}
             </span>
             <span className="font-bold text-sponsor-blue">{data.total_score.toFixed(1)}/10</span>
           </div>
@@ -732,8 +754,10 @@ export default function HeatmapPriorityPage() {
       <div className="max-w-7xl mx-auto space-y-6 pb-20">
         <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Sourcing Priority Heatmap</h1>
-            <p className="text-slate-500 mt-2 text-sm">Agentic continuous evaluation of existing contracts and new requests.</p>
+            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Sourcing Priority List</h1>
+            <p className="text-slate-500 mt-2 text-sm">
+              Ranked pipeline view (heatmap scoring): agentic evaluation of contracts and new requests.
+            </p>
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-3 bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
@@ -766,21 +790,21 @@ export default function HeatmapPriorityPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
             <h3 className="text-sm font-medium text-slate-500 mb-1">
-              <HeatmapAbbr term="t1">Tier 1</HeatmapAbbr> - Immediate
+              <HeatmapAbbr term="t1">High</HeatmapAbbr> - Immediate
             </h3>
             <p className="text-3xl font-bold text-mit-red">{loading ? "..." : tier1}</p>
             <div className="mt-3 w-full bg-slate-100 rounded-full h-1"><div className="bg-mit-red h-1 rounded-full" style={{width: `${Math.min((tier1 / Math.max(totalMonitored, 1)) * 100, 100)}%`}}></div></div>
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
             <h3 className="text-sm font-medium text-slate-500 mb-1">
-              <HeatmapAbbr term="t2">Tier 2</HeatmapAbbr> - Benchmark
+              <HeatmapAbbr term="t2">Medium</HeatmapAbbr> - Benchmark
             </h3>
             <p className="text-3xl font-bold text-orange-500">{loading ? "..." : tier2}</p>
             <div className="mt-3 w-full bg-slate-100 rounded-full h-1"><div className="bg-orange-500 h-1 rounded-full" style={{width: `${Math.min((tier2 / Math.max(totalMonitored, 1)) * 100, 100)}%`}}></div></div>
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
             <h3 className="text-sm font-medium text-slate-500 mb-1">
-              <HeatmapAbbr term="t3">Tier 3</HeatmapAbbr> - Monitor
+              <HeatmapAbbr term="t3">Low</HeatmapAbbr> - Monitor
             </h3>
             <p className="text-3xl font-bold text-blue-500">{loading ? "..." : tier3}</p>
             <div className="mt-3 w-full bg-slate-100 rounded-full h-1"><div className="bg-blue-500 h-1 rounded-full" style={{width: `${Math.min((tier3 / Math.max(totalMonitored, 1)) * 100, 100)}%`}}></div></div>
@@ -831,19 +855,19 @@ export default function HeatmapPriorityPage() {
             <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-4 text-xs font-medium text-slate-500">
               <span className="flex items-center gap-2 cursor-help" title={HEATMAP_GLOSSARY.t1}>
                 <div className="w-3 h-3 rounded-full bg-mit-red opacity-80" />
-                Tier 1 (Critical)
+                High — Immediate
               </span>
               <span className="flex items-center gap-2 cursor-help" title={HEATMAP_GLOSSARY.t2}>
                 <div className="w-3 h-3 rounded-full bg-orange-500 opacity-80" />
-                Tier 2 (Immediate)
+                Medium — Benchmark
               </span>
               <span className="flex items-center gap-2 cursor-help" title={HEATMAP_GLOSSARY.t3}>
                 <div className="w-3 h-3 rounded-full bg-blue-500 opacity-80" />
-                Tier 3 (Monitor)
+                Low — Monitor
               </span>
               <span className="flex items-center gap-2 cursor-help" title={HEATMAP_GLOSSARY.t4}>
                 <div className="w-3 h-3 rounded-full bg-slate-500 opacity-80" />
-                Tier 4 (Low)
+                Lowest — Defer
               </span>
             </div>
             <p className="mt-3 text-[11px] text-slate-400 text-center flex flex-wrap justify-center gap-x-1 gap-y-0.5">
@@ -899,7 +923,7 @@ export default function HeatmapPriorityPage() {
                     <th className="px-6 py-4 font-medium">Supplier / Request</th>
                     <th className="px-6 py-4 font-medium">Category</th>
                     <th className="px-6 py-4 font-medium cursor-help" title={HEATMAP_GLOSSARY.tier}>
-                      Tier
+                      Priority
                     </th>
                     <th className="px-6 py-4 font-medium cursor-help" title="Component scores (hover each chip below). Renewals: EUS, FIS, RSS, SCS, SAS. New requests: IUS, ES, CSIS, SAS.">
                       Score Breakdown
@@ -952,22 +976,22 @@ export default function HeatmapPriorityPage() {
                           <td className="px-6 py-4">
                             {opp.tier === 'T1' && (
                               <span title={HEATMAP_GLOSSARY.t1} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-mit-red ring-1 ring-inset ring-red-100 border border-mit-red/20 cursor-help">
-                                T1
+                                {heatmapTierLabel(opp.tier)}
                               </span>
                             )}
                             {opp.tier === 'T2' && (
                               <span title={HEATMAP_GLOSSARY.t2} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700 ring-1 ring-inset ring-orange-100 border border-orange-200 cursor-help">
-                                T2
+                                {heatmapTierLabel(opp.tier)}
                               </span>
                             )}
                             {opp.tier === 'T3' && (
                               <span title={HEATMAP_GLOSSARY.t3} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-sponsor-blue border border-sponsor-blue/20 cursor-help">
-                                T3
+                                {heatmapTierLabel(opp.tier)}
                               </span>
                             )}
                             {opp.tier === 'T4' && (
                               <span title={HEATMAP_GLOSSARY.t4} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200 cursor-help">
-                                T4
+                                {heatmapTierLabel(opp.tier)}
                               </span>
                             )}
                           </td>
@@ -1087,7 +1111,7 @@ export default function HeatmapPriorityPage() {
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-slate-800">Opportunity quick reference</p>
                     <p className="text-xs text-slate-500 mt-1">
-                      Search by supplier, contract_id, request_id, or tier. Click a row to insert its ID into your question.
+                      Search by supplier, contract_id, request_id, or priority (e.g. High or Medium). Click a row to insert its ID into your question.
                     </p>
                   </div>
                   <span className="text-[11px] text-slate-400 shrink-0">{opportunities.length} loaded</span>
@@ -1096,14 +1120,14 @@ export default function HeatmapPriorityPage() {
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
                   value={copilotRefQuery}
                   onChange={(e) => setCopilotRefQuery(e.target.value)}
-                  placeholder='e.g. "TechGlobal", "REQ-", "T1", "contract"'
+                  placeholder='e.g. "TechGlobal", "REQ-", "High", "Medium", "contract"'
                 />
                 <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-200">
                   <table className="w-full text-left text-xs">
                     <thead className="sticky top-0 bg-slate-50 border-b border-slate-200">
                       <tr>
                         <th className="px-3 py-2 font-semibold text-slate-600">Supplier / Request</th>
-                        <th className="px-3 py-2 font-semibold text-slate-600">Tier</th>
+                        <th className="px-3 py-2 font-semibold text-slate-600">Priority</th>
                         <th className="px-3 py-2 font-semibold text-slate-600">Total</th>
                       </tr>
                     </thead>
@@ -1117,6 +1141,7 @@ export default function HeatmapPriorityPage() {
                             o.contract_id,
                             o.request_id,
                             o.tier,
+                            heatmapTierLabel(o.tier),
                             o.category,
                             o.subcategory,
                           ]
@@ -1161,7 +1186,7 @@ export default function HeatmapPriorityPage() {
                                         : "bg-slate-100 text-slate-600"
                                 }`}
                               >
-                                {o.tier}
+                                {heatmapTierLabel(o.tier)}
                               </span>
                             </td>
                             <td className="px-3 py-2 font-mono text-slate-700">{Number(o.total_score || 0).toFixed(2)}</td>
@@ -1250,7 +1275,9 @@ export default function HeatmapPriorityPage() {
                         Choose the <strong className="font-medium text-slate-700">category</strong> whose policy block should be used.
                       </li>
                       <li>
-                        Optionally add <strong className="font-medium text-slate-700">supplier</strong> and <strong className="font-medium text-slate-700">current tier</strong> so the check can use that context.
+                        Optionally add <strong className="font-medium text-slate-700">supplier</strong> and{" "}
+                        <strong className="font-medium text-slate-700">current priority</strong> (e.g. Medium) so the check can use
+                        that context.
                       </li>
                       <li>
                         Paste the full <strong className="font-medium text-slate-700">feedback or rationale</strong> (at least a short paragraph; very short snippets are rejected).
@@ -1260,7 +1287,7 @@ export default function HeatmapPriorityPage() {
                       </li>
                     </ol>
                     <p className="text-slate-500">
-                      <strong className="text-slate-600">Suggestion only</strong> — does not change scores, tiers, or any files. Full
+                      <strong className="text-slate-600">Suggestion only</strong> — does not change scores, priority bands, or any files. Full
                       analysis needs <code className="text-slate-600">OPENAI_API_KEY</code> on the server; if it’s missing, you’ll see a
                       message that automatic checks aren’t available.
                     </p>
@@ -1290,12 +1317,12 @@ export default function HeatmapPriorityPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">Current tier (optional)</label>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Current priority (optional)</label>
                       <input
                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
                         value={policyTier}
                         onChange={(e) => setPolicyTier(e.target.value)}
-                        placeholder="T2"
+                        placeholder="e.g. Medium"
                       />
                     </div>
                   </div>
@@ -1483,7 +1510,7 @@ export default function HeatmapPriorityPage() {
                     className="text-xs font-bold text-mit-red mt-2 uppercase bg-red-50 inline-block px-2 py-1 rounded cursor-help"
                     title={HEATMAP_GLOSSARY[TIER_TOOLTIP[reviewOpp.tier] ?? "tier"]}
                   >
-                    {reviewOpp.tier} - {reviewOpp.recommended_action_window}
+                    {heatmapTierLabel(reviewOpp.tier)} — {reviewOpp.recommended_action_window}
                   </p>
                 </div>
               </div>
@@ -1606,17 +1633,17 @@ export default function HeatmapPriorityPage() {
                         value={feedbackTier} 
                         onChange={(e) => setFeedbackTier(e.target.value)}
                       >
-                        <option value="T1">T1 - Critical</option>
-                        <option value="T2">T2 - Immediate</option>
-                        <option value="T3">T3 - Monitor</option>
-                        <option value="T4">T4 - Low Priority</option>
+                        <option value="T1">High — Immediate</option>
+                        <option value="T2">Medium — Benchmark</option>
+                        <option value="T3">Low — Monitor</option>
+                        <option value="T4">Lowest — Defer</option>
                       </select>
                     </div>
                     <div className="col-span-2">
                       <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Rationale & Next Steps</label>
                       <textarea 
                         className="w-full border border-slate-300 rounded-lg shadow-sm py-3 px-4 text-sm focus:ring-2 focus:ring-sponsor-blue/20 focus:border-sponsor-blue min-h-[100px] placeholder-slate-400 bg-slate-50"
-                        placeholder="e.g., 'We decided to consolidate this supplier last week, pushing to Q3 instead. Downgrading to Tier 3 monitor.'"
+                        placeholder="e.g., 'We decided to consolidate this supplier last week, pushing to Q3 instead. Downgrading to Low (monitor) priority.'"
                         value={feedbackReason}
                         onChange={(e) => setFeedbackReason(e.target.value)}
                       />
@@ -1634,39 +1661,90 @@ export default function HeatmapPriorityPage() {
                       {reviewOpp.contract_id == null || reviewOpp.contract_id === ""
                         ? "new requests (PS_new)"
                         : "renewals (PS_contract)"}
-                      . Values renormalize to 100%. Your tier choice still applies a small learning nudge toward that band.
+                      . Values renormalize to 100%. Your priority choice still applies a small learning nudge toward that band.
+                    </p>
+                    <p className="text-[11px] text-slate-600 mb-3 flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 shrink-0">
+                        <span className="w-2 h-2 rounded-full bg-red-600 ring-2 ring-white shadow shrink-0" />
+                        <span className="border-l-2 border-dotted border-red-500 h-3 inline-block w-0 align-middle" />
+                      </span>
+                      <span>
+                        Red dot and dotted line = <strong className="text-slate-700">global average</strong> weight when this panel
+                        opened (anchor). Numbers on the right show percentage points vs that average after renormalization.
+                      </span>
                     </p>
                     <div className="space-y-3">
                       {(reviewOpp.contract_id == null || reviewOpp.contract_id === ""
                         ? PS_NEW_WEIGHT_KEYS
                         : PS_CONTRACT_WEIGHT_KEYS
-                      ).map((k) => (
-                        <div key={k}>
-                          <div className="flex justify-between text-xs font-medium text-slate-600 mb-1">
-                            <span>{WEIGHT_LABELS[k] ?? k}</span>
-                            <span>{((scoringWeights[k] ?? 0) * 100).toFixed(1)}%</span>
+                      ).map((k) => {
+                        const cur = scoringWeights[k] ?? 0;
+                        const base = baselineScoringWeights?.[k];
+                        const deltaPp = base != null ? Math.round((cur - base) * 1000) / 10 : null;
+                        const anchorLeftPct = base != null ? weightToSliderTrackPercent(base) : null;
+                        return (
+                          <div key={k}>
+                            <div className="flex justify-between text-xs font-medium text-slate-600 mb-1 gap-2">
+                              <span className="min-w-0">{WEIGHT_LABELS[k] ?? k}</span>
+                              <span className="text-right shrink-0 leading-tight">
+                                <span className="text-slate-800">{(cur * 100).toFixed(1)}%</span>
+                                {deltaPp != null && (
+                                  <span
+                                    className={`ml-1.5 block text-[10px] font-semibold sm:inline sm:ml-1.5 ${
+                                      Math.abs(deltaPp) < 0.05
+                                        ? "text-slate-400"
+                                        : deltaPp > 0
+                                          ? "text-red-600"
+                                          : "text-emerald-700"
+                                    }`}
+                                    title="Difference vs global average for this factor (percentage points)"
+                                  >
+                                    {Math.abs(deltaPp) < 0.05
+                                      ? "at avg"
+                                      : `${deltaPp > 0 ? "+" : ""}${deltaPp.toFixed(1)} pp vs avg`}
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                            <div className="relative w-full h-8 flex items-center">
+                              {anchorLeftPct != null && (
+                                <div
+                                  className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 h-6 z-10"
+                                  aria-hidden
+                                >
+                                  <div
+                                    className="absolute top-0 bottom-0 -translate-x-1/2 flex flex-col items-center"
+                                    style={{ left: `${anchorLeftPct}%` }}
+                                    title={`Global average: ${((base ?? 0) * 100).toFixed(1)}%`}
+                                  >
+                                    <span className="w-2 h-2 rounded-full bg-red-600 border-2 border-white shadow shrink-0 z-20" />
+                                    <span className="w-0 flex-1 min-h-[10px] border-l-2 border-dotted border-red-600 opacity-90" />
+                                  </div>
+                                </div>
+                              )}
+                              <input
+                                type="range"
+                                min={1}
+                                max={99}
+                                step={1}
+                                value={Math.min(99, Math.max(1, Math.round((scoringWeights[k] ?? 0.2) * 100)))}
+                                onChange={(e) => {
+                                  const v = Number(e.target.value) / 100;
+                                  const keys =
+                                    reviewOpp.contract_id == null || reviewOpp.contract_id === ""
+                                      ? PS_NEW_WEIGHT_KEYS
+                                      : PS_CONTRACT_WEIGHT_KEYS;
+                                  setScoringWeights((prev) => {
+                                    if (!prev) return prev;
+                                    return normalizeWeightGroup({ ...prev, [k]: v }, keys);
+                                  });
+                                }}
+                                className="relative z-20 w-full accent-[#2563eb]"
+                              />
+                            </div>
                           </div>
-                          <input
-                            type="range"
-                            min={1}
-                            max={99}
-                            step={1}
-                            value={Math.min(99, Math.max(1, Math.round((scoringWeights[k] ?? 0.2) * 100)))}
-                            onChange={(e) => {
-                              const v = Number(e.target.value) / 100;
-                              const keys =
-                                reviewOpp.contract_id == null || reviewOpp.contract_id === ""
-                                  ? PS_NEW_WEIGHT_KEYS
-                                  : PS_CONTRACT_WEIGHT_KEYS;
-                              setScoringWeights((prev) => {
-                                if (!prev) return prev;
-                                return normalizeWeightGroup({ ...prev, [k]: v }, keys);
-                              });
-                            }}
-                            className="w-full accent-[#2563eb]"
-                          />
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                     {weightAdjustPreview && (
                       <div className="mt-4 rounded-lg border border-indigo-100 bg-indigo-50/90 p-4">
@@ -1676,7 +1754,10 @@ export default function HeatmapPriorityPage() {
                         <p className="text-sm text-slate-800">
                           With the sliders above and the component scores in this modal, the linear score would be about{" "}
                           <strong className="text-indigo-900">{weightAdjustPreview.total.toFixed(2)}</strong>
-                          /10 → math tier <strong>{weightAdjustPreview.mathTier}</strong>
+                          /10 → math band{" "}
+                          <strong>
+                            {heatmapTierLabel(weightAdjustPreview.mathTier)}
+                          </strong>
                         </p>
                         {weightAdjustPreview.currentTotal != null && (
                           <p className="text-xs text-slate-600 mt-2">
@@ -1694,7 +1775,7 @@ export default function HeatmapPriorityPage() {
                         <p className="text-[11px] text-slate-500 mt-3 leading-snug">
                           This does not include category policy weights from{" "}
                           <code className="text-[10px] bg-white/80 px-1 rounded">category_cards.json</code> or the
-                          feedback-memory learning nudge — those can shift the stored total after save. The tier you pick
+                          feedback-memory learning nudge — those can shift the stored total after save. The priority you pick
                           below is still recorded as your decision.
                         </p>
                       </div>

@@ -41,11 +41,17 @@ export default function CaseDashboardPage() {
   return (
     <div className="flex-1 overflow-y-auto p-8 bg-slate-50 min-h-full">
       <div className="max-w-7xl mx-auto space-y-6">
-        <header className="flex justify-between items-end mb-8">
+        <header className="flex flex-wrap justify-between items-end gap-4 mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Active Sourcing Cases</h1>
-            <p className="text-slate-500 mt-2 text-sm">Case management workflow.</p>
+            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">S2C Case Dashboard</h1>
+            <p className="text-slate-500 mt-2 text-sm">Source-to-contract execution — active cases and DTP stages.</p>
           </div>
+          <Link
+            href="/s2c/performance"
+            className="text-sm font-semibold text-sponsor-blue hover:text-blue-800 border border-blue-200 bg-white rounded-lg px-4 py-2 shadow-sm"
+          >
+            S2C Performance Dashboard →
+          </Link>
         </header>
 
         {/* The Data Table */}

@@ -48,11 +48,11 @@ export default function HeatmapMatrixPage() {
               className="inline-flex items-center gap-1.5 text-sm font-semibold text-sponsor-blue hover:text-blue-800 mb-2"
             >
               <ArrowLeft className="w-4 h-4" />
-              Back to Priority List
+              Back to Sourcing Priority List
             </Link>
-            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Sourcing Opportunity Matrix</h1>
+            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Performance Dashboard</h1>
             <p className="text-slate-500 mt-2 text-sm">
-              KPI and KLI columns for all five Agentic Outcomes, aligned with the heatmap opportunity list.
+              KPI and KLI columns for all five Agentic Outcomes, aligned with the sourcing priority list.
             </p>
           </div>
         </header>

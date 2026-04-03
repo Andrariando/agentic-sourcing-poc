@@ -2,6 +2,7 @@
 
 import React from "react";
 import { HEATMAP_GLOSSARY, type HeatmapGlossaryKey } from "@/lib/heatmap-glossary";
+import { heatmapTierLabel } from "@/lib/heatmap-tier-display";
 
 const TIER_TOOLTIP: Record<string, HeatmapGlossaryKey> = {
   T1: "t1",
@@ -25,8 +26,8 @@ export default function SourcingOpportunityMatrix({ opportunities }: SourcingOpp
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
       <div className="p-5 border-b border-slate-200 bg-slate-50/50 flex justify-between items-center flex-wrap gap-3">
         <div>
-          <h2 className="text-lg font-bold text-slate-900 tracking-tight">Sourcing Opportunity Matrix</h2>
-          <p className="text-sm text-slate-500 mt-1">Per-opportunity tracking of all 5 Agentic Outcomes</p>
+          <h2 className="text-lg font-bold text-slate-900 tracking-tight">Performance Dashboard</h2>
+          <p className="text-sm text-slate-500 mt-1">Per-opportunity tracking of all 5 Agentic Outcomes (prioritization)</p>
         </div>
         <div className="flex gap-4 items-center">
           <span
@@ -61,7 +62,7 @@ export default function SourcingOpportunityMatrix({ opportunities }: SourcingOpp
                 className="px-3 py-3 border-r border-slate-200 font-syne text-[11px] font-bold uppercase tracking-widest text-slate-500 align-bottom text-center cursor-help"
                 title={HEATMAP_GLOSSARY.tier}
               >
-                Tier
+                Priority
               </th>
               <th
                 colSpan={2}
@@ -212,7 +213,7 @@ export default function SourcingOpportunityMatrix({ opportunities }: SourcingOpp
                         }`}
                         title={HEATMAP_GLOSSARY[TIER_TOOLTIP[opp.tier] ?? "tier"]}
                       >
-                        {opp.tier}
+                        {heatmapTierLabel(opp.tier)}
                       </span>
                     </td>
 
