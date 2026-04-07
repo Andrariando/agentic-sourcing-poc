@@ -6,6 +6,7 @@ import {
   List,
   X,
   MessageCircle,
+  ExternalLink,
   CheckCircle2,
   AlertCircle,
   ThumbsUp,
