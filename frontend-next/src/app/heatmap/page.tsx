@@ -1331,7 +1331,7 @@ export default function HeatmapPriorityPage() {
                         {parseSimpleMarkdown(qaAnswer)}
                       </div>
                       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white/90 px-3 py-2">
-                        <span className="text-xs font-medium text-slate-500">Was this helpful?</span>
+                        <span className="text-xs font-medium text-slate-500">Rate this response</span>
                         <button
                           type="button"
                           disabled={qaVoteLoading}
@@ -1343,7 +1343,7 @@ export default function HeatmapPriorityPage() {
                           } disabled:opacity-50`}
                         >
                           <ThumbsUp className="w-3.5 h-3.5" />
-                          Thumbs up
+                          Useful
                         </button>
                         <button
                           type="button"
@@ -1356,7 +1356,7 @@ export default function HeatmapPriorityPage() {
                           } disabled:opacity-50`}
                         >
                           <ThumbsDown className="w-3.5 h-3.5" />
-                          Thumbs down
+                          Needs work
                         </button>
                         {qaVoteNotice && (
                           <span className="text-xs text-slate-500">{qaVoteNotice}</span>

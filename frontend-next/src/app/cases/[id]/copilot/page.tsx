@@ -217,7 +217,7 @@ function buildAssistantWelcome(data: any): string {
   const stage = data.dtp_stage || "DTP-01";
   const focus = data.copilot_focus;
   const title = focus?.stage_title ? ` — ${focus.stage_title}` : "";
-  let msg = `I'm your Supervisor for **${name}**. We're in **${stage}${title}**.\n\n`;
+  let msg = `I'm your AI assistant for **${name}**. We're in **${stage}${title}**.\n\n`;
   if (focus?.stage_description) msg += `${focus.stage_description}\n\n`;
 
   msg +=
@@ -1275,7 +1275,7 @@ export default function CaseProcuraBotPage() {
                     {msg.role === "assistant" && (
                       <div className="mt-3 pt-2 border-t border-slate-100">
                         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white/90 px-3 py-2">
-                        <span className="text-[11px] font-medium text-slate-500">Was this helpful?</span>
+                        <span className="text-[11px] font-medium text-slate-500">Rate this response</span>
                         <button
                           type="button"
                           disabled={msgVoteBusyIdx === i}
@@ -1287,7 +1287,7 @@ export default function CaseProcuraBotPage() {
                           }`}
                         >
                           <ThumbsUp className="w-3 h-3" />
-                          Thumbs up
+                          Useful
                         </button>
                         <button
                           type="button"
@@ -1300,7 +1300,7 @@ export default function CaseProcuraBotPage() {
                           }`}
                         >
                           <ThumbsDown className="w-3 h-3" />
-                          Thumbs down
+                          Needs work
                         </button>
                         </div>
                       </div>
