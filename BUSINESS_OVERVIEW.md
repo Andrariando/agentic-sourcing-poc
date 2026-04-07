@@ -10,7 +10,7 @@
 This repository contains **two complementary procurement capabilities**:
 
 1. **Opportunity Heatmap** (early-warning + prioritization): continuously scores and ranks **renewals** and **new requests** into **T1–T4** so teams focus on the highest-value / highest-urgency work first.
-2. **Legacy DTP Copilot** (execution + governance): a structured, human-in-the-loop copilot that helps execute sourcing work through **DTP-01 → DTP-06**, producing artifacts (strategy, RFx, scoring, negotiation, contract, implementation) and capturing decisions for traceability.
+2. **Legacy DTP ProcuraBot** (execution + governance): a structured, human-in-the-loop copilot that helps execute sourcing work through **DTP-01 → DTP-06**, producing artifacts (strategy, RFx, scoring, negotiation, contract, implementation) and capturing decisions for traceability.
 
 **How they work together**: Heatmap identifies and prioritizes opportunities; when a human approves an opportunity, it can create a new DTP case to execute the work in a governed workflow.
 

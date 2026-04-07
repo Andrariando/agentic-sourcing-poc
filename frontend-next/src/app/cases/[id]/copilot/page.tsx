@@ -2,12 +2,14 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
-import { CheckCircle2, AlertTriangle, FileText, ShieldCheck, ChevronRight, MessageSquare, Briefcase, Clock, Terminal, Activity, Users, UserPlus, Download } from "lucide-react";
+import { CheckCircle2, AlertTriangle, FileText, ShieldCheck, ChevronRight, MessageSquare, Briefcase, Clock, Terminal, Activity, Users, UserPlus, Download, ThumbsUp, ThumbsDown } from "lucide-react";
 import { motion } from "framer-motion";
 import { apiFetch } from "@/lib/api-fetch";
 import { getApiBaseUrl } from "@/lib/api-base";
 import { getMockCasePerformanceInsight } from "@/lib/mock-case-performance";
 import { buildDecisionDataForStage } from "@/lib/dtp-approve-defaults";
+import ProcuraBotIdentity from "@/components/branding/ProcuraBotIdentity";
+import { PROCURABOT_BRAND } from "@/lib/procurabot-brand";
 
 /** Normalize common LLM quirks so chat reads cleanly before Markdown pass. */
 function normalizeAssistantText(text: string): string {
@@ -221,7 +223,7 @@ function buildAssistantWelcome(data: any): string {
   msg +=
     "**Editing RFx or contract drafts in Word:** use the left panel → **Word round-trip · RFx & contract**. " +
     "Typical loop: **download** a draft (.docx from *Work products* or *Word*), **open in Microsoft Word** and edit, **save**, then **Upload .docx** here under the right slot (RFx vs contract). " +
-    "I'll read the uploaded text when you chat; you can also use **Apply Copilot revision** for a full AI pass, then **Word** to download again. " +
+    "I'll read the uploaded text when you chat; you can also use **Apply ProcuraBot revision** for a full AI pass, then **Word** to download again. " +
     "Ask me anytime *how do I edit the document?* and I'll walk through it.\n\n";
 
   const pending = focus?.pending_questions || [];
@@ -247,7 +249,7 @@ function isStageDecisionRecordedOnServer(caseDetails: any): boolean {
   return Object.keys(expected).every((k) => readDecisionAnswer(row[k]));
 }
 
-export default function CaseCopilotPage() {
+export default function CaseProcuraBotPage() {
   const params = useParams();
   const caseId = params.id as string;
 
@@ -259,6 +261,8 @@ export default function CaseCopilotPage() {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [msgVoteByIdx, setMsgVoteByIdx] = useState<Record<number, "up" | "down">>({});
+  const [msgVoteBusyIdx, setMsgVoteBusyIdx] = useState<number | null>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
   const initialChatHydrated = useRef(false);
 
@@ -488,6 +492,32 @@ export default function CaseCopilotPage() {
     );
   };
 
+  const submitAssistantVote = async (msgIdx: number, content: string, vote: "up" | "down") => {
+    if (!caseId || !content?.trim()) return;
+    setMsgVoteBusyIdx(msgIdx);
+    try {
+      const res = await apiFetch(`${getApiBaseUrl()}/api/cases/${encodeURIComponent(caseId)}/copilot/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vote,
+          assistant_message: content,
+          user_id: "human-manager",
+        }),
+      });
+      if (!res.ok) {
+        const t = await res.text().catch(() => "");
+        throw new Error(t || `Feedback failed (${res.status})`);
+      }
+      setMsgVoteByIdx((prev) => ({ ...prev, [msgIdx]: vote }));
+    } catch (e) {
+      console.error(e);
+      alert("Could not save feedback on this response.");
+    } finally {
+      setMsgVoteBusyIdx(null);
+    }
+  };
+
   const hasLiveCase = Boolean(caseDetails);
   const displayName = caseDetails?.name || "Case";
   const displayCategory = caseDetails?.category_id || "Category";
@@ -571,7 +601,7 @@ export default function CaseCopilotPage() {
         <div className="bg-sponsor-blue text-white p-6 sticky top-0 z-10 shadow-md flex flex-row flex-wrap gap-3 justify-between items-center shrink-0">
           <div className="min-w-0 flex-1">
             <h1 className="text-2xl font-bold tracking-tight mb-1 font-syne">
-              {hasLiveCase ? displayName : caseLoading ? "Loading case…" : "Case Copilot"}
+              {hasLiveCase ? displayName : caseLoading ? "Loading case…" : "Case ProcuraBot"}
             </h1>
             <div className="flex items-center gap-3 text-sm text-blue-100 font-medium flex-wrap min-w-0">
               {hasLiveCase ? (
@@ -624,7 +654,7 @@ export default function CaseCopilotPage() {
                     <p className="text-slate-600 text-sm mt-2 leading-relaxed">
                       {caseError
                         ? `${caseError} The link may be wrong or the case was removed. Choose another case from the dashboard.`
-                        : "No case is loaded yet. Open the Case Dashboard and select a case to see the summary, stage, governance checklist, and Copilot context."}
+                        : "No case is loaded yet. Open the Case Dashboard and select a case to see the summary, stage, governance checklist, and ProcuraBot context."}
                     </p>
                     {caseId ? (
                       <p className="text-xs text-slate-500 mt-3 font-mono break-all">Requested ID: {caseId}</p>
@@ -663,7 +693,7 @@ export default function CaseCopilotPage() {
                   {strategyConfidence ? (
                     <span
                       className="cursor-help border-b border-dotted border-amber-800/50"
-                      title="From this case’s saved Strategy output: latest_agent_output.confidence (0–1 in the database), set by the Strategy agent rules, LLM step, or seed data. Copilot chat may phrase a different % — trust the saved field when they disagree."
+                      title="From this case’s saved Strategy output: latest_agent_output.confidence (0–1 in the database), set by the Strategy agent rules, LLM step, or seed data. ProcuraBot chat may phrase a different % — trust the saved field when they disagree."
                     >
                       {" "}· Strategy model confidence: {strategyConfidence}
                     </span>
@@ -683,7 +713,7 @@ export default function CaseCopilotPage() {
                   ))}
                 </ul>
               ) : (
-                <p className="text-sm text-slate-400 italic">No key findings yet—upload a document or ask Copilot to analyze.</p>
+                <p className="text-sm text-slate-400 italic">No key findings yet—upload a document or ask ProcuraBot to analyze.</p>
               )}
               {riskAssessment && (
                 <p className="text-sm text-slate-700 mt-3 pt-3 border-t border-slate-100"><span className="font-semibold">Risk note:</span> {riskAssessment}</p>
@@ -882,13 +912,13 @@ export default function CaseCopilotPage() {
                 <p className="text-sm text-slate-600 leading-relaxed">
                   Download everything an agent run produced for this case—RFx sections, strategy text, and suggested next steps—as one{" "}
                   <span className="font-semibold text-slate-800">Markdown</span>, <span className="font-semibold text-slate-800">Word</span>, or{" "}
-                  <span className="font-semibold text-slate-800">PDF</span> file. Run Copilot tasks that emit artifacts first if a pack is empty.
+                  <span className="font-semibold text-slate-800">PDF</span> file. Run ProcuraBot tasks that emit artifacts first if a pack is empty.
                 </p>
                 {packExportError ? (
                   <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{packExportError}</p>
                 ) : null}
                 {artifactPackSummaries.length === 0 ? (
-                  <p className="text-sm text-slate-400 italic py-1">No artifact packs stored yet—ask Copilot to draft an RFx or run a workflow that saves artifacts.</p>
+                  <p className="text-sm text-slate-400 italic py-1">No artifact packs stored yet—ask ProcuraBot to draft an RFx or run a workflow that saves artifacts.</p>
                 ) : (
                   <ul className="space-y-3">
                     {artifactPackSummaries.map((row) => (
@@ -960,9 +990,9 @@ export default function CaseCopilotPage() {
                   <span className="font-semibold text-slate-800">Like editing locally in Word, then syncing:</span>{" "}
                   <strong className="text-slate-800">Download</strong> (.docx from *Work products* or *Word* below) →{" "}
                   <strong className="text-slate-800">edit in Microsoft Word</strong> → <strong className="text-slate-800">save</strong> →{" "}
-                  <strong className="text-slate-800">Upload .docx</strong> in the right slot. Copilot reads the new text when you chat; ask{" "}
+                  <strong className="text-slate-800">Upload .docx</strong> in the right slot. ProcuraBot reads the new text when you chat; ask{" "}
                   <em className="text-slate-700">how do I edit the document?</em> anytime. You can also run{" "}
-                  <span className="font-semibold text-slate-800">Apply Copilot revision</span>, then the <strong className="text-slate-800">Word</strong> button to download again.
+                  <span className="font-semibold text-slate-800">Apply ProcuraBot revision</span>, then the <strong className="text-slate-800">Word</strong> button to download again.
                 </p>
                 {wdError ? (
                   <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{wdError}</p>
@@ -1065,7 +1095,7 @@ export default function CaseCopilotPage() {
                           }}
                           className="inline-flex items-center justify-center gap-1 rounded-md bg-indigo-600 text-white px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide hover:bg-indigo-700 disabled:opacity-45"
                         >
-                          {wdBusy === `rv-${key}` ? "…" : "Apply Copilot revision"}
+                          {wdBusy === `rv-${key}` ? "…" : "Apply ProcuraBot revision"}
                         </button>
                         <button
                           type="button"
@@ -1089,7 +1119,7 @@ export default function CaseCopilotPage() {
                       </div>
                       <div className="mt-auto pt-1">
                         <label className="block text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">
-                          Instruction for Copilot rewrite
+                          Instruction for ProcuraBot rewrite
                         </label>
                         <textarea
                           value={instruct}
@@ -1116,7 +1146,7 @@ export default function CaseCopilotPage() {
               <p className="text-sm text-slate-600 mb-4 leading-relaxed">
                 <strong>{displayStage}</strong>
                 {focus?.pending_questions?.length
-                  ? " — Answer step-by-step in **Copilot chat** (same window as the conversation). When prompts are satisfied, say **yes** or **approve** to lock the stage."
+                  ? " — Answer step-by-step in **ProcuraBot chat** (same window as the conversation). When prompts are satisfied, say **yes** or **approve** to lock the stage."
                   : " — Open questions look resolved in chat; say **approve** if you are ready to advance."}
               </p>
               <p className="text-xs text-slate-500 mb-4">
@@ -1174,26 +1204,20 @@ export default function CaseCopilotPage() {
         </motion.div>
       </div>
 
-      {/* RIGHT PANEL: Copilot Chat (40%) */}
+      {/* RIGHT PANEL: ProcuraBot Chat (40%) */}
       <div className="w-[40%] flex flex-col h-full bg-white shadow-2xl z-20">
         
         {/* Chat Header */}
         <header className="px-6 py-4 border-b border-slate-100 bg-white space-y-3">
-          <div className="flex items-center gap-3">
-             <div className="w-8 h-8 rounded-lg bg-sponsor-blue flex items-center justify-center shadow-md">
-               <MessageSquare className="w-4 h-4 text-white" />
-             </div>
-             <div>
-               <h2 className="text-lg font-bold text-slate-900 leading-tight">Case Copilot</h2>
-               <p className="text-xs text-slate-500 font-medium">
-                 {hasLiveCase
-                   ? `${displayStage}${focus?.stage_title ? ` · ${focus.stage_title}` : ""}`
-                   : caseLoading
-                     ? "Loading…"
-                     : "Select a case to begin"}
-               </p>
-             </div>
-          </div>
+          <ProcuraBotIdentity
+            subtitle={
+              hasLiveCase
+                ? `${displayStage}${focus?.stage_title ? ` · ${focus.stage_title}` : ""}`
+                : caseLoading
+                  ? "Loading…"
+                  : "Select a case to begin"
+            }
+          />
           {hasLiveCase && suggestedChatPrompts.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {suggestedChatPrompts.map((q, i) => (
@@ -1222,14 +1246,14 @@ export default function CaseCopilotPage() {
                 <a href="/cases" className="text-sponsor-blue font-semibold underline underline-offset-2">
                   Case Dashboard
                 </a>{" "}
-                and choose a case to open Copilot.
+                and choose a case to open {PROCURABOT_BRAND.name}.
               </p>
             </div>
           ) : (
             <>
               <div className="text-center pb-4">
                 <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-3 py-1 rounded-full uppercase tracking-widest border border-slate-200">
-                  Session Started
+                  {PROCURABOT_BRAND.shortName} Session Started
                 </span>
               </div>
 
@@ -1248,6 +1272,37 @@ export default function CaseCopilotPage() {
                     }`}
                   >
                     {msg.role === "assistant" ? renderMessageContent(msg.content) : msg.content}
+                    {msg.role === "assistant" && (
+                      <div className="mt-3 pt-2 border-t border-slate-100 flex items-center gap-2">
+                        <span className="text-[11px] text-slate-400">Helpful?</span>
+                        <button
+                          type="button"
+                          disabled={msgVoteBusyIdx === i}
+                          onClick={() => void submitAssistantVote(i, String(msg.content || ""), "up")}
+                          className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-[11px] ${
+                            msgVoteByIdx[i] === "up"
+                              ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                          }`}
+                        >
+                          <ThumbsUp className="w-3 h-3" />
+                          Up
+                        </button>
+                        <button
+                          type="button"
+                          disabled={msgVoteBusyIdx === i}
+                          onClick={() => void submitAssistantVote(i, String(msg.content || ""), "down")}
+                          className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-[11px] ${
+                            msgVoteByIdx[i] === "down"
+                              ? "bg-rose-100 text-rose-700 border-rose-200"
+                              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                          }`}
+                        >
+                          <ThumbsDown className="w-3 h-3" />
+                          Down
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -1274,7 +1329,7 @@ export default function CaseCopilotPage() {
             <textarea 
               className="flex-1 bg-transparent resize-none outline-none py-2.5 px-3 text-[15px] text-slate-900 placeholder:text-slate-400"
               rows={1}
-              placeholder="Ask Copilot a question or attach files..."
+              placeholder="Ask ProcuraBot a question or attach files..."
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => {

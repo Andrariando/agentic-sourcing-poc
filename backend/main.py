@@ -5,6 +5,7 @@ This is the ONLY entry point for the frontend.
 All business logic, agents, and data access go through this API.
 """
 import os
+import json
 from io import BytesIO
 from typing import Optional, List
 from datetime import datetime
@@ -37,6 +38,9 @@ from backend.services.working_document_revision import revise_working_document_t
 from backend.services.chat_service import get_chat_service
 from backend.services.ingestion_service import get_ingestion_service
 from backend.persistence.database import init_db
+from backend.persistence.database import get_db_session
+from backend.persistence.models import CaseState, S2CProcuraBotFeedback
+from sqlmodel import select, func
 
 # Import shared schemas
 from shared.schemas import (
@@ -71,7 +75,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 # Create FastAPI app
 app = FastAPI(
     title="Agentic Sourcing API",
-    description="Backend API for the Agentic Sourcing Copilot",
+    description="Backend API for the Agentic Sourcing ProcuraBot",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -161,6 +165,114 @@ async def list_suppliers_for_category(category_id: str = Query(..., description=
         raise HTTPException(status_code=400, detail="category_id is required")
     rows = get_category_supplier_pool(cid)
     return SupplierPoolResponse(category_id=cid, suppliers=rows, total_count=len(rows))
+
+
+class S2CProcuraBotFeedbackRequest(BaseModel):
+    vote: str  # up | down
+    assistant_message: str
+    user_id: Optional[str] = "human-user"
+
+
+@app.post("/api/cases/{case_id}/copilot/feedback")
+async def submit_s2c_copilot_feedback(case_id: str, body: S2CProcuraBotFeedbackRequest):
+    vote = (body.vote or "").strip().lower()
+    if vote not in ("up", "down"):
+        raise HTTPException(status_code=400, detail="vote must be 'up' or 'down'")
+    msg = (body.assistant_message or "").strip()
+    if len(msg) < 3:
+        raise HTTPException(status_code=400, detail="assistant_message is required")
+    session = get_db_session()
+    try:
+        case_exists = session.exec(
+            select(CaseState.case_id).where(CaseState.case_id == case_id)
+        ).first()
+        if not case_exists:
+            raise HTTPException(status_code=404, detail="Case not found")
+        row = S2CProcuraBotFeedback(
+            case_id=case_id,
+            vote=vote,
+            assistant_message=msg[:20000],
+            user_id=(body.user_id or "human-user").strip() or "human-user",
+        )
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+        return {"success": True, "feedback_id": row.id}
+    finally:
+        session.close()
+
+
+@app.get("/api/s2c/performance/metrics")
+async def get_s2c_performance_metrics():
+    """
+    S2C performance metrics:
+    - overall: avg AI reliability + signal attribution accuracy (thumbs up / total)
+    - detailed: per-case reliability based on human change events
+    """
+    session = get_db_session()
+    try:
+        case_rows = session.exec(select(CaseState)).all()
+        feedback_rows = session.exec(
+            select(S2CProcuraBotFeedback.vote, func.count(S2CProcuraBotFeedback.id)).group_by(
+                S2CProcuraBotFeedback.vote
+            )
+        ).all()
+        thumbs = {str(v): int(n) for v, n in feedback_rows}
+        thumbs_total = int(sum(thumbs.values()))
+        thumbs_up = int(thumbs.get("up", 0))
+        signal_acc = (thumbs_up / thumbs_total * 100.0) if thumbs_total else None
+
+        detailed: List[dict] = []
+        reliability_vals: List[float] = []
+        for c in case_rows:
+            try:
+                act = json.loads(c.activity_log) if c.activity_log else []
+            except json.JSONDecodeError:
+                act = []
+            human_changes = 0
+            for e in act if isinstance(act, list) else []:
+                if not isinstance(e, dict):
+                    continue
+                an = str(e.get("agent_name", "")).lower()
+                tn = str(e.get("task_name", "")).lower()
+                out = str(e.get("output_summary", "")).lower()
+                if ("human" in an or "user" in an) and "decision" in tn:
+                    human_changes += 1
+                elif "reject" in out or "revision" in out:
+                    human_changes += 1
+            reliability = max(50.0, min(99.0, 100.0 - min(human_changes, 10) * 5.0))
+            reliability_vals.append(reliability)
+            detailed.append(
+                {
+                    "case_id": c.case_id,
+                    "name": c.name,
+                    "dtp_stage": c.dtp_stage,
+                    "status": c.status,
+                    "ai_reliability_pct": round(reliability, 1),
+                    "human_change_count": int(human_changes),
+                }
+            )
+
+        overall_reliability = (
+            round(sum(reliability_vals) / len(reliability_vals), 1)
+            if reliability_vals
+            else None
+        )
+
+        return {
+            "overall": {
+                "ai_reliability_score_pct": overall_reliability,
+                "signal_attribution_accuracy_pct": round(signal_acc, 2)
+                if signal_acc is not None
+                else None,
+                "thumbs_up": thumbs_up,
+                "thumbs_down": int(thumbs.get("down", 0)),
+                "thumbs_total": thumbs_total,
+            },
+            "detailed": detailed,
+        }
+    finally:
+        session.close()
 
 
 @app.get("/api/cases/{case_id}/artifacts/{artifact_id}/export")
@@ -305,7 +417,7 @@ async def upload_working_document(
         "role": r,
         "chars": len(plain),
         "source_filename": fname,
-        "message": "Draft stored. Copilot can now reference it; download Word anytime.",
+        "message": "Draft stored. ProcuraBot can now reference it; download Word anytime.",
     }
 
 
@@ -315,7 +427,7 @@ async def revise_working_document_endpoint(
     body: WorkingDocumentReviseRequest,
 ):
     """
-    Apply a full-document Copilot rewrite (LLM) to the stored RFX or contract plain text.
+    Apply a full-document ProcuraBot rewrite (LLM) to the stored RFX or contract plain text.
     """
     r = (body.role or "").lower().strip()
     if r not in ("rfx", "contract"):

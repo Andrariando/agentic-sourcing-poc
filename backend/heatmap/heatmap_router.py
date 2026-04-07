@@ -16,7 +16,7 @@ from backend.heatmap.persistence.heatmap_models import (
     Opportunity,
     ReviewFeedback,
     AuditLog,
-    HeatmapCopilotFeedback,
+    HeatmapProcuraBotFeedback,
 )
 from backend.heatmap.context_builder import (
     load_category_cards,
@@ -293,7 +293,7 @@ def heatmap_qa(req: HeatmapQARequest):
 def heatmap_qa_feedback(req: HeatmapQAFeedbackRequest):
     session = heatmap_db.get_db_session()
     try:
-        row = HeatmapCopilotFeedback(
+        row = HeatmapProcuraBotFeedback(
             response_id=req.response_id.strip(),
             question=req.question.strip(),
             answer=req.answer.strip(),
@@ -557,9 +557,9 @@ def heatmap_dashboard_metrics():
 
         qa_vote_rows = session.exec(
             select(
-                HeatmapCopilotFeedback.vote,
-                func.count(HeatmapCopilotFeedback.id),
-            ).group_by(HeatmapCopilotFeedback.vote)
+                HeatmapProcuraBotFeedback.vote,
+                func.count(HeatmapProcuraBotFeedback.id),
+            ).group_by(HeatmapProcuraBotFeedback.vote)
         ).all()
         qa_vote_counts: Dict[str, int] = {}
         for vote, n in qa_vote_rows:

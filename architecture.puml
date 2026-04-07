@@ -22,7 +22,7 @@
 '            http://www.plantuml.com/plantuml
 ' =============================================================================
 
-title Agentic Sourcing Copilot - Enterprise Architecture\n//Human-in-the-Loop Multi-Agent Decision Support System//\n\n**Current Implementation** — Next.js + Dual Agentic Systems + Artifact System
+title Agentic Sourcing ProcuraBot - Enterprise Architecture\n//Human-in-the-Loop Multi-Agent Decision Support System//\n\n**Current Implementation** — Next.js + Dual Agentic Systems + Artifact System
 
 skinparam backgroundColor #FEFEFE
 skinparam defaultFontSize 11
@@ -66,9 +66,9 @@ package "**FRONTEND** - Next.js UI" <<frontend>> {
     package "**SYSTEM A** - Opportunity Prioritization" {
         rectangle "🔥 **Opportunity Heatmap**\nPrioritized list,\nhuman override,\napprove to case" as heatmap_ui
     }
-    package "**SYSTEM B** - Case Copilot (DTP-01..DTP-06)" {
+    package "**SYSTEM B** - Case ProcuraBot (DTP-01..DTP-06)" {
         rectangle "📊 **Case Dashboard**\nCase list, metrics,\nfiltering, status view" as dashboard
-        rectangle "💬 **Case Copilot**\nChat interface,\nartifact display,\naudit trail" as copilot
+        rectangle "💬 **Case ProcuraBot**\nChat interface,\nartifact display,\naudit trail" as copilot
         rectangle "📁 **Knowledge Management**\nDocument upload,\ndata ingestion" as knowledge
     }
     package "**SHARED**" {

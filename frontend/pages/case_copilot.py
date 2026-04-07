@@ -1,5 +1,5 @@
 """
-Case Copilot Page - Enterprise Decision Console (Redesigned)
+Case ProcuraBot Page - Enterprise Decision Console (Redesigned)
 
 Design Philosophy:
 - The decision is the focal point
@@ -484,10 +484,10 @@ def render_case_details_panel(case, client) -> None:
         if recommendation == "Pending Analysis":
             strategy_html += (
                 f'<div style="font-size: 1.1rem; font-weight: 500; color: {CHARCOAL}; margin-bottom: 12px; font-style: italic;">'
-                f'⏳ Waiting for Copilot Analysis...'
+                f'⏳ Waiting for ProcuraBot Analysis...'
                 f'</div>'
                 f'<div style="font-size: 0.85rem; color: {CHARCOAL};">'
-                f'Interact with the Case Copilot to generate a strategy based on the signals above.'
+                f'Interact with the Case ProcuraBot to generate a strategy based on the signals above.'
                 f'</div>'
             )
         else:
@@ -770,7 +770,7 @@ def render_chat_interface(case, client) -> None:
         
         # If no chat history found, add welcome message
         if not chat_history:
-            welcome_content = f"""👋 Hello! I'm your Case Copilot for **{case.case_id}**.
+            welcome_content = f"""👋 Hello! I'm your Case ProcuraBot for **{case.case_id}**.
 
 I can help you with:
 - Scanning for sourcing signals
@@ -794,7 +794,7 @@ What would you like to do?"""
     # Header
     st.markdown(f"""
     <div class="chat-header">
-        💬 Case Copilot
+        💬 Case ProcuraBot
     </div>
     <div class="chat-subtitle">
         Ask questions or request actions for {case.case_id}

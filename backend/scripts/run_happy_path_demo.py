@@ -479,7 +479,7 @@ def save_demo_data(demo_result: Dict[str, Any]):
         activity_log.append({
             "timestamp": chat_entry["timestamp"],
             "action": f"Chat: {chat_entry['role']}",
-            "agent_name": "User" if chat_entry["role"] == "user" else "Copilot",
+            "agent_name": "User" if chat_entry["role"] == "user" else "ProcuraBot",
             "details": {
                 "message": chat_entry["content"],
                 "stage": chat_entry.get("stage"),

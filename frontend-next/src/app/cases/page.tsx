@@ -130,7 +130,7 @@ export default function CaseDashboardPage() {
                       <td className="px-6 py-4 text-sm text-slate-600">{c.status}</td>
                       <td className="px-6 py-4 text-right">
                         <Link href={`/cases/${c.case_id}/copilot`} className="text-sponsor-blue hover:text-blue-800 text-sm font-medium">
-                          Open Copilot
+                          Open ProcuraBot
                         </Link>
                       </td>
                     </tr>

@@ -334,5 +334,17 @@ class ChatMessage(SQLModel, table=True):
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
 
 
+class S2CProcuraBotFeedback(SQLModel, table=True):
+    """Thumbs up/down feedback on S2C copilot assistant responses."""
+    __tablename__ = "s2c_copilot_feedback"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    case_id: str = Field(index=True)
+    vote: str = Field(index=True)  # up | down
+    assistant_message: str
+    user_id: str = Field(default="human-user")
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
 
 

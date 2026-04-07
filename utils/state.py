@@ -22,7 +22,7 @@ class PipelineState(TypedDict):
     case_id: str
     dtp_stage: str  # DTP-01 ... DTP-06
     trigger_source: str  # "User" | "Signal"
-    user_intent: str  # Raw Copilot text
+    user_intent: str  # Raw ProcuraBot text
     case_summary: CaseSummary  # Maintained by Supervisor
     latest_agent_output: Optional[Union[
         StrategyRecommendation,

@@ -282,7 +282,7 @@ st.markdown(f"""
         border-color: #CBD5F5;
         max-width: 100%;
         box-sizing: border-box;
-        margin-right: var(--space-md);  /* keep clear of Copilot column divider */
+        margin-right: var(--space-md);  /* keep clear of ProcuraBot column divider */
     }}
     .card-hero-main {{
         display: flex;
@@ -579,7 +579,7 @@ st.markdown(f"""
         font-weight: 600;
     }}
 
-    /* Copilot card */
+    /* ProcuraBot card */
     .card-copilot {{
         background: #FFFFFF;
         border-radius: var(--radius-md);
@@ -1836,7 +1836,7 @@ else:
             st.success("✅ Case state reset! Cache cleared. You can now retry the workflow.")
             st.rerun()
     
-    # Two column layout: Case Details (wider center), Sourcing Copilot (compact right)
+    # Two column layout: Case Details (wider center), Sourcing ProcuraBot (compact right)
     col_center, col_right = st.columns([2.8, 1.2], gap="small")
     
     with col_center:
@@ -2109,8 +2109,8 @@ else:
     
     with col_right:
         st.markdown('<div class="card-copilot">', unsafe_allow_html=True)
-        st.markdown("### Sourcing Copilot")
-        # Context line to tie Copilot to the case
+        st.markdown("### Sourcing ProcuraBot")
+        # Context line to tie ProcuraBot to the case
         dtp_label = get_dtp_stage_display(selected_case.dtp_stage)
         try:
             contract = get_contract(selected_case.contract_id) if selected_case.contract_id else None

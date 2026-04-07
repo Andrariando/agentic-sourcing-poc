@@ -23,7 +23,7 @@
 3. [Runtime and entry points](#3-runtime-and-entry-points)
 4. [Shared layer](#4-shared-layer)
 5. [Backend: FastAPI surface (`backend/main.py`)](#5-backend-fastapi-surface-backendmainpy)
-6. [System A — Legacy DTP Copilot](#6-system-a--legacy-dtp-copilot)
+6. [System A — Legacy DTP ProcuraBot](#6-system-a--legacy-dtp-copilot)
 7. [System B — Opportunity Heatmap](#7-system-b--opportunity-heatmap)
 8. [Integration between systems](#8-integration-between-systems)
 9. [Frontends](#9-frontends)
@@ -43,7 +43,7 @@ This repository implements **two independent product slices** behind **one FastA
 
 | System | Role | Primary API prefix | Primary persistence |
 |--------|------|--------------------|------------------------|
-| **Legacy DTP Copilot** | Case-centric workflow: DTP-01 → DTP-06, chat, decisions, RAG, artifacts | `/api/cases`, `/api/chat`, `/api/decisions`, `/api/ingest`, `/api/documents` | `data/datalake.db` + Chroma `sourcing_documents` |
+| **Legacy DTP ProcuraBot** | Case-centric workflow: DTP-01 → DTP-06, chat, decisions, RAG, artifacts | `/api/cases`, `/api/chat`, `/api/decisions`, `/api/ingest`, `/api/documents` | `data/datalake.db` + Chroma `sourcing_documents` |
 | **Opportunity Heatmap** | Opportunity scoring, tiers T1–T4, intake, feedback memory, copilot helpers | `/api/heatmap/*` | `data/heatmap.db` + Chroma `heatmap_documents` |
 
 **Critical rule**: No shared case/opportunity state between the two. The **only** integration is **Heatmap → Legacy** when a user approves heatmap opportunities: `backend/heatmap/services/case_bridge.py` calls the same `create_case` path used by the legacy API.
@@ -191,7 +191,7 @@ See [Section 7](#7-system-b--opportunity-heatmap) for the full route table and b
 
 ---
 
-## 6. System A — Legacy DTP Copilot
+## 6. System A — Legacy DTP ProcuraBot
 
 ### 6.1 Purpose
 
@@ -298,11 +298,11 @@ This lives at the repo root: **`graphs/workflow.py`** (alongside `graphs/__init_
 |--------|------------------|
 | **Artifact pack export** | Next.js case copilot: **Work products** card — export all artifacts in a pack as `.md` / `.docx` / `.pdf` (`artifact_document_export.py`: `build_artifact_pack_*`). |
 | **Working document slots** | Two slots per case — **RFx** and **contract** — persisted as JSON on `case_states.working_documents_json` (plain text extracted from uploaded `.docx` via `backend/services/docx_text.py`). |
-| **Copilot context** | `ChatService` passes `working_documents` into `case_context`; `LLMResponder` injects `format_working_documents_for_prompt()` (`shared/working_documents_prompt.py`). The model is instructed to **teach** the download → Word → save → **Upload .docx** flow when users ask how to edit. |
+| **ProcuraBot context** | `ChatService` passes `working_documents` into `case_context`; `LLMResponder` injects `format_working_documents_for_prompt()` (`shared/working_documents_prompt.py`). The model is instructed to **teach** the download → Word → save → **Upload .docx** flow when users ask how to edit. |
 | **Intent routing** | Questions like “how do I upload Word?” are classified as **direct answer** (not specialist agent). |
 | **UI** | `frontend-next/src/app/cases/[id]/copilot/page.tsx`: **Word round-trip · RFx & contract** card + first assistant message (`buildAssistantWelcome`) explains the same steps. |
 
-**Environment**: `OPENAI_API_KEY` required for **Apply Copilot revision** (`working_document_revision.py`).
+**Environment**: `OPENAI_API_KEY` required for **Apply ProcuraBot revision** (`working_document_revision.py`).
 
 ---
 

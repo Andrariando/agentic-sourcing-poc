@@ -1,5 +1,5 @@
 """
-Agentic Sourcing Copilot - Enterprise Frontend
+Agentic Sourcing ProcuraBot - Enterprise Frontend
 
 MIT Color System:
 - MIT Navy (#003A8F): Structure and hierarchy
@@ -28,7 +28,7 @@ LIGHT_GRAY = "#D9D9D9"
 
 # Page config
 st.set_page_config(
-    page_title="Agentic Sourcing Copilot",
+    page_title="Agentic Sourcing ProcuraBot",
     page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -164,7 +164,7 @@ def main():
         # Page search/filter
         pages = {
             "dashboard": "Case Dashboard",
-            "copilot": "Case Copilot", 
+            "copilot": "Case ProcuraBot", 
             "knowledge": "Knowledge Management"
         }
         
@@ -247,7 +247,7 @@ def main():
         with st.expander("About", expanded=False):
             st.markdown(f"""
             <div style="font-size: 0.8rem; color: {CHARCOAL};">
-                <p><strong>Agentic Sourcing Copilot</strong></p>
+                <p><strong>Agentic Sourcing ProcuraBot</strong></p>
                 <p>A human-in-the-loop decision support system for procurement sourcing.</p>
                 <br>
                 <p><strong>DTP Stages:</strong></p>
@@ -280,7 +280,7 @@ def main():
             st.markdown(f"""
             <div style="text-align: center; padding: 48px; color: {CHARCOAL};">
                 <h3 style="color: {MIT_NAVY};">No Case Selected</h3>
-                <p>Select a case from the Dashboard to open the Copilot.</p>
+                <p>Select a case from the Dashboard to open the ProcuraBot.</p>
             </div>
             """, unsafe_allow_html=True)
             

@@ -105,7 +105,7 @@ class HeatmapLearnedWeights(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-class HeatmapCopilotFeedback(SQLModel, table=True):
+class HeatmapProcuraBotFeedback(SQLModel, table=True):
     """Thumbs up/down votes for Heatmap copilot answers (for KPI/KLI later)."""
     id: Optional[int] = Field(default=None, primary_key=True)
     response_id: str = Field(default_factory=lambda: uuid4().hex, index=True)

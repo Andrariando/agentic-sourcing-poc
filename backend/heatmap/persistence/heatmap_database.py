@@ -49,7 +49,7 @@ class HeatmapDatabase(DatabaseInterface):
             ScoringRun,
             AuditLog,
             HeatmapLearnedWeights,
-            HeatmapCopilotFeedback,
+            HeatmapProcuraBotFeedback,
         )
         from sqlalchemy import text
         engine = get_engine()

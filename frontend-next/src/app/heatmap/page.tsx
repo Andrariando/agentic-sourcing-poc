@@ -16,6 +16,8 @@ import { apiFetch } from "@/lib/api-fetch";
 import { getApiBaseUrl, apiConnectivityHint } from "@/lib/api-base";
 import { HeatmapAbbr, HEATMAP_GLOSSARY, type HeatmapGlossaryKey } from "@/lib/heatmap-glossary";
 import { heatmapTierLabel } from "@/lib/heatmap-tier-display";
+import ProcuraBotIdentity from "@/components/branding/ProcuraBotIdentity";
+import { PROCURABOT_BRAND } from "@/lib/procurabot-brand";
 
 const TIER_TOOLTIP: Record<string, HeatmapGlossaryKey> = {
   T1: "t1",
@@ -156,10 +158,10 @@ export default function HeatmapPriorityPage() {
     message: string;
   } | null>(null);
 
-  // Optional Copilot Slide-over
-  const [copilotOpen, setCopilotOpen] = useState(false);
-  const [copilotTab, setCopilotTab] = useState<"qa" | "policy" | "cards">("qa");
-  const [copilotRefQuery, setCopilotRefQuery] = useState("");
+  // Optional ProcuraBot Slide-over
+  const [copilotOpen, setProcuraBotOpen] = useState(false);
+  const [copilotTab, setProcuraBotTab] = useState<"qa" | "policy" | "cards">("qa");
+  const [copilotRefQuery, setProcuraBotRefQuery] = useState("");
   const [qaQuestion, setQaQuestion] = useState("");
   const [qaAnswer, setQaAnswer] = useState<string | null>(null);
   const [qaResponseId, setQaResponseId] = useState<string | null>(null);
@@ -212,7 +214,7 @@ export default function HeatmapPriorityPage() {
   useEffect(() => {
     if (!copilotOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setCopilotOpen(false);
+      if (e.key === "Escape") setProcuraBotOpen(false);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -808,12 +810,12 @@ export default function HeatmapPriorityPage() {
             </div>
             <button
               type="button"
-              onClick={() => setCopilotOpen(true)}
+              onClick={() => setProcuraBotOpen(true)}
               className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-slate-200 shadow-sm text-sm font-medium text-slate-700 hover:bg-slate-50"
-              title="Open Heatmap Copilot (optional)"
+              title="Open Heatmap ProcuraBot (optional)"
             >
               <MessageCircle className="w-4 h-4 text-sponsor-blue" />
-              Copilot
+              ProcuraBot
             </button>
           </div>
         </header>
@@ -1105,20 +1107,17 @@ export default function HeatmapPriorityPage() {
         )}
       </div>
 
-      {/* Optional Copilot Slide-over */}
+      {/* Optional ProcuraBot Slide-over */}
       {copilotOpen && (
         <div className="fixed inset-0 z-50 overflow-hidden">
           <div
             className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
-            onClick={() => setCopilotOpen(false)}
+            onClick={() => setProcuraBotOpen(false)}
           />
           <div className="fixed inset-y-0 right-0 w-full max-w-2xl bg-white shadow-2xl flex flex-col transform transition-transform border-l border-slate-200">
             <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <div className="min-w-0">
-                <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-                  <MessageCircle className="w-5 h-5 text-sponsor-blue shrink-0" />
-                  Heatmap copilot
-                </h2>
+                <ProcuraBotIdentity subtitle={`Heatmap workspace · ${PROCURABOT_BRAND.tagline}`} />
                 <p className="text-sm text-slate-500 mt-1 leading-relaxed">
                   Optional. Ask how rows are ranked (scores stay as shown), check whether your notes fit category policy,
                   or preview updates to category sourcing rules — nothing here overwrites the heatmap until you apply
@@ -1127,9 +1126,9 @@ export default function HeatmapPriorityPage() {
               </div>
               <button
                 type="button"
-                onClick={() => setCopilotOpen(false)}
+                onClick={() => setProcuraBotOpen(false)}
                 className="text-slate-400 hover:text-slate-600 transition bg-white p-2 rounded-full shadow-sm"
-                aria-label="Close copilot"
+                aria-label={`Close ${PROCURABOT_BRAND.name}`}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1150,7 +1149,7 @@ export default function HeatmapPriorityPage() {
                 <input
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
                   value={copilotRefQuery}
-                  onChange={(e) => setCopilotRefQuery(e.target.value)}
+                  onChange={(e) => setProcuraBotRefQuery(e.target.value)}
                   placeholder='e.g. "TechGlobal", "REQ-", "High", "Medium", "contract"'
                 />
                 <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-200">
@@ -1189,7 +1188,7 @@ export default function HeatmapPriorityPage() {
                             onClick={() => {
                               const tag = o.id != null ? `id=${o.id}` : (o.contract_id ? `contract_id=${o.contract_id}` : (o.request_id ? `request_id=${o.request_id}` : ""));
                               if (!tag) return;
-                              setCopilotTab("qa");
+                              setProcuraBotTab("qa");
                               setQaQuestion((prev) => {
                                 const base = prev.trim();
                                 return base ? `${base}\n\n${tag}` : tag;
@@ -1246,7 +1245,7 @@ export default function HeatmapPriorityPage() {
                   <button
                     key={key}
                     type="button"
-                    onClick={() => setCopilotTab(key)}
+                    onClick={() => setProcuraBotTab(key)}
                     className={`px-3 py-2 transition ${
                       copilotTab === key ? "bg-sponsor-blue text-white" : "bg-white text-slate-600 hover:bg-slate-50"
                     }`}

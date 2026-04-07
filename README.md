@@ -2,7 +2,7 @@
 
 This repository contains **two independent procurement systems** that share a single FastAPI server (`backend/main.py`) but **do not share state**:
 
-1. **Legacy DTP Copilot (DTP-01 → DTP-06)**: A human-in-the-loop, multi-agent decision-support system for end-to-end sourcing execution.
+1. **Legacy DTP ProcuraBot (DTP-01 → DTP-06)**: A human-in-the-loop, multi-agent decision-support system for end-to-end sourcing execution.
 2. **Opportunity Heatmap (agentic scoring + intake)**: A separate agentic system that continuously evaluates sourcing opportunities (renewals + new requests) and prioritizes them using a weighted scoring model with optional LLM support.
 
 > **Integration point**: The only bridge between the systems is **Heatmap → DTP case creation** via `backend/heatmap/services/case_bridge.py` (approving a heatmap opportunity creates a new legacy DTP case).
@@ -31,7 +31,7 @@ This project includes comprehensive documentation covering all aspects of the sy
   - Dual-system architecture: Legacy DTP vs Opportunity Heatmap
 
 - **[BUSINESS_OVERVIEW.md](BUSINESS_OVERVIEW.md)** — Business translation + use cases
-  - What each system is for (Heatmap vs DTP Copilot)
+  - What each system is for (Heatmap vs DTP ProcuraBot)
   - Defined use cases and success metrics
   - Caveats / what this POC is (and is not)
   - Azure-aligned path to production (security, data, AI services)
@@ -91,7 +91,7 @@ This project includes comprehensive documentation covering all aspects of the sy
 
 ## 🧭 Two systems in one repo
 
-### System A: Legacy DTP Copilot (end-to-end workflow)
+### System A: Legacy DTP ProcuraBot (end-to-end workflow)
 
 **What it is**: the original procurement copilot that runs the DTP methodology (DTP-01 to DTP-06). Users work inside a case, chat with the copilot, review artifacts, and approve/reject decisions.
 
@@ -142,14 +142,14 @@ agentic-sourcing-poc/
 │       ├── case_copilot.py      # Procurement Workbench
 │       └── knowledge_management.py  # Document/data upload
 │
-├── frontend-next/               # New Next.js UI (Heatmap + Copilot)
+├── frontend-next/               # New Next.js UI (Heatmap + ProcuraBot)
 │   ├── src/app/
 │   │   ├── layout.tsx           # Root layout (Syne/DM Sans fonts, sidebar)
 │   │   ├── globals.css          # Premium dark-mode design tokens
 │   │   ├── heatmap/page.tsx     # Sourcing Priority Heatmap + KPI Dashboard
 │   │   ├── intake/page.tsx      # Business Intake form
 │   │   ├── kpi/page.tsx         # KPI Dashboard page
-│   │   └── cases/[id]/copilot/  # Case Copilot (60/40 split)
+│   │   └── cases/[id]/copilot/  # Case ProcuraBot (60/40 split)
 │   │       └── page.tsx         # Triage, Signals, Chat, Governance
 │   └── package.json             # Dependencies (recharts, framer-motion)
 │
@@ -300,14 +300,14 @@ Open:
 Premium dark-mode glassmorphic design with Syne/DM Sans typography:
 
 - **Priority Heatmap** (`/heatmap`) — KPI stat cards, Table/Matrix toggle, Recharts scatter chart, KLI Outcome Matrix, **Heatmap copilot** (Q&A, policy check, category-cards assist); see system doc **User experience impact** for how this shapes trust and workload
-- **Case Copilot** (`/cases/[id]/copilot`) — 60/40 split-screen with evidence/artifacts on the left and chat + Decision Console on the right (Cursor-style workflow). Includes **Word round-trip** (download `.docx` → edit in Microsoft Word → re-upload), artifact **pack export**, and copilot prompts that teach that flow; see [TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md) §6.11 and [SYSTEM_DOCUMENTATION.md](SYSTEM_DOCUMENTATION.md) (Chat lifecycle → Word round-trip).
-- **Case Copilot (no case selected)** (`/cases/copilot`) — default split-shell empty state with links back to Case Dashboard/Heatmap
+- **Case ProcuraBot** (`/cases/[id]/copilot`) — 60/40 split-screen with evidence/artifacts on the left and chat + Decision Console on the right (Cursor-style workflow). Includes **Word round-trip** (download `.docx` → edit in Microsoft Word → re-upload), artifact **pack export**, and copilot prompts that teach that flow; see [TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md) §6.11 and [SYSTEM_DOCUMENTATION.md](SYSTEM_DOCUMENTATION.md) (Chat lifecycle → Word round-trip).
+- **Case ProcuraBot (no case selected)** (`/cases/copilot`) — default split-shell empty state with links back to Case Dashboard/Heatmap
 - **Business Intake** (`/intake`) — New sourcing request form with API-backed **PS_new** preview and submit
 - **KPI Dashboard** (`/kpi`) — Performance metrics
 
 ### Legacy DTP System (Streamlit)
 - **Case Dashboard** — Case list & metrics
-- **Case Copilot** — Procurement Workbench with dark-mode agent activity log
+- **Case ProcuraBot** — Procurement Workbench with dark-mode agent activity log
 - **Knowledge Management** — Document/data upload
 
 For detailed UI/UX flow, see [System Documentation - UI/UX Flow](SYSTEM_DOCUMENTATION.md#uiux-flow).
@@ -353,8 +353,8 @@ Seed via: `python backend/scripts/seed_it_demo_data.py`
 - **Persistence Fixes**: Robust state management ensures no context is lost during multi-turn decision flows.
 
 ### Decision + Chat Synchronization (March 2026)
-- **Decision console in chat panel**: Approve/Revision actions are now performed from the right Copilot panel.
-- **Immediate Copilot reaction**: After approve/reject, the UI automatically sends a follow-up prompt to `/api/chat` so users get state-aware next-step guidance immediately.
+- **Decision console in chat panel**: Approve/Revision actions are now performed from the right ProcuraBot panel.
+- **Immediate ProcuraBot reaction**: After approve/reject, the UI automatically sends a follow-up prompt to `/api/chat` so users get state-aware next-step guidance immediately.
 - **Left panel as context desk**: Governance on the left is now status/context while artifacts and logs remain visible for decision support.
 
 ### Bug Fixes
@@ -402,7 +402,7 @@ Research POC — Not for production use
 | Task System | ✅ Complete |
 | Artifact System | ✅ Complete |
 | Legacy Streamlit UI | ✅ Complete |
-| Next.js Heatmap + Copilot UI | ✅ Complete |
+| Next.js Heatmap + ProcuraBot UI | ✅ Complete |
 | Agentic Scoring Engine | ✅ Complete |
 | KPI Dashboard & KLI Matrix | ✅ Complete |
 | Live Agentic Process Log | ✅ Complete |

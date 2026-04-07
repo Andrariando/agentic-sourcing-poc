@@ -275,7 +275,7 @@ WORD ROUND-TRIP — TEACH THE HUMAN (when relevant):
   1) **Download**: Left panel → *Work products* → export an artifact pack as **.docx**, OR after text exists use *Word round-trip* → **Word** to download the working copy.
   2) **Edit**: Open the file in **Microsoft Word**, make changes, **Save**.
   3) **Re-upload**: Same left panel → *Word round-trip · RFx & contract* → pick **RFx** or **Contract** → **Upload .docx** (only .docx is supported for this flow).
-  4) **Optional**: Chat here for clause-level help (you see the stored text), or use **Apply Copilot revision** for a full rewrite, then download **Word** again.
+  4) **Optional**: Chat here for clause-level help (you see the stored text), or use **Apply ProcuraBot revision** for a full rewrite, then download **Word** again.
 - If they already have draft text in WORKING WORD DRAFTS, you can skip repeating all steps—just remind them that **saving in Word and re-uploading** refreshes what you see.
 - If they have no draft yet, say they need to download something first (from Work products) or paste/upload when they have a .docx."""
 

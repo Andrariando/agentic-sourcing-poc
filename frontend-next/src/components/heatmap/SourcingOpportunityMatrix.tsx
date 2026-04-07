@@ -79,7 +79,7 @@ export default function SourcingOpportunityMatrix({ opportunities, summary }: So
               {signalAcc == null ? "—" : `${signalAcc.toFixed(1)}%`}
             </p>
             <p className="text-xs text-slate-500 mt-1">
-              Copilot thumbs up / total thumbs responses ({thumbsUp}/{thumbsTotal}).
+              ProcuraBot thumbs up / total thumbs responses ({thumbsUp}/{thumbsTotal}).
             </p>
           </div>
         </div>
@@ -174,7 +174,7 @@ export default function SourcingOpportunityMatrix({ opportunities, summary }: So
       <div className="bg-slate-50 px-5 py-3 border-t border-slate-200 text-[11px] text-slate-500 text-center leading-snug">
         * AI Reliability uses feedback-derived metrics (<code className="text-slate-600">kli_metrics.ai_reliability_pct</code>);
         Human Score Changes uses review override count per opportunity. Signal Attribution Accuracy uses thumbs up / total
-        thumbs responses from Heatmap Copilot feedback.
+        thumbs responses from Heatmap ProcuraBot feedback.
       </div>
     </div>
   );

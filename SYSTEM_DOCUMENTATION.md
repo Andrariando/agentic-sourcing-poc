@@ -1,6 +1,6 @@
 # Agentic Sourcing System: Technical Backend Documentation
 
-This document provides a detailed technical deep-dive into the backend architecture and logic of the Agentic Sourcing Copilot. It is intended for auditing, technical review, and developers seeking to understand the inner workings of the system.
+This document provides a detailed technical deep-dive into the backend architecture and logic of the Agentic Sourcing ProcuraBot. It is intended for auditing, technical review, and developers seeking to understand the inner workings of the system.
 
 **Last Updated**: March 24, 2026
 
@@ -10,7 +10,7 @@ This document provides a detailed technical deep-dive into the backend architect
 
 This repository contains **two independent systems** that share the same FastAPI process (`backend/main.py`) but are otherwise isolated by design.
 
-### System A — Legacy DTP Copilot (DTP-01 → DTP-06)
+### System A — Legacy DTP ProcuraBot (DTP-01 → DTP-06)
 
 **Purpose**: end-to-end sourcing execution inside a “case” using chat + multi-agent workflows + artifacts + governance decisions.
 
@@ -137,8 +137,8 @@ The Next.js case copilot (`frontend-next/src/app/cases/[id]/copilot/page.tsx`) s
 1. **Download** — From **Work products**, export an artifact pack as `.docx` (or, once text exists, use the **Word** button under **Word round-trip · RFx & contract**).
 2. **Edit** — Open the file in **Microsoft Word**, change the draft, **Save**.
 3. **Re-upload** — In the same left panel, under **Word round-trip**, choose the **RFx** or **Contract** slot and click **Upload .docx**. The backend extracts plain text (`POST /api/cases/{case_id}/working-documents`) and stores it on the case.
-4. **Chat** — Copilot receives that text via `working_documents` in the LLM prompt (`shared/working_documents_prompt.py`, `backend/services/llm_responder.py`) so users can ask clause-level questions.
-5. **Optional AI rewrite** — **Apply Copilot revision** runs a full-document LLM pass (`POST .../working-documents/revise`); then **Word** downloads an updated `.docx`.
+4. **Chat** — ProcuraBot receives that text via `working_documents` in the LLM prompt (`shared/working_documents_prompt.py`, `backend/services/llm_responder.py`) so users can ask clause-level questions.
+5. **Optional AI rewrite** — **Apply ProcuraBot revision** runs a full-document LLM pass (`POST .../working-documents/revise`); then **Word** downloads an updated `.docx`.
 
 The **first assistant message** in chat and the **LLM system prompts** explicitly teach this path (including “ask me *how do I edit the document?*”). This is **not** live co-authoring with Word Online; it is export/import of `.docx` with plain-text round-trip. See **TECHNICAL_DOCUMENTATION.md §6.11** for API and file references.
 
@@ -761,7 +761,7 @@ AGENT_TO_ARTIFACT_TYPE = {
 
 ### B. UI String Matching Fix for Recommended Strategy
 
-**Problem**: The "Recommended Strategy" UI component in `case_copilot.py` was hard-coded to expect only a `recommended_strategy` key from the agent output. Different agents (e.g. StrategyAgent vs SignalAssessmentAgent) use different schema fields such as `recommended_action`, `recommendation`, or `explanation` for their final output. Because the key was missing, the UI remained stuck on "Waiting for Copilot Analysis...".
+**Problem**: The "Recommended Strategy" UI component in `case_copilot.py` was hard-coded to expect only a `recommended_strategy` key from the agent output. Different agents (e.g. StrategyAgent vs SignalAssessmentAgent) use different schema fields such as `recommended_action`, `recommendation`, or `explanation` for their final output. Because the key was missing, the UI remained stuck on "Waiting for ProcuraBot Analysis...".
 
 **Solution**: Updated the recommendation extractor to check multiple acceptable fields using a prioritized list. 
 
@@ -1122,7 +1122,7 @@ These capabilities change how users *feel* and work with the heatmap—not just 
 - **Possible surprise:** Users may ask why a number changed vs. last run; mitigated by visible learning text and delta metadata.  
 - **Intake nuance:** Component sub-scores (IUS, ES, CSIS, SAS) stay **pre-memory** values; **total_score** / **tier** reflect the nudge—advanced users should read the sidebar chip and justification as the source of truth for the final total.
 
-**Overall:** Copilot **reduces cognitive load** for reading the heatmap and supports **governance** on reviews and policy edits. Category-card changes can remain preview-only or be **applied** explicitly for demos. Review memory trades a little **predictability of the raw formula** for **visible adaptation** from human corrections.
+**Overall:** ProcuraBot **reduces cognitive load** for reading the heatmap and supports **governance** on reviews and policy edits. Category-card changes can remain preview-only or be **applied** explicitly for demos. Review memory trades a little **predictability of the raw formula** for **visible adaptation** from human corrections.
 
 ### Deployment-Safe Runtime Mode (Render 512MB)
 
@@ -1216,9 +1216,9 @@ Replaces the entire Streamlit UI with a unified Next.js 16 application (Tailwind
 
 ---
 
-## 🔄 16. Copilot Decision Sync + Synthetic Artifact Visibility (March 2026)
+## 🔄 16. ProcuraBot Decision Sync + Synthetic Artifact Visibility (March 2026)
 
-### A. Cursor-Style Copilot Interaction Model
+### A. Cursor-Style ProcuraBot Interaction Model
 
 The Next.js case copilot now uses a single action zone:
 

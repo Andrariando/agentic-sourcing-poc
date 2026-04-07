@@ -64,7 +64,7 @@ def init_db():
     from backend.persistence.models import (
         SupplierPerformance, SpendMetric, SLAEvent,
         IngestionLog, DocumentRecord, CaseState,
-        Artifact, ArtifactPack, ChatMessage
+        Artifact, ArtifactPack, ChatMessage, S2CProcuraBotFeedback
     )
     engine = get_engine()
     SQLModel.metadata.create_all(engine)

@@ -1,5 +1,5 @@
 """
-Chat/Copilot service with Supervisor governance.
+Chat/ProcuraBot service with Supervisor governance.
 
 CONVERSATIONAL DESIGN:
 - STATUS intent: Summarize current state (no agent call)
@@ -205,7 +205,7 @@ def check_stage_readiness(case, state: dict) -> dict:
 
 class ChatService:
     """
-    Chat/Copilot service with conversational intelligence.
+    Chat/ProcuraBot service with conversational intelligence.
     
     Key behaviors:
     1. Don't run agents for every message
@@ -659,13 +659,13 @@ class ChatService:
             if "activity_log" not in state or state["activity_log"] is None:
                 state["activity_log"] = []
             
-            # Create a simplified log entry for the Copilot's direct action
+            # Create a simplified log entry for the ProcuraBot's direct action
             direct_log = {
                 "log_id": str(uuid.uuid4()),
                 "timestamp": datetime.now().isoformat(),
                 "case_id": case_id,
                 "dtp_stage": state.get("dtp_stage", "Unknown"),
-                "agent_name": "Copilot",
+                "agent_name": "ProcuraBot",
                 "task_name": "Direct Response",
                 "model_used": "gpt-4o-mini",
                 "output_summary": assistant_message,
@@ -684,20 +684,20 @@ class ChatService:
                 copilot_artifact = Artifact(
                     artifact_id=str(uuid.uuid4()),
                     type=ArtifactType.AUDIT_LOG_EVENT.value,
-                    title="Copilot Response",
+                    title="ProcuraBot Response",
                     content={"message": assistant_message},
                     content_text=assistant_message,
                     created_at=datetime.now().isoformat(),
-                    created_by_agent="Copilot"
+                    created_by_agent="ProcuraBot"
                 )
                 
                 copilot_pack = ArtifactPack(
                     pack_id=str(uuid.uuid4()),
                     artifacts=[copilot_artifact],
-                    agent_name="Copilot",
+                    agent_name="ProcuraBot",
                     created_at=datetime.now().isoformat(),
                     execution_metadata=ExecutionMetadata(
-                        agent_name="Copilot",
+                        agent_name="ProcuraBot",
                         dtp_stage=state.get("dtp_stage", "Unknown"),
                         execution_timestamp=datetime.now().isoformat(),
                         total_tokens_used=len(assistant_message.split()) // 3, # Rough heuristic (1.3 tokens per word approx)
@@ -721,7 +721,7 @@ class ChatService:
                 )
                 self.case_service.save_artifact_pack(case_id, copilot_pack)
             except Exception as e:
-                logger.error(f"Failed to save Copilot artifact pack: {e}")
+                logger.error(f"Failed to save ProcuraBot artifact pack: {e}")
 
             self.case_service.save_case_state(state)
         

@@ -145,7 +145,7 @@ A standard Next.js 14+ app layout (App router, React, Tailwind CSS or Vanilla CS
 
 #### Key Pages/Components for the Legacy DTP System:
 1. **Case Dashboard (`/cases`)**: Replaces `case_dashboard.py`. Displays all active legacy cases natively in the new Next.js styling, tracking progress through DTP01 to DTP06.
-2. **Case Copilot (`/cases/[id]/copilot`)**: Replaces `case_copilot.py`. Provides the chat interface with the Legacy DTP Supervisor, allowing file uploads and interactive AI assistance for case advancement inside the advanced UI.
+2. **Case ProcuraBot (`/cases/[id]/copilot`)**: Replaces `case_copilot.py`. Provides the chat interface with the Legacy DTP Supervisor, allowing file uploads and interactive AI assistance for case advancement inside the advanced UI.
 
 ---
 

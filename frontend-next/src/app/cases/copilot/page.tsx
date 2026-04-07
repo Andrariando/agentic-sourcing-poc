@@ -2,17 +2,19 @@
 
 import Link from "next/link";
 import { Briefcase, MessageSquare } from "lucide-react";
+import ProcuraBotIdentity from "@/components/branding/ProcuraBotIdentity";
+import { PROCURABOT_BRAND } from "@/lib/procurabot-brand";
 
 /**
- * /cases/copilot — no case id in the URL; same shell as the per-case Copilot with a default details pane.
+ * /cases/copilot — no case id in the URL; same shell as the per-case ProcuraBot with a default details pane.
  */
-export default function CaseCopilotNoIdPage() {
+export default function CaseProcuraBotNoIdPage() {
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden w-full m-0 p-0 font-sans">
       <div className="w-[60%] flex flex-col h-full overflow-y-auto bg-slate-50/50 border-r border-slate-200">
         <div className="bg-sponsor-blue text-white p-6 sticky top-0 z-10 shadow-md flex flex-row flex-wrap gap-3 justify-between items-center shrink-0">
           <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-bold tracking-tight mb-1 font-syne">Case Copilot</h1>
+            <h1 className="text-2xl font-bold tracking-tight mb-1 font-syne">Case ProcuraBot</h1>
             <p className="text-sm text-blue-100 font-medium">Select a case from the dashboard</p>
           </div>
           <span className="inline-flex shrink-0 items-center justify-center whitespace-nowrap bg-blue-900/60 text-blue-100 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide border border-blue-400/30 self-center">
@@ -30,7 +32,7 @@ export default function CaseCopilotNoIdPage() {
                 <h3 className="text-slate-900 font-bold text-base font-syne">Case details</h3>
                 <p className="text-slate-600 text-sm mt-2 leading-relaxed">
                   No case is loaded yet. Open the Case Dashboard and select a case to see the summary, stage, governance
-                  checklist, and Copilot context.
+                  checklist, and ProcuraBot context.
                 </p>
                 <div className="mt-5 flex flex-wrap gap-3">
                   <Link
@@ -54,15 +56,7 @@ export default function CaseCopilotNoIdPage() {
 
       <div className="w-[40%] flex flex-col h-full bg-white shadow-2xl z-20">
         <header className="px-6 py-4 border-b border-slate-100 bg-white">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-sponsor-blue flex items-center justify-center shadow-md">
-              <MessageSquare className="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-slate-900 leading-tight">Case Copilot</h2>
-              <p className="text-xs text-slate-500 font-medium">Select a case to begin</p>
-            </div>
-          </div>
+          <ProcuraBotIdentity subtitle="Select a case to begin" />
         </header>
 
         <div className="flex-1 overflow-y-auto p-6 flex flex-col items-center justify-center text-center text-slate-600 px-4 bg-[url('https://www.transparenttextures.com/patterns/tiny-grid.png')]">
@@ -72,7 +66,7 @@ export default function CaseCopilotNoIdPage() {
             <Link href="/cases" className="text-sponsor-blue font-semibold underline underline-offset-2">
               Case Dashboard
             </Link>{" "}
-            and choose a case to open Copilot.
+            and choose a case to open {PROCURABOT_BRAND.name}.
           </p>
         </div>
 
