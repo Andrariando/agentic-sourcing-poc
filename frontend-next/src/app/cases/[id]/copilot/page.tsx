@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
-import { CheckCircle2, AlertTriangle, FileText, ShieldCheck, ChevronRight, MessageSquare, Briefcase, Clock, Terminal, Activity, Users, UserPlus } from "lucide-react";
+import { CheckCircle2, AlertTriangle, FileText, ShieldCheck, ChevronRight, MessageSquare, Briefcase, Clock, Terminal, Activity, Users, UserPlus, Download } from "lucide-react";
 import { motion } from "framer-motion";
 import { apiFetch } from "@/lib/api-fetch";
 import { getApiBaseUrl } from "@/lib/api-base";
@@ -65,6 +65,58 @@ function parseSimpleMarkdown(text: string): React.ReactNode {
       ))}
     </>
   );
+}
+
+type ArtifactPackSummaryRow = {
+  pack_id: string;
+  agent_name?: string;
+  created_at?: string;
+  artifact_count?: number;
+  is_latest?: boolean;
+};
+
+async function downloadWorkingDocumentExport(caseId: string, role: "rfx" | "contract"): Promise<void> {
+  const url = `${getApiBaseUrl()}/api/cases/${encodeURIComponent(caseId)}/working-documents/${role}/export`;
+  const res = await apiFetch(url);
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(t || `Download failed (${res.status})`);
+  }
+  const blob = await res.blob();
+  const cd = res.headers.get("Content-Disposition");
+  let filename = role === "rfx" ? "RFX_draft.docx" : "Contract_draft.docx";
+  const m = cd && /filename="([^"]+)"/.exec(cd);
+  if (m) filename = m[1];
+  const u = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = u;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(u);
+}
+
+async function downloadArtifactPackExport(
+  caseId: string,
+  packId: string,
+  format: "md" | "docx" | "pdf"
+): Promise<void> {
+  const url = `${getApiBaseUrl()}/api/cases/${encodeURIComponent(caseId)}/artifact-packs/${encodeURIComponent(packId)}/export?export_format=${format}`;
+  const res = await apiFetch(url);
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(t || `Export failed (${res.status})`);
+  }
+  const blob = await res.blob();
+  const cd = res.headers.get("Content-Disposition");
+  let filename = `pack_export.${format}`;
+  const m = cd && /filename="([^"]+)"/.exec(cd);
+  if (m) filename = m[1];
+  const u = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = u;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(u);
 }
 
 function readDecisionAnswer(val: unknown): string | undefined {
@@ -165,6 +217,13 @@ function buildAssistantWelcome(data: any): string {
   const title = focus?.stage_title ? ` — ${focus.stage_title}` : "";
   let msg = `I'm your Supervisor for **${name}**. We're in **${stage}${title}**.\n\n`;
   if (focus?.stage_description) msg += `${focus.stage_description}\n\n`;
+
+  msg +=
+    "**Editing RFx or contract drafts in Word:** use the left panel → **Word round-trip · RFx & contract**. " +
+    "Typical loop: **download** a draft (.docx from *Work products* or *Word*), **open in Microsoft Word** and edit, **save**, then **Upload .docx** here under the right slot (RFx vs contract). " +
+    "I'll read the uploaded text when you chat; you can also use **Apply Copilot revision** for a full AI pass, then **Word** to download again. " +
+    "Ask me anytime *how do I edit the document?* and I'll walk through it.\n\n";
+
   const pending = focus?.pending_questions || [];
   if (pending.length > 0) {
     const pq = pending[0];
@@ -207,6 +266,16 @@ export default function CaseCopilotPage() {
   const [demoAddedShortlistRows, setDemoAddedShortlistRows] = useState<Dtp02ShortlistRow[]>([]);
   const [optionalSupplierName, setOptionalSupplierName] = useState("");
   const [optionalSupplierRegion, setOptionalSupplierRegion] = useState("");
+  const [packExportError, setPackExportError] = useState<string | null>(null);
+  const [packExportLoading, setPackExportLoading] = useState<string | null>(null);
+  const [wdError, setWdError] = useState<string | null>(null);
+  const [wdBusy, setWdBusy] = useState<string | null>(null);
+  const [wdReviseRfx, setWdReviseRfx] = useState(
+    "Tighten evaluation criteria, add data-residency language, and keep tone executive-ready."
+  );
+  const [wdReviseContract, setWdReviseContract] = useState(
+    "Clarify liability cap, payment terms, and termination for convenience; flag any risky clauses."
+  );
 
   useEffect(() => {
     setDemoAddedShortlistRows([]);
@@ -295,6 +364,16 @@ export default function CaseCopilotPage() {
     const interval = setInterval(() => fetchCase(true), 5000);
     return () => clearInterval(interval);
   }, [caseId]);
+
+  const refreshCaseMeta = async () => {
+    try {
+      const url = `${getApiBaseUrl()}/api/cases/${caseId}`;
+      const res = await apiFetch(url);
+      if (res.ok) setCaseDetails(await res.json());
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   // Auto-scroll the process log
   useEffect(() => {
@@ -434,6 +513,17 @@ export default function CaseCopilotPage() {
   const topFindings = keyFindings.slice(0, 3);
   const focus = caseDetails?.copilot_focus;
   const suggestedChatPrompts: string[] = (focus?.suggested_chat_prompts as string[]) || [];
+  const artifactPackSummaries: ArtifactPackSummaryRow[] = Array.isArray(caseDetails?.artifact_pack_summaries)
+    ? caseDetails.artifact_pack_summaries
+    : [];
+  const wdState = caseDetails?.working_documents;
+  const rfxWd = wdState?.rfx as { plain_text?: string; source_filename?: string; updated_at?: string; updated_by?: string } | undefined;
+  const contractWd = wdState?.contract as {
+    plain_text?: string;
+    source_filename?: string;
+    updated_at?: string;
+    updated_by?: string;
+  } | undefined;
   const perfInsight = hasLiveCase
     ? getMockCasePerformanceInsight({
         caseId,
@@ -776,6 +866,244 @@ export default function CaseCopilotPage() {
               </ul>
             </div>
           </details>
+
+          {hasLiveCase && (
+            <motion.div variants={item} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+              <div className="bg-slate-50 border-b border-slate-200 p-4 flex flex-wrap items-center justify-between gap-3">
+                <h3 className="text-slate-800 font-bold text-sm flex items-center gap-2">
+                  <Download className="w-4 h-4 text-sponsor-blue" />
+                  Work products (artifact packs)
+                </h3>
+                <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 bg-white border border-slate-200 px-2 py-1 rounded">
+                  Export draft bundle
+                </span>
+              </div>
+              <div className="p-4 space-y-3">
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  Download everything an agent run produced for this case—RFx sections, strategy text, and suggested next steps—as one{" "}
+                  <span className="font-semibold text-slate-800">Markdown</span>, <span className="font-semibold text-slate-800">Word</span>, or{" "}
+                  <span className="font-semibold text-slate-800">PDF</span> file. Run Copilot tasks that emit artifacts first if a pack is empty.
+                </p>
+                {packExportError ? (
+                  <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{packExportError}</p>
+                ) : null}
+                {artifactPackSummaries.length === 0 ? (
+                  <p className="text-sm text-slate-400 italic py-1">No artifact packs stored yet—ask Copilot to draft an RFx or run a workflow that saves artifacts.</p>
+                ) : (
+                  <ul className="space-y-3">
+                    {artifactPackSummaries.map((row) => (
+                      <li
+                        key={row.pack_id}
+                        className="rounded-lg border border-slate-100 bg-slate-50/80 p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-slate-900 truncate">
+                            {row.agent_name || "Agent run"}{" "}
+                            {row.is_latest ? (
+                              <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded ml-1">
+                                Latest
+                              </span>
+                            ) : null}
+                          </p>
+                          <p className="text-[11px] text-slate-500 font-mono truncate mt-0.5">{row.pack_id}</p>
+                          <p className="text-[11px] text-slate-500 mt-1">
+                            {row.artifact_count != null ? `${row.artifact_count} artifact(s)` : "—"}
+                            {row.created_at ? ` · ${row.created_at}` : ""}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2 shrink-0">
+                          {(["md", "docx", "pdf"] as const).map((fmt) => (
+                            <button
+                              key={fmt}
+                              type="button"
+                              disabled={packExportLoading !== null}
+                              onClick={async () => {
+                                setPackExportError(null);
+                                const key = `${row.pack_id}-${fmt}`;
+                                setPackExportLoading(key);
+                                try {
+                                  await downloadArtifactPackExport(caseId, row.pack_id, fmt);
+                                } catch (e) {
+                                  setPackExportError(e instanceof Error ? e.message : "Export failed.");
+                                } finally {
+                                  setPackExportLoading(null);
+                                }
+                              }}
+                              className="inline-flex items-center justify-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                            >
+                              {packExportLoading === `${row.pack_id}-${fmt}` ? "…" : <Download className="w-3 h-3" />}
+                              {fmt}
+                            </button>
+                          ))}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {hasLiveCase && (
+            <motion.div variants={item} className="bg-white rounded-xl shadow-sm border border-indigo-200 overflow-hidden">
+              <div className="bg-indigo-50 border-b border-indigo-100 p-4 flex flex-wrap items-center justify-between gap-3">
+                <h3 className="text-slate-800 font-bold text-sm flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-indigo-600" />
+                  Word round-trip · RFx &amp; contract
+                </h3>
+                <span className="text-[10px] font-bold uppercase tracking-wide text-indigo-700 bg-white border border-indigo-200 px-2 py-1 rounded">
+                  Showcase
+                </span>
+              </div>
+              <div className="p-4 space-y-4">
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  <span className="font-semibold text-slate-800">Like editing locally in Word, then syncing:</span>{" "}
+                  <strong className="text-slate-800">Download</strong> (.docx from *Work products* or *Word* below) →{" "}
+                  <strong className="text-slate-800">edit in Microsoft Word</strong> → <strong className="text-slate-800">save</strong> →{" "}
+                  <strong className="text-slate-800">Upload .docx</strong> in the right slot. Copilot reads the new text when you chat; ask{" "}
+                  <em className="text-slate-700">how do I edit the document?</em> anytime. You can also run{" "}
+                  <span className="font-semibold text-slate-800">Apply Copilot revision</span>, then the <strong className="text-slate-800">Word</strong> button to download again.
+                </p>
+                {wdError ? (
+                  <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{wdError}</p>
+                ) : null}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {(
+                    [
+                      { key: "rfx" as const, label: "RFx / RFP draft", slot: rfxWd, instruct: wdReviseRfx, setInstruct: setWdReviseRfx },
+                      {
+                        key: "contract" as const,
+                        label: "Contract draft",
+                        slot: contractWd,
+                        instruct: wdReviseContract,
+                        setInstruct: setWdReviseContract,
+                      },
+                    ] as const
+                  ).map(({ key, label, slot, instruct, setInstruct }) => (
+                    <div
+                      key={key}
+                      className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 space-y-3 flex flex-col min-h-[280px]"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <h4 className="text-sm font-bold text-slate-900">{label}</h4>
+                        {slot?.plain_text ? (
+                          <span className="text-[10px] text-slate-500">
+                            {(slot.plain_text as string).length.toLocaleString()} chars
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        {slot?.updated_at
+                          ? `Last update: ${slot.updated_at} · ${slot.updated_by || "?"} · ${slot.source_filename || "—"}`
+                          : "No working copy yet — upload a .docx or run a revision after seeding text."}
+                      </p>
+                      {slot?.plain_text ? (
+                        <div className="text-xs text-slate-600 bg-white border border-slate-100 rounded-lg p-2 max-h-28 overflow-y-auto font-mono leading-snug">
+                          {(slot.plain_text as string).slice(0, 520)}
+                          {(slot.plain_text as string).length > 520 ? "…" : ""}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-400 italic">Empty slot</p>
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        <label className="inline-flex items-center justify-center gap-1 rounded-md bg-white border border-slate-200 px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-700 hover:bg-slate-100 cursor-pointer">
+                          <input
+                            type="file"
+                            accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            className="hidden"
+                            disabled={wdBusy !== null}
+                            onChange={async (e) => {
+                              const f = e.target.files?.[0];
+                              e.target.value = "";
+                              if (!f || !hasLiveCase) return;
+                              setWdError(null);
+                              setWdBusy(`up-${key}`);
+                              try {
+                                const fd = new FormData();
+                                fd.append("role", key);
+                                fd.append("file", f);
+                                const res = await apiFetch(`${getApiBaseUrl()}/api/cases/${encodeURIComponent(caseId)}/working-documents`, {
+                                  method: "POST",
+                                  body: fd,
+                                });
+                                if (!res.ok) {
+                                  const t = await res.text();
+                                  throw new Error(t || `Upload failed (${res.status})`);
+                                }
+                                await refreshCaseMeta();
+                              } catch (err) {
+                                setWdError(err instanceof Error ? err.message : "Upload failed.");
+                              } finally {
+                                setWdBusy(null);
+                              }
+                            }}
+                          />
+                          Upload .docx
+                        </label>
+                        <button
+                          type="button"
+                          disabled={wdBusy !== null || !(slot?.plain_text as string | undefined)?.trim()}
+                          onClick={async () => {
+                            setWdError(null);
+                            setWdBusy(`rv-${key}`);
+                            try {
+                              const res = await apiFetch(`${getApiBaseUrl()}/api/cases/${encodeURIComponent(caseId)}/working-documents/revise`, {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ role: key, instruction: instruct }),
+                              });
+                              if (!res.ok) {
+                                const t = await res.text();
+                                throw new Error(t || `Revision failed (${res.status})`);
+                              }
+                              await refreshCaseMeta();
+                            } catch (err) {
+                              setWdError(err instanceof Error ? err.message : "Revision failed.");
+                            } finally {
+                              setWdBusy(null);
+                            }
+                          }}
+                          className="inline-flex items-center justify-center gap-1 rounded-md bg-indigo-600 text-white px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide hover:bg-indigo-700 disabled:opacity-45"
+                        >
+                          {wdBusy === `rv-${key}` ? "…" : "Apply Copilot revision"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={wdBusy !== null || !(slot?.plain_text as string | undefined)?.trim()}
+                          onClick={async () => {
+                            setWdError(null);
+                            setWdBusy(`dl-${key}`);
+                            try {
+                              await downloadWorkingDocumentExport(caseId, key);
+                            } catch (err) {
+                              setWdError(err instanceof Error ? err.message : "Download failed.");
+                            } finally {
+                              setWdBusy(null);
+                            }
+                          }}
+                          className="inline-flex items-center justify-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-indigo-900 hover:bg-indigo-100 disabled:opacity-45"
+                        >
+                          <Download className="w-3 h-3" />
+                          Word
+                        </button>
+                      </div>
+                      <div className="mt-auto pt-1">
+                        <label className="block text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">
+                          Instruction for Copilot rewrite
+                        </label>
+                        <textarea
+                          value={instruct}
+                          onChange={(e) => setInstruct(e.target.value)}
+                          rows={3}
+                          className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs text-slate-800 placeholder:text-slate-400"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
 
           <motion.div variants={item} className="bg-white rounded-xl shadow-sm border-2 border-slate-200 overflow-hidden">
             <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">

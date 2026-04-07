@@ -25,6 +25,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from shared.copilot_focus import format_copilot_focus_for_prompt
+from shared.working_documents_prompt import format_working_documents_for_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +120,11 @@ ENTERPRISE SUPPLIER CATALOG (COMPLETE demo master list — {case_context.get("en
 When the user asks which suppliers fit this procurement, use this list together with Case Category, Summary, and Key Findings. Prefer suppliers whose category_id matches the case category; only suggest cross-category names with a brief explicit rationale (e.g., adjacent capability).
 {case_context.get("enterprise_supplier_catalog") or "—"}
 
+WORKING WORD DRAFTS (plain text from uploaded/edited .docx — use when user asks about RFx or contract wording):
+{format_working_documents_for_prompt(case_context.get("working_documents"))}
+
+If the user asks how to edit documents in Word or how to get changes back into the app, give the download → edit in Word → re-upload steps (left panel: Work products + Word round-trip). Do not assume they know this UI.
+
 CONVERSATION HISTORY:
 {history_text}
 
@@ -167,6 +173,7 @@ Respond with JSON only:
 
 IMPORTANT: If the user is ASKING a question (what, why, how, which, etc.), set can_answer_directly=true and needs_agent=false.
 If STAGE COACH lists open decisions and the user sounds unsure or exploratory, set can_answer_directly=true and needs_agent=false so the assistant can discuss tradeoffs first.
+If the user asks how to edit/upload/download Word documents, RFx files, or contract drafts in this app (including "where do I upload"), set can_answer_directly=true and needs_agent=false — that is a UX/process question, not a request to run a specialist agent.
 
 Respond with valid JSON only, no explanation."""
 
@@ -260,7 +267,17 @@ RULES:
 - If the user approved something, acknowledge it warmly and explain next steps.
 - If you need more data, ask specific questions.
 - Always be helpful and action-oriented.
-- Optional: end with a short line in brackets like [Explore options] only when it matches a sensible next user message—at most one such hint."""
+- Optional: end with a short line in brackets like [Explore options] only when it matches a sensible next user message—at most one such hint.
+- If WORKING WORD DRAFTS below contains text, treat it as the user's current RFP/RFx or contract draft (from Word). Discuss clauses, risks, and edits.
+
+WORD ROUND-TRIP — TEACH THE HUMAN (when relevant):
+- If they ask how to edit, Word, upload, download, RFx file, contract file, or "where do I change the document", explain clearly and briefly:
+  1) **Download**: Left panel → *Work products* → export an artifact pack as **.docx**, OR after text exists use *Word round-trip* → **Word** to download the working copy.
+  2) **Edit**: Open the file in **Microsoft Word**, make changes, **Save**.
+  3) **Re-upload**: Same left panel → *Word round-trip · RFx & contract* → pick **RFx** or **Contract** → **Upload .docx** (only .docx is supported for this flow).
+  4) **Optional**: Chat here for clause-level help (you see the stored text), or use **Apply Copilot revision** for a full rewrite, then download **Word** again.
+- If they already have draft text in WORKING WORD DRAFTS, you can skip repeating all steps—just remind them that **saving in Word and re-uploading** refreshes what you see.
+- If they have no draft yet, say they need to download something first (from Work products) or paste/upload when they have a .docx."""
 
         coach_block = format_copilot_focus_for_prompt(case_context.get("copilot_focus"))
         user_prompt = f"""CASE CONTEXT:
@@ -275,6 +292,9 @@ RULES:
 
 STAGE COACH (prioritize helping with any open decisions here):
 {coach_block or "—"}
+
+WORKING WORD DRAFTS (from Word upload / copilot revision — not the same as agent artifact packs):
+{format_working_documents_for_prompt(case_context.get("working_documents"))}
 
 CATEGORY SUPPLIER POOL (for DTP-02 / RFx discussions; same enterprise catalog slice as the UI):
 {_format_category_supplier_pool_for_prompt(case_context.get("category_supplier_pool"))}

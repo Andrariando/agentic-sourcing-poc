@@ -353,6 +353,11 @@ class ChatService:
                     }
                     for r in pool
                 ]
+            wd = getattr(detail, "working_documents", None)
+            if wd is not None:
+                case_context["working_documents"] = (
+                    wd.model_dump() if hasattr(wd, "model_dump") else wd
+                )
         
         # 5. Use LLM to analyze intent
         responder = get_llm_responder()

@@ -47,6 +47,41 @@ class CaseSummary(BaseModel):
     recommended_action: Optional[str] = None
 
 
+class ArtifactPackSummary(BaseModel):
+    """Pack metadata for case detail — use with ``GET .../artifact-packs/{pack_id}/export``."""
+    pack_id: str
+    agent_name: str = ""
+    created_at: str = ""
+    artifact_count: int = 0
+    is_latest: bool = False
+
+
+class WorkingDocumentSlot(BaseModel):
+    """Plain text extracted from or revised for a Word draft (RFX vs contract)."""
+    plain_text: str = ""
+    source_filename: Optional[str] = None
+    updated_at: Optional[str] = None
+    updated_by: Optional[str] = None  # user_upload | copilot
+
+
+class WorkingDocumentsState(BaseModel):
+    """Two slots for showcase: RFx draft and contract draft."""
+    rfx: Optional[WorkingDocumentSlot] = None
+    contract: Optional[WorkingDocumentSlot] = None
+
+
+class WorkingDocumentReviseRequest(BaseModel):
+    role: str  # rfx | contract
+    instruction: str = ""
+
+
+class WorkingDocumentReviseResponse(BaseModel):
+    success: bool
+    role: str
+    message: str = ""
+    chars: int = 0
+
+
 class CaseDetail(BaseModel):
     """Full case details for detail view."""
     case_id: str
@@ -71,6 +106,10 @@ class CaseDetail(BaseModel):
     copilot_focus: Optional[Dict[str, Any]] = None
     # Suppliers in ``category_id`` from the shared enterprise catalog (latest performance or catalog fallback)
     category_supplier_pool: List[CategorySupplierPoolRow] = Field(default_factory=list)
+    # Lightweight index for artifact pack downloads (full packs via export API)
+    artifact_pack_summaries: List[ArtifactPackSummary] = Field(default_factory=list)
+    # Word round-trip: upload edited .docx or apply copilot revisions; see working-document API routes
+    working_documents: Optional[WorkingDocumentsState] = None
 
 
 class CaseListResponse(BaseModel):

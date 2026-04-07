@@ -136,7 +136,8 @@ The standalone **`/dashboard/heatmap`** Next.js page was **removed** (it was sta
 | §4–7 KPI/KLI | Heatmap UI (`heatmap/page.tsx`), `/api/heatmap/metrics/dashboard` |
 | Category cards ingest / apply | [TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md) §7.2, §7.8; [SYSTEM_DOCUMENTATION.md](SYSTEM_DOCUMENTATION.md) §Category cards + API table |
 | Original heatmap build phases | [Opportunity_Scope_implementation_plan.md](Opportunity_Scope_implementation_plan.md) |
+| Case copilot: Word round-trip (RFx/contract), pack export, copilot teaching | [TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md) §5.2, §6.11; [SYSTEM_DOCUMENTATION.md](SYSTEM_DOCUMENTATION.md) §Chat lifecycle → Word round-trip |
 
 ---
 
-*Last updated: March 2026*
+*Last updated: April 2026*

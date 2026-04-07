@@ -2,7 +2,7 @@
 
 **Purpose**: Single reference for engineers and architects to understand this repository end-to-end—**dual-system architecture**, components, APIs, data flows, and extension points.
 
-**Last updated**: March 2026 (aligned with current `backend/main.py`, `backend/heatmap/*`, and `frontend-next/*`)
+**Last updated**: April 2026 (aligned with current `backend/main.py`, `backend/heatmap/*`, and `frontend-next/*`)
 
 **Related documents**
 
@@ -115,7 +115,7 @@ Cursor Code/
 
 Central **Pydantic** contracts for the legacy API:
 
-- **Cases**: `CaseSummary`, `CaseDetail`, `CaseListResponse`, `CreateCaseRequest`, `CreateCaseResponse`
+- **Cases**: `CaseSummary`, `CaseDetail` (includes `artifact_pack_summaries`, `working_documents`), `CaseListResponse`, `CreateCaseRequest`, `CreateCaseResponse`; artifact helpers: `ArtifactPackSummary`, `WorkingDocumentsState`, `WorkingDocumentSlot`, revise request/response types
 - **Chat**: `ChatRequest`, `ChatResponse` (includes `intent_classified`, `agents_called`, `waiting_for_human`, `dtp_stage`, etc.)
 - **Decisions**: `DecisionRequest`, `DecisionResponse` (supports `decision_data` for structured decision console)
 - **Ingestion**: document ingest responses, data preview/ingest responses, document list
@@ -130,6 +130,7 @@ Enums and shared constants: `UserIntent`, `DocumentType`, `DataType`, `CaseStatu
 Typically used by both documentation and backend logic:
 
 - **Decision definitions** (`shared/decision_definitions.py`): stage-specific questions for the Decision Console
+- **Working document prompts** (`shared/working_documents_prompt.py`): truncate/format stored drafts for LLM context
 - **Stage prerequisites** (`shared/stage_prereqs.py`): preflight checks per DTP stage
 - **Schemas** beyond REST (`shared/schemas.py` may include additional models—see file for full list)
 
@@ -150,9 +151,13 @@ All routes below are defined on `app` except **`/api/heatmap/*`**, which is moun
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/cases` | List cases (filters: `status`, `dtp_stage`, `category_id`, `limit`) |
-| GET | `/api/cases/{case_id}` | Full case detail for copilot UI |
+| GET | `/api/cases/{case_id}` | Full case detail for copilot UI; includes `artifact_pack_summaries`, `working_documents` (see §6.11) |
 | POST | `/api/cases` | Create case (`CreateCaseRequest`) |
-| GET | `/api/cases/{case_id}/artifacts/{artifact_id}/export` | Download stored artifact as **Word** (`export_format=docx`) or **PDF** (`export_format=pdf`); see `backend/services/artifact_document_export.py`. Streamlit case copilot shows **Download Word / PDF** per artifact. |
+| GET | `/api/cases/{case_id}/artifacts/{artifact_id}/export` | Download a **single** stored artifact as **Word** (`export_format=docx`) or **PDF** (`export_format=pdf`); see `backend/services/artifact_document_export.py`. |
+| GET | `/api/cases/{case_id}/artifact-packs/{pack_id}/export` | Download an **entire artifact pack** as Markdown (`export_format=md`), Word (`docx`), or PDF (`pdf`). |
+| POST | `/api/cases/{case_id}/working-documents` | `multipart/form-data`: `role` = `rfx` \| `contract`, `file` = `.docx`. Extracts plain text and stores it on the case (`working_documents_json`). |
+| POST | `/api/cases/{case_id}/working-documents/revise` | JSON `WorkingDocumentReviseRequest` (`role`, `instruction`). LLM full-document rewrite; persists with `updated_by: copilot`. See `backend/services/working_document_revision.py`. |
+| GET | `/api/cases/{case_id}/working-documents/{role}/export` | Download the stored working copy as `.docx` (`build_plain_text_docx_bytes` in `artifact_document_export.py`). |
 
 ### 5.3 Chat (Legacy DTP)
 
@@ -284,6 +289,20 @@ Agents are invoked **from the supervisor/task execution path**, not directly fro
 This lives at the repo root: **`graphs/workflow.py`** (alongside `graphs/__init__.py`). It orchestrates specialist agent nodes for case execution.
 
 **Related but separate**: `backend/supervisor/graph.py` defines `SupervisorGraph` (intent → validate → execute → approval → decision). Depending on code paths, both “supervisor-style” routing and the unified `graphs.workflow` graph participate in legacy behavior—when extending agents, trace **`chat_service.py`** first, then **`graphs/workflow.py`**, then **`backend/supervisor/graph.py`**.
+
+### 6.11 Word round-trip, pack export, and copilot teaching
+
+**Not** in-browser Microsoft Word; this is an explicit **download → edit locally → re-upload** loop for demos and pilots.
+
+| Concern | Implementation |
+|--------|------------------|
+| **Artifact pack export** | Next.js case copilot: **Work products** card — export all artifacts in a pack as `.md` / `.docx` / `.pdf` (`artifact_document_export.py`: `build_artifact_pack_*`). |
+| **Working document slots** | Two slots per case — **RFx** and **contract** — persisted as JSON on `case_states.working_documents_json` (plain text extracted from uploaded `.docx` via `backend/services/docx_text.py`). |
+| **Copilot context** | `ChatService` passes `working_documents` into `case_context`; `LLMResponder` injects `format_working_documents_for_prompt()` (`shared/working_documents_prompt.py`). The model is instructed to **teach** the download → Word → save → **Upload .docx** flow when users ask how to edit. |
+| **Intent routing** | Questions like “how do I upload Word?” are classified as **direct answer** (not specialist agent). |
+| **UI** | `frontend-next/src/app/cases/[id]/copilot/page.tsx`: **Word round-trip · RFx & contract** card + first assistant message (`buildAssistantWelcome`) explains the same steps. |
+
+**Environment**: `OPENAI_API_KEY` required for **Apply Copilot revision** (`working_document_revision.py`).
 
 ---
 

@@ -130,6 +130,18 @@ The output and conversation history are saved:
 ### Step 7: Natural Response Generation
 The `LLMResponder` takes the agent's raw output (or direct answer) and formats it into a conversational message for the user. It ensures the tone is consistent and helpful, and seamlessly handles "Ask for more data" scenarios if the user's request was incomplete.
 
+### Word round-trip (RFx & contract drafts) — teaching users the loop
+
+The Next.js case copilot (`frontend-next/src/app/cases/[id]/copilot/page.tsx`) supports **human-in-the-loop editing in Microsoft Word** alongside AI:
+
+1. **Download** — From **Work products**, export an artifact pack as `.docx` (or, once text exists, use the **Word** button under **Word round-trip · RFx & contract**).
+2. **Edit** — Open the file in **Microsoft Word**, change the draft, **Save**.
+3. **Re-upload** — In the same left panel, under **Word round-trip**, choose the **RFx** or **Contract** slot and click **Upload .docx**. The backend extracts plain text (`POST /api/cases/{case_id}/working-documents`) and stores it on the case.
+4. **Chat** — Copilot receives that text via `working_documents` in the LLM prompt (`shared/working_documents_prompt.py`, `backend/services/llm_responder.py`) so users can ask clause-level questions.
+5. **Optional AI rewrite** — **Apply Copilot revision** runs a full-document LLM pass (`POST .../working-documents/revise`); then **Word** downloads an updated `.docx`.
+
+The **first assistant message** in chat and the **LLM system prompts** explicitly teach this path (including “ask me *how do I edit the document?*”). This is **not** live co-authoring with Word Online; it is export/import of `.docx` with plain-text round-trip. See **TECHNICAL_DOCUMENTATION.md §6.11** for API and file references.
+
 ---
 
 ## 📊 3. DTP Stage Data Requirements

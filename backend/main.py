@@ -24,8 +24,16 @@ from backend.services.case_service import get_case_service
 from backend.services.artifact_document_export import (
     build_artifact_docx_bytes,
     build_artifact_pdf_bytes,
+    build_artifact_pack_docx_bytes,
+    build_artifact_pack_markdown_bytes,
+    build_artifact_pack_pdf_bytes,
+    build_plain_text_docx_bytes,
     export_filename,
+    export_pack_filename,
+    export_working_doc_filename,
 )
+from backend.services.docx_text import extract_text_from_docx_bytes
+from backend.services.working_document_revision import revise_working_document_text
 from backend.services.chat_service import get_chat_service
 from backend.services.ingestion_service import get_ingestion_service
 from backend.persistence.database import init_db
@@ -39,6 +47,8 @@ from shared.schemas import (
     DataIngestResponse, DataPreviewResponse,
     HealthCheckResponse,
     SupplierPoolResponse,
+    WorkingDocumentReviseRequest,
+    WorkingDocumentReviseResponse,
 )
 from backend.services.supplier_pool import get_category_supplier_pool
 from shared.constants import DocumentType, DataType
@@ -192,6 +202,197 @@ async def export_artifact_document(
     return StreamingResponse(
         BytesIO(data),
         media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+@app.get("/api/cases/{case_id}/artifact-packs/{pack_id}/export")
+async def export_artifact_pack_document(
+    case_id: str,
+    pack_id: str,
+    export_format: str = Query(
+        "md",
+        description="Export format: md (Markdown), docx, or pdf (full pack: all artifacts + next actions / risks)",
+    ),
+):
+    """
+    Download an entire artifact pack as Markdown, Word, or PDF.
+
+    Bundles every artifact in the pack (RFx sections, strategy summaries, etc.) into one file.
+    """
+    fmt = (export_format or "md").lower().strip()
+    if fmt not in ("md", "docx", "pdf", "markdown"):
+        raise HTTPException(
+            status_code=400,
+            detail="export_format must be md, docx, or pdf",
+        )
+    if fmt == "markdown":
+        fmt = "md"
+
+    service = get_case_service()
+    case = service.get_case(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    pack = service.get_artifact_pack_for_case(case_id, pack_id)
+    if not pack:
+        raise HTTPException(status_code=404, detail="Artifact pack not found for this case")
+
+    try:
+        if fmt == "md":
+            data = build_artifact_pack_markdown_bytes(
+                pack, case_id, case.name or case_id
+            )
+            media = "text/markdown; charset=utf-8"
+            fname = export_pack_filename(pack, "md")
+        elif fmt == "docx":
+            data = build_artifact_pack_docx_bytes(
+                pack, case_id, case.name or case_id
+            )
+            media = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            fname = export_pack_filename(pack, "docx")
+        else:
+            data = build_artifact_pack_pdf_bytes(
+                pack, case_id, case.name or case_id
+            )
+            media = "application/pdf"
+            fname = export_pack_filename(pack, "pdf")
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+    return StreamingResponse(
+        BytesIO(data),
+        media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+@app.post("/api/cases/{case_id}/working-documents")
+async def upload_working_document(
+    case_id: str,
+    role: str = Form(..., description="rfx or contract"),
+    file: UploadFile = File(...),
+):
+    """
+    Upload a .docx edited in Word; plain text is extracted and stored for copilot + export.
+    """
+    r = (role or "").lower().strip()
+    if r not in ("rfx", "contract"):
+        raise HTTPException(status_code=400, detail="role must be rfx or contract")
+    fname = file.filename or "document.docx"
+    if not fname.lower().endswith(".docx"):
+        raise HTTPException(status_code=400, detail="Only .docx files are supported for this showcase")
+
+    service = get_case_service()
+    case = service.get_case(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    content = await file.read()
+    try:
+        plain = extract_text_from_docx_bytes(content)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not read Word file: {e}") from e
+
+    ok = service.upsert_working_document_slot(
+        case_id, r, plain, fname, "user_upload"
+    )
+    if not ok:
+        raise HTTPException(status_code=500, detail="Failed to save working document")
+
+    return {
+        "success": True,
+        "role": r,
+        "chars": len(plain),
+        "source_filename": fname,
+        "message": "Draft stored. Copilot can now reference it; download Word anytime.",
+    }
+
+
+@app.post("/api/cases/{case_id}/working-documents/revise", response_model=WorkingDocumentReviseResponse)
+async def revise_working_document_endpoint(
+    case_id: str,
+    body: WorkingDocumentReviseRequest,
+):
+    """
+    Apply a full-document Copilot rewrite (LLM) to the stored RFX or contract plain text.
+    """
+    r = (body.role or "").lower().strip()
+    if r not in ("rfx", "contract"):
+        raise HTTPException(status_code=400, detail="role must be rfx or contract")
+
+    service = get_case_service()
+    case = service.get_case(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    wd = case.working_documents
+    slot = None
+    if wd:
+        slot = wd.rfx if r == "rfx" else wd.contract
+    current = (slot.plain_text if slot else "") or ""
+    if not current.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="No draft text for this slot. Upload a .docx first or paste content via API.",
+        )
+
+    revised = revise_working_document_text(
+        role=r,
+        current_text=current,
+        instruction=body.instruction,
+        case_name=case.name or case_id,
+        category_id=case.category_id,
+        dtp_stage=case.dtp_stage,
+    )
+    if not revised:
+        raise HTTPException(
+            status_code=503,
+            detail="Revision unavailable (check OPENAI_API_KEY or try again).",
+        )
+
+    ok = service.upsert_working_document_slot(
+        case_id, r, revised, slot.source_filename if slot else None, "copilot"
+    )
+    if not ok:
+        raise HTTPException(status_code=500, detail="Failed to save revised draft")
+
+    return WorkingDocumentReviseResponse(
+        success=True,
+        role=r,
+        message="Draft updated. Download Word or keep chatting.",
+        chars=len(revised),
+    )
+
+
+@app.get("/api/cases/{case_id}/working-documents/{role}/export")
+async def export_working_document_word(
+    case_id: str,
+    role: str,
+):
+    """Download the stored plain-text draft as a .docx (open/edit again in Word)."""
+    r = (role or "").lower().strip()
+    if r not in ("rfx", "contract"):
+        raise HTTPException(status_code=400, detail="role must be rfx or contract")
+
+    service = get_case_service()
+    case = service.get_case(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    wd = case.working_documents
+    slot = wd.rfx if r == "rfx" else (wd.contract if wd else None)
+    if not slot or not (slot.plain_text or "").strip():
+        raise HTTPException(status_code=404, detail="No saved draft for this slot")
+
+    title = "RFx draft (working copy)" if r == "rfx" else "Contract draft (working copy)"
+    data = build_plain_text_docx_bytes(
+        title, slot.plain_text, case_id, case.name or case_id
+    )
+    fname = export_working_doc_filename(r, "docx")
+    return StreamingResponse(
+        BytesIO(data),
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={"Content-Disposition": f'attachment; filename="{fname}"'},
     )
 

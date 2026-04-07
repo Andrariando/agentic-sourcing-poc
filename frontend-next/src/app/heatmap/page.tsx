@@ -5,10 +5,11 @@ import {
   LayoutGrid,
   List,
   X,
-  ExternalLink,
   MessageCircle,
   CheckCircle2,
   AlertCircle,
+  ThumbsUp,
+  ThumbsDown,
 } from "lucide-react";
 import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { apiFetch } from "@/lib/api-fetch";
@@ -126,9 +127,6 @@ export default function HeatmapPriorityPage() {
   const [pipelineRunning, setPipelineRunning] = useState(false);
   const [viewMode, setViewMode] = useState<'table' | 'heatmap'>('table');
   
-  // Selection State
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  
   // Review Modal State
   const [reviewOpp, setReviewOpp] = useState<any | null>(null);
   const [feedbackTier, setFeedbackTier] = useState<string>("T1");
@@ -164,6 +162,10 @@ export default function HeatmapPriorityPage() {
   const [copilotRefQuery, setCopilotRefQuery] = useState("");
   const [qaQuestion, setQaQuestion] = useState("");
   const [qaAnswer, setQaAnswer] = useState<string | null>(null);
+  const [qaResponseId, setQaResponseId] = useState<string | null>(null);
+  const [qaVote, setQaVote] = useState<"up" | "down" | null>(null);
+  const [qaVoteLoading, setQaVoteLoading] = useState(false);
+  const [qaVoteNotice, setQaVoteNotice] = useState<string | null>(null);
   const [qaLoading, setQaLoading] = useState(false);
   const [qaUsedLlm, setQaUsedLlm] = useState(false);
   const [policyText, setPolicyText] = useState("");
@@ -195,12 +197,17 @@ export default function HeatmapPriorityPage() {
   const [pendingPatch, setPendingPatch] = useState<Record<string, unknown> | null>(null);
   const [applyLoading, setApplyLoading] = useState(false);
   const [cardCategories, setCardCategories] = useState<string[]>(["IT Infrastructure", "Software", "Hardware"]);
-  const activeOpportunities = opportunities.filter((o) => o.status !== "Approved");
+  const activeOpportunities = opportunities;
 
   const rankOpportunities = (rows: any[]) =>
-    rows
-      .filter((o) => o.status !== "Approved")
-      .sort((a: any, b: any) => b.total_score - a.total_score);
+    rows.sort((a: any, b: any) => b.total_score - a.total_score);
+
+  const isOpportunityReviewed = (opp: any) =>
+    opp?.status === "Approved" ||
+    Boolean(opp?.reviewed) ||
+    Number(opp?.kli_metrics?.feedback_rows ?? 0) > 0;
+
+  const isOpportunityApproved = (opp: any) => opp?.status === "Approved";
 
   useEffect(() => {
     if (!copilotOpen) return;
@@ -279,23 +286,8 @@ export default function HeatmapPriorityPage() {
   
   const pipelineValueText = formatMillions(totalValue);
 
-  // Selection Logic
-  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.checked) {
-      setSelectedIds(new Set(activeOpportunities.map(o => o.id as number)));
-    } else {
-      setSelectedIds(new Set());
-    }
-  };
-
-  const handleSelectOne = (id: number) => {
-    const nextSet = new Set(selectedIds);
-    if (nextSet.has(id)) nextSet.delete(id);
-    else nextSet.add(id);
-    setSelectedIds(nextSet);
-  };
-
   const openReviewModal = async (opp: any) => {
+    if (isOpportunityApproved(opp)) return;
     setReviewOpp(opp);
     setFeedbackTier(opp.tier);
     setFeedbackReason("");
@@ -382,10 +374,16 @@ export default function HeatmapPriorityPage() {
         const snap = data.opportunity;
         const updated = opportunities.map((o) => {
           if (o.id === reviewOpp.id) {
+            const oldFeedbackRows = Number(o?.kli_metrics?.feedback_rows ?? 0);
             return {
               ...o,
               tier: snap?.tier ?? feedbackTier,
               total_score: snap?.total_score ?? o.total_score,
+              reviewed: true,
+              kli_metrics: {
+                ...(o?.kli_metrics ?? {}),
+                feedback_rows: oldFeedbackRows + 1,
+              },
             };
           }
           return o;
@@ -399,40 +397,6 @@ export default function HeatmapPriorityPage() {
         const baseSavedMsg = `Review saved for ${reviewOpp.supplier_name || "this opportunity"} (priority ${heatmapTierLabel(feedbackTier)}).${scorePart} Your feedback is stored in the audit log.`;
 
         setReviewOpp(null);
-
-        // High priority: single bridge into case management — same path as "Approve Selected" (one case per opportunity).
-        if (feedbackTier === "T1") {
-          try {
-            const approveUrl = `${getApiBaseUrl()}/api/heatmap/approve`;
-            const approveRes = await apiFetch(approveUrl, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                opportunity_ids: [reviewOpp.id],
-                approver_id: "human-manager",
-              }),
-            });
-            const approveData = await approveRes.json();
-            const caseId = approveData.cases?.[String(reviewOpp.id)];
-            if (caseId) {
-              setReviewSaveNotice({
-                kind: "success",
-                message: `${baseSavedMsg} Opening the case workspace…`,
-              });
-              window.setTimeout(() => {
-                window.location.href = `/cases/${caseId}/copilot`;
-              }, 400);
-              return;
-            }
-          } catch (e) {
-            console.error(e);
-          }
-          setReviewSaveNotice({
-            kind: "success",
-            message: `${baseSavedMsg} No case link was returned — open S2C Case Dashboard to continue.`,
-          });
-          return;
-        }
 
         setReviewSaveNotice({ kind: "success", message: baseSavedMsg });
       } else {
@@ -453,19 +417,12 @@ export default function HeatmapPriorityPage() {
     }
   };
 
-  const handlePushToCasework = async () => {
-    // Check if any non-T1 is selected
-    const selectedOpps = activeOpportunities.filter(o => selectedIds.has(o.id as number));
-    if (selectedOpps.length === 0) return;
-
-    const nonT1 = selectedOpps.some(o => o.tier !== 'T1');
-    if (nonT1) {
-      alert(
-        "Error: Only High priority (Immediate) opportunities can be pushed directly to the S2C Case Dashboard. Please review and approve lower-priority items first."
-      );
+  const handleApproveToExecution = async (opp: any) => {
+    if (isOpportunityApproved(opp)) return;
+    if (!isOpportunityReviewed(opp)) {
+      alert("Review this opportunity first before approving to S2C Execution.");
       return;
     }
-
     try {
       const url = `${getApiBaseUrl()}/api/heatmap/approve`;
 
@@ -473,22 +430,20 @@ export default function HeatmapPriorityPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          opportunity_ids: Array.from(selectedIds),
+          opportunity_ids: [opp.id],
           approver_id: "human-manager"
         })
       });
 
       if (res.ok) {
         const data = await res.json();
-        const ids = data.cases ? Object.values(data.cases).join(", ") : "";
-        const linked = data.cases ? Object.keys(data.cases).length : 0;
+        const caseId = data.cases?.[String(opp.id)];
+        const linked = data.already_linked?.[String(opp.id)] === true;
         alert(
-          `Success! ${linked} opportunity(ies) linked to case(s)` +
-            (data.approved_count ? ` (${data.approved_count} newly created). ` : ". ") +
-            (ids ? `Case ID(s): ${ids}. ` : "") +
-            "Open the S2C Case Dashboard to continue."
+          linked
+            ? `Already linked to S2C Execution${caseId ? ` (Case ${caseId})` : ""}.`
+            : `Approved to S2C Execution${caseId ? ` (Case ${caseId})` : ""}.`
         );
-        setSelectedIds(new Set());
         // Refresh list so server-side Approved status matches the UI.
         const oppUrl = `${getApiBaseUrl()}/api/heatmap/opportunities`;
         const oppRes = await apiFetch(oppUrl, { cache: "no-store" });
@@ -497,11 +452,11 @@ export default function HeatmapPriorityPage() {
           setOpportunities(rankOpportunities(oppJson.opportunities));
         }
       } else {
-        alert("Failed to push to casework. Please try again.");
+        alert("Failed to approve to S2C Execution. Please try again.");
       }
     } catch (err) {
       console.error(err);
-      alert("Network error pushing to casework.");
+      alert("Network error approving to S2C Execution.");
     }
   };
 
@@ -551,6 +506,9 @@ export default function HeatmapPriorityPage() {
   const submitHeatmapQA = async () => {
     setQaLoading(true);
     setQaAnswer(null);
+    setQaResponseId(null);
+    setQaVote(null);
+    setQaVoteNotice(null);
     try {
       const res = await apiFetch(`${getApiBaseUrl()}/api/heatmap/qa`, {
         method: "POST",
@@ -565,11 +523,44 @@ export default function HeatmapPriorityPage() {
       }
       setQaAnswer(data.answer || "");
       setQaUsedLlm(Boolean(data.used_llm));
+      setQaResponseId(typeof data.response_id === "string" ? data.response_id : null);
     } catch {
       setQaAnswer(`Network error. API: ${getApiBaseUrl()}${apiConnectivityHint()}`);
       setQaUsedLlm(false);
     } finally {
       setQaLoading(false);
+    }
+  };
+
+  const submitQaVote = async (vote: "up" | "down") => {
+    if (!qaAnswer || !qaResponseId || qaQuestion.trim().length < 3) return;
+    setQaVoteLoading(true);
+    setQaVoteNotice(null);
+    try {
+      const res = await apiFetch(`${getApiBaseUrl()}/api/heatmap/qa/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          response_id: qaResponseId,
+          question: qaQuestion.trim(),
+          answer: qaAnswer,
+          vote,
+          user_id: "human-manager",
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setQaVoteNotice(
+          typeof data.detail === "string" ? data.detail : "Could not save feedback."
+        );
+        return;
+      }
+      setQaVote(vote);
+      setQaVoteNotice("Thanks, feedback saved for KPI tracking.");
+    } catch {
+      setQaVoteNotice("Network error saving feedback.");
+    } finally {
+      setQaVoteLoading(false);
     }
   };
 
@@ -926,11 +917,6 @@ export default function HeatmapPriorityPage() {
             <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
               <div className="flex items-center gap-4">
                 <h2 className="font-semibold text-slate-800">Prioritized Opportunities</h2>
-                {selectedIds.size > 0 && (
-                  <span className="text-xs bg-blue-50 text-sponsor-blue font-medium px-2.5 py-1 rounded-full border border-blue-100">
-                    {selectedIds.size} selected
-                  </span>
-                )}
               </div>
               <div className="flex gap-3">
                 <button
@@ -940,27 +926,12 @@ export default function HeatmapPriorityPage() {
                 >
                   {pipelineRunning ? "Refreshing..." : "Refresh Scores"}
                 </button>
-                <button 
-                  onClick={handlePushToCasework}
-                  disabled={selectedIds.size === 0}
-                  className="px-4 py-2 bg-sponsor-blue text-white shadow-md rounded-md text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Approve Selected (Run DTP01)
-                </button>
               </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-200 text-left">
-                    <th className="px-6 py-4 font-medium w-10">
-                      <input 
-                        type="checkbox" 
-                        className="rounded border-slate-300 w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" 
-                        checked={selectedIds.size === activeOpportunities.length && activeOpportunities.length > 0}
-                        onChange={handleSelectAll}
-                      />
-                    </th>
                     <th className="px-6 py-4 font-medium">Supplier / Request</th>
                     <th className="px-6 py-4 font-medium">Category</th>
                     <th className="px-6 py-4 font-medium cursor-help" title={HEATMAP_GLOSSARY.tier}>
@@ -972,14 +943,14 @@ export default function HeatmapPriorityPage() {
                     <th className="px-6 py-4 font-medium cursor-help" title={HEATMAP_GLOSSARY.agenticScore}>
                       Total
                     </th>
-                    <th className="px-6 py-4 font-medium">Action Window</th>
-                    <th className="px-6 py-4 font-medium text-right">Action</th>
+                    <th className="px-6 py-4 font-medium">Review Status</th>
+                    <th className="px-6 py-4 font-medium text-right">Approval Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {loading ? (
                     <tr>
-                      <td colSpan={8} className="px-6 py-12 text-center text-slate-500">
+                      <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
                         <div className="flex flex-col items-center justify-center">
                           <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-sponsor-blue animate-spin mb-3"></div>
                           <p>Loading scored opportunities from backend...</p>
@@ -988,24 +959,16 @@ export default function HeatmapPriorityPage() {
                     </tr>
                   ) : opportunities.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-6 py-12 text-center text-slate-500">
+                      <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
                         No opportunities found in the scoring engine.
                       </td>
                     </tr>
                   ) : (
                     activeOpportunities.map((opp) => {
-                      const id = opp.id;
-                      const isSelected = selectedIds.has(id);
+                      const reviewed = isOpportunityReviewed(opp);
+                      const approved = isOpportunityApproved(opp);
                       return (
-                        <tr key={id} className={`transition-colors ${isSelected ? 'bg-blue-50/50' : 'hover:bg-slate-50'}`}>
-                          <td className="px-6 py-4 border-l-2 border-transparent" style={{borderLeftColor: isSelected ? '#1e3a8a' : 'transparent'}}>
-                            <input 
-                              type="checkbox" 
-                              className="rounded border-slate-300 w-4 h-4 text-sponsor-blue focus:ring-sponsor-blue" 
-                              checked={isSelected}
-                              onChange={() => handleSelectOne(id)}
-                            />
-                          </td>
+                        <tr key={opp.id} className="transition-colors hover:bg-slate-50">
                           <td className="px-6 py-4">
                             <div className="font-semibold text-slate-900">{opp.supplier_name || 'New Requirement'}</div>
                             <div className="text-xs text-slate-500 font-mono mt-0.5">{opp.contract_id || opp.request_id}</div>
@@ -1086,23 +1049,49 @@ export default function HeatmapPriorityPage() {
                               <span className="text-xs text-slate-500 font-normal">/10</span>
                             </div>
                           </td>
-                          <td className="px-6 py-4 text-sm font-medium text-slate-700">
-                            {opp.recommended_action_window || (opp.tier === 'T1' ? 'Critical' : opp.tier === 'T2' ? 'Immediate' : 'Monitor')}
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            {opp.status === 'Approved' ? (
-                              <span className="text-xs font-semibold text-green-600 uppercase flex items-center justify-end gap-1">
-                                Reviewed <ExternalLink className="w-3 h-3"/>
+                          <td className="px-6 py-4">
+                            {approved ? (
+                              <span className="inline-flex items-center text-xs font-semibold uppercase px-2 py-1 rounded bg-slate-100 text-slate-500 border border-slate-200">
+                                Reviewed (Locked)
                               </span>
+                            ) : reviewed ? (
+                              <button
+                                onClick={() => {
+                                  void openReviewModal(opp);
+                                }}
+                                className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2.5 py-1.5 rounded hover:bg-emerald-100 transition"
+                                title="Reviewed — click to view/update review"
+                              >
+                                Reviewed
+                              </button>
                             ) : (
                               <button
                                 onClick={() => {
                                   void openReviewModal(opp);
                                 }}
-                                className="text-sponsor-blue hover:text-blue-800 text-sm font-medium bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded transition"
+                                className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-100 px-2.5 py-1.5 rounded hover:bg-amber-100 transition"
+                                title="Not reviewed — click to review"
                               >
-                                Review
+                                Not Reviewed
                               </button>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            {approved ? (
+                              <span className="inline-flex items-center text-xs font-semibold uppercase px-2 py-1 rounded bg-green-100 text-green-700 border border-green-200">
+                                Approved
+                              </span>
+                            ) : reviewed ? (
+                              <button
+                                onClick={() => {
+                                  void handleApproveToExecution(opp);
+                                }}
+                                className="text-xs font-semibold text-white bg-sponsor-blue px-3 py-1.5 rounded hover:bg-blue-700 transition"
+                              >
+                                Approve to S2C Execution
+                              </button>
+                            ) : (
+                              <span className="text-xs text-slate-400">Review required</span>
                             )}
                           </td>
                         </tr>
@@ -1295,8 +1284,42 @@ export default function HeatmapPriorityPage() {
                     )}
                   </div>
                   {qaAnswer && (
-                    <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">
-                      {qaAnswer}
+                    <div className="space-y-3">
+                      <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">
+                        {qaAnswer}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-500">Was this helpful?</span>
+                        <button
+                          type="button"
+                          disabled={qaVoteLoading}
+                          onClick={() => void submitQaVote("up")}
+                          className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition ${
+                            qaVote === "up"
+                              ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                          } disabled:opacity-50`}
+                        >
+                          <ThumbsUp className="w-3.5 h-3.5" />
+                          Thumbs up
+                        </button>
+                        <button
+                          type="button"
+                          disabled={qaVoteLoading}
+                          onClick={() => void submitQaVote("down")}
+                          className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition ${
+                            qaVote === "down"
+                              ? "bg-rose-100 text-rose-700 border-rose-200"
+                              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                          } disabled:opacity-50`}
+                        >
+                          <ThumbsDown className="w-3.5 h-3.5" />
+                          Thumbs down
+                        </button>
+                        {qaVoteNotice && (
+                          <span className="text-xs text-slate-500">{qaVoteNotice}</span>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>

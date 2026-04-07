@@ -235,6 +235,9 @@ class CaseState(SQLModel, table=True):
     
     # Pre-seeded chat history for demo cases (JSON array of messages)
     chat_history: Optional[str] = None  # JSON array
+
+    # User/copilot-editable Word round-trip drafts: JSON { "rfx": {...}, "contract": {...} }
+    working_documents_json: Optional[str] = None
     
     # Timestamps
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())

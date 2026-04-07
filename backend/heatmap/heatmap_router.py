@@ -6,12 +6,18 @@ from sqlmodel import select, func
 import json
 import threading
 import time
+from uuid import uuid4
 
 from backend.heatmap.services.feedback_service import get_feedback_service
 from backend.heatmap.services.case_bridge import get_case_bridge_service
 from backend.heatmap.run_pipeline_init import run_init
 from backend.heatmap.persistence.heatmap_database import heatmap_db
-from backend.heatmap.persistence.heatmap_models import Opportunity, ReviewFeedback, AuditLog
+from backend.heatmap.persistence.heatmap_models import (
+    Opportunity,
+    ReviewFeedback,
+    AuditLog,
+    HeatmapCopilotFeedback,
+)
 from backend.heatmap.context_builder import (
     load_category_cards,
     category_cards_fingerprint,
@@ -153,6 +159,20 @@ class HeatmapQARequest(BaseModel):
 class HeatmapQAResponse(BaseModel):
     answer: str
     used_llm: bool
+    response_id: str
+
+
+class HeatmapQAFeedbackRequest(BaseModel):
+    response_id: str = Field(min_length=6, max_length=80)
+    question: str = Field(min_length=3, max_length=4000)
+    answer: str = Field(min_length=3, max_length=20000)
+    vote: str = Field(pattern="^(up|down)$")
+    user_id: str = Field(default="human-user", min_length=1, max_length=80)
+
+
+class HeatmapQAFeedbackResponse(BaseModel):
+    success: bool
+    feedback_id: int
 
 
 class PolicyCheckRequest(BaseModel):
@@ -260,7 +280,30 @@ def heatmap_qa(req: HeatmapQARequest):
     session = heatmap_db.get_db_session()
     try:
         answer, used_llm = answer_heatmap_question(session, req.question.strip())
-        return HeatmapQAResponse(answer=answer, used_llm=used_llm)
+        return HeatmapQAResponse(
+            answer=answer,
+            used_llm=used_llm,
+            response_id=uuid4().hex,
+        )
+    finally:
+        session.close()
+
+
+@heatmap_router.post("/qa/feedback", response_model=HeatmapQAFeedbackResponse)
+def heatmap_qa_feedback(req: HeatmapQAFeedbackRequest):
+    session = heatmap_db.get_db_session()
+    try:
+        row = HeatmapCopilotFeedback(
+            response_id=req.response_id.strip(),
+            question=req.question.strip(),
+            answer=req.answer.strip(),
+            vote=req.vote.strip(),
+            user_id=req.user_id.strip() or "human-user",
+        )
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+        return HeatmapQAFeedbackResponse(success=True, feedback_id=int(row.id or 0))
     finally:
         session.close()
 
@@ -512,6 +555,19 @@ def heatmap_dashboard_metrics():
             last_pipe["running"] = _pipeline_status.get("running")
             last_pipe["last_success"] = _pipeline_status.get("last_success")
 
+        qa_vote_rows = session.exec(
+            select(
+                HeatmapCopilotFeedback.vote,
+                func.count(HeatmapCopilotFeedback.id),
+            ).group_by(HeatmapCopilotFeedback.vote)
+        ).all()
+        qa_vote_counts: Dict[str, int] = {}
+        for vote, n in qa_vote_rows:
+            qa_vote_counts[str(vote)] = int(n)
+        qa_total = int(sum(qa_vote_counts.values()))
+        qa_up = int(qa_vote_counts.get("up", 0))
+        qa_signal_attr_accuracy = (qa_up / qa_total * 100.0) if qa_total else None
+
         n_opp = len(opps)
         avg_fb = (fb_total / n_opp) if n_opp else 0.0
 
@@ -525,6 +581,16 @@ def heatmap_dashboard_metrics():
             "feedback_per_opportunity_avg": round(avg_fb, 3),
             "last_pipeline": last_pipe,
             "pipeline_status": dict(_pipeline_status),
+            "copilot_feedback": {
+                "thumbs_up": qa_up,
+                "thumbs_down": int(qa_vote_counts.get("down", 0)),
+                "thumbs_total": qa_total,
+                "signal_attribution_accuracy_pct": (
+                    round(qa_signal_attr_accuracy, 2)
+                    if qa_signal_attr_accuracy is not None
+                    else None
+                ),
+            },
         }
     finally:
         session.close()

@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 from sqlmodel import SQLModel, Field, Column, JSON
+from uuid import uuid4
 
 
 class Opportunity(SQLModel, table=True):
@@ -102,3 +103,14 @@ class HeatmapLearnedWeights(SQLModel, table=True):
     id: int = Field(primary_key=True)  # always 1
     weights_json: str = Field(default="{}")
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class HeatmapCopilotFeedback(SQLModel, table=True):
+    """Thumbs up/down votes for Heatmap copilot answers (for KPI/KLI later)."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    response_id: str = Field(default_factory=lambda: uuid4().hex, index=True)
+    question: str
+    answer: str
+    vote: str = Field(index=True)  # up | down
+    user_id: str = Field(default="human-user")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

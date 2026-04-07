@@ -18,7 +18,8 @@ from shared.case_context_derive import merge_derived_case_context
 from shared.copilot_focus import build_copilot_focus
 from backend.services.supplier_pool import get_category_supplier_pool
 from shared.schemas import (
-    CaseSummary, CaseDetail, Artifact, ArtifactPack, 
+    CaseSummary, CaseDetail, Artifact, ArtifactPack, ArtifactPackSummary,
+    WorkingDocumentsState,
     NextAction, RiskItem, GroundingReference,
     ExecutionMetadata, TaskExecutionDetail
 )
@@ -111,7 +112,23 @@ class CaseService:
         human_decision = json.loads(case.human_decision) if case.human_decision else None
         copilot_focus = build_copilot_focus(case.dtp_stage, human_decision)
         category_supplier_pool = get_category_supplier_pool(case.category_id)
-        
+        artifact_pack_summaries = self._artifact_pack_summaries_for_case(
+            case.case_id, latest_artifact_pack_id
+        )
+
+        working_documents: Optional[WorkingDocumentsState] = None
+        wd_raw = getattr(case, "working_documents_json", None)
+        if wd_raw:
+            try:
+                working_documents = WorkingDocumentsState.model_validate_json(wd_raw)
+            except Exception:
+                try:
+                    working_documents = WorkingDocumentsState.model_validate(
+                        json.loads(wd_raw)
+                    )
+                except Exception:
+                    working_documents = None
+
         return CaseDetail(
             case_id=case.case_id,
             name=case.name,
@@ -133,8 +150,97 @@ class CaseService:
             chat_history=case.chat_history,  # Pass through as-is (JSON string or None)
             copilot_focus=copilot_focus,
             category_supplier_pool=category_supplier_pool,
+            artifact_pack_summaries=artifact_pack_summaries,
+            working_documents=working_documents,
         )
-    
+
+    def upsert_working_document_slot(
+        self,
+        case_id: str,
+        role: str,
+        plain_text: str,
+        source_filename: Optional[str],
+        updated_by: str,
+    ) -> bool:
+        """
+        Store plain text for the RFX or contract Word round-trip slot (max ~100k chars).
+        """
+        if role not in ("rfx", "contract"):
+            return False
+        max_chars = 100_000
+        text = (plain_text or "")[:max_chars]
+        session = get_db_session()
+        case = session.exec(
+            select(CaseState).where(CaseState.case_id == case_id)
+        ).first()
+        if not case:
+            session.close()
+            return False
+        data: Dict[str, Any] = {}
+        raw = getattr(case, "working_documents_json", None)
+        if raw:
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError:
+                data = {}
+        data[role] = {
+            "plain_text": text,
+            "source_filename": source_filename,
+            "updated_at": datetime.now().isoformat(),
+            "updated_by": updated_by,
+        }
+        case.working_documents_json = json.dumps(data)
+        case.updated_at = datetime.now().isoformat()
+        session.add(case)
+        session.commit()
+        session.close()
+        return True
+
+    def _artifact_pack_summaries_for_case(
+        self, case_id: str, latest_pack_id: Optional[str]
+    ) -> List[ArtifactPackSummary]:
+        session = get_db_session()
+        try:
+            packs = session.exec(
+                select(ArtifactPackModel)
+                .where(ArtifactPackModel.case_id == case_id)
+                .order_by(ArtifactPackModel.created_at)
+            ).all()
+        finally:
+            session.close()
+        out: List[ArtifactPackSummary] = []
+        for p in packs:
+            n = 0
+            if p.artifact_ids:
+                try:
+                    aids = json.loads(p.artifact_ids)
+                    n = len(aids) if isinstance(aids, list) else 0
+                except json.JSONDecodeError:
+                    n = 0
+            out.append(
+                ArtifactPackSummary(
+                    pack_id=p.pack_id,
+                    agent_name=p.agent_name or "",
+                    created_at=p.created_at or "",
+                    artifact_count=n,
+                    is_latest=(p.pack_id == latest_pack_id),
+                )
+            )
+        return out
+
+    def get_artifact_pack_for_case(self, case_id: str, pack_id: str) -> Optional[ArtifactPack]:
+        """Load a pack only if it belongs to ``case_id`` (for export URLs)."""
+        session = get_db_session()
+        try:
+            row = session.exec(
+                select(ArtifactPackModel).where(ArtifactPackModel.pack_id == pack_id)
+            ).first()
+        finally:
+            session.close()
+        if not row or row.case_id != case_id:
+            return None
+        return self._model_to_pack(row, case_id)
+
     def create_case(
         self,
         category_id: str,

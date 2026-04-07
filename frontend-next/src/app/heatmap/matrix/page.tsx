@@ -9,24 +9,37 @@ import SourcingOpportunityMatrix from "@/components/heatmap/SourcingOpportunityM
 
 function rankOpportunities(rows: any[]) {
   return rows
-    .filter((o) => o.status !== "Approved")
     .sort((a: any, b: any) => b.total_score - a.total_score);
 }
 
+type HeatmapPerformanceSummary = {
+  copilot_feedback?: {
+    thumbs_up?: number;
+    thumbs_down?: number;
+    thumbs_total?: number;
+    signal_attribution_accuracy_pct?: number | null;
+  };
+};
+
 export default function HeatmapMatrixPage() {
   const [opportunities, setOpportunities] = useState<any[]>([]);
+  const [summary, setSummary] = useState<HeatmapPerformanceSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchData() {
       try {
-        const url = `${getApiBaseUrl()}/api/heatmap/opportunities`;
-        const res = await apiFetch(url, { cache: "no-store" });
-        const data = await res.json();
-        if (data.opportunities) {
-          setOpportunities(rankOpportunities(data.opportunities));
+        const base = getApiBaseUrl();
+        const [oppRes, sumRes] = await Promise.all([
+          apiFetch(`${base}/api/heatmap/opportunities`, { cache: "no-store" }),
+          apiFetch(`${base}/api/heatmap/metrics/dashboard`, { cache: "no-store" }),
+        ]);
+        const oppData = await oppRes.json();
+        if (oppData.opportunities) {
+          setOpportunities(rankOpportunities(oppData.opportunities));
         }
+        if (sumRes.ok) setSummary(await sumRes.json());
         setError(null);
       } catch (err) {
         console.error(err);
@@ -52,7 +65,7 @@ export default function HeatmapMatrixPage() {
             </Link>
             <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Performance Dashboard</h1>
             <p className="text-slate-500 mt-2 text-sm">
-              KPI and KLI columns for all five Agentic Outcomes, aligned with the sourcing priority list.
+              Overall and detailed performance for sourcing prioritization quality.
             </p>
           </div>
         </header>
@@ -65,7 +78,7 @@ export default function HeatmapMatrixPage() {
             {apiConnectivityHint()}
           </div>
         ) : (
-          <SourcingOpportunityMatrix opportunities={opportunities} />
+          <SourcingOpportunityMatrix opportunities={opportunities} summary={summary || undefined} />
         )}
       </div>
     </div>

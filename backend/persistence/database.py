@@ -5,6 +5,7 @@ import os
 import tempfile
 from pathlib import Path
 from sqlmodel import SQLModel, Session, create_engine
+from sqlalchemy import text
 from typing import Generator
 
 # Database path - use temp directory for Streamlit Cloud (read-only filesystem)
@@ -44,6 +45,20 @@ def get_engine():
     return _engine
 
 
+def _sqlite_add_column_if_missing(table: str, column: str, ddl: str) -> None:
+    """Best-effort migration for existing SQLite files (create_all does not add columns)."""
+    engine = get_engine()
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(text(f"PRAGMA table_info({table})")).fetchall()
+            names = {r[1] for r in rows}  # column name
+            if column not in names:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {ddl}"))
+                conn.commit()
+    except Exception:
+        pass
+
+
 def init_db():
     """Initialize database tables."""
     from backend.persistence.models import (
@@ -53,6 +68,7 @@ def init_db():
     )
     engine = get_engine()
     SQLModel.metadata.create_all(engine)
+    _sqlite_add_column_if_missing("case_states", "working_documents_json", "working_documents_json TEXT")
 
 
 def get_session() -> Generator[Session, None, None]:
