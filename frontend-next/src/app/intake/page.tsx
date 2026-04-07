@@ -1,30 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { apiFetch } from "@/lib/api-fetch";
 import { getApiBaseUrl, apiConnectivityHint } from "@/lib/api-base";
-import { HeatmapAbbr, HEATMAP_GLOSSARY, type HeatmapGlossaryKey } from "@/lib/heatmap-glossary";
-import { heatmapTierLabel } from "@/lib/heatmap-tier-display";
-
-const TIER_GLOSS: Record<string, HeatmapGlossaryKey> = {
-  T1: "t1",
-  T2: "t2",
-  T3: "t3",
-  T4: "t4",
-};
-
-type PreviewResponse = {
-  meta: {
-    max_estimated_spend_pipeline?: number;
-    category_spend_used?: number;
-    fis_field_note?: string;
-    feedback_memory_delta?: number;
-  };
-  scores: Record<string, number | null | undefined>;
-  total_score: number;
-  tier: string;
-  justification: string;
-};
+import { HeatmapAbbr } from "@/lib/heatmap-glossary";
 
 const DEFAULT_CATEGORIES = ["IT Infrastructure", "Software", "Hardware"];
 
@@ -39,9 +18,6 @@ export default function SourcingIntakePage() {
     estimated_spend: 250_000,
     implementation_timeline_months: 6,
   });
-  const [preview, setPreview] = useState<PreviewResponse | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewError, setPreviewError] = useState<string | null>(null);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
 
@@ -66,59 +42,6 @@ export default function SourcingIntakePage() {
     };
     load();
   }, []);
-
-  const runPreview = useCallback(async () => {
-    const base = getApiBaseUrl();
-    const url = `${base}/api/heatmap/intake/preview`;
-    setPreviewLoading(true);
-    setPreviewError(null);
-    try {
-      const res = await apiFetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          category: formData.category,
-          subcategory: formData.subcategory || null,
-          supplier_name: formData.supplier_name || null,
-          estimated_spend_usd: formData.estimated_spend,
-          implementation_timeline_months: formData.implementation_timeline_months,
-          preferred_supplier_status: null,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        const detail =
-          typeof err.detail === "string"
-            ? err.detail
-            : Array.isArray(err.detail)
-              ? err.detail.map((d: { msg?: string }) => d.msg).join("; ")
-              : "Preview failed";
-        setPreviewError(detail);
-        setPreview(null);
-        return;
-      }
-      const data = (await res.json()) as PreviewResponse;
-      setPreview(data);
-    } catch {
-      setPreviewError(`Could not reach API. Base: ${base}${apiConnectivityHint()}`);
-      setPreview(null);
-    } finally {
-      setPreviewLoading(false);
-    }
-  }, [
-    formData.category,
-    formData.subcategory,
-    formData.supplier_name,
-    formData.estimated_spend,
-    formData.implementation_timeline_months,
-  ]);
-
-  useEffect(() => {
-    const t = window.setTimeout(() => {
-      void runPreview();
-    }, 450);
-    return () => window.clearTimeout(t);
-  }, [runPreview]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -157,7 +80,6 @@ export default function SourcingIntakePage() {
           ? `Saved as opportunity #${id}${reqId ? ` (${reqId})` : ""}. It appears on the heatmap alongside batch rows.`
           : "Requirement saved."
       );
-      void runPreview();
     } catch {
       setSubmitMessage(`Network error. API base: ${getApiBaseUrl()}${apiConnectivityHint()}`);
     } finally {
@@ -165,13 +87,11 @@ export default function SourcingIntakePage() {
     }
   };
 
-  const s = preview?.scores;
-
   return (
     <div className="flex-1 overflow-y-auto p-8 bg-slate-50 min-h-full flex justify-center">
-      <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div className="max-w-4xl w-full">
         <form
-          className="md:col-span-2 space-y-6 bg-white p-8 rounded-xl border border-slate-200 shadow-sm"
+          className="space-y-6 bg-white p-8 rounded-xl border border-slate-200 shadow-sm"
           onSubmit={handleSubmit}
         >
           <div>
@@ -302,95 +222,6 @@ export default function SourcingIntakePage() {
             </div>
           </div>
         </form>
-
-        <div className="md:col-span-1 space-y-4">
-          <div className="bg-slate-900 text-white p-6 rounded-xl shadow-lg sticky top-8">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold uppercase tracking-widest text-slate-400">
-                Live <HeatmapAbbr term="psNew">PS_new</HeatmapAbbr> score
-              </h3>
-              {previewLoading && <span className="text-xs text-slate-500">Updating…</span>}
-            </div>
-
-            {previewError && (
-              <p className="text-sm text-amber-200 mb-4 border border-amber-800/50 rounded p-2">{previewError}</p>
-            )}
-
-            {preview ? (
-              <>
-                <div className="flex items-end gap-2 mb-2 flex-wrap">
-                  <span className="text-5xl font-bold tabular-nums">{preview.total_score.toFixed(2)}</span>
-                  <span className="text-slate-400 mb-1">weighted</span>
-                  {typeof preview.meta?.feedback_memory_delta === "number" &&
-                    Math.abs(preview.meta.feedback_memory_delta) >= 0.01 && (
-                      <span
-                        className="text-xs font-medium px-2 py-1 rounded bg-emerald-900/60 text-emerald-200 border border-emerald-700/50 mb-1"
-                        title="Small adjustment from similar past reviewer feedback (Chroma + optional LLM). Sub-scores shown are pre-adjustment."
-                      >
-                        Review memory Δ{preview.meta.feedback_memory_delta >= 0 ? "+" : ""}
-                        {preview.meta.feedback_memory_delta.toFixed(2)}
-                      </span>
-                    )}
-                </div>
-                <p className="text-sm text-sponsor-orange font-semibold mb-4">
-                  <span title={HEATMAP_GLOSSARY.tier} className="cursor-help border-b border-dotted border-orange-400/60">
-                    Priority
-                  </span>{" "}
-                  <HeatmapAbbr term={TIER_GLOSS[preview.tier] ?? "tier"}>{heatmapTierLabel(preview.tier)}</HeatmapAbbr>
-                  {" · "}
-                  <span title="Max of estimated spend across intake requests (no contract) used as the ES denominator.">
-                    Pipeline max est. spend
-                  </span>
-                  : ${Math.round(preview.meta?.max_estimated_spend_pipeline ?? 0).toLocaleString()}
-                </p>
-
-                <div className="space-y-3 pt-4 border-t border-slate-700 text-sm">
-                  <div className="flex justify-between items-baseline gap-2">
-                    <span className="text-slate-300">
-                      <HeatmapAbbr term="ius">IUS</HeatmapAbbr>
-                    </span>
-                    <span className="font-mono tabular-nums">{s?.ius_score?.toFixed(2) ?? "—"}</span>
-                  </div>
-                  <div className="flex justify-between items-baseline gap-2">
-                    <span className="text-slate-300">
-                      <HeatmapAbbr term="es">ES</HeatmapAbbr>
-                    </span>
-                    <span className="font-mono tabular-nums">{s?.es_score?.toFixed(2) ?? "—"}</span>
-                  </div>
-                  <div className="flex justify-between items-baseline gap-2">
-                    <span className="text-slate-300">
-                      <HeatmapAbbr term="csis">CSIS</HeatmapAbbr>
-                    </span>
-                    <span className="font-mono tabular-nums">{s?.csis_score?.toFixed(2) ?? "—"}</span>
-                  </div>
-                  <div className="flex justify-between items-baseline gap-2">
-                    <span className="text-slate-300">
-                      <HeatmapAbbr term="sas">SAS</HeatmapAbbr>
-                    </span>
-                    <span className="font-mono tabular-nums">{s?.sas_score?.toFixed(2) ?? "—"}</span>
-                  </div>
-                </div>
-
-                {preview.meta?.fis_field_note && (
-                  <p className="mt-4 text-xs text-slate-500 border-t border-slate-700 pt-3 leading-relaxed">
-                    Batch <HeatmapAbbr term="fis">FIS</HeatmapAbbr> uses {preview.meta.fis_field_note} (set{" "}
-                    <code className="text-slate-400">HEATMAP_FIS_USE_ACV=1</code> for{" "}
-                    <HeatmapAbbr term="acv">ACV</HeatmapAbbr> instead of <HeatmapAbbr term="tcv">TCV</HeatmapAbbr>).
-                  </p>
-                )}
-
-                <div className="mt-6 p-3 bg-slate-800 rounded-lg text-xs leading-relaxed text-slate-300 border border-slate-700">
-                  <span className="text-sponsor-orange font-semibold block mb-1">Framework note</span>
-                  {preview.justification}
-                </div>
-              </>
-            ) : (
-              !previewError && (
-                <p className="text-sm text-slate-400">Adjust the form to preview scores from the API.</p>
-              )
-            )}
-          </div>
-        </div>
       </div>
     </div>
   );
