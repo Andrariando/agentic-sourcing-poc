@@ -42,6 +42,48 @@ const WEIGHT_LABELS: Record<string, string> = {
   w_sas_contract: "SAS — strategic alignment (renewal)",
 };
 
+function parseInlineMarkdown(text: string): React.ReactNode {
+  const parts: React.ReactNode[] = [];
+  let key = 0;
+  const re = /(\*\*[\s\S]+?\*\*|\*[^*\n]+\*)/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    const full = m[1];
+    if (full.startsWith("**")) {
+      parts.push(
+        <strong key={`md-${key++}`} className="font-semibold text-slate-900">
+          {full.slice(2, -2)}
+        </strong>
+      );
+    } else {
+      parts.push(
+        <em key={`md-${key++}`} className="italic text-slate-800">
+          {full.slice(1, -1)}
+        </em>
+      );
+    }
+    last = re.lastIndex;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts.length === 0 ? text : <>{parts}</>;
+}
+
+function parseSimpleMarkdown(text: string): React.ReactNode {
+  const lines = text.split("\n");
+  return (
+    <>
+      {lines.map((line, idx) => (
+        <React.Fragment key={`ln-${idx}`}>
+          {idx > 0 ? <br /> : null}
+          {parseInlineMarkdown(line)}
+        </React.Fragment>
+      ))}
+    </>
+  );
+}
+
 /** Common override reasons — map to PS_new / PS_contract components and governance. */
 const PRIORITY_OVERRIDE_REASONS: { id: string; label: string }[] = [
   { id: "ius_eus", label: "Urgency / timing (IUS or EUS) doesn’t match business reality" },
@@ -1285,19 +1327,19 @@ export default function HeatmapPriorityPage() {
                   </div>
                   {qaAnswer && (
                     <div className="space-y-3">
-                      <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">
-                        {qaAnswer}
+                      <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 text-sm text-slate-800 leading-relaxed">
+                        {parseSimpleMarkdown(qaAnswer)}
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-slate-500">Was this helpful?</span>
+                      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white/90 px-3 py-2">
+                        <span className="text-xs font-medium text-slate-500">Was this helpful?</span>
                         <button
                           type="button"
                           disabled={qaVoteLoading}
                           onClick={() => void submitQaVote("up")}
-                          className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition ${
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
                             qaVote === "up"
-                              ? "bg-emerald-100 text-emerald-700 border-emerald-200"
-                              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-300 shadow-sm"
+                              : "bg-white text-slate-600 border-slate-200 hover:border-emerald-200 hover:text-emerald-700"
                           } disabled:opacity-50`}
                         >
                           <ThumbsUp className="w-3.5 h-3.5" />
@@ -1307,10 +1349,10 @@ export default function HeatmapPriorityPage() {
                           type="button"
                           disabled={qaVoteLoading}
                           onClick={() => void submitQaVote("down")}
-                          className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition ${
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
                             qaVote === "down"
-                              ? "bg-rose-100 text-rose-700 border-rose-200"
-                              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                              ? "bg-rose-50 text-rose-700 border-rose-300 shadow-sm"
+                              : "bg-white text-slate-600 border-slate-200 hover:border-rose-200 hover:text-rose-700"
                           } disabled:opacity-50`}
                         >
                           <ThumbsDown className="w-3.5 h-3.5" />

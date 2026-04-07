@@ -1273,34 +1273,36 @@ export default function CaseProcuraBotPage() {
                   >
                     {msg.role === "assistant" ? renderMessageContent(msg.content) : msg.content}
                     {msg.role === "assistant" && (
-                      <div className="mt-3 pt-2 border-t border-slate-100 flex items-center gap-2">
-                        <span className="text-[11px] text-slate-400">Helpful?</span>
+                      <div className="mt-3 pt-2 border-t border-slate-100">
+                        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white/90 px-3 py-2">
+                        <span className="text-[11px] font-medium text-slate-500">Was this helpful?</span>
                         <button
                           type="button"
                           disabled={msgVoteBusyIdx === i}
                           onClick={() => void submitAssistantVote(i, String(msg.content || ""), "up")}
-                          className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-[11px] ${
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition ${
                             msgVoteByIdx[i] === "up"
-                              ? "bg-emerald-100 text-emerald-700 border-emerald-200"
-                              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-300 shadow-sm"
+                              : "bg-white text-slate-600 border-slate-200 hover:border-emerald-200 hover:text-emerald-700"
                           }`}
                         >
                           <ThumbsUp className="w-3 h-3" />
-                          Up
+                          Thumbs up
                         </button>
                         <button
                           type="button"
                           disabled={msgVoteBusyIdx === i}
                           onClick={() => void submitAssistantVote(i, String(msg.content || ""), "down")}
-                          className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-[11px] ${
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition ${
                             msgVoteByIdx[i] === "down"
-                              ? "bg-rose-100 text-rose-700 border-rose-200"
-                              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                              ? "bg-rose-50 text-rose-700 border-rose-300 shadow-sm"
+                              : "bg-white text-slate-600 border-slate-200 hover:border-rose-200 hover:text-rose-700"
                           }`}
                         >
                           <ThumbsDown className="w-3 h-3" />
-                          Down
+                          Thumbs down
                         </button>
+                        </div>
                       </div>
                     )}
                   </div>
