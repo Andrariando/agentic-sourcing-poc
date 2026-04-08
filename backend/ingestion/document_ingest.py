@@ -22,8 +22,7 @@ try:
 except ImportError:
     HAS_DOCX = False
 
-from backend.rag.vector_store import get_vector_store
-from backend.persistence.database import get_db_session
+from backend.infrastructure.storage_providers import get_app_db, get_legacy_vector_store
 from backend.persistence.models import DocumentRecord, IngestionLog
 
 
@@ -45,7 +44,8 @@ class DocumentIngester:
     CHUNK_OVERLAP = 200  # characters
     
     def __init__(self):
-        self.vector_store = get_vector_store()
+        self.vector_store = get_legacy_vector_store()
+        self.app_db = get_app_db()
     
     def ingest(
         self,
@@ -68,7 +68,7 @@ class DocumentIngester:
         ingestion_id = str(uuid4())
         
         # Start ingestion log
-        session = get_db_session()
+        session = self.app_db.get_db_session()
         log = IngestionLog(
             ingestion_id=ingestion_id,
             source_type="document",
@@ -251,7 +251,7 @@ class DocumentIngester:
         chunks_deleted = self.vector_store.delete_document(document_id)
         
         # Delete from database
-        session = get_db_session()
+        session = self.app_db.get_db_session()
         doc = session.exec(
             select(DocumentRecord).where(DocumentRecord.document_id == document_id)
         ).first()
@@ -272,7 +272,7 @@ class DocumentIngester:
         """List ingested documents with optional filters."""
         from sqlmodel import select
         
-        session = get_db_session()
+        session = self.app_db.get_db_session()
         query = select(DocumentRecord)
         
         if supplier_id:

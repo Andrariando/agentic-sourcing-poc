@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
-import { CheckCircle2, AlertTriangle, FileText, ShieldCheck, ChevronRight, MessageSquare, Briefcase, Clock, Terminal, Activity, Users, UserPlus, Download, ThumbsUp, ThumbsDown } from "lucide-react";
+import { CheckCircle2, AlertTriangle, FileText, ShieldCheck, ChevronRight, MessageSquare, Briefcase, Clock, Terminal, Activity, Users, UserPlus, Download, ThumbsUp, ThumbsDown, Paperclip, X } from "lucide-react";
 import { motion } from "framer-motion";
 import { apiFetch } from "@/lib/api-fetch";
 import { getApiBaseUrl } from "@/lib/api-base";
@@ -266,12 +266,14 @@ export default function CaseProcuraBotPage() {
   const [documents, setDocuments] = useState<any[]>([]);
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
+  const [chatFiles, setChatFiles] = useState<File[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [msgVoteByIdx, setMsgVoteByIdx] = useState<Record<number, "up" | "down">>({});
   const [msgVoteBusyIdx, setMsgVoteBusyIdx] = useState<number | null>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
   const initialChatHydrated = useRef(false);
+  const chatFileInputRef = useRef<HTMLInputElement>(null);
 
   /** Demo-only rows added in the UI (not persisted). Resets per case. */
   const [demoAddedShortlistRows, setDemoAddedShortlistRows] = useState<Dtp02ShortlistRow[]>([]);
@@ -394,24 +396,39 @@ export default function CaseProcuraBotPage() {
   // 3. Handle Live Chat
   const handleSend = async () => {
     if (!caseDetails) return;
-    if (!input.trim()) return;
-    const userMsg = input;
-    setMessages(prev => [...prev, { role: "user", content: userMsg }]);
+    if (!input.trim() && chatFiles.length === 0) return;
+    const userMsg = input.trim();
+    const fileNames = chatFiles.map((f) => f.name);
+    const userVisibleMsg = [userMsg, fileNames.length ? `Attached: ${fileNames.join(", ")}` : ""]
+      .filter(Boolean)
+      .join("\n");
+    setMessages(prev => [...prev, { role: "user", content: userVisibleMsg }]);
     setInput("");
+    setChatFiles([]);
     setIsTyping(true);
     
     try {
-      const url = `${getApiBaseUrl()}/api/chat`;
-        
-      const res = await apiFetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          case_id: caseId,
-          user_message: userMsg,
-          use_tier_2: true
-        })
-      });
+      let res: Response;
+      if (fileNames.length > 0) {
+        const url = `${getApiBaseUrl()}/api/chat/with-attachments`;
+        const fd = new FormData();
+        fd.append("case_id", caseId);
+        fd.append("user_message", userMsg);
+        fd.append("use_tier_2", "true");
+        chatFiles.forEach((f) => fd.append("files", f));
+        res = await apiFetch(url, { method: "POST", body: fd });
+      } else {
+        const url = `${getApiBaseUrl()}/api/chat`;
+        res = await apiFetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            case_id: caseId,
+            user_message: userMsg,
+            use_tier_2: true
+          })
+        });
+      }
       
       const data = await res.json();
       if (data.messages && data.messages.length > 0) {
@@ -1334,11 +1351,55 @@ export default function CaseProcuraBotPage() {
 
         {/* Input Area */}
         <div className="p-4 bg-white border-t border-slate-100">
+          {chatFiles.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-2">
+              {chatFiles.map((f, idx) => (
+                <span
+                  key={`${f.name}-${idx}`}
+                  className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-600"
+                >
+                  <Paperclip className="w-3 h-3" />
+                  <span className="max-w-[220px] truncate">{f.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => setChatFiles((prev) => prev.filter((_, i) => i !== idx))}
+                    className="text-slate-400 hover:text-slate-600"
+                    aria-label={`Remove ${f.name}`}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
           <div className="flex items-end gap-2 p-1.5 bg-slate-50 border border-slate-300 rounded-xl focus-within:ring-2 focus-within:ring-sponsor-blue/20 focus-within:border-sponsor-blue transition-all shadow-inner">
+            <input
+              ref={chatFileInputRef}
+              type="file"
+              multiple
+              accept=".docx,.pdf,.txt,.csv,.xlsx,.xls,.png,.jpg,.jpeg,.webp"
+              className="hidden"
+              onChange={(e) => {
+                const picked = Array.from(e.target.files || []);
+                if (picked.length > 0) setChatFiles((prev) => [...prev, ...picked]);
+                e.target.value = "";
+              }}
+              disabled={isTyping || !hasLiveCase || caseLoading}
+            />
+            <button
+              type="button"
+              onClick={() => chatFileInputRef.current?.click()}
+              disabled={isTyping || !hasLiveCase || caseLoading}
+              className="p-2 text-slate-500 hover:text-sponsor-blue rounded-lg disabled:opacity-50"
+              aria-label="Attach files"
+              title="Attach files"
+            >
+              <Paperclip className="w-4 h-4" />
+            </button>
             <textarea 
               className="flex-1 bg-transparent resize-none outline-none py-2.5 px-3 text-[15px] text-slate-900 placeholder:text-slate-400"
               rows={1}
-              placeholder="Ask ProcuraBot a question or attach files..."
+              placeholder="Ask ProcuraBot or attach files..."
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => {
@@ -1353,7 +1414,7 @@ export default function CaseProcuraBotPage() {
               id="send-btn"
               className="p-3 bg-sponsor-blue text-white rounded-lg hover:bg-blue-700 transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed m-0.5"
               onClick={handleSend}
-              disabled={!input.trim() || isTyping || !hasLiveCase || caseLoading}
+              disabled={(!input.trim() && chatFiles.length === 0) || isTyping || !hasLiveCase || caseLoading}
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
                 <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />

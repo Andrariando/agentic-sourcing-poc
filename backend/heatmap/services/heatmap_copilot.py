@@ -13,7 +13,7 @@ from sqlmodel import Session, select
 
 from backend.heatmap.context_builder import load_category_cards
 from backend.heatmap.persistence.heatmap_models import Opportunity, ReviewFeedback
-from backend.heatmap.persistence.heatmap_vector_store import get_heatmap_vector_store
+from backend.infrastructure.storage_providers import get_heatmap_vector_store
 from backend.heatmap.services.feedback_memory import _parse_chroma_results
 
 MAX_OPPS_IN_CONTEXT = 80

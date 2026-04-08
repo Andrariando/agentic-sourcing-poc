@@ -11,7 +11,7 @@ from uuid import uuid4
 from backend.heatmap.services.feedback_service import get_feedback_service
 from backend.heatmap.services.case_bridge import get_case_bridge_service
 from backend.heatmap.run_pipeline_init import run_init
-from backend.heatmap.persistence.heatmap_database import heatmap_db
+from backend.infrastructure.storage_providers import get_heatmap_db
 from backend.heatmap.persistence.heatmap_models import (
     Opportunity,
     ReviewFeedback,
@@ -44,6 +44,8 @@ _pipeline_status = {
     "opportunity_count": None,
     "last_duration_sec": None,
 }
+
+heatmap_db = get_heatmap_db()
 
 class FeedbackRequest(BaseModel):
     opportunity_id: int

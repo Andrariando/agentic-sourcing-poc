@@ -9,7 +9,7 @@ import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from backend.heatmap.persistence.heatmap_vector_store import get_heatmap_vector_store
+from backend.infrastructure.storage_providers import get_heatmap_vector_store
 
 MAX_ABS_DELTA = 0.6
 TOP_K = 5

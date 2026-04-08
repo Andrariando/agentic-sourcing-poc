@@ -4,8 +4,7 @@ Implements filtered retrieval with governance checks.
 """
 import json
 from typing import List, Dict, Any, Optional
-from backend.rag.vector_store import get_vector_store
-from backend.persistence.database import get_db_session
+from backend.infrastructure.storage_providers import get_app_db, get_legacy_vector_store
 from backend.persistence.models import DocumentRecord, SupplierPerformance, SpendMetric, SLAEvent
 from sqlmodel import select
 
@@ -22,7 +21,8 @@ class DocumentRetriever:
     """
     
     def __init__(self):
-        self.vector_store = get_vector_store()
+        self.vector_store = get_legacy_vector_store()
+        self.app_db = get_app_db()
     
     def retrieve_documents(
         self,
@@ -133,7 +133,7 @@ class DocumentRetriever:
         Returns:
             Dict with performance records and summary
         """
-        session = get_db_session()
+        session = self.app_db.get_db_session()
         
         query = select(SupplierPerformance).where(
             SupplierPerformance.supplier_id == supplier_id
@@ -188,7 +188,7 @@ class DocumentRetriever:
         time_window: Optional[str] = None
     ) -> Dict[str, Any]:
         """Get spend data for supplier or category."""
-        session = get_db_session()
+        session = self.app_db.get_db_session()
         
         query = select(SpendMetric)
         
@@ -233,7 +233,7 @@ class DocumentRetriever:
         status: Optional[str] = None
     ) -> Dict[str, Any]:
         """Get SLA events for a supplier."""
-        session = get_db_session()
+        session = self.app_db.get_db_session()
         
         query = select(SLAEvent).where(SLAEvent.supplier_id == supplier_id)
         

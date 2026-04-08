@@ -164,6 +164,7 @@ All routes below are defined on `app` except **`/api/heatmap/*`**, which is moun
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/api/chat` | Main copilot: `ChatService.process_message` → supervisor / agent workflow |
+| POST | `/api/chat/with-attachments` | Multipart chat submit with files; routes `.docx` to working drafts, ingests supported docs, and can summarize image attachments via vision LLM before running chat |
 
 ### 5.4 Decisions (Legacy DTP)
 
@@ -457,6 +458,10 @@ Legacy UI entry: `frontend/app.py` with pages under `frontend/pages/` (case dash
 | `HEATMAP_LEARNING_MODEL` | Model for learning synthesis (default `gpt-4o-mini`) |
 | `HEATMAP_COPILOT_MODEL` | Heatmap copilot model (fallback chain in `heatmap_copilot.py`) |
 | `HEATMAP_INTERPRETER_MODEL` | LLM interpreter fallback model |
+| `APP_DB_BACKEND` | Legacy app DB provider selector (`sqlite` default, `azure_sql` planned) |
+| `HEATMAP_DB_BACKEND` | Heatmap DB provider selector (`sqlite` default, `azure_sql` planned) |
+| `LEGACY_VECTOR_BACKEND` | Legacy vector provider selector (`chroma` default, `azure_ai_search` planned) |
+| `HEATMAP_VECTOR_BACKEND` | Heatmap vector provider selector (`chroma` default, `azure_ai_search` planned) |
 
 See `README.md` and `SYSTEM_DOCUMENTATION.md` §15 for the authoritative list.
 
@@ -512,6 +517,37 @@ Run with `pytest` from repo root (ensure `PYTHONPATH` includes project root if n
 
 - **Heatmap copilot** must not mutate scores in the DB unless explicitly designed (today: explain-only endpoints).
 - **Learning** applies bounded deltas; disable via `HEATMAP_LEARNING=0` for pure formula runs.
+
+### 14.5 Storage modularity and Azure migration path
+
+Provider switchboard:
+- `backend/infrastructure/storage_providers.py`
+
+Key factory functions:
+- `get_app_db()`
+- `get_heatmap_db()`
+- `get_legacy_vector_store()`
+- `get_heatmap_vector_store()`
+- `initialize_storage_backends()`
+
+This keeps service/API modules independent from concrete SQLite/Chroma imports.
+
+Minimal migration steps:
+1. Add Azure SQL adapters implementing `DatabaseInterface` in `storage_providers.py`.
+2. Add Azure AI Search adapters implementing `VectorStoreInterface` in `storage_providers.py`.
+3. Set backend selectors in deployment env:
+   - `APP_DB_BACKEND=azure_sql`
+   - `HEATMAP_DB_BACKEND=azure_sql`
+   - `LEGACY_VECTOR_BACKEND=azure_ai_search`
+   - `HEATMAP_VECTOR_BACKEND=azure_ai_search`
+4. Keep endpoint/service logic unchanged; only provider selection changes.
+
+Scaffolded Azure env vars (already referenced by provider templates):
+- `AZURE_SQL_CONNECTION_STRING`
+- `AZURE_SEARCH_ENDPOINT`
+- `AZURE_SEARCH_API_KEY`
+- `AZURE_SEARCH_INDEX_LEGACY`
+- `AZURE_SEARCH_INDEX_HEATMAP`
 
 ---
 

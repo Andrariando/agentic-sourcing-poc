@@ -96,7 +96,7 @@ This project includes comprehensive documentation covering all aspects of the sy
 **What it is**: the original procurement copilot that runs the DTP methodology (DTP-01 to DTP-06). Users work inside a case, chat with the copilot, review artifacts, and approve/reject decisions.
 
 **Key API surface**:
-- `/api/cases/*`, `/api/chat`, `/api/decisions/*`, `/api/ingest/*`
+- `/api/cases/*`, `/api/chat`, `/api/chat/with-attachments`, `/api/decisions/*`, `/api/ingest/*`
 - Artifact download: `GET /api/cases/{case_id}/artifacts/{artifact_id}/export?export_format=docx|pdf` (Word/PDF from stored agent artifacts)
 
 **Primary UI**:
@@ -248,7 +248,7 @@ Open:
 
 ### Legacy DTP
 - **Cases**: `GET /api/cases`, `GET /api/cases/{id}`, `POST /api/cases`
-- **Chat**: `POST /api/chat`
+- **Chat**: `POST /api/chat`, `POST /api/chat/with-attachments` (multipart with files; image files can be interpreted with a vision-capable OpenAI model when configured)
 - **Decisions**: `POST /api/decisions/approve`, `POST /api/decisions/reject`
 - **Ingestion**: `POST /api/ingest/document`, `POST /api/ingest/data`, etc.
 
@@ -273,6 +273,10 @@ Open:
 
 ### Shared
 - `OPENAI_API_KEY`: enables LLM-powered features; both systems have graceful fallbacks when unset.
+- `APP_DB_BACKEND`: app DB provider (`sqlite` default, future: `azure_sql`)
+- `HEATMAP_DB_BACKEND`: heatmap DB provider (`sqlite` default, future: `azure_sql`)
+- `LEGACY_VECTOR_BACKEND`: legacy vector provider (`chroma` default, future: `azure_ai_search`)
+- `HEATMAP_VECTOR_BACKEND`: heatmap vector provider (`chroma` default, future: `azure_ai_search`)
 
 ### Heatmap
 - `HEATMAP_FIS_USE_ACV=1`: use ACV instead of TCV for FIS in batch scoring
@@ -280,6 +284,26 @@ Open:
 - `HEATMAP_LEARNING_MODEL`: model for review-memory synthesis (default `gpt-4o-mini`)
 - `HEATMAP_COPILOT_MODEL`: model for heatmap copilot explanations (default falls back to learning model)
 - `HEATMAP_INTERPRETER_MODEL`: model for interpreter fallbacks (default `gpt-4o-mini`)
+
+### Storage backend switchboard (for Azure migration)
+
+Backend now centralizes storage provider selection in:
+- `backend/infrastructure/storage_providers.py`
+
+Current runtime default:
+- SQLite + ChromaDB
+
+Migration workflow:
+1. Implement Azure adapters in `storage_providers.py` for `azure_sql` and `azure_ai_search`.
+2. Set env vars (`APP_DB_BACKEND`, `HEATMAP_DB_BACKEND`, `LEGACY_VECTOR_BACKEND`, `HEATMAP_VECTOR_BACKEND`) in your Azure App Service / Container App config.
+3. Keep API/service code unchanged; modules consume providers via factory functions.
+
+Azure adapter env vars (scaffolded):
+- `AZURE_SQL_CONNECTION_STRING`
+- `AZURE_SEARCH_ENDPOINT`
+- `AZURE_SEARCH_API_KEY`
+- `AZURE_SEARCH_INDEX_LEGACY`
+- `AZURE_SEARCH_INDEX_HEATMAP`
 
 ---
 

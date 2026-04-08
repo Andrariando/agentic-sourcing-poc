@@ -56,6 +56,14 @@ These align with **[BUSINESS_OVERVIEW.md](BUSINESS_OVERVIEW.md)** (Azure pilot a
 | L2 | **MDM-style normalization** — supplier IDs, canonical categories, date parsing pipeline | Foundation for trustworthy scores |
 | L3 | **Azure-aligned hosting** (see BUSINESS_OVERVIEW) | Identity, private endpoints, observability |
 
+### 2.4 Storage modularity baseline (April 2026)
+
+| Item | Status | Location |
+|------|--------|----------|
+| Provider switchboard for DB/vector backends | **Implemented** | `backend/infrastructure/storage_providers.py` |
+| Runtime selectors by env vars | **Implemented** | `APP_DB_BACKEND`, `HEATMAP_DB_BACKEND`, `LEGACY_VECTOR_BACKEND`, `HEATMAP_VECTOR_BACKEND` |
+| Azure SQL / Azure AI Search concrete adapters | **Pending** | Add to `storage_providers.py` (behind the selectors) |
+
 ---
 
 ## 3. Quick wins (minimal effort)

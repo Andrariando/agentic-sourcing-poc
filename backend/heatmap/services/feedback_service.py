@@ -3,9 +3,8 @@ from uuid import uuid4
 
 from sqlmodel import select
 
-from backend.heatmap.persistence.heatmap_database import heatmap_db
 from backend.heatmap.persistence.heatmap_models import Opportunity, ReviewFeedback, AuditLog
-from backend.heatmap.persistence.heatmap_vector_store import get_heatmap_vector_store
+from backend.infrastructure.storage_providers import get_heatmap_db, get_heatmap_vector_store
 from backend.heatmap.category_scoring_mix import apply_category_scoring_overlay
 from backend.heatmap.context_builder import load_category_cards
 from backend.heatmap.services.learned_weights import (
@@ -37,7 +36,7 @@ class FeedbackService:
         scoring_weight_overrides: Optional[Dict[str, float]] = None,
         tier_before: Optional[str] = None,
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
-        session = heatmap_db.get_db_session()
+        session = get_heatmap_db().get_db_session()
 
         try:
             feedback = ReviewFeedback(

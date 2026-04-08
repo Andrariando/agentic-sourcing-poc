@@ -6,6 +6,7 @@ All business logic, agents, and data access go through this API.
 """
 import os
 import json
+import base64
 from io import BytesIO
 from typing import Optional, List
 from datetime import datetime
@@ -37,9 +38,8 @@ from backend.services.docx_text import extract_text_from_docx_bytes
 from backend.services.working_document_revision import revise_working_document_text
 from backend.services.chat_service import get_chat_service
 from backend.services.ingestion_service import get_ingestion_service
-from backend.persistence.database import init_db
-from backend.persistence.database import get_db_session
 from backend.persistence.models import CaseState, S2CProcuraBotFeedback
+from backend.infrastructure.storage_providers import initialize_storage_backends, get_app_db
 from sqlmodel import select, func
 
 # Import shared schemas
@@ -58,13 +58,92 @@ from backend.services.supplier_pool import get_category_supplier_pool
 from shared.constants import DocumentType, DataType
 
 
+def _infer_working_document_role(filename: str) -> str:
+    """Best-effort role inference for uploaded .docx files."""
+    name = (filename or "").lower()
+    if any(k in name for k in ("contract", "msa", "sow", "agreement")):
+        return "contract"
+    if any(k in name for k in ("rfx", "rfp", "tender", "proposal")):
+        return "rfx"
+    return "rfx"
+
+
+def _image_mime_from_ext(ext: str) -> Optional[str]:
+    ext = (ext or "").lower()
+    if ext == ".png":
+        return "image/png"
+    if ext in (".jpg", ".jpeg"):
+        return "image/jpeg"
+    if ext == ".webp":
+        return "image/webp"
+    if ext == ".gif":
+        return "image/gif"
+    return None
+
+
+def _summarize_image_for_chat(
+    *,
+    filename: str,
+    content: bytes,
+    user_message: str,
+) -> Optional[str]:
+    """
+    Use a vision-capable OpenAI model to extract useful context from an image.
+    Returns a short textual summary or None when unavailable.
+    """
+    key = (os.getenv("OPENAI_API_KEY") or "").strip()
+    if not key:
+        return None
+    ext = os.path.splitext(filename)[1].lower()
+    mime = _image_mime_from_ext(ext)
+    if not mime:
+        return None
+
+    try:
+        from openai import OpenAI
+    except ImportError:
+        return None
+
+    b64 = base64.b64encode(content).decode("ascii")
+    data_url = f"data:{mime};base64,{b64}"
+    model = os.getenv("OPENAI_VISION_MODEL", "gpt-4o-mini")
+    prompt = (
+        "You are extracting business-relevant details from an uploaded image for a sourcing copilot. "
+        "Summarize key facts, numbers, entities, and risks in 4-7 bullet points. "
+        "If text in the image is unclear, say so briefly."
+    )
+    if (user_message or "").strip():
+        prompt += f"\n\nUser question/context: {user_message.strip()}"
+
+    try:
+        client = OpenAI(api_key=key)
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": data_url}},
+                    ],
+                }
+            ],
+            temperature=0.2,
+            max_tokens=350,
+        )
+        txt = (resp.choices[0].message.content or "").strip()
+        return txt or None
+    except Exception:
+        return None
+
+
 # Initialize database on startup
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
     # Startup
-    init_db()
-    print("[OK] Database initialized")
+    initialize_storage_backends()
+    print("[OK] Storage backends initialized")
     yield
     # Shutdown
     print("[INFO] Shutting down")
@@ -181,7 +260,7 @@ async def submit_s2c_copilot_feedback(case_id: str, body: S2CProcuraBotFeedbackR
     msg = (body.assistant_message or "").strip()
     if len(msg) < 3:
         raise HTTPException(status_code=400, detail="assistant_message is required")
-    session = get_db_session()
+    session = get_app_db().get_db_session()
     try:
         case_exists = session.exec(
             select(CaseState.case_id).where(CaseState.case_id == case_id)
@@ -209,7 +288,7 @@ async def get_s2c_performance_metrics():
     - overall: avg AI reliability + signal attribution accuracy (thumbs up / total)
     - detailed: per-case reliability based on human change events
     """
-    session = get_db_session()
+    session = get_app_db().get_db_session()
     try:
         case_rows = session.exec(select(CaseState)).all()
         feedback_rows = session.exec(
@@ -553,6 +632,116 @@ async def chat(request: ChatRequest):
         use_tier_2=request.use_tier_2
     )
     
+    return response
+
+
+@app.post("/api/chat/with-attachments", response_model=ChatResponse)
+async def chat_with_attachments(
+    case_id: str = Form(...),
+    user_message: str = Form(""),
+    use_tier_2: bool = Form(True),
+    files: List[UploadFile] = File(default_factory=list),
+):
+    """
+    Chat endpoint that accepts files in the same submit action (multipart/form-data).
+
+    Behavior:
+    - .docx: saved as working document slot (role inferred from filename)
+    - .pdf/.txt/.csv/.xlsx/.xls: ingested for retrieval context
+    - images (.png/.jpg/.jpeg/.webp/.gif): summarized with vision model when available
+    - unsupported types are skipped (chat still proceeds)
+    """
+    msg = (user_message or "").strip()
+    if not msg and not files:
+        raise HTTPException(status_code=400, detail="Provide a message or at least one file.")
+
+    case_service = get_case_service()
+    case = case_service.get_case(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    ingestion_service = get_ingestion_service()
+    uploaded_names: List[str] = []
+    skipped_names: List[str] = []
+    image_notes: List[str] = []
+
+    for f in files:
+        filename = (f.filename or "").strip()
+        if not filename:
+            continue
+        ext = os.path.splitext(filename)[1].lower()
+        content = await f.read()
+        if not content:
+            continue
+
+        if ext == ".docx":
+            try:
+                role = _infer_working_document_role(filename)
+                plain = extract_text_from_docx_bytes(content)
+                ok = case_service.upsert_working_document_slot(
+                    case_id, role, plain, filename, "chat_upload"
+                )
+                if ok:
+                    uploaded_names.append(filename)
+                else:
+                    skipped_names.append(filename)
+            except Exception:
+                skipped_names.append(filename)
+            continue
+
+        if ext in (".pdf", ".txt", ".csv", ".xlsx", ".xls"):
+            try:
+                r = ingestion_service.ingest_document(
+                    file_content=content,
+                    filename=filename,
+                    document_type=DocumentType.OTHER.value,
+                    case_id=case_id,
+                    description="Uploaded in chat composer",
+                )
+                if r.success:
+                    uploaded_names.append(filename)
+                else:
+                    skipped_names.append(filename)
+            except Exception:
+                skipped_names.append(filename)
+            continue
+
+        if ext in (".png", ".jpg", ".jpeg", ".webp", ".gif"):
+            note = _summarize_image_for_chat(
+                filename=filename,
+                content=content,
+                user_message=msg,
+            )
+            if note:
+                uploaded_names.append(filename)
+                image_notes.append(f"Image summary for {filename}:\n{note}")
+            else:
+                skipped_names.append(filename)
+            continue
+
+        skipped_names.append(filename)
+
+    augmented_msg = msg
+    if uploaded_names:
+        upload_summary = ", ".join(uploaded_names[:8])
+        summary_line = f"I uploaded these files for context: {upload_summary}."
+        augmented_msg = f"{augmented_msg}\n\n{summary_line}" if augmented_msg else summary_line
+    if skipped_names:
+        skipped_summary = ", ".join(skipped_names[:6])
+        skip_line = (
+            f"Note: some files were skipped because their type is not supported yet: {skipped_summary}."
+        )
+        augmented_msg = f"{augmented_msg}\n\n{skip_line}" if augmented_msg else skip_line
+    if image_notes:
+        img_line = "\n\n".join(image_notes[:3])
+        augmented_msg = f"{augmented_msg}\n\n{img_line}" if augmented_msg else img_line
+
+    service = get_chat_service()
+    response = service.process_message(
+        case_id=case_id,
+        user_message=augmented_msg,
+        use_tier_2=use_tier_2,
+    )
     return response
 
 
