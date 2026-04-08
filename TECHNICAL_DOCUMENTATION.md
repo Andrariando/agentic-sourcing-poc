@@ -410,7 +410,7 @@ Tiers: T1 ≥ 8.0, T2 ≥ 6.0, T3 ≥ 4.0, else T4.
 |-------|--------|---------|
 | `/` | Shell | Landing |
 | `/heatmap` | Heatmap | Priority list, matrix, copilot slide-over, review |
-| `/intake` | Heatmap | Business intake + PS_new preview |
+| `/intake` | Heatmap | Business intake submit form (preview endpoint remains available via API) |
 | `/cases` | Legacy DTP | Case list |
 | `/cases/copilot` | Legacy DTP | Empty-state / case selection shell |
 | `/cases/[id]/copilot` | Legacy DTP | Case copilot split view |

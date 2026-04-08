@@ -299,10 +299,10 @@ Open:
 ### New Heatmap System (Next.js)
 Premium dark-mode glassmorphic design with Syne/DM Sans typography:
 
-- **Priority Heatmap** (`/heatmap`) — KPI stat cards, Table/Matrix toggle, Recharts scatter chart, KLI Outcome Matrix, **Heatmap copilot** (Q&A, policy check, category-cards assist); see system doc **User experience impact** for how this shapes trust and workload
-- **Case ProcuraBot** (`/cases/[id]/copilot`) — 60/40 split-screen with evidence/artifacts on the left and chat + Decision Console on the right (Cursor-style workflow). Includes **Word round-trip** (download `.docx` → edit in Microsoft Word → re-upload), artifact **pack export**, and copilot prompts that teach that flow; see [TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md) §6.11 and [SYSTEM_DOCUMENTATION.md](SYSTEM_DOCUMENTATION.md) (Chat lifecycle → Word round-trip).
+- **Priority Heatmap** (`/heatmap`) — KPI stat cards, Table/Matrix toggle, Recharts scatter chart, KLI Outcome Matrix, **Heatmap ProcuraBot** (Q&A, policy check, category-cards assist); response feedback UI uses neutral labels (**Useful** / **Needs work**) for cleaner review flow
+- **Case ProcuraBot** (`/cases/[id]/copilot`) — 60/40 split-screen with evidence/artifacts on the left and chat + Decision Console on the right (Cursor-style workflow). ProcuraBot is positioned as an **AI assistant** to the human decision owner. Includes **Word round-trip** (download `.docx` → edit in Microsoft Word → re-upload), artifact **pack export**, and prompts that teach that flow; see [TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md) §6.11 and [SYSTEM_DOCUMENTATION.md](SYSTEM_DOCUMENTATION.md) (Chat lifecycle → Word round-trip).
 - **Case ProcuraBot (no case selected)** (`/cases/copilot`) — default split-shell empty state with links back to Case Dashboard/Heatmap
-- **Business Intake** (`/intake`) — New sourcing request form with API-backed **PS_new** preview and submit
+- **Business Intake** (`/intake`) — submit-focused new sourcing request form (the API still exposes `/api/heatmap/intake/preview` for programmatic checks)
 - **KPI Dashboard** (`/kpi`) — Performance metrics
 
 ### Legacy DTP System (Streamlit)

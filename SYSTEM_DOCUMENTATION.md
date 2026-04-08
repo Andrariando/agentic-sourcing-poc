@@ -2,7 +2,7 @@
 
 This document provides a detailed technical deep-dive into the backend architecture and logic of the Agentic Sourcing ProcuraBot. It is intended for auditing, technical review, and developers seeking to understand the inner workings of the system.
 
-**Last Updated**: March 24, 2026
+**Last Updated**: April 7, 2026
 
 ---
 
@@ -128,7 +128,7 @@ The output and conversation history are saved:
 - If the agent made a recommendation, the case state is set to `waiting_for_human = True`.
 
 ### Step 7: Natural Response Generation
-The `LLMResponder` takes the agent's raw output (or direct answer) and formats it into a conversational message for the user. It ensures the tone is consistent and helpful, and seamlessly handles "Ask for more data" scenarios if the user's request was incomplete.
+The `LLMResponder` takes the agent's raw output (or direct answer) and formats it into a conversational message for the user. It ensures the tone is consistent and helpful, and seamlessly handles "Ask for more data" scenarios if the user's request was incomplete. In the current UX, ProcuraBot is framed as an **AI assistant** supporting the human decision-maker (not as a supervisor role).
 
 ### Word round-trip (RFx & contract drafts) — teaching users the loop
 
@@ -1180,7 +1180,7 @@ Replaces the entire Streamlit UI with a unified Next.js 16 application (Tailwind
 | Route | System | Description |
 |-------|--------|-------------|
 | `/heatmap` | Heatmap | Priority list with Tier badges and score breakdowns; **Heatmap copilot** panel (Q&A, policy check, category-cards assist) |
-| `/intake` | Heatmap | Business intake form; live **PS_new** preview/submit; optional **Review memory Δ** chip when **`feedback_memory_delta`** is non-zero |
+| `/intake` | Heatmap | Business intake submit form; backend preview API (`/api/heatmap/intake/preview`) remains available for programmatic checks and testing |
 | `/cases` | Legacy DTP | Case dashboard tracking DTP01–DTP06 progress |
 | `/cases/[id]/copilot` | Legacy DTP | Cursor-style split: left evidence/artifacts, right chat + decision console |
 | `/cases/copilot` | Legacy DTP | No-case-selected default shell (context + disabled chat prompt) |

@@ -77,6 +77,13 @@ type ArtifactPackSummaryRow = {
   is_latest?: boolean;
 };
 
+function getFriendlyArtifactSourceName(agentName?: string): string {
+  const raw = (agentName || "").trim();
+  if (!raw) return "ProcuraBot run";
+  if (raw.toLowerCase() === "copilot") return "ProcuraBot";
+  return raw;
+}
+
 async function downloadWorkingDocumentExport(caseId: string, role: "rfx" | "contract"): Promise<void> {
   const url = `${getApiBaseUrl()}/api/cases/${encodeURIComponent(caseId)}/working-documents/${role}/export`;
   const res = await apiFetch(url);
@@ -693,9 +700,9 @@ export default function CaseProcuraBotPage() {
                   {strategyConfidence ? (
                     <span
                       className="cursor-help border-b border-dotted border-amber-800/50"
-                      title="From this case’s saved Strategy output: latest_agent_output.confidence (0–1 in the database), set by the Strategy agent rules, LLM step, or seed data. ProcuraBot chat may phrase a different % — trust the saved field when they disagree."
+                      title="Confidence from the latest saved strategy output for this case."
                     >
-                      {" "}· Strategy model confidence: {strategyConfidence}
+                      {" "}· Recommendation confidence: {strategyConfidence}
                     </span>
                   ) : null}
                 </p>
@@ -729,7 +736,7 @@ export default function CaseProcuraBotPage() {
                   Supplier shortlist · DTP-02
                 </h3>
                 <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 bg-white border border-slate-200 px-2 py-1 rounded">
-                  Demo — RFx targeting
+                  Demo view
                 </span>
               </div>
               <div className="p-4 space-y-4">
@@ -827,7 +834,7 @@ export default function CaseProcuraBotPage() {
                   </button>
                 </div>
                 <p className="text-[10px] text-slate-400 leading-snug">
-                  Catalog rows come from <span className="font-mono">GET /api/cases/…</span> as <span className="font-mono">category_supplier_pool</span> (latest KPI per supplier for this case&apos;s category). Added rows stay in this session only until you refresh.
+                  Rows are loaded from your case category supplier list. Added rows are temporary and reset on refresh.
                 </p>
               </div>
             </motion.div>
@@ -902,7 +909,7 @@ export default function CaseProcuraBotPage() {
               <div className="bg-slate-50 border-b border-slate-200 p-4 flex flex-wrap items-center justify-between gap-3">
                 <h3 className="text-slate-800 font-bold text-sm flex items-center gap-2">
                   <Download className="w-4 h-4 text-sponsor-blue" />
-                  Work products (artifact packs)
+                  Work products
                 </h3>
                 <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 bg-white border border-slate-200 px-2 py-1 rounded">
                   Export draft bundle
@@ -910,15 +917,15 @@ export default function CaseProcuraBotPage() {
               </div>
               <div className="p-4 space-y-3">
                 <p className="text-sm text-slate-600 leading-relaxed">
-                  Download everything an agent run produced for this case—RFx sections, strategy text, and suggested next steps—as one{" "}
+                  Download case outputs—RFx sections, strategy text, and suggested next steps—as one{" "}
                   <span className="font-semibold text-slate-800">Markdown</span>, <span className="font-semibold text-slate-800">Word</span>, or{" "}
-                  <span className="font-semibold text-slate-800">PDF</span> file. Run ProcuraBot tasks that emit artifacts first if a pack is empty.
+                  <span className="font-semibold text-slate-800">PDF</span> file. If this area is empty, ask ProcuraBot to create a draft first.
                 </p>
                 {packExportError ? (
                   <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{packExportError}</p>
                 ) : null}
                 {artifactPackSummaries.length === 0 ? (
-                  <p className="text-sm text-slate-400 italic py-1">No artifact packs stored yet—ask ProcuraBot to draft an RFx or run a workflow that saves artifacts.</p>
+                  <p className="text-sm text-slate-400 italic py-1">No files yet. Ask ProcuraBot to draft an RFx first.</p>
                 ) : (
                   <ul className="space-y-3">
                     {artifactPackSummaries.map((row) => (
@@ -928,7 +935,7 @@ export default function CaseProcuraBotPage() {
                       >
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-slate-900 truncate">
-                            {row.agent_name || "Agent run"}{" "}
+                            {getFriendlyArtifactSourceName(row.agent_name)}{" "}
                             {row.is_latest ? (
                               <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded ml-1">
                                 Latest
@@ -937,7 +944,7 @@ export default function CaseProcuraBotPage() {
                           </p>
                           <p className="text-[11px] text-slate-500 font-mono truncate mt-0.5">{row.pack_id}</p>
                           <p className="text-[11px] text-slate-500 mt-1">
-                            {row.artifact_count != null ? `${row.artifact_count} artifact(s)` : "—"}
+                            {row.artifact_count != null ? `${row.artifact_count} file(s)` : "—"}
                             {row.created_at ? ` · ${row.created_at}` : ""}
                           </p>
                         </div>
@@ -979,10 +986,10 @@ export default function CaseProcuraBotPage() {
               <div className="bg-indigo-50 border-b border-indigo-100 p-4 flex flex-wrap items-center justify-between gap-3">
                 <h3 className="text-slate-800 font-bold text-sm flex items-center gap-2">
                   <FileText className="w-4 h-4 text-indigo-600" />
-                  Word round-trip · RFx &amp; contract
+                  Edit in Word · RFx &amp; contract
                 </h3>
                 <span className="text-[10px] font-bold uppercase tracking-wide text-indigo-700 bg-white border border-indigo-200 px-2 py-1 rounded">
-                  Showcase
+                  Quick flow
                 </span>
               </div>
               <div className="p-4 space-y-4">
@@ -1139,15 +1146,15 @@ export default function CaseProcuraBotPage() {
             <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
               <h3 className="text-slate-800 font-bold text-[15px] flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-sponsor-blue" />
-                Decision status · {displayStage}
+                Decision checklist · {displayStage}
               </h3>
             </div>
             <div className="p-6">
               <p className="text-sm text-slate-600 mb-4 leading-relaxed">
                 <strong>{displayStage}</strong>
                 {focus?.pending_questions?.length
-                  ? " — Answer step-by-step in **ProcuraBot chat** (same window as the conversation). When prompts are satisfied, say **yes** or **approve** to lock the stage."
-                  : " — Open questions look resolved in chat; say **approve** if you are ready to advance."}
+                  ? " — Answer step-by-step in ProcuraBot chat (this same window). When all prompts are complete, type yes or approve to confirm this stage."
+                  : " — Open questions look resolved in chat. Type approve when you are ready to move to the next stage."}
               </p>
               <p className="text-xs text-slate-500 mb-4">
                 Use this panel for evidence and context; all formal decisions run through chat—try **reject** or **request revision** if you need a new pass.
@@ -1170,7 +1177,7 @@ export default function CaseProcuraBotPage() {
                       ))}
                     </ul>
                   ) : (
-                    <p>No open checklist items from the coach—if you are happy with the recommendation, send <span className="font-semibold">approve</span> in chat.</p>
+                    <p>No open checklist items. If you are ready, type <span className="font-semibold">approve</span> in chat.</p>
                   )}
                 </div>
               )}
@@ -1181,7 +1188,7 @@ export default function CaseProcuraBotPage() {
             <summary className="cursor-pointer list-none flex items-center justify-between px-4 py-3 bg-slate-900/80 text-white font-bold text-[13px]">
               <span className="flex items-center gap-2 font-syne tracking-wide">
                 <Terminal className="w-4 h-4 text-emerald-400" />
-                Agent activity ({caseDetails?.activity_log?.length ?? 0}) — expand if debugging
+                System activity ({caseDetails?.activity_log?.length ?? 0}) — expand for details
               </span>
               <ChevronRight className="w-4 h-4 text-slate-400 group-open:rotate-90 transition-transform" />
             </summary>
