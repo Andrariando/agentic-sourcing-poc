@@ -31,7 +31,7 @@ export default function WelcomePage() {
 
   return (
     <div className="flex-1 overflow-y-auto p-8 bg-slate-50 min-h-full">
-      <div className="max-w-6xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-6">
         <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-8">
           <p className="text-xs uppercase tracking-[0.2em] text-slate-500 font-semibold">Executive Overview</p>
           <h1 className="text-3xl font-bold text-slate-900 mt-2 tracking-tight">Agentic Sourcing Command Center</h1>
