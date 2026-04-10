@@ -30,8 +30,8 @@ export default function WelcomePage() {
   const activeStep = FLOW_STEPS.find((s) => s.id === active) ?? FLOW_STEPS[0];
 
   return (
-    <div className="flex-1 overflow-y-auto p-8 bg-slate-50 min-h-full">
-      <div className="max-w-7xl mx-auto space-y-6 overflow-x-hidden">
+    <div className="flex-1 overflow-y-auto p-6 sm:p-8 lg:px-12 bg-slate-50 min-h-full">
+      <div className="max-w-[min(100%,1680px)] w-full mx-auto space-y-6">
         <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-8">
           <p className="text-xs uppercase tracking-[0.2em] text-slate-500 font-semibold">Executive Overview</p>
           <h1 className="text-3xl font-bold text-slate-900 mt-2 tracking-tight">Agentic Sourcing Command Center</h1>
@@ -56,10 +56,7 @@ export default function WelcomePage() {
           </div>
         </section>
 
-        {/* Full-bleed so agent meshes can scale with viewport width */}
-        <div className="w-screen relative left-1/2 -translate-x-1/2 max-w-none px-4 sm:px-6 md:px-8 flex justify-center">
-          <WelcomeAgentMesh />
-        </div>
+        <WelcomeAgentMesh />
 
         <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <article className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">

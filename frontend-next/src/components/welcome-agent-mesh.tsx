@@ -18,15 +18,15 @@ const SYSTEM2_SPECIALISTS = [
   { id: "implementation", label: "Implementation", hint: "DTP-06" },
 ] as const;
 
-/** Room for labels + large orbit */
-const VB = 520;
-const CX = 260;
-const CY = 260;
-const R = 168;
+/** ViewBox tuned for side-by-side columns (~half of wide layout) */
+const VB = 500;
+const CX = 250;
+const CY = 250;
+const R = 156;
 
 /** Hub / satellite radii used to trim spokes so lines are not buried under filled circles */
-const HUB_TRIM = 44;
-const SAT_TRIM = 20;
+const HUB_TRIM = 40;
+const SAT_TRIM = 18;
 
 function nodePosition(index: number, total: number) {
   const start = -Math.PI / 2;
@@ -134,14 +134,14 @@ function AgentConstellation({
   const supervisorHot = phase === 0;
 
   const glowId = `${idPrefix}-node-glow`;
-  const hubR = supervisorHot ? 40 : 34;
+  const hubR = supervisorHot ? 36 : 30;
 
   return (
-    <div className="w-full flex justify-center items-stretch py-3">
+    <div className="w-full flex justify-center items-stretch py-2">
       <svg
         viewBox={`0 0 ${VB} ${VB}`}
         preserveAspectRatio="xMidYMid meet"
-        className="w-full h-[min(72vh,820px)] min-h-[420px] sm:min-h-[480px] md:min-h-[520px] drop-shadow-[0_0_28px_rgba(15,23,42,0.55)]"
+        className="w-full h-[min(38vh,380px)] min-h-[260px] sm:min-h-[280px] lg:h-[min(44vh,420px)] lg:min-h-[300px] drop-shadow-[0_0_24px_rgba(15,23,42,0.5)]"
         role="img"
         aria-hidden
       >
@@ -250,7 +250,7 @@ function AgentConstellation({
 
         {outer.map((n, i) => {
           const hot = activeIdx === i;
-          const r = hot ? 18 : 15;
+          const r = hot ? 16 : 13;
           const fill = hot ? palette.hot : palette.nodeIdle;
           const stroke = hot ? palette.hotStroke : palette.nodeIdleStroke;
           return (
@@ -288,10 +288,10 @@ function AgentConstellation({
           />
           <text
             x={CX}
-            y={CY - 10}
+            y={CY - 8}
             textAnchor="middle"
             fill="#f8fafc"
-            fontSize="19"
+            fontSize="17"
             fontWeight="800"
             fontFamily="system-ui, sans-serif"
           >
@@ -299,10 +299,10 @@ function AgentConstellation({
           </text>
           <text
             x={CX}
-            y={CY + 14}
+            y={CY + 12}
             textAnchor="middle"
             fill="#e2e8f0"
-            fontSize="13"
+            fontSize="11.5"
             fontWeight="700"
             fontFamily="system-ui, sans-serif"
           >
@@ -324,7 +324,7 @@ function AgentConstellation({
               y={ly + (sub ? -4 : 5)}
               textAnchor="middle"
               fill={hot ? "#ffffff" : "#e2e8f0"}
-              fontSize={hot ? 15 : 13}
+              fontSize={hot ? 13 : 11.5}
               fontWeight={hot ? 700 : 650}
               fontFamily="system-ui, sans-serif"
               className="select-none"
@@ -334,7 +334,7 @@ function AgentConstellation({
                 {label}
               </tspan>
               {sub ? (
-                <tspan x={lx} dy="16" fontSize={11.5} fill={hot ? "#f1f5f9" : "#cbd5e1"} fontWeight="650">
+                <tspan x={lx} dy="14" fontSize={9.5} fill={hot ? "#f1f5f9" : "#cbd5e1"} fontWeight="650">
                   {sub}
                 </tspan>
               ) : null}
@@ -360,7 +360,7 @@ export function WelcomeAgentMesh() {
 
   return (
     <section
-      className="relative w-full max-w-[min(100vw,1680px)] mx-auto overflow-hidden rounded-xl border border-slate-700/80 bg-slate-950 text-left shadow-[0_0_80px_-20px_rgba(52,211,153,0.18)]"
+      className="relative w-full mx-auto overflow-hidden rounded-xl border border-slate-700/80 bg-slate-950 text-left shadow-[0_0_80px_-20px_rgba(52,211,153,0.18)]"
       aria-label="Animated diagrams of System 1 and System 2 agent meshes"
     >
       <div
@@ -369,10 +369,10 @@ export function WelcomeAgentMesh() {
       />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_75%_60%_at_25%_35%,rgba(5,150,105,0.14),transparent),radial-gradient(ellipse_65%_55%_at_85%_45%,rgba(0,58,143,0.22),transparent)]" />
 
-      <div className="relative z-10 p-6 md:p-10 border-b border-slate-800/80">
+      <div className="relative z-10 p-5 md:p-8 border-b border-slate-800/80">
         <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400 mb-2">Dual agent architectures</p>
-        <h2 className="text-3xl md:text-4xl font-bold text-white tracking-tight">System 1 and System 2 agent meshes</h2>
-        <p className="mt-4 text-base md:text-lg text-slate-300 max-w-4xl leading-relaxed">
+        <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">System 1 and System 2 agent meshes</h2>
+        <p className="mt-3 text-sm md:text-base text-slate-300 max-w-5xl leading-relaxed">
           Both stacks use LangGraph-style orchestration with shared context and retrieval.{" "}
           <span className="text-emerald-300">System 1</span> scores opportunities for the heatmap;{" "}
           <span className="text-cyan-300">System 2</span> runs source-to-contract execution. Trimmable hub-to-agent paths stay visible;
@@ -383,14 +383,13 @@ export function WelcomeAgentMesh() {
         )}
       </div>
 
-      {/* One column = each diagram uses full content width (largest readable scale) */}
-      <div className="relative z-10 grid grid-cols-1 gap-0 divide-y divide-slate-800/80">
-        <div className="p-6 md:p-10">
-          <div className="flex items-center gap-3 mb-3">
-            <span className="h-3 w-3 rounded-full bg-emerald-400 shadow-[0_0_14px_rgba(52,211,153,0.85)]" />
-            <h3 className="text-lg md:text-xl font-bold text-emerald-100 tracking-wide uppercase">System 1 · Prioritization</h3>
+      <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-0 divide-y lg:divide-y-0 lg:divide-x divide-slate-800/80">
+        <div className="p-5 md:p-6 lg:p-7 border-b lg:border-b-0 border-slate-800/80">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.85)]" />
+            <h3 className="text-base md:text-lg font-bold text-emerald-100 tracking-wide uppercase">System 1 · Prioritization</h3>
           </div>
-          <p className="text-base text-slate-300 leading-relaxed mb-2 max-w-4xl">
+          <p className="text-sm text-slate-300 leading-relaxed mb-2">
             Supervisor coordinates spend, renewal, category strategy, and supplier-risk signals into scores and explanations
             (opportunity register / heatmap).
           </p>
@@ -403,19 +402,19 @@ export function WelcomeAgentMesh() {
             centerAbbr="SUP"
             centerDetail="Supervisor"
           />
-          <p className="mt-4 text-sm md:text-base text-slate-400 font-mono leading-relaxed border-t border-slate-800/80 pt-5">
+          <p className="mt-3 text-xs sm:text-sm text-slate-400 font-mono leading-relaxed border-t border-slate-800/80 pt-4">
             <span className="text-emerald-200 font-semibold">Supervisor</span>
             {" · "}
             {SYSTEM1_SPECIALISTS.map((s) => s.label).join(" · ")}
           </p>
         </div>
 
-        <div className="p-6 md:p-10">
-          <div className="flex items-center gap-3 mb-3">
-            <span className="h-3 w-3 rounded-full bg-cyan-400 shadow-[0_0_14px_rgba(34,211,238,0.85)]" />
-            <h3 className="text-lg md:text-xl font-bold text-cyan-100 tracking-wide uppercase">System 2 · S2C execution</h3>
+        <div className="p-5 md:p-6 lg:p-7">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="h-2.5 w-2.5 rounded-full bg-cyan-400 shadow-[0_0_12px_rgba(34,211,238,0.85)]" />
+            <h3 className="text-base md:text-lg font-bold text-cyan-100 tracking-wide uppercase">System 2 · S2C execution</h3>
           </div>
-          <p className="text-base text-slate-300 leading-relaxed mb-2 max-w-4xl">
+          <p className="text-sm text-slate-300 leading-relaxed mb-2">
             Supervisor routes work across six specialists from sourcing signal through implementation; human-in-the-loop chat and
             artifacts attach to case execution.
           </p>
@@ -428,7 +427,7 @@ export function WelcomeAgentMesh() {
             centerAbbr="SUP"
             centerDetail="Supervisor"
           />
-          <p className="mt-4 text-sm md:text-base text-slate-400 font-mono leading-relaxed border-t border-slate-800/80 pt-5">
+          <p className="mt-3 text-xs sm:text-sm text-slate-400 font-mono leading-relaxed border-t border-slate-800/80 pt-4">
             <span className="text-cyan-200 font-semibold">Supervisor</span>
             {" · "}
             {SYSTEM2_SPECIALISTS.map((s) => s.label).join(" · ")}
