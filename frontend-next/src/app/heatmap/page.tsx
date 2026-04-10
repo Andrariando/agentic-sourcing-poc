@@ -1762,40 +1762,52 @@ export default function HeatmapPriorityPage() {
             
             <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-slate-50/30">
               
-              {/* Header Box */}
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex justify-between items-start">
-                <div>
-                  <p className="text-xs font-bold text-sponsor-blue uppercase tracking-widest mb-2 flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-sponsor-blue animate-pulse"></span>
-                    Target
-                  </p>
-                  <p className="text-2xl font-bold text-slate-800">{reviewOpp.supplier_name || 'New Requirement'}</p>
+              {/* Header: identity + single clear score (no raw formula) */}
+              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:justify-between sm:items-start gap-6">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Opportunity</p>
+                  <p className="text-2xl font-bold text-slate-900 tracking-tight">{reviewOpp.supplier_name || "New Requirement"}</p>
                   <p className="text-sm font-mono text-slate-500 mt-1">{reviewOpp.contract_id || reviewOpp.request_id}</p>
-                  <div className="mt-4 flex gap-2">
-                    <span className="px-2.5 py-1 bg-slate-100 rounded text-xs font-medium text-slate-600 border border-slate-200">{reviewOpp.category}</span>
-                    <span className="px-2.5 py-1 bg-slate-100 rounded text-xs font-medium text-slate-600 border border-slate-200">{reviewOpp.subcategory || 'General'}</span>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <span className="px-2.5 py-1 bg-slate-100 rounded-md text-xs font-medium text-slate-700 border border-slate-200">
+                      {reviewOpp.category}
+                    </span>
+                    <span className="px-2.5 py-1 bg-slate-100 rounded-md text-xs font-medium text-slate-700 border border-slate-200">
+                      {reviewOpp.subcategory || "General"}
+                    </span>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm font-semibold text-slate-500 mb-1 cursor-help" title={HEATMAP_GLOSSARY.agenticScore}>
-                    Agentic Score
-                  </p>
-                  <p className="text-4xl font-black text-sponsor-blue tracking-tighter cursor-help" title={HEATMAP_GLOSSARY.agenticScore}>
-                    {reviewOpp.total_score?.toFixed(1)}
-                    <span className="text-lg text-slate-400">/10</span>
-                  </p>
-                  <p
-                    className="text-xs font-bold text-mit-red mt-2 uppercase bg-red-50 inline-block px-2 py-1 rounded cursor-help"
+                <div className="flex sm:flex-col items-center sm:items-end gap-3 sm:gap-2 sm:text-right w-full sm:w-auto">
+                  <span
+                    className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide cursor-help border ${
+                      reviewOpp.tier === "T1"
+                        ? "bg-red-50 text-mit-red border-red-200"
+                        : reviewOpp.tier === "T2"
+                          ? "bg-orange-50 text-orange-800 border-orange-200"
+                          : reviewOpp.tier === "T3"
+                            ? "bg-blue-50 text-blue-800 border-blue-200"
+                            : "bg-slate-100 text-slate-600 border-slate-200"
+                    }`}
                     title={HEATMAP_GLOSSARY[TIER_TOOLTIP[reviewOpp.tier] ?? "tier"]}
                   >
-                    {heatmapTierLabel(reviewOpp.tier)} — {reviewOpp.recommended_action_window}
-                  </p>
+                    {heatmapTierLabel(reviewOpp.tier)}
+                  </span>
+                  <div>
+                    <p className="text-xs font-medium text-slate-500 cursor-help" title={HEATMAP_GLOSSARY.agenticScore}>
+                      Priority score
+                    </p>
+                    <p className="text-4xl font-black text-sponsor-blue tracking-tight tabular-nums cursor-help" title={HEATMAP_GLOSSARY.agenticScore}>
+                      {reviewOpp.total_score?.toFixed(1)}
+                      <span className="text-lg font-semibold text-slate-400">/10</span>
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1 max-w-[14rem] sm:ml-auto sm:text-right">{reviewOpp.recommended_action_window}</p>
+                  </div>
                 </div>
               </div>
 
-              {/* Weighted score explanation (replaces raw formula string) */}
-              <div className="bg-blue-50/50 p-6 rounded-xl border border-blue-100">
-                <p className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">How this score is built</p>
+              <div className="rounded-xl border border-slate-200 bg-gradient-to-b from-slate-50/90 to-white p-6 shadow-sm">
+                <p className="text-base font-semibold text-slate-900 mb-1">What drove this score</p>
+                <p className="text-xs text-slate-500 mb-5">Bars show strength (0–10); points show how much each metric added to the total.</p>
                 <HeatmapScoreBreakdown opportunity={reviewOpp as HeatmapOpportunityLike} />
               </div>
 

@@ -20,23 +20,22 @@ def process_supervisor(state: HeatmapState) -> dict:
     
     total_score = 0.0
     tier = "T4"
-    justification = ""
-    
+    formula_tail = ""
+
     if is_new:
         # PS_new = 0.30(IUS) + 0.30(ES) + 0.25(CSIS) + 0.15(SAS)
         w_ius = w.get("w_ius", 0.30)
         w_es = w.get("w_es", 0.30)
         w_csis = w.get("w_csis", 0.25)
         w_sas = w.get("w_sas_new", w.get("w_sas", 0.15))
-        
+
         ius = s_contract.get("ius_score") or 0.0
         es = s_spend.get("es_score") or 0.0
         csis = s_spend.get("csis_score") or 0.0
         sas = s_strategy.get("sas_score") or 0.0
-        
+
         total_score = (w_ius * ius) + (w_es * es) + (w_csis * csis) + (w_sas * sas)
-        justification = (
-            f"New request scored {total_score:.2f}. "
+        formula_tail = (
             f"IUS({ius})*{w_ius} + ES({es})*{w_es} + CSIS({csis})*{w_csis} + SAS({sas})*{w_sas}"
         )
     else:
@@ -46,29 +45,35 @@ def process_supervisor(state: HeatmapState) -> dict:
         w_rss = w.get("w_rss", 0.20)
         w_scs = w.get("w_scs", 0.15)
         w_sas = w.get("w_sas_contract", w.get("w_sas", 0.10))
-        
+
         eus = s_contract.get("eus_score") or 0.0
         fis = s_spend.get("fis_score") or 0.0
         rss = s_risk.get("rss_score") or 0.0
         scs = s_spend.get("scs_score") or 0.0
         sas = s_strategy.get("sas_score") or 0.0
-        
+
         total_score = (w_eus * eus) + (w_fis * fis) + (w_rss * rss) + (w_scs * scs) + (w_sas * sas)
-        justification = (
-            f"Contract scored {total_score:.2f}. "
+        formula_tail = (
             f"EUS({eus})*{w_eus} + FIS({fis})*{w_fis} + RSS({rss})*{w_rss} + SCS({scs})*{w_scs} + SAS({sas})*{w_sas}"
         )
 
     base_total = round(total_score, 2)
+    # Memory retrieval uses the baseline formula text; the headline number is fixed after the nudge below.
+    baseline_for_memory = f"Baseline weighted total {base_total:.2f}. {formula_tail}"
     _delta, mem_note, total_score, tier = apply_learning_nudge(
         category=contract.get("category") or "",
         subcategory=contract.get("subcategory"),
         supplier_name=contract.get("supplier_name"),
         is_new=is_new,
-        baseline_summary=justification,
+        baseline_summary=baseline_for_memory,
         base_total=base_total,
         weights=w,
     )
+    final_total = round(total_score, 2)
+    if is_new:
+        justification = f"New request scored {final_total:.2f}. {formula_tail}"
+    else:
+        justification = f"Contract scored {final_total:.2f}. {formula_tail}"
     if mem_note:
         justification = f"{justification} | Learning: {mem_note}"
         

@@ -1,11 +1,11 @@
 Supplier Number,Supplier Parent,Supplier,Site,Category,Subcategory,Sector,Region,Country,State,City,Spend Tier (USD),Supplier Parent Risk Rating,Supplier Risk Score,Criticality Risk Level,Criticality Risk Score,Strategic Risk Score,BPRA Security Scorecard,BPRA Vendor Status,Ethics,Labor & Human Rights,Resilinc Alerts by Supplier,"Sanctions, AML+ABC due diligence",Environment,Supplier Financial Health,Sustainable Procurement
-SUP-1000,TechGlobal Inc,TechGlobal Inc,HQ,IT Infrastructure,Cloud Hosting,Tech,NA,USA,NY,New York,Tier 1,Medium,2.38,High,4.72,3.95,A,Approved,Pass,Pass,0,Clear,Pass,Stable,Pass
-SUP-1001,NetSystems LLC,NetSystems LLC,HQ,IT Infrastructure,End User Computing,Tech,NA,USA,NY,New York,Tier 1,Medium,2.71,High,4.3,4.97,A,Approved,Pass,Pass,0,Clear,Pass,Stable,Pass
-SUP-1002,CloudServe Group,CloudServe Group,HQ,IT Infrastructure,Cybersecurity,Tech,NA,USA,NY,New York,Tier 1,Medium,1.11,Low,2.55,1.24,A,Approved,Pass,Pass,0,Clear,Pass,Stable,Pass
-SUP-1003,SecureShield Tech,SecureShield Tech,HQ,IT Infrastructure,Cybersecurity,Tech,NA,USA,NY,New York,Tier 3,Medium,3.09,High,3.62,2.8,A,Approved,Pass,Pass,0,Clear,Pass,Weak,Pass
-SUP-1004,DataCenter Partners,DataCenter Partners,HQ,IT Infrastructure,Network Infrastructure,Tech,NA,USA,NY,New York,Tier 3,Low,1.55,Low,2.96,3.92,A,Approved,Pass,Pass,0,Clear,Pass,Weak,Pass
-SUP-1005,Endpoint Solutions Corp,Endpoint Solutions Corp,HQ,IT Infrastructure,End User Computing,Tech,NA,USA,NY,New York,Tier 3,High,1.31,Medium,1.24,4.94,A,Approved,Pass,Pass,0,Clear,Pass,Stable,Pass
-SUP-1006,AlphaNetwork Services,AlphaNetwork Services,HQ,IT Infrastructure,Cybersecurity,Tech,NA,USA,NY,New York,Tier 3,Low,3.1,Medium,2.83,3.58,A,Approved,Pass,Pass,0,Clear,Pass,Weak,Pass
-SUP-1007,CyberGuard Ltd,CyberGuard Ltd,HQ,IT Infrastructure,Cloud Hosting,Tech,NA,USA,NY,New York,Tier 3,Low,4.25,High,4.35,1.38,A,Approved,Pass,Pass,0,Clear,Pass,Weak,Pass
-SUP-1008,DeltaStorage Systems,DeltaStorage Systems,HQ,IT Infrastructure,Cloud Hosting,Tech,NA,USA,NY,New York,Tier 1,Low,2.17,Low,2.34,3.15,A,Approved,Pass,Pass,0,Clear,Pass,Weak,Pass
-SUP-1009,Infinite Computing,Infinite Computing,HQ,IT Infrastructure,Cybersecurity,Tech,NA,USA,NY,New York,Tier 2,Medium,3.12,Low,4.81,3.9,A,Approved,Pass,Pass,0,Clear,Pass,Strong,Pass
+SUP-1000,TechGlobal Inc,TechGlobal Inc,HQ,IT Infrastructure,Network Infrastructure,Tech,NA,USA,NY,New York,Tier 3,Low,1.74,High,3.07,1.5,A,Approved,Pass,Pass,0,Clear,Pass,Stable,Pass
+SUP-1001,NetSystems LLC,NetSystems LLC,HQ,IT Infrastructure,Data Center,Tech,NA,USA,NY,New York,Tier 3,High,4.98,Medium,1.68,3.01,A,Approved,Pass,Pass,0,Clear,Pass,Strong,Pass
+SUP-1002,CloudServe Group,CloudServe Group,HQ,IT Infrastructure,Cloud Hosting,Tech,NA,USA,NY,New York,Tier 1,Low,1.74,Low,2.82,3.3,A,Approved,Pass,Pass,0,Clear,Pass,Stable,Pass
+SUP-1003,SecureShield Tech,SecureShield Tech,HQ,IT Infrastructure,End User Computing,Tech,NA,USA,NY,New York,Tier 3,High,4.11,Low,3.74,1.29,A,Approved,Pass,Pass,0,Clear,Pass,Stable,Pass
+SUP-1004,DataCenter Partners,DataCenter Partners,HQ,IT Infrastructure,Cloud Hosting,Tech,NA,USA,NY,New York,Tier 3,Medium,3.22,Medium,4.88,1.96,A,Approved,Pass,Pass,0,Clear,Pass,Stable,Pass
+SUP-1005,Endpoint Solutions Corp,Endpoint Solutions Corp,HQ,IT Infrastructure,Cloud Hosting,Tech,NA,USA,NY,New York,Tier 3,High,2.54,High,2.55,1.91,A,Approved,Pass,Pass,0,Clear,Pass,Stable,Pass
+SUP-1006,AlphaNetwork Services,AlphaNetwork Services,HQ,IT Infrastructure,Cybersecurity,Tech,NA,USA,NY,New York,Tier 2,High,1.51,Medium,4.58,3.32,A,Approved,Pass,Pass,0,Clear,Pass,Weak,Pass
+SUP-1007,CyberGuard Ltd,CyberGuard Ltd,HQ,IT Infrastructure,Network Infrastructure,Tech,NA,USA,NY,New York,Tier 3,Low,3.38,High,3.42,3.32,A,Approved,Pass,Pass,0,Clear,Pass,Strong,Pass
+SUP-1008,DeltaStorage Systems,DeltaStorage Systems,HQ,IT Infrastructure,Cloud Hosting,Tech,NA,USA,NY,New York,Tier 3,Medium,3.35,Low,4.2,2.04,A,Approved,Pass,Pass,0,Clear,Pass,Strong,Pass
+SUP-1009,Infinite Computing,Infinite Computing,HQ,IT Infrastructure,Network Infrastructure,Tech,NA,USA,NY,New York,Tier 1,Low,4.35,Medium,4.27,4.55,A,Approved,Pass,Pass,0,Clear,Pass,Stable,Pass
