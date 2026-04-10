@@ -12,13 +12,23 @@ import {
   ThumbsUp,
   ThumbsDown,
 } from "lucide-react";
-import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import {
+  ScatterChart,
+  Scatter,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  ReferenceLine,
+} from "recharts";
 import { apiFetch } from "@/lib/api-fetch";
 import { getApiBaseUrl, apiConnectivityHint } from "@/lib/api-base";
 import { HeatmapAbbr, HEATMAP_GLOSSARY, type HeatmapGlossaryKey } from "@/lib/heatmap-glossary";
 import { heatmapTierLabel } from "@/lib/heatmap-tier-display";
 import ProcuraBotIdentity from "@/components/branding/ProcuraBotIdentity";
 import { PROCURABOT_BRAND } from "@/lib/procurabot-brand";
+import { HeatmapScoreBreakdown, type HeatmapOpportunityLike } from "@/lib/heatmap-score-breakdown";
 
 const TIER_TOOLTIP: Record<string, HeatmapGlossaryKey> = {
   T1: "t1",
@@ -26,6 +36,51 @@ const TIER_TOOLTIP: Record<string, HeatmapGlossaryKey> = {
   T3: "t3",
   T4: "t4",
 };
+
+function isHeatmapNewRequest(o: { request_id?: string | null; contract_id?: string | null }): boolean {
+  return Boolean(o.request_id) && !o.contract_id;
+}
+
+function formatScore(n: unknown): string {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return "—";
+  return v.toFixed(1);
+}
+
+function matrixScatterFillForTier(tier: string | undefined): string {
+  if (tier === "T1") return "#ef4444";
+  if (tier === "T2") return "#f97316";
+  if (tier === "T3") return "#3b82f6";
+  return "#64748b";
+}
+
+/** Scatter dot: radius from total priority score (0–10); fill from tier. Bypasses ZAxis so size is never stuck uniform. */
+function HeatmapMatrixScatterDot(props: {
+  cx?: number;
+  cy?: number;
+  payload?: { total_score?: number; tier?: string };
+  onClick?: React.MouseEventHandler<SVGCircleElement>;
+}) {
+  const { cx, cy, payload, onClick } = props;
+  if (cx == null || cy == null) return null;
+  const raw = Number(payload?.total_score);
+  const score = Number.isFinite(raw) ? Math.max(0, Math.min(10, raw)) : 0;
+  const r = 6 + (score / 10) * 16;
+  const fill = matrixScatterFillForTier(payload?.tier);
+  return (
+    <circle
+      cx={cx}
+      cy={cy}
+      r={r}
+      fill={fill}
+      fillOpacity={0.7}
+      stroke={fill}
+      strokeWidth={2}
+      className="cursor-pointer transition-all hover:fill-opacity-100"
+      onClick={onClick}
+    />
+  );
+}
 
 const PS_NEW_WEIGHT_KEYS = ["w_ius", "w_es", "w_csis", "w_sas_new"] as const;
 const PS_CONTRACT_WEIGHT_KEYS = ["w_eus", "w_fis", "w_rss", "w_scs", "w_sas_contract"] as const;
@@ -734,7 +789,7 @@ export default function HeatmapPriorityPage() {
   // Matrix axes must match row type: renewals use FIS + EUS/RSS (and SCS for spread);
   // new requests use ES + CSIS on X and IUS on Y (PS_new does not populate FIS/EUS/RSS).
   const chartData = activeOpportunities.map((o) => {
-    const isNewRequest = Boolean(o.request_id) && !o.contract_id;
+    const isNewRequest = isHeatmapNewRequest(o);
     let x: number;
     let y: number;
     if (isNewRequest) {
@@ -755,7 +810,6 @@ export default function HeatmapPriorityPage() {
       ...o,
       x: Number(Math.min(10, Math.max(0, x)).toFixed(1)),
       y: Number(Math.min(10, Math.max(0, y)).toFixed(1)),
-      z: o.total_score * 15, // visual radius size
     };
   });
 
@@ -776,23 +830,66 @@ export default function HeatmapPriorityPage() {
     };
   }, [reviewOpp, scoringWeights]);
 
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: Record<string, unknown> }> }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
+      const isNew = isHeatmapNewRequest(data as { request_id?: string; contract_id?: string });
+      const total = Number(data.total_score);
+      const totalStr = Number.isFinite(total) ? total.toFixed(1) : "—";
       return (
-        <div className="bg-white p-4 border border-slate-200 shadow-xl rounded-lg max-w-xs">
-          <p className="font-bold text-slate-800">{data.supplier_name || 'New Request'}</p>
-          <p className="text-xs text-slate-500 mb-2">{data.contract_id || data.request_id}</p>
-          <div className="flex justify-between items-center mb-2">
+        <div className="bg-white p-3 border border-slate-200 shadow-xl rounded-lg max-w-sm max-h-[min(80vh,480px)] overflow-y-auto">
+          <p className="font-bold text-slate-800">{String(data.supplier_name || "New Request")}</p>
+          <p className="text-xs text-slate-500 mb-2">{String(data.contract_id || data.request_id || "")}</p>
+          <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-1">
+            {isNew ? "New request" : "Renewal"} · matrix position
+          </p>
+          <div className="text-xs text-slate-600 space-y-1 mb-2 font-mono">
+            {isNew ? (
+              <>
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500">IUS (vertical)</span>
+                  <span>{formatScore(data.ius_score)}</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500">ES / CSIS (horizontal)</span>
+                  <span>
+                    {formatScore(data.es_score)} / {formatScore(data.csis_score)}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500">EUS (time pressure)</span>
+                  <span>{formatScore(data.eus_score)}</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500" title={HEATMAP_GLOSSARY.rss}>
+                    RSS (supplier risk)
+                  </span>
+                  <span>{formatScore(data.rss_score)}</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500">FIS / SCS (horizontal)</span>
+                  <span>
+                    {formatScore(data.fis_score)} / {formatScore(data.scs_score)}
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+          <div className="flex justify-between items-center mb-2 pt-1 border-t border-slate-100">
             <span
               className="text-xs font-semibold px-2 py-0.5 rounded bg-slate-100 cursor-help"
-              title={HEATMAP_GLOSSARY[TIER_TOOLTIP[data.tier] ?? "tier"]}
+              title={HEATMAP_GLOSSARY[TIER_TOOLTIP[String(data.tier)] ?? "tier"]}
             >
-              {heatmapTierLabel(data.tier)}
+              {heatmapTierLabel(String(data.tier))}
             </span>
-            <span className="font-bold text-sponsor-blue">{data.total_score.toFixed(1)}/10</span>
+            <span className="font-bold text-sponsor-blue">{totalStr}/10</span>
           </div>
-          <p className="text-xs text-slate-600 line-clamp-3 leading-snug">{data.justification_summary}</p>
+          <div className="pt-1 border-t border-slate-100">
+            <HeatmapScoreBreakdown opportunity={data as HeatmapOpportunityLike} compact />
+          </div>
         </div>
       );
     }
@@ -899,33 +996,106 @@ export default function HeatmapPriorityPage() {
         {/* View Router */}
         {viewMode === 'heatmap' ? (
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <h2 className="font-semibold text-slate-800 mb-1">Strategic Impact vs Urgency Matrix</h2>
-            <p className="text-xs text-slate-500 mb-4 leading-relaxed max-w-3xl">
-              Plotted position matches each row&apos;s score family. Renewals (
-              <HeatmapAbbr term="psContract">PS_contract</HeatmapAbbr>): horizontal{" "}
-              <HeatmapAbbr term="fis">FIS</HeatmapAbbr> blended with <HeatmapAbbr term="scs">SCS</HeatmapAbbr>; vertical{" "}
-              <HeatmapAbbr term="eus">EUS</HeatmapAbbr> and <HeatmapAbbr term="rss">RSS</HeatmapAbbr>. New requests (
-              <HeatmapAbbr term="psNew">PS_new</HeatmapAbbr>): horizontal <HeatmapAbbr term="es">ES</HeatmapAbbr> with{" "}
-              <HeatmapAbbr term="csis">CSIS</HeatmapAbbr>; vertical <HeatmapAbbr term="ius">IUS</HeatmapAbbr>. The table is sorted
-              by total score; the &quot;top-right&quot; corner is not the same as rank #1.
+            <h2 className="font-semibold text-slate-800 mb-1">Strategic Impact vs Urgency &amp; Risk</h2>
+            <p className="text-sm text-slate-600 mb-3 max-w-3xl">
+              Each point is one opportunity. Read <span className="font-medium text-slate-700">position</span> as strategic
+              story, <span className="font-medium text-slate-700">color</span> as recommended pace (tier), and{" "}
+              <span className="font-medium text-slate-700">size</span> as overall numeric priority (0–10).
             </p>
+            <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 text-left max-w-3xl">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">How to read</p>
+              <ul className="space-y-2 list-none pl-0">
+                <li className="flex gap-2">
+                  <span className="shrink-0 font-mono text-sponsor-blue" aria-hidden>
+                    →
+                  </span>
+                  <span>
+                    <span className="font-medium text-slate-800">Horizontal impact.</span> Renewals:{" "}
+                    <HeatmapAbbr term="fis">FIS</HeatmapAbbr> + <HeatmapAbbr term="scs">SCS</HeatmapAbbr>. New requests:{" "}
+                    <HeatmapAbbr term="es">ES</HeatmapAbbr> + <HeatmapAbbr term="csis">CSIS</HeatmapAbbr>. Farther right = stronger
+                    financial / category impact.
+                  </span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="shrink-0 font-mono text-sponsor-blue" aria-hidden>
+                    ↑
+                  </span>
+                  <span>
+                    <span className="font-medium text-slate-800">Vertical urgency &amp; risk.</span> Renewals blend{" "}
+                    <HeatmapAbbr term="eus">EUS</HeatmapAbbr> (time pressure) and{" "}
+                    <HeatmapAbbr term="rss">RSS</HeatmapAbbr> (supplier risk) 50/50 — risk is explicit on this axis. New requests
+                    use <HeatmapAbbr term="ius">IUS</HeatmapAbbr> only (implementation urgency). Higher = act sooner.
+                  </span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="shrink-0 text-slate-400" aria-hidden>
+                    ○
+                  </span>
+                  <span>
+                    <span className="font-medium text-slate-800">Dot size</span> = total priority score (same idea as table
+                    rank drivers). <span className="font-medium text-slate-800">Color</span> = tier (T1 fastest path to engage).
+                  </span>
+                </li>
+              </ul>
+              <p className="mt-2 text-xs text-slate-500 leading-relaxed">
+                The table is sorted by total score; the chart sorts by two blended axes, so the top-right is not always rank
+                #1. Midpoint lines (5) are a visual guide only.
+              </p>
+            </div>
             <div className="w-full h-[500px]">
               <ResponsiveContainer width="100%" height="100%">
-                <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                <ScatterChart margin={{ top: 20, right: 20, bottom: 28, left: 28 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                  <XAxis type="number" dataKey="x" name="Impact" tick={{fontSize: 12, fill: '#64748b'}} label={{ value: 'Financial impact (FIS+SCS / ES+CSIS) →', position: 'bottom', fill: '#64748b', fontSize: 12 }} domain={[0, 10]} />
-                  <YAxis type="number" dataKey="y" name="Urgency" tick={{fontSize: 12, fill: '#64748b'}} label={{ value: 'Urgency & risk (EUS+RSS / IUS) →', angle: -90, position: 'left', fill: '#64748b', fontSize: 12 }} domain={[0, 10]} />
-                  <ZAxis type="number" dataKey="z" range={[60, 400]} name="Volume" />
-                  <Tooltip content={<CustomTooltip />} cursor={{ strokeDasharray: '3 3' }} />
-                  <Scatter name="Opportunities" data={chartData} onClick={(data) => { void openReviewModal(data.payload); }}>
-                    {chartData.map((entry, index) => {
-                      let fill = "#64748b"; // T4
-                      if (entry.tier === "T1") fill = "#ef4444";
-                      if (entry.tier === "T2") fill = "#f97316";
-                      if (entry.tier === "T3") fill = "#3b82f6";
-                      return <Cell key={`cell-${index}`} fill={fill} fillOpacity={0.7} stroke={fill} strokeWidth={2} className="cursor-pointer transition-all hover:fill-opacity-100" />
-                    })}
-                  </Scatter>
+                  <XAxis
+                    type="number"
+                    dataKey="x"
+                    name="Impact"
+                    tick={{ fontSize: 12, fill: "#64748b" }}
+                    label={{
+                      value: "Impact (FIS+SCS / ES+CSIS) →",
+                      position: "bottom",
+                      fill: "#64748b",
+                      fontSize: 12,
+                    }}
+                    domain={[0, 10]}
+                  />
+                  <YAxis
+                    type="number"
+                    dataKey="y"
+                    name="UrgencyRisk"
+                    tick={{ fontSize: 12, fill: "#64748b" }}
+                    label={{
+                      value: "Urgency & risk (EUS+RSS / IUS) ↑",
+                      angle: -90,
+                      position: "left",
+                      fill: "#64748b",
+                      fontSize: 12,
+                    }}
+                    domain={[0, 10]}
+                  />
+                  <ReferenceLine
+                    x={5}
+                    stroke="#cbd5e1"
+                    strokeDasharray="4 4"
+                    strokeWidth={1}
+                    ifOverflow="visible"
+                  />
+                  <ReferenceLine
+                    y={5}
+                    stroke="#cbd5e1"
+                    strokeDasharray="4 4"
+                    strokeWidth={1}
+                    ifOverflow="visible"
+                  />
+                  <Tooltip content={<CustomTooltip />} cursor={{ strokeDasharray: "3 3" }} />
+                  <Scatter
+                    name="Opportunities"
+                    data={chartData}
+                    shape={HeatmapMatrixScatterDot}
+                    onClick={(data) => {
+                      void openReviewModal(data.payload);
+                    }}
+                  />
                 </ScatterChart>
               </ResponsiveContainer>
             </div>
@@ -949,11 +1119,11 @@ export default function HeatmapPriorityPage() {
             </div>
             <p className="mt-3 text-[11px] text-slate-400 text-center flex flex-wrap justify-center gap-x-1 gap-y-0.5">
               <span title={HEATMAP_GLOSSARY.chartAxisX} className="cursor-help border-b border-dotted border-slate-400">
-                X-axis: FIS / ES
+                X: FIS+SCS / ES+CSIS
               </span>
               <span className="text-slate-300">·</span>
               <span title={HEATMAP_GLOSSARY.chartAxisY} className="cursor-help border-b border-dotted border-slate-400">
-                Y-axis: EUS / RSS
+                Y: EUS+RSS (renewals) / IUS (new)
               </span>
             </p>
           </div>
@@ -988,8 +1158,8 @@ export default function HeatmapPriorityPage() {
                     <th className="px-6 py-4 font-medium cursor-help" title={HEATMAP_GLOSSARY.agenticScore}>
                       Total
                     </th>
-                    <th className="px-6 py-4 font-medium">Review Status</th>
-                    <th className="px-6 py-4 font-medium text-right">Approval Status</th>
+                    <th className="px-6 py-4 font-medium align-middle">Review Status</th>
+                    <th className="px-6 py-4 font-medium align-middle">Approval Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
@@ -1094,7 +1264,7 @@ export default function HeatmapPriorityPage() {
                               <span className="text-xs text-slate-500 font-normal">/10</span>
                             </div>
                           </td>
-                          <td className="px-6 py-4">
+                          <td className="px-6 py-4 align-middle">
                             {approved ? (
                               <span className="inline-flex items-center text-xs font-semibold uppercase px-2 py-1 rounded bg-slate-100 text-slate-500 border border-slate-200">
                                 Reviewed (Locked)
@@ -1121,17 +1291,18 @@ export default function HeatmapPriorityPage() {
                               </button>
                             )}
                           </td>
-                          <td className="px-6 py-4 text-right">
+                          <td className="px-6 py-4 align-middle">
                             {approved ? (
                               <span className="inline-flex items-center text-xs font-semibold uppercase px-2 py-1 rounded bg-green-100 text-green-700 border border-green-200">
                                 Approved
                               </span>
                             ) : reviewed ? (
                               <button
+                                type="button"
                                 onClick={() => {
                                   void handleApproveToExecution(opp);
                                 }}
-                                className="text-xs font-semibold text-white bg-sponsor-blue px-3 py-1.5 rounded hover:bg-blue-700 transition"
+                                className="text-xs font-semibold text-white bg-sponsor-blue px-3 py-1.5 rounded hover:bg-blue-700 transition whitespace-nowrap"
                               >
                                 Approve to S2C Execution
                               </button>
@@ -1622,90 +1793,13 @@ export default function HeatmapPriorityPage() {
                 </div>
               </div>
 
-              {/* Justification Box */}
+              {/* Weighted score explanation (replaces raw formula string) */}
               <div className="bg-blue-50/50 p-6 rounded-xl border border-blue-100">
-                <p className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">AI Engine Justification</p>
-                <p className="text-sm text-slate-700 leading-relaxed italic border-l-4 border-sponsor-blue pl-4 py-1">
-                  &ldquo;{reviewOpp.justification_summary}&rdquo;
-                </p>
+                <p className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">How this score is built</p>
+                <HeatmapScoreBreakdown opportunity={reviewOpp as HeatmapOpportunityLike} />
               </div>
 
-              {/* Detailed Breakdown & Artifacts Grid */}
-              <div className="grid grid-cols-2 gap-6">
-                
-                {/* Mathematical Engine Breakdown */}
-                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2">Sub-Score Breakdown</p>
-                  <div className="space-y-3">
-                    {reviewOpp.eus_score != null && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-slate-600 cursor-help border-b border-dotted border-slate-300" title={HEATMAP_GLOSSARY.eus}>
-                          Expiry Urgency (EUS)
-                        </span>
-                        <span className="font-mono text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded">{reviewOpp.eus_score?.toFixed(1)}</span>
-                      </div>
-                    )}
-                    {reviewOpp.ius_score != null && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-slate-600 cursor-help border-b border-dotted border-slate-300" title={HEATMAP_GLOSSARY.ius}>
-                          Implement Urgency (IUS)
-                        </span>
-                        <span className="font-mono text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded">{reviewOpp.ius_score?.toFixed(1)}</span>
-                      </div>
-                    )}
-                    {reviewOpp.fis_score != null && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-slate-600 cursor-help border-b border-dotted border-slate-300" title={HEATMAP_GLOSSARY.fis}>
-                          Financial Impact (FIS)
-                        </span>
-                        <span className="font-mono text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded">{reviewOpp.fis_score?.toFixed(1)}</span>
-                      </div>
-                    )}
-                    {reviewOpp.es_score != null && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-slate-600 cursor-help border-b border-dotted border-slate-300" title={HEATMAP_GLOSSARY.es}>
-                          Estimated Spend (ES)
-                        </span>
-                        <span className="font-mono text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded">{reviewOpp.es_score?.toFixed(1)}</span>
-                      </div>
-                    )}
-                    {reviewOpp.rss_score != null && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-slate-600 cursor-help border-b border-dotted border-slate-300" title={HEATMAP_GLOSSARY.rss}>
-                          Supplier Risk (RSS)
-                        </span>
-                        <span className="font-mono text-sm font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-100">{reviewOpp.rss_score?.toFixed(1)}</span>
-                      </div>
-                    )}
-                    {reviewOpp.scs_score != null && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-slate-600 cursor-help border-b border-dotted border-slate-300" title={HEATMAP_GLOSSARY.scs}>
-                          Spend Concentration (SCS)
-                        </span>
-                        <span className="font-mono text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded">{reviewOpp.scs_score?.toFixed(1)}</span>
-                      </div>
-                    )}
-                    {reviewOpp.csis_score != null && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-slate-600 cursor-help border-b border-dotted border-slate-300" title={HEATMAP_GLOSSARY.csis}>
-                          Category Spend (CSIS)
-                        </span>
-                        <span className="font-mono text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded">{reviewOpp.csis_score?.toFixed(1)}</span>
-                      </div>
-                    )}
-                    {reviewOpp.sas_score != null && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-slate-600 cursor-help border-b border-dotted border-slate-300" title={HEATMAP_GLOSSARY.sas}>
-                          Strategic Alignment (SAS)
-                        </span>
-                        <span className="font-mono text-sm font-semibold bg-slate-100 px-2 py-0.5 rounded">{reviewOpp.sas_score?.toFixed(1)}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Context & Artifacts */}
-                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
+              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-slate-50 to-slate-100 rounded-bl-full border-l border-b border-slate-100"></div>
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2 relative z-10">Supporting Artifacts</p>
                   <ul className="space-y-3 relative z-10">
@@ -1722,7 +1816,6 @@ export default function HeatmapPriorityPage() {
                       <span className="underline decoration-slate-200 underline-offset-2">Supplier_QBR_Notes.docx</span>
                     </li>
                   </ul>
-                </div>
               </div>
 
               {/* Human Feedback Section + History */}

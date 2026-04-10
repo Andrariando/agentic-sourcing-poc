@@ -77,6 +77,17 @@ type ArtifactPackSummaryRow = {
   is_latest?: boolean;
 };
 
+type DocumentCenterRow = {
+  id: string;
+  filename: string;
+  file_type?: string;
+  document_type?: string;
+  source: string;
+  updated_at?: string;
+  pack_id?: string;
+  artifact_count?: number;
+};
+
 function getFriendlyArtifactSourceName(agentName?: string): string {
   const raw = (agentName || "").trim();
   if (!raw) return "ProcuraBot run";
@@ -241,7 +252,14 @@ export default function CaseProcuraBotPage() {
   const [caseDetails, setCaseDetails] = useState<any>(null);
   const [caseError, setCaseError] = useState<string | null>(null);
   const [caseLoading, setCaseLoading] = useState(true);
-  const [documents, setDocuments] = useState<any[]>([]);
+  const [documentsCenter, setDocumentsCenter] = useState<{
+    uploads: DocumentCenterRow[];
+    internal_references: DocumentCenterRow[];
+    generated_outputs: DocumentCenterRow[];
+  }>({ uploads: [], internal_references: [], generated_outputs: [] });
+  const [documentsTab, setDocumentsTab] = useState<"uploads" | "generated" | "internal">("uploads");
+  const [documentsQuery, setDocumentsQuery] = useState("");
+  const [documentsTypeFilter, setDocumentsTypeFilter] = useState<"all" | "pdf" | "docx" | "xlsx" | "bundle" | "other">("all");
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
   const [chatFiles, setChatFiles] = useState<File[]>([]);
@@ -328,22 +346,24 @@ export default function CaseProcuraBotPage() {
       }
     }
     
-    // 2. Fetch Documents
-    async function fetchDocs() {
+  // 2. Fetch Documents center
+    async function fetchDocsCenter() {
       try {
-        const url = `${getApiBaseUrl()}/api/documents`;
+        const url = `${getApiBaseUrl()}/api/cases/${caseId}/documents/center`;
         const res = await apiFetch(url);
         const data = await res.json();
-        if (data.documents) {
-            setDocuments(data.documents);
-        }
+        setDocumentsCenter({
+          uploads: Array.isArray(data.uploads) ? data.uploads : [],
+          internal_references: Array.isArray(data.internal_references) ? data.internal_references : [],
+          generated_outputs: Array.isArray(data.generated_outputs) ? data.generated_outputs : [],
+        });
       } catch (err) {
-        console.error("Failed to fetch documents:", err);
+        console.error("Failed to fetch document center:", err);
       }
     }
 
     fetchCase(false);
-    fetchDocs();
+    fetchDocsCenter();
     const interval = setInterval(() => fetchCase(true), 5000);
     return () => clearInterval(interval);
   }, [caseId]);
@@ -418,10 +438,6 @@ export default function CaseProcuraBotPage() {
     } finally {
       setIsTyping(false);
     }
-  };
-
-  const handleDocumentClick = (filename: string) => {
-     alert(`Feature coming soon: Download/Preview for ${filename}`);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -537,9 +553,6 @@ export default function CaseProcuraBotPage() {
   const topFindings = keyFindings.slice(0, 3);
   const focus = caseDetails?.copilot_focus;
   const suggestedChatPrompts: string[] = (focus?.suggested_chat_prompts as string[]) || [];
-  const artifactPackSummaries: ArtifactPackSummaryRow[] = Array.isArray(caseDetails?.artifact_pack_summaries)
-    ? caseDetails.artifact_pack_summaries
-    : [];
   const perfInsight = hasLiveCase
     ? getMockCasePerformanceInsight({
         caseId,
@@ -557,6 +570,46 @@ export default function CaseProcuraBotPage() {
     poolFromCase.length > 0 ? poolFromCase : legacyAgentShortlist;
   const dtp02ShortlistRows: Dtp02ShortlistRow[] = [...dtp02ShortlistBase, ...demoAddedShortlistRows];
   const showDtp02ShortlistCard = hasLiveCase && displayStage === "DTP-02";
+  const activeDocuments =
+    documentsTab === "uploads"
+      ? documentsCenter.uploads
+      : documentsTab === "generated"
+        ? documentsCenter.generated_outputs
+        : documentsCenter.internal_references;
+  const filteredDocuments = activeDocuments.filter((d) => {
+    const q = documentsQuery.trim().toLowerCase();
+    const name = (d.filename || "").toLowerCase();
+    const docType = (d.document_type || "").toLowerCase();
+    const fileType = (d.file_type || "").toLowerCase();
+    const qPass = !q || name.includes(q) || docType.includes(q) || fileType.includes(q);
+    if (!qPass) return false;
+    if (documentsTypeFilter === "all") return true;
+    if (documentsTypeFilter === "other") {
+      return !["pdf", "docx", "xlsx", "xls", "bundle"].includes(fileType);
+    }
+    if (documentsTypeFilter === "xlsx") return fileType === "xlsx" || fileType === "xls";
+    return fileType === documentsTypeFilter;
+  });
+  const decisionAuditRows: Array<{ stage: string; question: string; answer: string; by: string; when?: string }> = [];
+  if (caseDetails?.human_decision && typeof caseDetails.human_decision === "object") {
+    Object.entries(caseDetails.human_decision as Record<string, unknown>).forEach(([stageKey, rowVal]) => {
+      if (!rowVal || typeof rowVal !== "object") return;
+      Object.entries(rowVal as Record<string, unknown>).forEach(([qKey, ansVal]) => {
+        if (!ansVal || typeof ansVal !== "object") return;
+        const ansObj = ansVal as Record<string, unknown>;
+        const answer = ansObj.answer != null ? String(ansObj.answer) : "";
+        if (!answer) return;
+        decisionAuditRows.push({
+          stage: stageKey,
+          question: qKey.replaceAll("_", " "),
+          answer,
+          by: ansObj.decided_by_role != null ? String(ansObj.decided_by_role) : "User",
+          when: ansObj.timestamp != null ? String(ansObj.timestamp) : undefined,
+        });
+      });
+    });
+  }
+  decisionAuditRows.sort((a, b) => (b.when || "").localeCompare(a.when || ""));
 
   const addDemoOptionalSupplier = () => {
     const name = optionalSupplierName.trim();
@@ -853,113 +906,184 @@ export default function CaseProcuraBotPage() {
             </motion.div>
           )}
 
-          <details className="bg-white rounded-xl border border-slate-200 shadow-sm group">
-            <summary className="cursor-pointer list-none flex items-center gap-2 px-4 py-3 font-bold text-sm text-slate-800 border-b border-slate-100">
-              <ChevronRight className="w-4 h-4 text-slate-400 group-open:rotate-90 transition-transform" />
-              <FileText className="w-4 h-4 text-slate-400" />
-              Supporting documents ({documents.length})
-            </summary>
-            <div className="p-4 pt-0">
-              <ul className="space-y-2">
-                {documents.length > 0 ? (
-                  documents.map((doc, idx) => {
-                    const ext = doc.filename.split(".").pop()?.toUpperCase() || "DOC";
-                    const isPdf = ext === "PDF";
-                    return (
-                      <li key={idx} onClick={() => handleDocumentClick(doc.filename)} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg cursor-pointer text-sm">
-                        <span className={`font-bold text-[10px] px-2 py-0.5 rounded ${isPdf ? "bg-red-50 text-red-600" : "bg-green-50 text-green-700"}`}>{ext}</span>
-                        <span className="flex-1 truncate ml-2 text-sponsor-blue">{doc.filename}</span>
-                      </li>
-                    );
-                  })
-                ) : (
-                  <li className="text-sm text-slate-400 italic py-2">None yet.</li>
-                )}
-                <li className="relative border-2 border-dashed border-slate-200 rounded-lg p-2 mt-2">
-                  <input type="file" onChange={handleFileUpload} disabled={isUploading || !hasLiveCase} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed" />
-                  <span className="text-sm text-slate-500">{isUploading ? "Uploading…" : "Upload PDF / XLSX"}</span>
-                </li>
-              </ul>
-            </div>
-          </details>
-
           {hasLiveCase && (
             <motion.div variants={item} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
               <div className="bg-slate-50 border-b border-slate-200 p-4 flex flex-wrap items-center justify-between gap-3">
                 <h3 className="text-slate-800 font-bold text-sm flex items-center gap-2">
-                  <Download className="w-4 h-4 text-sponsor-blue" />
-                  Work products
+                  <FileText className="w-4 h-4 text-sponsor-blue" />
+                  Case documents
                 </h3>
-                <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 bg-white border border-slate-200 px-2 py-1 rounded">
-                  Export draft bundle
-                </span>
+                <div className="flex gap-1 rounded-lg border border-slate-200 bg-white p-1">
+                  {([
+                    ["uploads", "Case uploads"],
+                    ["generated", "Generated outputs"],
+                    ["internal", "Internal references"],
+                  ] as const).map(([k, lbl]) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setDocumentsTab(k)}
+                      className={`px-2.5 py-1.5 rounded text-[11px] font-semibold inline-flex items-center gap-1.5 ${
+                        documentsTab === k ? "bg-sponsor-blue text-white" : "text-slate-600 hover:bg-slate-100"
+                      }`}
+                    >
+                      <span>{lbl}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${documentsTab === k ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"}`}>
+                        {k === "uploads" ? documentsCenter.uploads.length : k === "generated" ? documentsCenter.generated_outputs.length : documentsCenter.internal_references.length}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="p-4 space-y-3">
-                <p className="text-sm text-slate-600 leading-relaxed">
-                  Download case outputs—RFx sections, strategy text, and suggested next steps—as one{" "}
-                  <span className="font-semibold text-slate-800">Markdown</span>, <span className="font-semibold text-slate-800">Word</span>, or{" "}
-                  <span className="font-semibold text-slate-800">PDF</span> file. If this area is empty, ask ProcuraBot to create a draft first.
-                </p>
+                <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                  <input
+                    type="text"
+                    value={documentsQuery}
+                    onChange={(e) => setDocumentsQuery(e.target.value)}
+                    placeholder="Search files..."
+                    className="flex-1 rounded-md border border-slate-200 px-2.5 py-2 text-sm text-slate-700 placeholder:text-slate-400"
+                  />
+                  <select
+                    value={documentsTypeFilter}
+                    onChange={(e) => setDocumentsTypeFilter(e.target.value as typeof documentsTypeFilter)}
+                    className="rounded-md border border-slate-200 px-2.5 py-2 text-sm text-slate-700 bg-white"
+                  >
+                    <option value="all">All types</option>
+                    <option value="pdf">PDF</option>
+                    <option value="docx">DOCX</option>
+                    <option value="xlsx">XLSX</option>
+                    <option value="bundle">Bundle</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
                 {packExportError ? (
                   <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{packExportError}</p>
                 ) : null}
-                {artifactPackSummaries.length === 0 ? (
-                  <p className="text-sm text-slate-400 italic py-1">No files yet. Ask ProcuraBot to draft an RFx first.</p>
-                ) : (
+                {documentsTab === "uploads" && (
+                  <ul className="space-y-2">
+                    {filteredDocuments.length === 0 ? (
+                      <li className="text-sm text-slate-500 italic">No uploads yet. Attach files in chat to add context.</li>
+                    ) : (
+                      filteredDocuments.map((doc) => (
+                        <li key={doc.id} className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/70 p-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-slate-900 truncate">{doc.filename}</p>
+                            <p className="text-[11px] text-slate-500">{doc.document_type || "Document"}{doc.updated_at ? ` · ${doc.updated_at}` : ""}</p>
+                          </div>
+                          <span className="text-[10px] font-bold uppercase tracking-wide bg-white border border-slate-200 px-2 py-1 rounded text-slate-600">
+                            {doc.file_type || "file"}
+                          </span>
+                        </li>
+                      ))
+                    )}
+                  </ul>
+                )}
+                {documentsTab === "internal" && (
+                  <ul className="space-y-2">
+                    {filteredDocuments.length === 0 ? (
+                      <li className="text-sm text-slate-500 italic">No internal references found for this case yet.</li>
+                    ) : (
+                      filteredDocuments.map((doc) => (
+                        <li key={doc.id} className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/70 p-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-slate-900 truncate">{doc.filename}</p>
+                            <p className="text-[11px] text-slate-500">
+                              {doc.document_type || "Reference"}
+                              {doc.updated_at ? ` · ${doc.updated_at}` : ""}
+                            </p>
+                          </div>
+                          <span className="text-[10px] font-bold uppercase tracking-wide bg-blue-50 border border-blue-200 px-2 py-1 rounded text-blue-700">
+                            Internal
+                          </span>
+                        </li>
+                      ))
+                    )}
+                  </ul>
+                )}
+                {documentsTab === "generated" && (
                   <ul className="space-y-3">
-                    {artifactPackSummaries.map((row) => (
-                      <li
-                        key={row.pack_id}
-                        className="rounded-lg border border-slate-100 bg-slate-50/80 p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
-                      >
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-slate-900 truncate">
-                            {getFriendlyArtifactSourceName(row.agent_name)}{" "}
-                            {row.is_latest ? (
-                              <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded ml-1">
-                                Latest
-                              </span>
-                            ) : null}
-                          </p>
-                          <p className="text-[11px] text-slate-500 font-mono truncate mt-0.5">{row.pack_id}</p>
-                          <p className="text-[11px] text-slate-500 mt-1">
-                            {row.artifact_count != null ? `${row.artifact_count} file(s)` : "—"}
-                            {row.created_at ? ` · ${row.created_at}` : ""}
-                          </p>
-                        </div>
-                        <div className="flex flex-wrap gap-2 shrink-0">
-                          {(["md", "docx", "pdf"] as const).map((fmt) => (
-                            <button
-                              key={fmt}
-                              type="button"
-                              disabled={packExportLoading !== null}
-                              onClick={async () => {
-                                setPackExportError(null);
-                                const key = `${row.pack_id}-${fmt}`;
-                                setPackExportLoading(key);
-                                try {
-                                  await downloadArtifactPackExport(caseId, row.pack_id, fmt);
-                                } catch (e) {
-                                  setPackExportError(e instanceof Error ? e.message : "Export failed.");
-                                } finally {
-                                  setPackExportLoading(null);
-                                }
-                              }}
-                              className="inline-flex items-center justify-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-                            >
-                              {packExportLoading === `${row.pack_id}-${fmt}` ? "…" : <Download className="w-3 h-3" />}
-                              {fmt}
-                            </button>
-                          ))}
-                        </div>
-                      </li>
-                    ))}
+                    {filteredDocuments.length === 0 ? (
+                      <li className="text-sm text-slate-500 italic">No generated outputs yet. Ask ProcuraBot to draft an RFx first.</li>
+                    ) : (
+                      filteredDocuments.map((row) => (
+                        <li
+                          key={row.id}
+                          className="rounded-lg border border-slate-100 bg-slate-50/80 p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-slate-900 truncate">
+                              {getFriendlyArtifactSourceName(row.source)}
+                            </p>
+                            <p className="text-[11px] text-slate-500 font-mono truncate mt-0.5">{row.pack_id || row.id}</p>
+                            <p className="text-[11px] text-slate-500 mt-1">
+                              {row.artifact_count != null ? `${row.artifact_count} file(s)` : "—"}
+                              {row.updated_at ? ` · ${row.updated_at}` : ""}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-2 shrink-0">
+                            {(["md", "docx", "pdf"] as const).map((fmt) => (
+                              <button
+                                key={fmt}
+                                type="button"
+                                disabled={packExportLoading !== null || !row.pack_id}
+                                onClick={async () => {
+                                  if (!row.pack_id) return;
+                                  setPackExportError(null);
+                                  const key = `${row.pack_id}-${fmt}`;
+                                  setPackExportLoading(key);
+                                  try {
+                                    await downloadArtifactPackExport(caseId, row.pack_id, fmt);
+                                  } catch (e) {
+                                    setPackExportError(e instanceof Error ? e.message : "Export failed.");
+                                  } finally {
+                                    setPackExportLoading(null);
+                                  }
+                                }}
+                                className="inline-flex items-center justify-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                              >
+                                {packExportLoading === `${row.pack_id}-${fmt}` ? "…" : <Download className="w-3 h-3" />}
+                                {fmt}
+                              </button>
+                            ))}
+                          </div>
+                        </li>
+                      ))
+                    )}
                   </ul>
                 )}
               </div>
             </motion.div>
           )}
 
+
+          <motion.div variants={item} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
+              <h3 className="text-slate-800 font-bold text-[15px] flex items-center gap-2">
+                <Clock className="w-4 h-4 text-sponsor-blue" />
+                Decision audit
+              </h3>
+            </div>
+            <div className="p-4">
+              {decisionAuditRows.length === 0 ? (
+                <p className="text-sm text-slate-500 italic">No recorded decisions yet for this case.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {decisionAuditRows.slice(0, 12).map((r, idx) => (
+                    <li key={`${r.stage}-${r.question}-${idx}`} className="rounded-lg border border-slate-100 bg-slate-50/70 p-3">
+                      <p className="text-xs text-slate-500">
+                        {r.stage} · {r.when || "Time not captured"}
+                      </p>
+                      <p className="text-sm text-slate-800 mt-1">
+                        <span className="font-semibold capitalize">{r.question}:</span> {r.answer}
+                      </p>
+                      <p className="text-xs text-slate-500 mt-1">By: {r.by}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </motion.div>
 
           <motion.div variants={item} className="bg-white rounded-xl shadow-sm border-2 border-slate-200 overflow-hidden">
             <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">

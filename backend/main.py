@@ -38,7 +38,7 @@ from backend.services.docx_text import extract_text_from_docx_bytes
 from backend.services.working_document_revision import revise_working_document_text
 from backend.services.chat_service import get_chat_service
 from backend.services.ingestion_service import get_ingestion_service
-from backend.persistence.models import CaseState, S2CProcuraBotFeedback
+from backend.persistence.models import CaseState, S2CProcuraBotFeedback, DocumentRecord, ArtifactPack
 from backend.infrastructure.storage_providers import initialize_storage_backends, get_app_db
 from sqlmodel import select, func
 
@@ -234,6 +234,115 @@ async def get_case(case_id: str):
         raise HTTPException(status_code=404, detail="Case not found")
     
     return case
+
+
+@app.get("/api/cases/{case_id}/documents/center")
+async def get_case_documents_center(case_id: str):
+    """
+    Unified document center for case UI:
+    - uploads: files uploaded directly for this case
+    - internal_references: relevant internal docs by category/supplier
+    - generated_outputs: artifact pack summaries for this case
+    """
+    case_service = get_case_service()
+    case = case_service.get_case(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    session = get_app_db().get_db_session()
+    try:
+        # 1) Files uploaded for this case
+        case_docs = session.exec(
+            select(DocumentRecord).where(DocumentRecord.case_id == case_id)
+        ).all()
+        uploads = [
+            {
+                "id": d.document_id,
+                "filename": d.filename,
+                "file_type": d.file_type,
+                "document_type": d.document_type,
+                "source": "You",
+                "updated_at": d.ingested_at,
+                "category_id": d.category_id,
+                "supplier_id": d.supplier_id,
+            }
+            for d in case_docs
+        ]
+
+        # 2) Internal references relevant by category/supplier (excluding case uploads)
+        internal: List[DocumentRecord] = []
+        if case.category_id or case.supplier_id:
+            if case.category_id and case.supplier_id:
+                stmt = select(DocumentRecord).where(
+                    DocumentRecord.case_id != case_id,
+                    (DocumentRecord.category_id == case.category_id)
+                    | (DocumentRecord.supplier_id == case.supplier_id),
+                )
+                internal = session.exec(stmt).all()
+            elif case.category_id:
+                stmt = select(DocumentRecord).where(
+                    DocumentRecord.case_id != case_id,
+                    DocumentRecord.category_id == case.category_id,
+                )
+                internal = session.exec(stmt).all()
+            else:
+                stmt = select(DocumentRecord).where(
+                    DocumentRecord.case_id != case_id,
+                    DocumentRecord.supplier_id == case.supplier_id,
+                )
+                internal = session.exec(stmt).all()
+
+        internal_references = [
+            {
+                "id": d.document_id,
+                "filename": d.filename,
+                "file_type": d.file_type,
+                "document_type": d.document_type,
+                "source": "Internal",
+                "updated_at": d.ingested_at,
+                "category_id": d.category_id,
+                "supplier_id": d.supplier_id,
+            }
+            for d in internal[:20]
+        ]
+
+        # 3) Generated outputs from artifact packs
+        packs = session.exec(
+            select(ArtifactPack).where(ArtifactPack.case_id == case_id)
+        ).all()
+        generated_outputs = []
+        for p in packs:
+            artifact_ids = []
+            if p.artifact_ids:
+                try:
+                    artifact_ids = json.loads(p.artifact_ids)
+                except Exception:
+                    artifact_ids = []
+            generated_outputs.append(
+                {
+                    "id": p.pack_id,
+                    "filename": f"{(p.agent_name or 'ProcuraBot').strip()} output bundle",
+                    "file_type": "bundle",
+                    "document_type": "Generated Output",
+                    "source": "ProcuraBot",
+                    "updated_at": p.created_at,
+                    "artifact_count": len(artifact_ids) if isinstance(artifact_ids, list) else 0,
+                    "pack_id": p.pack_id,
+                    "agent_name": p.agent_name,
+                }
+            )
+
+        uploads.sort(key=lambda x: x.get("updated_at") or "", reverse=True)
+        internal_references.sort(key=lambda x: x.get("updated_at") or "", reverse=True)
+        generated_outputs.sort(key=lambda x: x.get("updated_at") or "", reverse=True)
+
+        return {
+            "uploads": uploads,
+            "internal_references": internal_references,
+            "generated_outputs": generated_outputs,
+        }
+    finally:
+        session.close()
 
 
 @app.get("/api/suppliers", response_model=SupplierPoolResponse)
