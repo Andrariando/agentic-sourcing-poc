@@ -144,10 +144,13 @@ function getBreakdownRows(o: HeatmapOpportunityLike): {
   return { rows: fallbackRows(o), learningNote: undefined, fromParse: false };
 }
 
-function MetricStrengthBar({ score }: { score: number }) {
+function MetricStrengthBar({ score, slim }: { score: number; slim?: boolean }) {
   const pct = Math.min(100, Math.max(0, (score / 10) * 100));
   return (
-    <div className="h-2 rounded-full bg-slate-100 overflow-hidden" title={`Strength ${score.toFixed(1)} / 10`}>
+    <div
+      className={`${slim ? "h-1.5" : "h-2"} rounded-full bg-slate-100 overflow-hidden`}
+      title={`Strength ${score.toFixed(1)} / 10`}
+    >
       <div
         className="h-full rounded-full bg-gradient-to-r from-slate-400 to-sponsor-blue transition-[width] duration-300"
         style={{ width: `${pct}%` }}
@@ -178,10 +181,32 @@ export function HeatmapScoreBreakdown({
   const sumPoints = rows.reduce((s, r) => s + r.points, 0);
   const maxPts = sorted.length ? sorted[0].points : 0;
 
-  const tableCls = compact
-    ? "text-[11px] leading-tight"
-    : "text-sm";
-  const headCls = compact ? "text-[9px]" : "text-xs";
+  const tableCls = "text-sm leading-tight";
+  const headCls = "text-xs";
+
+  /** Matrix tooltip: bars only — never the raw engine string (easy to spot vs old UI). */
+  const compactVisualBlock = (
+    <div className="space-y-2 pt-0.5" data-heatmap-tooltip="score-breakdown-v2">
+      <p className="text-[10px] font-semibold text-slate-700">What drove this score</p>
+      {sorted.slice(0, 5).map((r) => (
+        <div key={r.code} className="space-y-0.5">
+          <div className="flex justify-between gap-2 text-[10px] leading-tight">
+            <span className="text-slate-700 min-w-0 truncate" title={HEATMAP_GLOSSARY[r.glossaryKey]}>
+              <span className="font-mono text-slate-500">{r.code}</span> · {r.label}
+            </span>
+            <span className="shrink-0 font-mono font-semibold text-slate-900 tabular-nums">{r.points.toFixed(2)}</span>
+          </div>
+          <MetricStrengthBar score={r.score} slim />
+        </div>
+      ))}
+      {learningNote ? (
+        <p className="text-[9px] text-amber-900 bg-amber-50 border border-amber-100 rounded-md px-2 py-1 leading-snug">
+          <span className="font-semibold">Learning: </span>
+          {learningNote.length > 140 ? `${learningNote.slice(0, 140)}…` : learningNote}
+        </p>
+      ) : null}
+    </div>
+  );
 
   const tableBlock = (
     <div className={`rounded-lg border border-slate-200 overflow-hidden bg-white ${compact ? "" : "shadow-sm"}`}>
@@ -288,11 +313,7 @@ export function HeatmapScoreBreakdown({
           mattered most.
         </p>
       )}
-      {compact && (
-        <p className="text-[10px] uppercase tracking-wide text-slate-400 font-medium">Weighted score mix</p>
-      )}
-
-      {compact ? tableBlock : visualBlock}
+      {compact ? compactVisualBlock : visualBlock}
 
       {!compact && (
         <details className="rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 group">
@@ -331,8 +352,8 @@ export function HeatmapScoreBreakdown({
         </p>
       )}
 
-      {learningNote && (
-        <p className={`text-slate-600 ${compact ? "text-[10px] leading-snug" : "text-sm leading-snug"} border border-amber-200 bg-amber-50 rounded-lg px-3 py-2`}>
+      {learningNote && !compact && (
+        <p className="text-slate-600 text-sm leading-snug border border-amber-200 bg-amber-50 rounded-lg px-3 py-2">
           <span className="font-semibold text-amber-900">Learning note: </span>
           {learningNote}
         </p>

@@ -65,7 +65,9 @@ function HeatmapMatrixScatterDot(props: {
   if (cx == null || cy == null) return null;
   const raw = Number(payload?.total_score);
   const score = Number.isFinite(raw) ? Math.max(0, Math.min(10, raw)) : 0;
-  const r = 6 + (score / 10) * 16;
+  // Wider radius range + slight curve so nearby scores (e.g. 8.2 vs 9.1) still read differently on the chart.
+  const t = score / 10;
+  const r = 5 + t ** 1.35 * 22;
   const fill = matrixScatterFillForTier(payload?.tier);
   return (
     <circle
