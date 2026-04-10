@@ -78,8 +78,10 @@ export default function WelcomePage() {
         </section>
 
         <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-          <h2 className="text-lg font-semibold text-slate-900">Interactive flow</h2>
-          <p className="text-sm text-slate-500 mt-1">Click each step to see how the systems connect.</p>
+          <h2 className="text-lg font-semibold text-slate-900">Signal-to-execution path</h2>
+          <p className="text-sm text-slate-500 mt-1">
+            Select a lifecycle phase to see how work moves from integrated signals through prioritization into S2C execution.
+          </p>
           <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
             {FLOW_STEPS.map((step) => (
               <button
