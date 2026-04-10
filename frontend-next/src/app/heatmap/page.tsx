@@ -1345,10 +1345,27 @@ export default function HeatmapPriorityPage() {
               <div className="min-w-0">
                 <ProcuraBotIdentity subtitle={`Heatmap workspace · ${PROCURABOT_BRAND.tagline}`} />
                 <p className="text-sm text-slate-500 mt-1 leading-relaxed">
-                  Optional. Ask how rows are ranked (scores stay as shown), check whether your notes fit category policy,
-                  or preview updates to category sourcing rules — nothing here overwrites the heatmap until you apply
-                  changes elsewhere.
+                  Optional helper for explanations, policy checks, and draft category-rule updates.
                 </p>
+                <details className="group mt-3 rounded-lg border border-slate-200 bg-white/80">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-slate-700 [&::-webkit-details-marker]:hidden">
+                    <span>What can I do here?</span>
+                    <ChevronDown
+                      className="h-4 w-4 shrink-0 text-slate-500 transition-transform duration-200 group-open:rotate-180"
+                      aria-hidden
+                    />
+                  </summary>
+                  <div className="border-t border-slate-200 px-3 py-2 text-xs text-slate-600 space-y-1.5 leading-relaxed">
+                    <ul className="list-disc list-inside space-y-1">
+                      <li>Ask why a row is ranked where it is (scores stay as shown).</li>
+                      <li>Check whether your review notes match preferred-supplier policy.</li>
+                      <li>Draft updates to category cards, then apply them when ready.</li>
+                    </ul>
+                    <p className="text-slate-500">
+                      Nothing changes the heatmap until you click an apply action.
+                    </p>
+                  </div>
+                </details>
               </div>
               <button
                 type="button"
@@ -1552,36 +1569,6 @@ export default function HeatmapPriorityPage() {
 
               {copilotTab === "policy" && (
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-4">
-                  <div className="space-y-2 text-xs leading-relaxed">
-                    <p className="text-slate-600">
-                      <strong className="text-slate-800">What this does:</strong> Paste reviewer or sourcing rationale and see whether
-                      the wording aligns with this category’s official preferred-supplier rules in{" "}
-                      <code className="text-slate-700">category_cards.json</code>. Useful before you publish notes, escalate, or file
-                      audit text—so narrative matches the policy the heatmap uses.
-                    </p>
-                    <p className="font-medium text-slate-700">How to use it</p>
-                    <ol className="list-decimal list-inside space-y-1 text-slate-600">
-                      <li>
-                        Choose the <strong className="font-medium text-slate-700">category</strong> whose policy block should be used.
-                      </li>
-                      <li>
-                        Optionally add <strong className="font-medium text-slate-700">supplier</strong> and{" "}
-                        <strong className="font-medium text-slate-700">current priority</strong> (e.g. Medium) so the check can use
-                        that context.
-                      </li>
-                      <li>
-                        Paste the full <strong className="font-medium text-slate-700">feedback or rationale</strong> (at least a short paragraph; very short snippets are rejected).
-                      </li>
-                      <li>
-                        Click <strong className="font-medium text-slate-700">Check vs policy</strong> and read the summary. Treat the output as a draft review aid, not a formal decision.
-                      </li>
-                    </ol>
-                    <p className="text-slate-500">
-                      <strong className="text-slate-600">Suggestion only</strong> — does not change scores, priority bands, or any files. Full
-                      analysis needs <code className="text-slate-600">OPENAI_API_KEY</code> on the server; if it’s missing, you’ll see a
-                      message that automatic checks aren’t available.
-                    </p>
-                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-slate-600 mb-1">Category</label>
@@ -1625,6 +1612,28 @@ export default function HeatmapPriorityPage() {
                       placeholder="Paste reviewer rationale to check against preferred-supplier policy…"
                     />
                   </div>
+                  <details className="group w-full rounded-lg border border-slate-200 bg-slate-50/90 text-left">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-slate-800 [&::-webkit-details-marker]:hidden">
+                      <span>How to use policy check</span>
+                      <ChevronDown className="h-4 w-4 shrink-0 text-slate-500 transition-transform duration-200 group-open:rotate-180" aria-hidden />
+                    </summary>
+                    <div className="border-t border-slate-200 px-4 pb-4 pt-3 text-xs leading-relaxed space-y-2">
+                      <p className="text-slate-600">
+                        <strong className="text-slate-800">What this does:</strong> Checks whether your reviewer/sourcing narrative aligns
+                        with preferred-supplier rules in <code className="text-slate-700">category_cards.json</code>.
+                      </p>
+                      <ol className="list-decimal list-inside space-y-1 text-slate-600">
+                        <li>Pick the category policy block to evaluate against.</li>
+                        <li>Optionally add supplier and current priority for better context.</li>
+                        <li>Paste a full rationale paragraph (very short snippets are rejected).</li>
+                        <li>Click <strong className="font-medium text-slate-700">Check vs policy</strong> and review the summary.</li>
+                      </ol>
+                      <p className="text-slate-500">
+                        <strong className="text-slate-600">Suggestion only:</strong> this does not change scores, tiers, or files.
+                        Full analysis requires <code className="text-slate-600">OPENAI_API_KEY</code> on the server.
+                      </p>
+                    </div>
+                  </details>
                   <button
                     type="button"
                     onClick={() => void submitPolicyCheck()}
@@ -1658,13 +1667,6 @@ export default function HeatmapPriorityPage() {
 
               {copilotTab === "cards" && (
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-3">
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    Upload a policy document (plain text) or describe changes below. The system extracts a structured patch into{" "}
-                    <code className="text-slate-600">data/heatmap/category_cards.json</code>, then you can{" "}
-                    <strong>apply and re-run scoring</strong>. That file holds preferred-supplier rules and optional{" "}
-                    <strong>scoring_mix</strong> (human-readable weight labels per category for new requests vs renewals — see{" "}
-                    <code className="text-slate-600">_documentation</code> at the top of the JSON).
-                  </p>
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">Category</label>
                     <select
@@ -1705,6 +1707,34 @@ export default function HeatmapPriorityPage() {
                       placeholder="e.g. Add Acme Corp as preferred in Software and set default to allowed…"
                     />
                   </div>
+                  <details className="group w-full rounded-lg border border-slate-200 bg-slate-50/90 text-left">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-slate-800 [&::-webkit-details-marker]:hidden">
+                      <span>How patch assist works</span>
+                      <ChevronDown className="h-4 w-4 shrink-0 text-slate-500 transition-transform duration-200 group-open:rotate-180" aria-hidden />
+                    </summary>
+                    <div className="border-t border-slate-200 px-4 pb-4 pt-3 text-xs leading-relaxed space-y-2">
+                      <p className="text-slate-600">
+                        Upload a policy document (plain text) or describe changes below. The system drafts a structured patch for{" "}
+                        <code className="text-slate-700">data/heatmap/category_cards.json</code>.
+                      </p>
+                      <ul className="list-disc list-inside space-y-1 text-slate-600">
+                        <li>
+                          <strong className="font-medium text-slate-700">Suggest patch (LLM)</strong> drafts changes (no file write yet).
+                        </li>
+                        <li>
+                          <strong className="font-medium text-slate-700">Apply patch &amp; re-score</strong> writes the JSON and starts the
+                          batch scoring pipeline.
+                        </li>
+                        <li>
+                          <strong className="font-medium text-slate-700">scoring_mix</strong> can override weights per category for new
+                          requests vs renewals (see <code className="text-slate-600">_documentation</code> in the JSON).
+                        </li>
+                      </ul>
+                      <p className="text-slate-500">
+                        Tip: Intake previews pick up changes immediately; batch rows refresh after the run completes.
+                      </p>
+                    </div>
+                  </details>
                   <button
                     type="button"
                     onClick={() => void submitAssistCategory()}
