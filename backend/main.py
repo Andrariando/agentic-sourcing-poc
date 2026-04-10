@@ -7,15 +7,19 @@ All business logic, agents, and data access go through this API.
 import os
 import json
 import base64
+import io
+import re
 from io import BytesIO
-from typing import Optional, List
+from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime
 from contextlib import asynccontextmanager
+from uuid import uuid4
+import threading
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -39,7 +43,7 @@ from backend.services.working_document_revision import revise_working_document_t
 from backend.services.chat_service import get_chat_service
 from backend.services.ingestion_service import get_ingestion_service
 from backend.persistence.models import CaseState, S2CProcuraBotFeedback, DocumentRecord, ArtifactPack
-from backend.infrastructure.storage_providers import initialize_storage_backends, get_app_db
+from backend.infrastructure.storage_providers import initialize_storage_backends, get_app_db, get_heatmap_db
 from sqlmodel import select, func
 
 # Import shared schemas
@@ -171,8 +175,268 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from backend.heatmap.heatmap_router import heatmap_router
+from backend.heatmap.heatmap_router import heatmap_router, _start_heatmap_pipeline_background
+from backend.heatmap.persistence.heatmap_models import Opportunity
+from backend.heatmap.services.intake_scoring import persist_intake_opportunity
 app.include_router(heatmap_router, prefix="/api/heatmap", tags=["heatmap"])
+
+
+ALLOWED_SYSTEM1_UPLOAD_EXTENSIONS = {".pdf", ".docx", ".txt", ".csv", ".xls", ".xlsx"}
+_system1_upload_jobs: Dict[str, Dict[str, Any]] = {}
+_system1_upload_lock = threading.Lock()
+
+
+class System1UploadPreviewRow(BaseModel):
+    row_id: str
+    row_type: Literal["renewal", "new_business"]
+    source_filename: str
+    source_kind: Literal["structured", "document"]
+    confidence: float = 0.7
+    category: str
+    subcategory: Optional[str] = None
+    supplier_name: Optional[str] = None
+    contract_id: Optional[str] = None
+    request_title: Optional[str] = None
+    estimated_spend_usd: float = 0.0
+    implementation_timeline_months: Optional[float] = None
+    months_to_expiry: Optional[float] = None
+    preferred_supplier_status: Optional[str] = None
+    rss_score: Optional[float] = None
+    scs_score: Optional[float] = None
+    sas_score: Optional[float] = None
+    warnings: List[str] = Field(default_factory=list)
+    valid_for_approval: bool = True
+
+
+class System1UploadPreviewResponse(BaseModel):
+    job_id: str
+    status: str
+    total_candidates: int
+    valid_candidates: int
+    candidates: List[System1UploadPreviewRow]
+    parsing_notes: List[str] = Field(default_factory=list)
+
+
+class System1UploadApproveRequest(BaseModel):
+    job_id: str
+    approved_row_ids: List[str]
+    approver_id: str = "human-user"
+
+
+class System1UploadApproveResponse(BaseModel):
+    success: bool
+    job_id: str
+    approved_count: int
+    created_opportunity_ids: List[int]
+    run_triggered: bool
+    message: str
+
+
+class System1UploadJobStatusResponse(BaseModel):
+    job_id: str
+    status: str
+    created_at: str
+    total_candidates: int = 0
+    approved_count: int = 0
+    created_opportunity_ids: List[int] = Field(default_factory=list)
+    run_triggered: bool = False
+    parsing_notes: List[str] = Field(default_factory=list)
+
+
+def _safe_float(raw: Any, default: float = 0.0) -> float:
+    try:
+        if raw is None:
+            return default
+        txt = str(raw).strip().replace(",", "")
+        if not txt:
+            return default
+        return float(txt)
+    except Exception:
+        return default
+
+
+def _safe_opt_float(raw: Any) -> Optional[float]:
+    if raw is None:
+        return None
+    txt = str(raw).strip().replace(",", "")
+    if not txt:
+        return None
+    try:
+        return float(txt)
+    except Exception:
+        return None
+
+
+def _normalize_type(raw: Any, contract_id: Optional[str]) -> str:
+    txt = (str(raw or "")).strip().lower()
+    if contract_id:
+        return "renewal"
+    if "renew" in txt or txt in {"contract", "existing"}:
+        return "renewal"
+    return "new_business"
+
+
+def _normalize_category(raw: Any) -> str:
+    out = (str(raw or "")).strip()
+    return out or "Uncategorized"
+
+
+def _extract_text_for_upload(content: bytes, filename: str) -> str:
+    ext = os.path.splitext(filename)[1].lower()
+    if ext in {".txt", ".csv"}:
+        return content.decode("utf-8", errors="ignore")
+    if ext == ".docx":
+        try:
+            return extract_text_from_docx_bytes(content)
+        except Exception:
+            return ""
+    if ext == ".pdf":
+        try:
+            import PyPDF2
+            reader = PyPDF2.PdfReader(io.BytesIO(content))
+            pages = [p.extract_text() or "" for p in reader.pages]
+            return "\n\n".join(pages).strip()
+        except Exception:
+            return ""
+    return ""
+
+
+def _extract_rows_from_text_with_llm(text: str, filename: str) -> List[Dict[str, Any]]:
+    key = (os.getenv("OPENAI_API_KEY") or "").strip()
+    if not key or not text.strip():
+        return []
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=key)
+        model = os.getenv("SYSTEM1_UPLOAD_EXTRACT_MODEL", "gpt-4o-mini")
+        prompt = f"""
+Extract sourcing opportunities from the uploaded text.
+Return JSON object with key "rows", where each row may contain:
+- row_type: "renewal" or "new_business"
+- category, subcategory, supplier_name
+- contract_id (for renewals), request_title (for new)
+- estimated_spend_usd
+- implementation_timeline_months (for new)
+- months_to_expiry (for renewals)
+- preferred_supplier_status
+- rss_score, scs_score, sas_score (optional numeric 0-10)
+
+Use only information in the text. Skip uncertain rows.
+Text source: {filename}
+"""
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You extract structured procurement opportunities."},
+                {"role": "user", "content": f"{prompt}\n\nTEXT:\n{text[:120000]}"},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.1,
+            max_tokens=2200,
+        )
+        payload = json.loads((resp.choices[0].message.content or "{}").strip() or "{}")
+        rows = payload.get("rows")
+        if isinstance(rows, list):
+            return [r for r in rows if isinstance(r, dict)]
+        return []
+    except Exception:
+        return []
+
+
+def _extract_rows_from_structured_file(content: bytes, filename: str) -> List[Dict[str, Any]]:
+    try:
+        import pandas as pd
+    except Exception:
+        return []
+    ext = os.path.splitext(filename)[1].lower()
+    if ext == ".csv":
+        df = pd.read_csv(io.BytesIO(content))
+    elif ext in {".xls", ".xlsx"}:
+        df = pd.read_excel(io.BytesIO(content))
+    else:
+        return []
+    out: List[Dict[str, Any]] = []
+    for row in df.to_dict(orient="records"):
+        out.append({str(k).strip().lower(): v for k, v in row.items()})
+    return out
+
+
+def _build_preview_row(raw: Dict[str, Any], filename: str, source_kind: str, row_index: int) -> System1UploadPreviewRow:
+    category = _normalize_category(raw.get("category"))
+    contract_id = (str(raw.get("contract_id") or "")).strip() or None
+    row_type = _normalize_type(raw.get("row_type") or raw.get("type"), contract_id)
+    spend = _safe_float(
+        raw.get("estimated_spend_usd")
+        or raw.get("estimated_spend")
+        or raw.get("spend")
+        or raw.get("contract_value")
+        or raw.get("annual_spend"),
+        0.0,
+    )
+    months_to_expiry = _safe_opt_float(raw.get("months_to_expiry") or raw.get("expiry_months"))
+    impl_months = _safe_opt_float(
+        raw.get("implementation_timeline_months")
+        or raw.get("implementation_months")
+        or raw.get("timeline_months")
+    )
+    supplier_name = (str(raw.get("supplier_name") or raw.get("supplier") or "")).strip() or None
+    warnings: List[str] = []
+    if spend <= 0:
+        warnings.append("Missing or non-positive spend")
+    if row_type == "renewal" and months_to_expiry is None:
+        warnings.append("Renewal row missing months_to_expiry (will default conservatively)")
+    if row_type == "new_business" and impl_months is None:
+        warnings.append("New business row missing implementation_timeline_months (will default to 6)")
+    if not supplier_name:
+        warnings.append("Supplier name missing")
+    row_id = f"{os.path.basename(filename)}::{row_index}"
+    return System1UploadPreviewRow(
+        row_id=row_id,
+        row_type=row_type,  # type: ignore[arg-type]
+        source_filename=filename,
+        source_kind=source_kind,  # type: ignore[arg-type]
+        confidence=0.75 if source_kind == "structured" else 0.6,
+        category=category,
+        subcategory=(str(raw.get("subcategory") or "")).strip() or None,
+        supplier_name=supplier_name,
+        contract_id=contract_id,
+        request_title=(str(raw.get("request_title") or raw.get("title") or "")).strip() or None,
+        estimated_spend_usd=round(spend, 2),
+        implementation_timeline_months=impl_months,
+        months_to_expiry=months_to_expiry,
+        preferred_supplier_status=(str(raw.get("preferred_supplier_status") or "")).strip() or None,
+        rss_score=_safe_opt_float(raw.get("rss_score")),
+        scs_score=_safe_opt_float(raw.get("scs_score")),
+        sas_score=_safe_opt_float(raw.get("sas_score")),
+        warnings=warnings,
+        valid_for_approval=True,
+    )
+
+
+def _eus_from_expiry_months(months_to_expiry: Optional[float]) -> float:
+    m = months_to_expiry if months_to_expiry is not None else 9.0
+    if m <= 1:
+        return 10.0
+    if m <= 3:
+        return 9.0
+    if m <= 6:
+        return 7.0
+    if m <= 12:
+        return 5.0
+    if m <= 24:
+        return 3.0
+    return 1.0
+
+
+def _window_from_expiry_months(months_to_expiry: Optional[float]) -> str:
+    m = months_to_expiry if months_to_expiry is not None else 9.0
+    if m <= 3:
+        return "Critical (<3 mo)"
+    if m <= 6:
+        return "High (3–6 mo)"
+    if m <= 12:
+        return "Standard (6–12 mo)"
+    return "Planned (>12 mo)"
 
 
 # ============================================================
@@ -1068,6 +1332,219 @@ async def get_ingestion_history(
     service = get_ingestion_service()
     history = service.get_ingestion_history(data_type=data_type, limit=limit)
     return {"history": history, "count": len(history)}
+
+
+# ============================================================
+# SYSTEM 1 STAGED UPLOAD ENDPOINTS
+# ============================================================
+
+@app.post("/api/system1/upload/preview", response_model=System1UploadPreviewResponse)
+async def system1_upload_preview(
+    files: List[UploadFile] = File(...),
+):
+    """
+    Stage 1: Upload files and preview normalized opportunity rows.
+    No scoring writes are performed in this step.
+    """
+    if not files:
+        raise HTTPException(status_code=400, detail="Upload at least one file.")
+
+    candidates: List[System1UploadPreviewRow] = []
+    parsing_notes: List[str] = []
+
+    for f in files:
+        filename = (f.filename or "").strip() or "upload.bin"
+        ext = os.path.splitext(filename)[1].lower()
+        if ext not in ALLOWED_SYSTEM1_UPLOAD_EXTENSIONS:
+            parsing_notes.append(f"Skipped {filename}: unsupported type {ext}")
+            continue
+        content = await f.read()
+        if not content:
+            parsing_notes.append(f"Skipped {filename}: empty file")
+            continue
+
+        raw_rows: List[Dict[str, Any]] = []
+        source_kind = "structured" if ext in {".csv", ".xls", ".xlsx"} else "document"
+        if source_kind == "structured":
+            raw_rows = _extract_rows_from_structured_file(content, filename)
+            if not raw_rows:
+                parsing_notes.append(f"No parseable rows found in {filename}")
+        else:
+            text = _extract_text_for_upload(content, filename)
+            if not text.strip():
+                parsing_notes.append(f"No text extracted from {filename}")
+                continue
+            llm_rows = _extract_rows_from_text_with_llm(text, filename)
+            if llm_rows:
+                raw_rows = [{str(k).strip().lower(): v for k, v in r.items()} for r in llm_rows]
+            else:
+                parsing_notes.append(f"{filename}: LLM extraction unavailable; provide CSV/XLS for deterministic parsing.")
+                raw_rows = []
+
+        for idx, raw in enumerate(raw_rows, start=1):
+            candidates.append(_build_preview_row(raw, filename, source_kind, idx))
+
+    if not candidates:
+        raise HTTPException(
+            status_code=400,
+            detail="No candidate opportunities extracted. Use CSV/XLS with mapped columns or richer document content.",
+        )
+
+    job_id = f"up-{uuid4().hex[:12]}"
+    valid_candidates = sum(1 for c in candidates if c.valid_for_approval)
+    with _system1_upload_lock:
+        _system1_upload_jobs[job_id] = {
+            "job_id": job_id,
+            "status": "preview_ready",
+            "created_at": datetime.utcnow().isoformat(),
+            "total_candidates": len(candidates),
+            "approved_count": 0,
+            "created_opportunity_ids": [],
+            "run_triggered": False,
+            "parsing_notes": parsing_notes,
+            "candidates": [c.model_dump() for c in candidates],
+        }
+
+    return System1UploadPreviewResponse(
+        job_id=job_id,
+        status="preview_ready",
+        total_candidates=len(candidates),
+        valid_candidates=valid_candidates,
+        candidates=candidates,
+        parsing_notes=parsing_notes,
+    )
+
+
+@app.post("/api/system1/upload/approve", response_model=System1UploadApproveResponse)
+async def system1_upload_approve(body: System1UploadApproveRequest):
+    """
+    Stage 2: Approve selected preview rows, persist opportunities, then trigger a scoring refresh run.
+    """
+    with _system1_upload_lock:
+        job = _system1_upload_jobs.get(body.job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Preview job not found or expired.")
+
+    candidates = [System1UploadPreviewRow(**r) for r in job.get("candidates", [])]
+    approved_ids = set(body.approved_row_ids or [])
+    selected = [r for r in candidates if r.row_id in approved_ids and r.valid_for_approval]
+    if not selected:
+        raise HTTPException(status_code=400, detail="No valid selected rows to approve.")
+
+    session = get_heatmap_db().get_db_session()
+    created_ids: List[int] = []
+    try:
+        renewals = [r for r in selected if r.row_type == "renewal"]
+        renewal_max_spend = max([r.estimated_spend_usd for r in renewals], default=1.0)
+
+        for row in selected:
+            if row.row_type == "new_business":
+                opp = persist_intake_opportunity(
+                    session,
+                    request_title=row.request_title,
+                    category=row.category,
+                    subcategory=row.subcategory,
+                    supplier_name=row.supplier_name,
+                    estimated_spend_usd=max(0.0, float(row.estimated_spend_usd)),
+                    implementation_timeline_months=float(row.implementation_timeline_months or 6.0),
+                    preferred_supplier_status=row.preferred_supplier_status,
+                    justification_summary_text=f"Staged upload approved by {body.approver_id}",
+                )
+                created_ids.append(int(opp.id))
+                continue
+
+            # Renewal scoring path (contract-like): EUS, FIS, RSS, SCS, SAS weighted sum.
+            eus = _eus_from_expiry_months(row.months_to_expiry)
+            fis = round(min(10.0, max(0.0, (row.estimated_spend_usd / max(renewal_max_spend, 1.0)) * 10.0)), 2)
+            rss = round(min(10.0, max(0.0, float(row.rss_score if row.rss_score is not None else 5.0))), 2)
+            scs = round(min(10.0, max(0.0, float(row.scs_score if row.scs_score is not None else 5.0))), 2)
+            sas = round(min(10.0, max(0.0, float(row.sas_score if row.sas_score is not None else 5.0))), 2)
+            total = round((0.30 * eus) + (0.25 * fis) + (0.20 * rss) + (0.15 * scs) + (0.10 * sas), 2)
+            tier = "T1" if total >= 8.0 else "T2" if total >= 6.0 else "T3" if total >= 4.0 else "T4"
+            justification = (
+                f"Contract scored {total:.2f}. "
+                f"EUS({eus})*0.3 + FIS({fis})*0.25 + RSS({rss})*0.2 + SCS({scs})*0.15 + SAS({sas})*0.1 "
+                f"| Source: staged upload approved by {body.approver_id}"
+            )
+
+            opp = Opportunity(
+                contract_id=row.contract_id or f"CNT-UP-{uuid4().hex[:10].upper()}",
+                request_id=None,
+                supplier_name=row.supplier_name,
+                category=row.category,
+                subcategory=row.subcategory,
+                eus_score=eus,
+                ius_score=None,
+                fis_score=fis,
+                es_score=None,
+                rss_score=rss,
+                scs_score=scs,
+                csis_score=None,
+                sas_score=sas,
+                total_score=total,
+                tier=tier,
+                recommended_action_window=_window_from_expiry_months(row.months_to_expiry),
+                justification_summary=justification,
+                status="Pending",
+                source="upload_staged",
+                estimated_spend_usd=row.estimated_spend_usd,
+                implementation_timeline_months=None,
+                request_title=row.request_title,
+                preferred_supplier_status=row.preferred_supplier_status,
+                weights_used_json=json.dumps(
+                    {
+                        "w_eus": 0.30,
+                        "w_fis": 0.25,
+                        "w_rss": 0.20,
+                        "w_scs": 0.15,
+                        "w_sas_contract": 0.10,
+                        "source": "staged_upload_defaults",
+                    }
+                ),
+            )
+            session.add(opp)
+            session.commit()
+            session.refresh(opp)
+            created_ids.append(int(opp.id))
+
+    finally:
+        session.close()
+
+    run_result = _start_heatmap_pipeline_background()
+    run_triggered = bool(run_result.get("success"))
+    with _system1_upload_lock:
+        job["status"] = "approved"
+        job["approved_count"] = len(selected)
+        job["created_opportunity_ids"] = created_ids
+        job["run_triggered"] = run_triggered
+        _system1_upload_jobs[body.job_id] = job
+
+    return System1UploadApproveResponse(
+        success=True,
+        job_id=body.job_id,
+        approved_count=len(selected),
+        created_opportunity_ids=created_ids,
+        run_triggered=run_triggered,
+        message="Approved rows persisted. Scoring refresh started in background.",
+    )
+
+
+@app.get("/api/system1/upload/jobs/{job_id}", response_model=System1UploadJobStatusResponse)
+async def system1_upload_job_status(job_id: str):
+    with _system1_upload_lock:
+        job = _system1_upload_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found.")
+    return System1UploadJobStatusResponse(
+        job_id=job["job_id"],
+        status=job.get("status", "unknown"),
+        created_at=job.get("created_at", ""),
+        total_candidates=int(job.get("total_candidates", 0)),
+        approved_count=int(job.get("approved_count", 0)),
+        created_opportunity_ids=[int(x) for x in job.get("created_opportunity_ids", [])],
+        run_triggered=bool(job.get("run_triggered", False)),
+        parsing_notes=list(job.get("parsing_notes", [])),
+    )
 
 
 # ============================================================

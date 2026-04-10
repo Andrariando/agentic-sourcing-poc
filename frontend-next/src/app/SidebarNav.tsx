@@ -12,14 +12,27 @@ function navCls(active: boolean): string {
 
 export default function SidebarNav() {
   const pathname = usePathname();
+  const onWelcome = pathname === "/welcome";
   const onHeatmap = pathname === "/heatmap";
   const onHeatmapMatrix = pathname === "/heatmap/matrix";
   const onIntake = pathname === "/intake";
+  const onSystem1Upload = pathname === "/system-1/upload";
   const onCases = pathname === "/cases";
   const onS2cPerformance = pathname === "/s2c/performance";
 
   return (
     <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-8 mt-2">
+      <div>
+        <h2 className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+          Executive
+        </h2>
+        <div className="space-y-1">
+          <Link href="/welcome" className={navCls(onWelcome)}>
+            Welcome
+          </Link>
+        </div>
+      </div>
+
       <div>
         <h2 className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
           Opportunity Prioritization
@@ -33,6 +46,9 @@ export default function SidebarNav() {
           </Link>
           <Link href="/intake" className={navCls(onIntake)}>
             Sourcing Intake Form (New Request)
+          </Link>
+          <Link href="/system-1/upload" className={navCls(onSystem1Upload)}>
+            System 1 Upload (Staged)
           </Link>
         </div>
       </div>
