@@ -217,10 +217,29 @@ class System1UploadPreviewResponse(BaseModel):
     parsing_notes: List[str] = Field(default_factory=list)
 
 
+class System1UploadRowOverride(BaseModel):
+    """Optional human edits applied at approve time (merged onto preview rows)."""
+
+    row_type: Optional[Literal["renewal", "new_business"]] = None
+    category: Optional[str] = None
+    subcategory: Optional[str] = None
+    supplier_name: Optional[str] = None
+    contract_id: Optional[str] = None
+    request_title: Optional[str] = None
+    estimated_spend_usd: Optional[float] = None
+    implementation_timeline_months: Optional[float] = None
+    months_to_expiry: Optional[float] = None
+    preferred_supplier_status: Optional[str] = None
+    rss_score: Optional[float] = None
+    scs_score: Optional[float] = None
+    sas_score: Optional[float] = None
+
+
 class System1UploadApproveRequest(BaseModel):
     job_id: str
     approved_row_ids: List[str]
     approver_id: str = "human-user"
+    row_overrides: Optional[Dict[str, System1UploadRowOverride]] = None
 
 
 class System1UploadApproveResponse(BaseModel):
@@ -274,6 +293,51 @@ def _normalize_type(raw: Any, contract_id: Optional[str]) -> str:
     if "renew" in txt or txt in {"contract", "existing"}:
         return "renewal"
     return "new_business"
+
+
+def _finalize_upload_preview_row(row: System1UploadPreviewRow) -> System1UploadPreviewRow:
+    warnings: List[str] = []
+    if row.estimated_spend_usd <= 0:
+        warnings.append("Missing or non-positive spend")
+    if row.row_type == "renewal" and row.months_to_expiry is None:
+        warnings.append("Renewal row missing months_to_expiry (will default conservatively)")
+    if row.row_type == "new_business" and row.implementation_timeline_months is None:
+        warnings.append("New business row missing implementation_timeline_months (will default to 6)")
+    if not (row.supplier_name or "").strip():
+        warnings.append("Supplier name missing")
+    valid = row.estimated_spend_usd > 0
+    return row.model_copy(update={"warnings": warnings, "valid_for_approval": valid})
+
+
+def _merge_system1_upload_row(
+    base: System1UploadPreviewRow,
+    override: Optional[System1UploadRowOverride],
+) -> System1UploadPreviewRow:
+    if not override:
+        return _finalize_upload_preview_row(base)
+    d = base.model_dump()
+    for k, v in override.model_dump(exclude_none=True).items():
+        d[k] = v
+    d["category"] = _normalize_category(d.get("category"))
+    cid = (str(d.get("contract_id") or "")).strip() or None
+    d["contract_id"] = cid
+    d["row_type"] = _normalize_type(d.get("row_type"), cid)
+    d["estimated_spend_usd"] = round(_safe_float(d.get("estimated_spend_usd"), 0.0), 2)
+    d["implementation_timeline_months"] = _safe_opt_float(d.get("implementation_timeline_months"))
+    d["months_to_expiry"] = _safe_opt_float(d.get("months_to_expiry"))
+    for key in ("rss_score", "scs_score", "sas_score"):
+        if d.get(key) is not None:
+            d[key] = _safe_opt_float(d.get(key))
+    if d.get("subcategory") is not None:
+        d["subcategory"] = (str(d.get("subcategory") or "")).strip() or None
+    if d.get("supplier_name") is not None:
+        d["supplier_name"] = (str(d.get("supplier_name") or "")).strip() or None
+    if d.get("request_title") is not None:
+        d["request_title"] = (str(d.get("request_title") or "")).strip() or None
+    if d.get("preferred_supplier_status") is not None:
+        d["preferred_supplier_status"] = (str(d.get("preferred_supplier_status") or "")).strip() or None
+    row = System1UploadPreviewRow(**d)
+    return _finalize_upload_preview_row(row)
 
 
 def _normalize_category(raw: Any) -> str:
@@ -380,17 +444,8 @@ def _build_preview_row(raw: Dict[str, Any], filename: str, source_kind: str, row
         or raw.get("timeline_months")
     )
     supplier_name = (str(raw.get("supplier_name") or raw.get("supplier") or "")).strip() or None
-    warnings: List[str] = []
-    if spend <= 0:
-        warnings.append("Missing or non-positive spend")
-    if row_type == "renewal" and months_to_expiry is None:
-        warnings.append("Renewal row missing months_to_expiry (will default conservatively)")
-    if row_type == "new_business" and impl_months is None:
-        warnings.append("New business row missing implementation_timeline_months (will default to 6)")
-    if not supplier_name:
-        warnings.append("Supplier name missing")
     row_id = f"{os.path.basename(filename)}::{row_index}"
-    return System1UploadPreviewRow(
+    row = System1UploadPreviewRow(
         row_id=row_id,
         row_type=row_type,  # type: ignore[arg-type]
         source_filename=filename,
@@ -408,9 +463,10 @@ def _build_preview_row(raw: Dict[str, Any], filename: str, source_kind: str, row
         rss_score=_safe_opt_float(raw.get("rss_score")),
         scs_score=_safe_opt_float(raw.get("scs_score")),
         sas_score=_safe_opt_float(raw.get("sas_score")),
-        warnings=warnings,
+        warnings=[],
         valid_for_approval=True,
     )
+    return _finalize_upload_preview_row(row)
 
 
 def _eus_from_expiry_months(months_to_expiry: Optional[float]) -> float:
@@ -1427,9 +1483,20 @@ async def system1_upload_approve(body: System1UploadApproveRequest):
 
     candidates = [System1UploadPreviewRow(**r) for r in job.get("candidates", [])]
     approved_ids = set(body.approved_row_ids or [])
-    selected = [r for r in candidates if r.row_id in approved_ids and r.valid_for_approval]
+    overrides = body.row_overrides or {}
+    by_id = {r.row_id: r for r in candidates}
+    merged: List[System1UploadPreviewRow] = []
+    for rid in body.approved_row_ids or []:
+        base = by_id.get(rid)
+        if not base:
+            continue
+        merged.append(_merge_system1_upload_row(base, overrides.get(rid)))
+    selected = [r for r in merged if r.valid_for_approval]
     if not selected:
-        raise HTTPException(status_code=400, detail="No valid selected rows to approve.")
+        raise HTTPException(
+            status_code=400,
+            detail="No valid selected rows to approve after edits. Ensure spend is positive and required fields are set.",
+        )
 
     session = get_heatmap_db().get_db_session()
     created_ids: List[int] = []

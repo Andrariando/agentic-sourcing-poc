@@ -8,7 +8,7 @@ const FLOW_STEPS = [
     id: "ingest",
     title: "1) Ingest data",
     detail:
-      "Upload renewal/new-business documents or CSV in System 1 Upload. Data is parsed into candidate opportunities before approval.",
+      "Upload renewal/new-business documents or CSV in Sourcing Opportunity Data Upload. Data is parsed into candidate opportunities before approval.",
   },
   {
     id: "score",
@@ -40,7 +40,7 @@ export default function WelcomePage() {
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
             <Link href="/system-1/upload" className="px-4 py-2 rounded-lg bg-sponsor-blue text-white text-sm font-semibold">
-              Go to System 1 Upload
+              Go to Sourcing Opportunity Data Upload
             </Link>
             <Link href="/heatmap" className="px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-semibold">
               Open Heatmap Prioritization

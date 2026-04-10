@@ -48,7 +48,7 @@ export default function SidebarNav() {
             Sourcing Intake Form (New Request)
           </Link>
           <Link href="/system-1/upload" className={navCls(onSystem1Upload)}>
-            System 1 Upload (Staged)
+            Sourcing Opportunity Data Upload
           </Link>
         </div>
       </div>
