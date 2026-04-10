@@ -2,9 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-/**
- * System 1 — Opportunity prioritization / heatmap (LangGraph + shared memory).
- */
 const SYSTEM1_SPECIALISTS = [
   { id: "spend", label: "Spend Pattern", hint: "Spend data · opportunities" },
   { id: "renewal", label: "Contract Renewal", hint: "Expiry · time window" },
@@ -12,9 +9,6 @@ const SYSTEM1_SPECIALISTS = [
   { id: "risk", label: "Supplier Risk", hint: "Risk profile" },
 ] as const;
 
-/**
- * System 2 — S2C execution (official seven first-class agents).
- */
 const SYSTEM2_SPECIALISTS = [
   { id: "signal", label: "Sourcing Signal", hint: "DTP-01" },
   { id: "supplier", label: "Supplier Scoring", hint: "DTP-02" },
@@ -24,11 +18,15 @@ const SYSTEM2_SPECIALISTS = [
   { id: "implementation", label: "Implementation", hint: "DTP-06" },
 ] as const;
 
-/** Larger canvas so labels/nodes read clearly when scaled up in layout */
-const VB = 420;
-const CX = 210;
-const CY = 210;
-const R = 132;
+/** Room for labels + large orbit */
+const VB = 520;
+const CX = 260;
+const CY = 260;
+const R = 168;
+
+/** Hub / satellite radii used to trim spokes so lines are not buried under filled circles */
+const HUB_TRIM = 44;
+const SAT_TRIM = 20;
 
 function nodePosition(index: number, total: number) {
   const start = -Math.PI / 2;
@@ -37,37 +35,58 @@ function nodePosition(index: number, total: number) {
   return { x: CX + R * Math.cos(a), y: CY + R * Math.sin(a) };
 }
 
+/** Line from hub edge to satellite edge — always visible between nodes */
+function trimSpoke(nx: number, ny: number, inner = HUB_TRIM, outer = SAT_TRIM) {
+  const dx = nx - CX;
+  const dy = ny - CY;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len;
+  const uy = dy / len;
+  const x1 = CX + ux * inner;
+  const y1 = CY + uy * inner;
+  const x2 = nx - ux * outer;
+  const y2 = ny - uy * outer;
+  const path = `M ${x1.toFixed(1)} ${y1.toFixed(1)} L ${x2.toFixed(1)} ${y2.toFixed(1)}`;
+  const pathRev = `M ${x2.toFixed(1)} ${y2.toFixed(1)} L ${x1.toFixed(1)} ${y1.toFixed(1)}`;
+  return { x1, y1, x2, y2, path, pathRev };
+}
+
 type Accent = "emerald" | "cyan";
 
 const ACCENT = {
   emerald: {
     hot: "#34d399",
-    hotStroke: "#a7f3d0",
+    hotStroke: "#d1fae5",
     nodeIdle: "#64748b",
-    nodeIdleStroke: "#94a3b8",
-    glow: "rgba(52,211,153,0.22)",
-    /** Always-visible hub spokes */
-    edgeIdle: "rgba(110,231,183,0.78)",
-    edgeBroadcast: "rgba(167,243,208,0.92)",
-    edgeHot: "#6ee7b7",
-    centerFill: "rgba(30,41,59,0.95)",
-    centerFillHot: "rgba(5,150,105,0.55)",
-    centerStrokeIdle: "rgba(148,163,184,0.85)",
-    centerStrokeHot: "#a7f3d0",
+    nodeIdleStroke: "#cbd5e1",
+    glow: "rgba(52,211,153,0.28)",
+    edgeUnder: "rgba(15,23,42,0.85)",
+    edgeIdle: "rgba(52,211,153,0.95)",
+    edgeBroadcast: "rgba(167,243,208,0.98)",
+    edgeHot: "#a7f3d0",
+    particle: "#ecfdf5",
+    ripple: "rgba(52,211,153,0.45)",
+    centerFill: "rgba(30,41,59,0.96)",
+    centerFillHot: "rgba(5,150,105,0.62)",
+    centerStrokeIdle: "#cbd5e1",
+    centerStrokeHot: "#d1fae5",
   },
   cyan: {
     hot: "#22d3ee",
-    hotStroke: "#a5f3fc",
+    hotStroke: "#ecfeff",
     nodeIdle: "#64748b",
-    nodeIdleStroke: "#94a3b8",
-    glow: "rgba(34,211,238,0.22)",
-    edgeIdle: "rgba(103,232,249,0.78)",
-    edgeBroadcast: "rgba(165,243,252,0.92)",
-    edgeHot: "#67e8f9",
-    centerFill: "rgba(30,41,59,0.95)",
-    centerFillHot: "rgba(0,58,143,0.55)",
-    centerStrokeIdle: "rgba(148,163,184,0.85)",
-    centerStrokeHot: "#7dd3fc",
+    nodeIdleStroke: "#cbd5e1",
+    glow: "rgba(34,211,238,0.28)",
+    edgeUnder: "rgba(15,23,42,0.85)",
+    edgeIdle: "rgba(34,211,238,0.95)",
+    edgeBroadcast: "rgba(165,243,252,0.98)",
+    edgeHot: "#a5f3fc",
+    particle: "#ecfeff",
+    ripple: "rgba(34,211,238,0.45)",
+    centerFill: "rgba(30,41,59,0.96)",
+    centerFillHot: "rgba(0,58,143,0.62)",
+    centerStrokeIdle: "#cbd5e1",
+    centerStrokeHot: "#bae6fd",
   },
 } as const;
 
@@ -109,23 +128,26 @@ function AgentConstellation({
     }));
   }, [specialists]);
 
+  const spokes = useMemo(() => outer.map((n) => trimSpoke(n.x, n.y)), [outer]);
+
   const activeIdx = phase === 0 ? -1 : phase - 1;
   const supervisorHot = phase === 0;
 
   const glowId = `${idPrefix}-node-glow`;
+  const hubR = supervisorHot ? 40 : 34;
 
   return (
-    <div className="w-full flex justify-center items-center min-h-[min(52vh,520px)] md:min-h-[min(56vh,580px)] py-2">
+    <div className="w-full flex justify-center items-stretch py-3">
       <svg
         viewBox={`0 0 ${VB} ${VB}`}
         preserveAspectRatio="xMidYMid meet"
-        className="w-full max-w-none h-[min(52vh,520px)] md:h-[min(56vh,580px)] drop-shadow-[0_0_20px_rgba(15,23,42,0.5)]"
+        className="w-full h-[min(72vh,820px)] min-h-[420px] sm:min-h-[480px] md:min-h-[520px] drop-shadow-[0_0_28px_rgba(15,23,42,0.55)]"
         role="img"
         aria-hidden
       >
         <defs>
-          <filter id={glowId} x="-80%" y="-80%" width="260%" height="260%">
-            <feGaussianBlur stdDeviation="3" result="b" />
+          <filter id={glowId} x="-100%" y="-100%" width="300%" height="300%">
+            <feGaussianBlur stdDeviation="4" result="b" />
             <feMerge>
               <feMergeNode in="b" />
               <feMergeNode in="SourceGraphic" />
@@ -133,48 +155,94 @@ function AgentConstellation({
           </filter>
         </defs>
 
-        {/* Base edges: solid, always visible (flow simulation) */}
-        {outer.map((n, i) => {
+        {/* Pulse rings from hub */}
+        {!reduceMotion &&
+          [0, 1.1, 2.2].map((begin, ri) => (
+            <circle
+              key={`ripple-${idPrefix}-${ri}`}
+              cx={CX}
+              cy={CY}
+              r={hubR + 8}
+              fill="none"
+              stroke={palette.ripple}
+              strokeWidth="1.5"
+            >
+              <animate attributeName="r" values={`${hubR + 8};${R + hubR + 40}`} dur="3.2s" begin={`${begin}s`} repeatCount="indefinite" />
+              <animate attributeName="opacity" values="0.5;0" dur="3.2s" begin={`${begin}s`} repeatCount="indefinite" />
+            </circle>
+          ))}
+
+        {/* Wide underlay + main spokes (trimmed so not hidden under node fills) */}
+        {spokes.map((s, i) => {
+          const n = outer[i];
           const hot = activeIdx === i;
           const broadcast = supervisorHot;
-          const strokeColor = hot
-            ? palette.edgeHot
-            : broadcast
-              ? palette.edgeBroadcast
-              : palette.edgeIdle;
-          const strokeWidth = hot ? 4.2 : broadcast ? 3.4 : 3;
+          const strokeColor = hot ? palette.edgeHot : broadcast ? palette.edgeBroadcast : palette.edgeIdle;
+          const wMain = hot ? 5.5 : broadcast ? 4.8 : 4.2;
+          const wUnder = wMain + 5;
           return (
-            <line
-              key={`ln-base-${idPrefix}-${n.id}`}
-              x1={CX}
-              y1={CY}
-              x2={n.x}
-              y2={n.y}
-              stroke={strokeColor}
-              strokeWidth={strokeWidth}
-              strokeOpacity={1}
-              strokeLinecap="round"
-            />
+            <g key={`spoke-${idPrefix}-${n.id}`}>
+              <path
+                d={s.path}
+                fill="none"
+                stroke={palette.edgeUnder}
+                strokeWidth={wUnder}
+                strokeLinecap="round"
+                strokeOpacity={0.95}
+              />
+              <path
+                d={s.path}
+                fill="none"
+                stroke={strokeColor}
+                strokeWidth={wMain}
+                strokeLinecap="round"
+                strokeOpacity={1}
+              />
+            </g>
           );
         })}
 
-        {/* Active edge pulse overlay (motion) */}
+        {/* Moving “data” along every spoke — staggered */}
         {!reduceMotion &&
-          outer.map((n, i) => {
+          spokes.map((s, i) => {
+            const n = outer[i];
+            const dur = 2.8 + i * 0.15;
+            const begin = `${i * 0.32}s`;
+            const hot = activeIdx === i;
+            return (
+              <g key={`pkt-${idPrefix}-${n.id}`}>
+                <circle r={hot ? 5 : 3.5} fill={palette.particle} filter={hot ? `url(#${glowId})` : undefined} opacity={hot ? 1 : 0.85}>
+                  <animateMotion dur={`${dur}s`} repeatCount="indefinite" begin={begin} path={s.path} rotate="auto" />
+                </circle>
+                <circle r={2.5} fill={palette.edgeHot} opacity={0.7}>
+                  <animateMotion
+                    dur={`${dur}s`}
+                    repeatCount="indefinite"
+                    begin={`${i * 0.32 + dur * 0.5}s`}
+                    path={s.pathRev}
+                    rotate="auto"
+                  />
+                </circle>
+              </g>
+            );
+          })}
+
+        {/* Active channel emphasis */}
+        {!reduceMotion &&
+          spokes.map((s, i) => {
             const hot = activeIdx === i;
             if (!hot) return null;
+            const n = outer[i];
             return (
-              <line
-                key={`ln-flow-${idPrefix}-${n.id}`}
-                x1={CX}
-                y1={CY}
-                x2={n.x}
-                y2={n.y}
+              <path
+                key={`flow-${idPrefix}-${n.id}`}
+                d={s.path}
+                fill="none"
                 stroke={palette.edgeHot}
-                strokeWidth={2}
+                strokeWidth={2.5}
                 strokeOpacity={0.95}
                 strokeLinecap="round"
-                strokeDasharray="10 14"
+                strokeDasharray="14 18"
                 className="welcome-agent-dash"
               />
             );
@@ -182,7 +250,7 @@ function AgentConstellation({
 
         {outer.map((n, i) => {
           const hot = activeIdx === i;
-          const r = hot ? 15 : 12;
+          const r = hot ? 18 : 15;
           const fill = hot ? palette.hot : palette.nodeIdle;
           const stroke = hot ? palette.hotStroke : palette.nodeIdleStroke;
           return (
@@ -190,8 +258,8 @@ function AgentConstellation({
               <circle
                 cx={n.x}
                 cy={n.y}
-                r={r + 6}
-                fill={hot ? palette.glow : "rgba(148,163,184,0.08)"}
+                r={r + 8}
+                fill={hot ? palette.glow : "rgba(148,163,184,0.12)"}
                 className={hot && !reduceMotion ? "welcome-agent-node-pulse" : ""}
               />
               <circle
@@ -200,7 +268,7 @@ function AgentConstellation({
                 r={r}
                 fill={fill}
                 stroke={stroke}
-                strokeWidth={hot ? 2.2 : 1.6}
+                strokeWidth={hot ? 2.6 : 2}
                 filter={hot ? `url(#${glowId})` : undefined}
               />
             </g>
@@ -211,19 +279,19 @@ function AgentConstellation({
           <circle
             cx={CX}
             cy={CY}
-            r={supervisorHot ? 34 : 28}
+            r={hubR}
             fill={supervisorHot ? palette.centerFillHot : palette.centerFill}
             stroke={supervisorHot ? palette.centerStrokeHot : palette.centerStrokeIdle}
-            strokeWidth={supervisorHot ? 2.8 : 2}
+            strokeWidth={supervisorHot ? 3.2 : 2.4}
             filter={supervisorHot ? `url(#${glowId})` : undefined}
             className={supervisorHot && !reduceMotion ? "welcome-agent-node-pulse-slow" : ""}
           />
           <text
             x={CX}
-            y={CY - 7}
+            y={CY - 10}
             textAnchor="middle"
             fill="#f8fafc"
-            fontSize="14"
+            fontSize="19"
             fontWeight="800"
             fontFamily="system-ui, sans-serif"
           >
@@ -231,11 +299,11 @@ function AgentConstellation({
           </text>
           <text
             x={CX}
-            y={CY + 10}
+            y={CY + 14}
             textAnchor="middle"
-            fill="#cbd5e1"
-            fontSize="10"
-            fontWeight="600"
+            fill="#e2e8f0"
+            fontSize="13"
+            fontWeight="700"
             fontFamily="system-ui, sans-serif"
           >
             {centerDetail}
@@ -247,25 +315,26 @@ function AgentConstellation({
           const parts = n.label.split(" ");
           const label = parts[0];
           const sub = parts.slice(1).join(" ");
-          const lx = n.x + (n.x - CX) * 0.2;
-          const ly = n.y + (n.y - CY) * 0.2;
+          const lx = n.x + (n.x - CX) * 0.18;
+          const ly = n.y + (n.y - CY) * 0.18;
           return (
             <text
               key={`lb-${idPrefix}-${n.id}`}
               x={lx}
-              y={ly + (sub ? -3 : 4)}
+              y={ly + (sub ? -4 : 5)}
               textAnchor="middle"
-              fill={hot ? "#f1f5f9" : "#cbd5e1"}
-              fontSize={hot ? 12 : 10.5}
-              fontWeight={hot ? 650 : 600}
+              fill={hot ? "#ffffff" : "#e2e8f0"}
+              fontSize={hot ? 15 : 13}
+              fontWeight={hot ? 700 : 650}
               fontFamily="system-ui, sans-serif"
               className="select-none"
+              style={{ textShadow: hot ? "0 0 20px rgba(255,255,255,0.35)" : "0 1px 8px rgba(0,0,0,0.8)" }}
             >
               <tspan x={lx} dy="0" fontWeight="800">
                 {label}
               </tspan>
               {sub ? (
-                <tspan x={lx} dy="13" fontSize={9} fill={hot ? "#e2e8f0" : "#94a3b8"} fontWeight="600">
+                <tspan x={lx} dy="16" fontSize={11.5} fill={hot ? "#f1f5f9" : "#cbd5e1"} fontWeight="650">
                   {sub}
                 </tspan>
               ) : null}
@@ -291,40 +360,37 @@ export function WelcomeAgentMesh() {
 
   return (
     <section
-      className="relative overflow-hidden rounded-xl border border-slate-700/80 bg-slate-950 text-left shadow-[0_0_70px_-16px_rgba(52,211,153,0.12)]"
+      className="relative w-full max-w-[min(100vw,1680px)] mx-auto overflow-hidden rounded-xl border border-slate-700/80 bg-slate-950 text-left shadow-[0_0_80px_-20px_rgba(52,211,153,0.18)]"
       aria-label="Animated diagrams of System 1 and System 2 agent meshes"
     >
       <div
-        className="pointer-events-none absolute inset-0 welcome-agent-grid opacity-90 welcome-agent-scan"
+        className="pointer-events-none absolute inset-0 welcome-agent-grid opacity-90 welcome-agent-scan welcome-agent-grid-drift"
         aria-hidden
       />
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_55%_at_30%_40%,rgba(5,150,105,0.12),transparent),radial-gradient(ellipse_60%_50%_at_80%_50%,rgba(0,58,143,0.2),transparent)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_75%_60%_at_25%_35%,rgba(5,150,105,0.14),transparent),radial-gradient(ellipse_65%_55%_at_85%_45%,rgba(0,58,143,0.22),transparent)]" />
 
-      <div className="relative z-10 p-5 md:p-8 border-b border-slate-800/80">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-slate-400 mb-2">
-          Dual agent architectures
-        </p>
-        <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">System 1 and System 2 agent meshes</h2>
-        <p className="mt-3 text-sm md:text-base text-slate-400 max-w-3xl leading-relaxed">
+      <div className="relative z-10 p-6 md:p-10 border-b border-slate-800/80">
+        <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400 mb-2">Dual agent architectures</p>
+        <h2 className="text-3xl md:text-4xl font-bold text-white tracking-tight">System 1 and System 2 agent meshes</h2>
+        <p className="mt-4 text-base md:text-lg text-slate-300 max-w-4xl leading-relaxed">
           Both stacks use LangGraph-style orchestration with shared context and retrieval.{" "}
-          <span className="text-emerald-300/90">System 1</span> scores and explains opportunities for the heatmap;{" "}
-          <span className="text-cyan-300/90">System 2</span> runs source-to-contract execution with the seven documented specialists.
-          Solid lines show the supervisor-to-specialist flow; the highlighted channel animates for emphasis.
+          <span className="text-emerald-300">System 1</span> scores opportunities for the heatmap;{" "}
+          <span className="text-cyan-300">System 2</span> runs source-to-contract execution. Trimmable hub-to-agent paths stay visible;
+          particles and ripples illustrate concurrent signal flow (illustrative).
         </p>
-        <ul className="mt-3 space-y-1 text-xs text-slate-500 font-mono">
-          {reduceMotion && <li className="text-amber-200/80">Motion reduced — static view</li>}
-        </ul>
+        {reduceMotion && (
+          <p className="mt-3 text-sm text-amber-200/90 font-mono">Motion reduced — ripples and particles disabled.</p>
+        )}
       </div>
 
-      <div className="relative z-10 grid grid-cols-1 xl:grid-cols-2 gap-0 xl:divide-x xl:divide-slate-800/80">
-        <div className="p-5 md:p-8 border-b xl:border-b-0 border-slate-800/80 xl:border-emerald-500/20">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.75)]" />
-            <h3 className="text-base md:text-lg font-bold text-emerald-100 tracking-wide uppercase">
-              System 1 · Prioritization
-            </h3>
+      {/* One column = each diagram uses full content width (largest readable scale) */}
+      <div className="relative z-10 grid grid-cols-1 gap-0 divide-y divide-slate-800/80">
+        <div className="p-6 md:p-10">
+          <div className="flex items-center gap-3 mb-3">
+            <span className="h-3 w-3 rounded-full bg-emerald-400 shadow-[0_0_14px_rgba(52,211,153,0.85)]" />
+            <h3 className="text-lg md:text-xl font-bold text-emerald-100 tracking-wide uppercase">System 1 · Prioritization</h3>
           </div>
-          <p className="text-sm text-slate-400 leading-relaxed mb-1 max-w-prose">
+          <p className="text-base text-slate-300 leading-relaxed mb-2 max-w-4xl">
             Supervisor coordinates spend, renewal, category strategy, and supplier-risk signals into scores and explanations
             (opportunity register / heatmap).
           </p>
@@ -333,25 +399,23 @@ export function WelcomeAgentMesh() {
             accent="emerald"
             idPrefix="s1"
             reduceMotion={reduceMotion}
-            intervalMs={1400}
+            intervalMs={1600}
             centerAbbr="SUP"
             centerDetail="Supervisor"
           />
-          <p className="mt-2 text-xs md:text-sm text-slate-400 font-mono leading-relaxed border-t border-slate-800/80 pt-4">
+          <p className="mt-4 text-sm md:text-base text-slate-400 font-mono leading-relaxed border-t border-slate-800/80 pt-5">
             <span className="text-emerald-200 font-semibold">Supervisor</span>
             {" · "}
             {SYSTEM1_SPECIALISTS.map((s) => s.label).join(" · ")}
           </p>
         </div>
 
-        <div className="p-5 md:p-8 xl:border-cyan-500/20">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-cyan-400 shadow-[0_0_12px_rgba(34,211,238,0.75)]" />
-            <h3 className="text-base md:text-lg font-bold text-cyan-100 tracking-wide uppercase">
-              System 2 · S2C execution
-            </h3>
+        <div className="p-6 md:p-10">
+          <div className="flex items-center gap-3 mb-3">
+            <span className="h-3 w-3 rounded-full bg-cyan-400 shadow-[0_0_14px_rgba(34,211,238,0.85)]" />
+            <h3 className="text-lg md:text-xl font-bold text-cyan-100 tracking-wide uppercase">System 2 · S2C execution</h3>
           </div>
-          <p className="text-sm text-slate-400 leading-relaxed mb-1 max-w-prose">
+          <p className="text-base text-slate-300 leading-relaxed mb-2 max-w-4xl">
             Supervisor routes work across six specialists from sourcing signal through implementation; human-in-the-loop chat and
             artifacts attach to case execution.
           </p>
@@ -360,11 +424,11 @@ export function WelcomeAgentMesh() {
             accent="cyan"
             idPrefix="s2"
             reduceMotion={reduceMotion}
-            intervalMs={1300}
+            intervalMs={1500}
             centerAbbr="SUP"
             centerDetail="Supervisor"
           />
-          <p className="mt-2 text-xs md:text-sm text-slate-400 font-mono leading-relaxed border-t border-slate-800/80 pt-4">
+          <p className="mt-4 text-sm md:text-base text-slate-400 font-mono leading-relaxed border-t border-slate-800/80 pt-5">
             <span className="text-cyan-200 font-semibold">Supervisor</span>
             {" · "}
             {SYSTEM2_SPECIALISTS.map((s) => s.label).join(" · ")}

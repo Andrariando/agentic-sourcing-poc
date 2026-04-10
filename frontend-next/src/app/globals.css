@@ -141,6 +141,19 @@ body {
   background-size: 28px 28px;
 }
 
+@keyframes welcome-agent-grid-drift {
+  0% {
+    background-position: 0 0, 0 0;
+  }
+  100% {
+    background-position: 28px 14px, 28px 14px;
+  }
+}
+
+.welcome-agent-grid-drift {
+  animation: welcome-agent-grid-drift 24s linear infinite;
+}
+
 .welcome-agent-scan::after {
   content: "";
   position: absolute;
@@ -160,6 +173,9 @@ body {
   .welcome-agent-scan::after {
     animation: none;
     opacity: 0;
+  }
+  .welcome-agent-grid-drift {
+    animation: none !important;
   }
   .welcome-agent-dash {
     animation: none !important;
