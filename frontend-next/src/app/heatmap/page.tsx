@@ -11,6 +11,7 @@ import {
   AlertCircle,
   ThumbsUp,
   ThumbsDown,
+  ChevronDown,
 } from "lucide-react";
 import {
   ScatterChart,
@@ -999,51 +1000,9 @@ export default function HeatmapPriorityPage() {
         {viewMode === 'heatmap' ? (
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <h2 className="font-semibold text-slate-800 mb-1">Strategic Impact vs Urgency &amp; Risk</h2>
-            <p className="text-sm text-slate-600 mb-3 max-w-3xl">
-              Each point is one opportunity. Read <span className="font-medium text-slate-700">position</span> as strategic
-              story, <span className="font-medium text-slate-700">color</span> as recommended pace (tier), and{" "}
-              <span className="font-medium text-slate-700">size</span> as overall numeric priority (0–10).
+            <p className="text-sm text-slate-500 mb-4">
+              Each bubble is one opportunity — hover for score details, click to review.
             </p>
-            <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 text-left max-w-3xl">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">How to read</p>
-              <ul className="space-y-2 list-none pl-0">
-                <li className="flex gap-2">
-                  <span className="shrink-0 font-mono text-sponsor-blue" aria-hidden>
-                    →
-                  </span>
-                  <span>
-                    <span className="font-medium text-slate-800">Horizontal impact.</span> Renewals:{" "}
-                    <HeatmapAbbr term="fis">FIS</HeatmapAbbr> + <HeatmapAbbr term="scs">SCS</HeatmapAbbr>. New requests:{" "}
-                    <HeatmapAbbr term="es">ES</HeatmapAbbr> + <HeatmapAbbr term="csis">CSIS</HeatmapAbbr>. Farther right = stronger
-                    financial / category impact.
-                  </span>
-                </li>
-                <li className="flex gap-2">
-                  <span className="shrink-0 font-mono text-sponsor-blue" aria-hidden>
-                    ↑
-                  </span>
-                  <span>
-                    <span className="font-medium text-slate-800">Vertical urgency &amp; risk.</span> Renewals blend{" "}
-                    <HeatmapAbbr term="eus">EUS</HeatmapAbbr> (time pressure) and{" "}
-                    <HeatmapAbbr term="rss">RSS</HeatmapAbbr> (supplier risk) 50/50 — risk is explicit on this axis. New requests
-                    use <HeatmapAbbr term="ius">IUS</HeatmapAbbr> only (implementation urgency). Higher = act sooner.
-                  </span>
-                </li>
-                <li className="flex gap-2">
-                  <span className="shrink-0 text-slate-400" aria-hidden>
-                    ○
-                  </span>
-                  <span>
-                    <span className="font-medium text-slate-800">Dot size</span> = total priority score (same idea as table
-                    rank drivers). <span className="font-medium text-slate-800">Color</span> = tier (T1 fastest path to engage).
-                  </span>
-                </li>
-              </ul>
-              <p className="mt-2 text-xs text-slate-500 leading-relaxed">
-                The table is sorted by total score; the chart sorts by two blended axes, so the top-right is not always rank
-                #1. Midpoint lines (5) are a visual guide only.
-              </p>
-            </div>
             <div className="w-full h-[500px]">
               <ResponsiveContainer width="100%" height="100%">
                 <ScatterChart margin={{ top: 20, right: 20, bottom: 28, left: 28 }}>
@@ -1101,6 +1060,57 @@ export default function HeatmapPriorityPage() {
                 </ScatterChart>
               </ResponsiveContainer>
             </div>
+
+            <details className="group w-full mt-4 rounded-lg border border-slate-200 bg-slate-50/90 text-left">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-slate-800 [&::-webkit-details-marker]:hidden">
+                <span>How to read this matrix</span>
+                <ChevronDown className="h-4 w-4 shrink-0 text-slate-500 transition-transform duration-200 group-open:rotate-180" aria-hidden />
+              </summary>
+              <div className="border-t border-slate-200 px-4 pb-4 pt-0">
+                <div className="pt-3 text-sm text-slate-700 space-y-3">
+                  <ul className="space-y-2 list-none pl-0">
+                    <li className="flex gap-2">
+                      <span className="shrink-0 font-mono text-sponsor-blue" aria-hidden>
+                        →
+                      </span>
+                      <span>
+                        <span className="font-medium text-slate-800">Horizontal impact.</span> Renewals:{" "}
+                        <HeatmapAbbr term="fis">FIS</HeatmapAbbr> + <HeatmapAbbr term="scs">SCS</HeatmapAbbr>. New requests:{" "}
+                        <HeatmapAbbr term="es">ES</HeatmapAbbr> + <HeatmapAbbr term="csis">CSIS</HeatmapAbbr>. Farther right
+                        means stronger financial / category impact.
+                      </span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="shrink-0 font-mono text-sponsor-blue" aria-hidden>
+                        ↑
+                      </span>
+                      <span>
+                        <span className="font-medium text-slate-800">Vertical urgency &amp; risk.</span> Renewals blend{" "}
+                        <HeatmapAbbr term="eus">EUS</HeatmapAbbr> (time pressure) and{" "}
+                        <HeatmapAbbr term="rss">RSS</HeatmapAbbr> (supplier risk) 50/50 — risk is explicit on this axis. New
+                        requests use <HeatmapAbbr term="ius">IUS</HeatmapAbbr> only (implementation urgency). Higher = act
+                        sooner.
+                      </span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="shrink-0 text-slate-400" aria-hidden>
+                        ○
+                      </span>
+                      <span>
+                        <span className="font-medium text-slate-800">Dot size</span> = total priority score (same idea as
+                        table rank drivers). <span className="font-medium text-slate-800">Color</span> = tier (T1 fastest path
+                        to engage).
+                      </span>
+                    </li>
+                  </ul>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    The table is sorted by total score; the chart sorts by two blended axes, so the top-right is not always
+                    rank #1. Midpoint lines (5) are a visual guide only.
+                  </p>
+                </div>
+              </div>
+            </details>
+
             <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-4 text-xs font-medium text-slate-500">
               <span className="flex items-center gap-2 cursor-help" title={HEATMAP_GLOSSARY.t1}>
                 <div className="w-3 h-3 rounded-full bg-mit-red opacity-80" />
