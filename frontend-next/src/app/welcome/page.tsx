@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { WelcomeAgentMesh } from "@/components/welcome-agent-mesh";
 
 const FLOW_STEPS = [
   {
     id: "ingest",
-    title: "1) Ingest data",
+    title: "1) Connect opportunity signals",
     detail:
-      "Upload renewal/new-business documents or CSV in Sourcing Opportunity Data Upload. Data is parsed into candidate opportunities before approval.",
+      "Target state: renewal and new-business signals flow from your ERP or other systems of record via API, feeding the prioritization engine. Today, the intake form and an optional bulk upload path exist for pilots—upload is not the primary operating model.",
   },
   {
     id: "score",
@@ -36,26 +37,32 @@ export default function WelcomePage() {
           <h1 className="text-3xl font-bold text-slate-900 mt-2 tracking-tight">Agentic Sourcing Command Center</h1>
           <p className="text-slate-600 mt-3 max-w-3xl leading-relaxed">
             Two connected systems: System 1 identifies where to act first (prioritization), and System 2 drives source-to-contract
-            execution with human oversight.
+            execution with human oversight. Long term, opportunity data should arrive from integrated systems (for example ERP APIs); ad
+            hoc file upload remains available when needed.
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
-            <Link href="/system-1/upload" className="px-4 py-2 rounded-lg bg-sponsor-blue text-white text-sm font-semibold">
-              Go to Sourcing Opportunity Data Upload
-            </Link>
-            <Link href="/heatmap" className="px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-semibold">
+            <Link href="/heatmap" className="px-4 py-2 rounded-lg bg-sponsor-blue text-white text-sm font-semibold">
               Open Heatmap Prioritization
             </Link>
             <Link href="/cases" className="px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-semibold">
               Open S2C Cases
             </Link>
+            <Link
+              href="/system-1/upload"
+              className="px-4 py-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 text-slate-600 text-sm font-medium hover:bg-slate-100"
+            >
+              Optional: bulk file upload
+            </Link>
           </div>
         </section>
+
+        <WelcomeAgentMesh />
 
         <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <article className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
             <h2 className="text-lg font-semibold text-slate-900">System 1: Opportunity Prioritization</h2>
             <ul className="mt-3 space-y-2 text-sm text-slate-600 list-disc list-inside">
-              <li>Accepts renewal and new-business signals from uploads and intake.</li>
+              <li>Designed for renewal and new-business signals from integrated sources (ERP/API roadmap), plus intake today.</li>
               <li>Scores urgency, impact, risk, and strategic alignment.</li>
               <li>Supports human review before approval and bridge to execution.</li>
             </ul>

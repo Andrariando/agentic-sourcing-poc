@@ -89,3 +89,95 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-mit-red); 
 }
+
+/* Welcome page — high-tech agent mesh visualization */
+@keyframes welcome-agent-scan {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  8% {
+    opacity: 0.12;
+  }
+  92% {
+    opacity: 0.12;
+  }
+  100% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+@keyframes welcome-agent-dash {
+  to {
+    stroke-dashoffset: -80;
+  }
+}
+
+@keyframes welcome-agent-node-pulse {
+  0%,
+  100% {
+    opacity: 0.22;
+  }
+  50% {
+    opacity: 0.65;
+  }
+}
+
+@keyframes welcome-agent-node-pulse-slow {
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.welcome-agent-grid {
+  background-image:
+    linear-gradient(rgba(34, 211, 238, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.06) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.welcome-agent-scan::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 40%;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(34, 211, 238, 0.06),
+    transparent
+  );
+  animation: welcome-agent-scan 7s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .welcome-agent-scan::after {
+    animation: none;
+    opacity: 0;
+  }
+  .welcome-agent-dash {
+    animation: none !important;
+  }
+  .welcome-agent-node-pulse,
+  .welcome-agent-node-pulse-slow {
+    animation: none !important;
+  }
+}
+
+.welcome-agent-dash {
+  animation: welcome-agent-dash 1.8s linear infinite;
+}
+
+.welcome-agent-node-pulse {
+  animation: welcome-agent-node-pulse 1.6s ease-in-out infinite;
+}
+
+.welcome-agent-node-pulse-slow {
+  animation: welcome-agent-node-pulse-slow 2.2s ease-in-out infinite;
+}

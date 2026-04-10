@@ -292,8 +292,9 @@ export default function System1UploadPage() {
         <header className="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
           <h1 className="text-2xl font-bold text-slate-900">Sourcing Opportunity Data Upload</h1>
           <p className="text-sm text-slate-600 mt-2 leading-relaxed">
-            Upload renewal/new-business source files, preview extracted opportunities, edit cells if anything looks
-            wrong, approve selected rows, then trigger scoring refresh. Nothing is persisted until approval.
+            Optional path for pilots: upload renewal/new-business source files, preview extracted opportunities, edit cells if
+            anything looks wrong, approve selected rows, then trigger scoring refresh. Nothing is persisted until approval. System
+            integration (for example ERP APIs) is the intended primary feed over time.
           </p>
         </header>
 

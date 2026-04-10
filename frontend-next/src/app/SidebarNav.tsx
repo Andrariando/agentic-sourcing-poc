@@ -10,6 +10,13 @@ function navCls(active: boolean): string {
   return "flex items-center px-3 py-2 text-sm font-medium rounded-md hover:bg-slate-800 hover:text-white transition-colors";
 }
 
+function navClsOptional(active: boolean): string {
+  if (active) {
+    return "flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-slate-100 text-slate-800 border border-slate-200";
+  }
+  return "flex items-center px-3 py-1.5 text-xs font-medium rounded-md text-slate-500 hover:bg-slate-800 hover:text-white transition-colors";
+}
+
 export default function SidebarNav() {
   const pathname = usePathname();
   const onWelcome = pathname === "/welcome";
@@ -47,8 +54,13 @@ export default function SidebarNav() {
           <Link href="/intake" className={navCls(onIntake)}>
             Sourcing Intake Form (New Request)
           </Link>
-          <Link href="/system-1/upload" className={navCls(onSystem1Upload)}>
-            Sourcing Opportunity Data Upload
+        </div>
+        <p className="px-3 mt-3 mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+          Optional import
+        </p>
+        <div className="space-y-1">
+          <Link href="/system-1/upload" className={navClsOptional(onSystem1Upload)}>
+            Bulk file upload (CSV / docs)
           </Link>
         </div>
       </div>
