@@ -91,6 +91,16 @@ class ApprovalRequest(BaseModel):
     approver_id: str
 
 
+class OpportunityDispositionUpdateRequest(BaseModel):
+    opportunity_id: int
+    disposition: str = Field(
+        pattern="^(renewal_candidate|not_pursuing|supplier_exit_planned|deferred|new_request)$"
+    )
+    not_pursue_reason_code: Optional[str] = None
+    comment_text: Optional[str] = ""
+    updated_by: str = "human-manager"
+
+
 class ApproveOpportunitiesResponse(BaseModel):
     success: bool
     approved_count: int
@@ -476,10 +486,18 @@ def list_opportunities(
         True,
         description="Include data_quality_warnings and kli_metrics (feedback-derived).",
     ),
+    include_not_pursuing: bool = Query(
+        True,
+        description="When false, excludes opportunities marked not_pursuing/supplier_exit_planned.",
+    ),
 ):
     session = heatmap_db.get_db_session()
     try:
         statement = select(Opportunity)
+        if not include_not_pursuing:
+            statement = statement.where(
+                Opportunity.disposition.not_in(["not_pursuing", "supplier_exit_planned"])
+            )
         results = session.exec(statement).all()
         cards = load_category_cards()
         cat_keys = iter_category_card_names(cards)
@@ -726,6 +744,51 @@ def approve_opportunities(req: ApprovalRequest):
     return ApproveOpportunitiesResponse(
         success=True, approved_count=count, cases=cases_str, already_linked=linked_str
     )
+
+
+@heatmap_router.post("/opportunities/disposition")
+def update_opportunity_disposition(req: OpportunityDispositionUpdateRequest):
+    session = heatmap_db.get_db_session()
+    try:
+        opp = session.get(Opportunity, req.opportunity_id)
+        if not opp:
+            raise HTTPException(status_code=404, detail="Opportunity not found")
+
+        reason_code = (req.not_pursue_reason_code or "").strip() or None
+        if req.disposition == "not_pursuing" and not reason_code:
+            raise HTTPException(
+                status_code=400,
+                detail="not_pursue_reason_code is required when disposition=not_pursuing",
+            )
+
+        old_payload = {
+            "disposition": opp.disposition,
+            "not_pursue_reason_code": opp.not_pursue_reason_code,
+        }
+
+        opp.disposition = req.disposition
+        opp.not_pursue_reason_code = reason_code if req.disposition == "not_pursuing" else None
+        session.add(opp)
+
+        audit = AuditLog(
+            event_type="OPPORTUNITY_DISPOSITION_UPDATED",
+            entity_id=str(opp.id),
+            old_value=json.dumps(old_payload),
+            new_value=json.dumps(
+                {
+                    "disposition": opp.disposition,
+                    "not_pursue_reason_code": opp.not_pursue_reason_code,
+                    "comment_text": (req.comment_text or "").strip()[:1000] or None,
+                }
+            ),
+            user_id=(req.updated_by or "human-manager").strip() or "human-manager",
+        )
+        session.add(audit)
+        session.commit()
+        session.refresh(opp)
+        return {"success": True, "opportunity": opp.model_dump(mode="json")}
+    finally:
+        session.close()
 
 @heatmap_router.post("/run")
 def run_pipeline():

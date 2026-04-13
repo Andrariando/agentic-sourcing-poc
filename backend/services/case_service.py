@@ -323,6 +323,57 @@ class CaseService:
         session.close()
         
         return True
+
+    def cancel_case(
+        self,
+        case_id: str,
+        reason_code: str,
+        reason_text: Optional[str],
+        cancelled_by: str,
+    ) -> bool:
+        """Cancel a case in execution with audit-friendly reason fields."""
+        session = get_db_session()
+        try:
+            case = session.exec(
+                select(CaseState).where(CaseState.case_id == case_id)
+            ).first()
+            if not case:
+                return False
+
+            now = datetime.now().isoformat()
+            case.status = "Cancelled"
+            case.cancel_reason_code = (reason_code or "").strip()[:100]
+            case.cancel_reason_text = (reason_text or "").strip()[:2000] or None
+            case.cancelled_at = now
+
+            existing_activity = []
+            if case.activity_log:
+                try:
+                    parsed = json.loads(case.activity_log)
+                    if isinstance(parsed, list):
+                        existing_activity = parsed
+                except json.JSONDecodeError:
+                    existing_activity = []
+
+            existing_activity.append(
+                {
+                    "timestamp": now,
+                    "agent_name": "System",
+                    "task_name": "CaseCancellation",
+                    "output_summary": (
+                        f"Case cancelled by {cancelled_by}: "
+                        f"{case.cancel_reason_code}"
+                        + (f" — {case.cancel_reason_text}" if case.cancel_reason_text else "")
+                    ),
+                }
+            )
+            case.activity_log = json.dumps(existing_activity)
+            case.updated_at = now
+            session.add(case)
+            session.commit()
+            return True
+        finally:
+            session.close()
     
     def _rehydrate_agent_output(self, output_dict: dict, agent_name: str):
         """

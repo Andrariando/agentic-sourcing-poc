@@ -73,11 +73,25 @@ class HeatmapDatabase(DatabaseInterface):
                 ("request_title", "TEXT"),
                 ("preferred_supplier_status", "TEXT"),
                 ("record_created_at", "TIMESTAMP"),
+                ("contract_end_date", "TIMESTAMP"),
+                ("disposition", "TEXT"),
+                ("not_pursue_reason_code", "TEXT"),
             ):
                 if name not in cols:
                     conn.execute(text(f"ALTER TABLE opportunity ADD COLUMN {name} {typ}"))
                     conn.commit()
             conn.execute(text("UPDATE opportunity SET source = 'batch' WHERE source IS NULL"))
+            conn.commit()
+            conn.execute(
+                text(
+                    "UPDATE opportunity SET disposition = "
+                    "CASE "
+                    "WHEN disposition IS NOT NULL THEN disposition "
+                    "WHEN contract_id IS NULL THEN 'new_request' "
+                    "ELSE 'renewal_candidate' "
+                    "END"
+                )
+            )
             conn.commit()
             conn.execute(
                 text(

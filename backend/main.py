@@ -11,7 +11,7 @@ import io
 import re
 from io import BytesIO
 from typing import Optional, List, Dict, Any, Literal
-from datetime import datetime
+from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
 from uuid import uuid4
 import threading
@@ -197,6 +197,7 @@ class System1UploadPreviewRow(BaseModel):
     supplier_name: Optional[str] = None
     contract_id: Optional[str] = None
     request_title: Optional[str] = None
+    contract_end_date: Optional[datetime] = None
     estimated_spend_usd: float = 0.0
     implementation_timeline_months: Optional[float] = None
     months_to_expiry: Optional[float] = None
@@ -226,6 +227,7 @@ class System1UploadRowOverride(BaseModel):
     supplier_name: Optional[str] = None
     contract_id: Optional[str] = None
     request_title: Optional[str] = None
+    contract_end_date: Optional[str] = None
     estimated_spend_usd: Optional[float] = None
     implementation_timeline_months: Optional[float] = None
     months_to_expiry: Optional[float] = None
@@ -286,6 +288,36 @@ def _safe_opt_float(raw: Any) -> Optional[float]:
         return None
 
 
+def _safe_opt_datetime(raw: Any) -> Optional[datetime]:
+    if raw is None:
+        return None
+    txt = str(raw).strip()
+    if not txt:
+        return None
+    # Accept common date forms from CSV/docs/UI overrides.
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%d-%m-%Y", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(txt, fmt)
+        except Exception:
+            pass
+    try:
+        # ISO variants, incl trailing Z.
+        dt = datetime.fromisoformat(txt.replace("Z", "+00:00"))
+        if dt.tzinfo is not None:
+            return dt.astimezone(tz=None).replace(tzinfo=None)
+        return dt
+    except Exception:
+        return None
+
+
+def _months_to_expiry_from_contract_end(contract_end_date: Optional[datetime]) -> Optional[float]:
+    if contract_end_date is None:
+        return None
+    now = datetime.utcnow()
+    delta_days = (contract_end_date - now).total_seconds() / 86400.0
+    return round(max(0.0, delta_days / 30.4375), 2)
+
+
 def _normalize_type(raw: Any, contract_id: Optional[str]) -> str:
     txt = (str(raw or "")).strip().lower()
     if contract_id:
@@ -299,8 +331,8 @@ def _finalize_upload_preview_row(row: System1UploadPreviewRow) -> System1UploadP
     warnings: List[str] = []
     if row.estimated_spend_usd <= 0:
         warnings.append("Missing or non-positive spend")
-    if row.row_type == "renewal" and row.months_to_expiry is None:
-        warnings.append("Renewal row missing months_to_expiry (will default conservatively)")
+    if row.row_type == "renewal" and row.months_to_expiry is None and row.contract_end_date is None:
+        warnings.append("Renewal row missing months_to_expiry/contract_end_date (will default conservatively)")
     if row.row_type == "new_business" and row.implementation_timeline_months is None:
         warnings.append("New business row missing implementation_timeline_months (will default to 6)")
     if not (row.supplier_name or "").strip():
@@ -325,6 +357,9 @@ def _merge_system1_upload_row(
     d["estimated_spend_usd"] = round(_safe_float(d.get("estimated_spend_usd"), 0.0), 2)
     d["implementation_timeline_months"] = _safe_opt_float(d.get("implementation_timeline_months"))
     d["months_to_expiry"] = _safe_opt_float(d.get("months_to_expiry"))
+    d["contract_end_date"] = _safe_opt_datetime(d.get("contract_end_date"))
+    if d["months_to_expiry"] is None:
+        d["months_to_expiry"] = _months_to_expiry_from_contract_end(d["contract_end_date"])
     for key in ("rss_score", "scs_score", "sas_score"):
         if d.get(key) is not None:
             d[key] = _safe_opt_float(d.get(key))
@@ -438,6 +473,14 @@ def _build_preview_row(raw: Dict[str, Any], filename: str, source_kind: str, row
         0.0,
     )
     months_to_expiry = _safe_opt_float(raw.get("months_to_expiry") or raw.get("expiry_months"))
+    contract_end_date = _safe_opt_datetime(
+        raw.get("contract_end_date")
+        or raw.get("expiry_date")
+        or raw.get("end_date")
+        or raw.get("contract_expiry_date")
+    )
+    if months_to_expiry is None:
+        months_to_expiry = _months_to_expiry_from_contract_end(contract_end_date)
     impl_months = _safe_opt_float(
         raw.get("implementation_timeline_months")
         or raw.get("implementation_months")
@@ -456,6 +499,7 @@ def _build_preview_row(raw: Dict[str, Any], filename: str, source_kind: str, row
         supplier_name=supplier_name,
         contract_id=contract_id,
         request_title=(str(raw.get("request_title") or raw.get("title") or "")).strip() or None,
+        contract_end_date=contract_end_date,
         estimated_spend_usd=round(spend, 2),
         implementation_timeline_months=impl_months,
         months_to_expiry=months_to_expiry,
@@ -681,6 +725,12 @@ class S2CProcuraBotFeedbackRequest(BaseModel):
     user_id: Optional[str] = "human-user"
 
 
+class CancelCaseRequest(BaseModel):
+    reason_code: str = Field(min_length=2, max_length=100)
+    reason_text: Optional[str] = Field(default=None, max_length=2000)
+    cancelled_by: str = Field(default="human-manager", min_length=1, max_length=80)
+
+
 @app.post("/api/cases/{case_id}/copilot/feedback")
 async def submit_s2c_copilot_feedback(case_id: str, body: S2CProcuraBotFeedbackRequest):
     vote = (body.vote or "").strip().lower()
@@ -708,6 +758,21 @@ async def submit_s2c_copilot_feedback(case_id: str, body: S2CProcuraBotFeedbackR
         return {"success": True, "feedback_id": row.id}
     finally:
         session.close()
+
+
+@app.post("/api/cases/{case_id}/cancel")
+async def cancel_case(case_id: str, body: CancelCaseRequest):
+    """Cancel a case already in execution, with reason code and free-text reason."""
+    service = get_case_service()
+    ok = service.cancel_case(
+        case_id=case_id,
+        reason_code=body.reason_code,
+        reason_text=body.reason_text,
+        cancelled_by=body.cancelled_by,
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="Case not found")
+    return {"success": True, "case_id": case_id, "status": "Cancelled"}
 
 
 @app.get("/api/s2c/performance/metrics")
@@ -1553,11 +1618,15 @@ async def system1_upload_approve(body: System1UploadApproveRequest):
                 recommended_action_window=_window_from_expiry_months(row.months_to_expiry),
                 justification_summary=justification,
                 status="Pending",
+                disposition="renewal_candidate",
+                not_pursue_reason_code=None,
                 source="upload_staged",
                 estimated_spend_usd=row.estimated_spend_usd,
                 implementation_timeline_months=None,
                 request_title=row.request_title,
                 preferred_supplier_status=row.preferred_supplier_status,
+                contract_end_date=row.contract_end_date
+                or (datetime.utcnow() + timedelta(days=(30.4375 * float(row.months_to_expiry or 9.0)))),
                 weights_used_json=json.dumps(
                     {
                         "w_eus": 0.30,

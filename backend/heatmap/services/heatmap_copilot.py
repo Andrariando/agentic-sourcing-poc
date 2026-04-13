@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlmodel import Session, select
@@ -17,6 +18,7 @@ from backend.infrastructure.storage_providers import get_heatmap_vector_store
 from backend.heatmap.services.feedback_memory import _parse_chroma_results
 
 MAX_OPPS_IN_CONTEXT = 80
+MAX_TARGETED_OPPS_IN_CONTEXT = 40
 MAX_FEEDBACK_ROWS = 40
 CHROMA_QA_TOP_K = 8
 
@@ -58,16 +60,92 @@ def _format_opportunity_line(o: Opportunity) -> str:
         f"CSIS={o.csis_score}",
         f"SAS={o.sas_score}",
         f"source={o.source}",
+        f"status={o.status}",
+        f"window={o.recommended_action_window or '—'}",
+        f"contract_end_date={o.contract_end_date.isoformat() if o.contract_end_date else '—'}",
+        f"est_spend_usd={o.estimated_spend_usd}",
+        f"impl_months={o.implementation_timeline_months}",
     ]
+    if o.contract_end_date:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        end_dt = o.contract_end_date
+        if end_dt.tzinfo is not None:
+            end_dt = end_dt.astimezone(tz=None).replace(tzinfo=None)
+        days = int((end_dt - now).total_seconds() // 86400)
+        parts.append(f"days_to_expiry={days}")
+    if o.justification_summary:
+        brief = str(o.justification_summary).replace("\n", " ").strip()
+        if len(brief) > 180:
+            brief = brief[:177] + "..."
+        parts.append(f"justification={brief}")
     return " | ".join(str(p) for p in parts)
 
 
-def build_opportunities_context(session: Session) -> str:
+def _extract_query_terms(question: str) -> List[str]:
+    q = (question or "").strip()
+    if not q:
+        return []
+    terms: List[str] = []
+    # Likely IDs (REQ-..., CNT-..., etc.)
+    for t in re.findall(r"\b[A-Za-z]{2,6}-[A-Za-z0-9][A-Za-z0-9\-_]{2,}\b", q):
+        terms.append(t.lower())
+    # Quoted entity names ("CloudServe Group")
+    for t in re.findall(r"\"([^\"]{3,})\"", q):
+        terms.append(t.strip().lower())
+    # Deduplicate, keep only meaningful terms.
+    out: List[str] = []
+    seen = set()
+    for t in terms:
+        tt = t.strip()
+        if len(tt) < 3:
+            continue
+        if tt in seen:
+            continue
+        seen.add(tt)
+        out.append(tt)
+    return out
+
+
+def _row_match_blob(o: Opportunity) -> str:
+    return " ".join(
+        [
+            str(o.id or ""),
+            str(o.supplier_name or ""),
+            str(o.contract_id or ""),
+            str(o.request_id or ""),
+            str(o.request_title or ""),
+            str(o.category or ""),
+            str(o.subcategory or ""),
+        ]
+    ).lower()
+
+
+def build_opportunities_context(session: Session, question: str = "") -> str:
     stmt = select(Opportunity).order_by(Opportunity.total_score.desc())
     rows = session.exec(stmt).all()
     if not rows:
         return "(No opportunities in database.)"
-    lines = [_format_opportunity_line(o) for o in rows[:MAX_OPPS_IN_CONTEXT]]
+
+    top_rows = rows[:MAX_OPPS_IN_CONTEXT]
+    lines = [_format_opportunity_line(o) for o in top_rows]
+
+    query_terms = _extract_query_terms(question)
+    if query_terms:
+        top_ids = {int(o.id or -1) for o in top_rows}
+        targeted: List[Opportunity] = []
+        for o in rows:
+            if int(o.id or -1) in top_ids:
+                continue
+            blob = _row_match_blob(o)
+            if any(t in blob for t in query_terms):
+                targeted.append(o)
+            if len(targeted) >= MAX_TARGETED_OPPS_IN_CONTEXT:
+                break
+        if targeted:
+            lines.append("")
+            lines.append("=== TARGETED MATCHES FOR QUESTION TERMS ===")
+            lines.extend(_format_opportunity_line(o) for o in targeted)
+
     if len(rows) > MAX_OPPS_IN_CONTEXT:
         lines.append(f"... and {len(rows) - MAX_OPPS_IN_CONTEXT} more rows not shown.")
     return "\n".join(lines)
@@ -118,7 +196,7 @@ def answer_heatmap_question(session: Session, question: str) -> Tuple[str, bool]
     if len(question) < 3:
         return "Please enter a longer question.", False
 
-    opps = build_opportunities_context(session)
+    opps = build_opportunities_context(session, question)
     fb_sql = build_sql_feedback_context(session)
     fb_chroma = chroma_snippets_for_question(question)
 
@@ -147,7 +225,9 @@ Rules (must follow):
 2) You MUST NOT change, recalculate, or contradict the stored total_score or tier — treat them as ground truth.
 3) For comparisons ("why is X above Y"), locate both rows in <DATA> by supplier name and/or request_id/contract_id/id. Compare total_score and tier; briefly cite relevant sub-scores if present.
 4) If you cannot find an entity in <DATA>, say so clearly instead of guessing.
-5) Be concise (2–6 short paragraphs or bullet list). Plain English.
+5) If asked about expiry timing, use `window` and `EUS` (expiry urgency score) to explain when action is needed.
+6) If asked for score details, provide a short breakdown using total + available component scores (EUS/IUS/FIS/ES/RSS/SCS/CSIS/SAS) and mention the tier.
+7) Be concise (2–6 short paragraphs or bullet list). Plain English.
 
 <DATA>
 {context}

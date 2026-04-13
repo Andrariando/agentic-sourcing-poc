@@ -277,6 +277,9 @@ export default function CaseProcuraBotPage() {
   const [optionalSupplierRegion, setOptionalSupplierRegion] = useState("");
   const [packExportError, setPackExportError] = useState<string | null>(null);
   const [packExportLoading, setPackExportLoading] = useState<string | null>(null);
+  const [cancelReasonCode, setCancelReasonCode] = useState("strategy_change");
+  const [cancelReasonText, setCancelReasonText] = useState("");
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
 
   useEffect(() => {
     setDemoAddedShortlistRows([]);
@@ -532,6 +535,8 @@ export default function CaseProcuraBotPage() {
   const displayName = caseDetails?.name || "Case";
   const displayCategory = caseDetails?.category_id || "Category";
   const displayStage = caseDetails?.dtp_stage || "DTP-01";
+  const caseStatus = String(caseDetails?.status || "In Progress");
+  const isCaseCancelled = caseStatus.toLowerCase() === "cancelled";
   
   // Derive display text from the real API schema
   const summaryText = caseDetails?.summary?.summary_text || "Analyzing background signals and compiling case recommendations...";
@@ -630,6 +635,33 @@ export default function CaseProcuraBotPage() {
     setOptionalSupplierRegion("");
   };
 
+  const handleCancelCase = async () => {
+    if (!hasLiveCase || isCaseCancelled) return;
+    setCancelSubmitting(true);
+    try {
+      const res = await apiFetch(`${getApiBaseUrl()}/api/cases/${encodeURIComponent(caseId)}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reason_code: cancelReasonCode,
+          reason_text: cancelReasonText || undefined,
+          cancelled_by: "human-manager",
+        }),
+      });
+      if (!res.ok) {
+        const t = await res.text().catch(() => "");
+        throw new Error(t || `Cancel failed (${res.status})`);
+      }
+      await refreshCaseMeta();
+      alert("Case cancelled successfully.");
+    } catch (e) {
+      console.error(e);
+      alert("Could not cancel this case.");
+    } finally {
+      setCancelSubmitting(false);
+    }
+  };
+
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden w-full m-0 p-0 font-sans">
       
@@ -664,8 +696,10 @@ export default function CaseProcuraBotPage() {
             </div>
           </div>
           {hasLiveCase ? (
-            <span className="inline-flex shrink-0 items-center justify-center whitespace-nowrap bg-sponsor-orange text-white px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide shadow-sm self-center">
-              In Progress
+            <span className={`inline-flex shrink-0 items-center justify-center whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide shadow-sm self-center ${
+              isCaseCancelled ? "bg-slate-200 text-slate-700" : "bg-sponsor-orange text-white"
+            }`}>
+              {caseStatus}
             </span>
           ) : (
             <span className="inline-flex shrink-0 items-center justify-center whitespace-nowrap bg-blue-900/60 text-blue-100 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide border border-blue-400/30 self-center">
@@ -757,6 +791,52 @@ export default function CaseProcuraBotPage() {
               {riskAssessment && (
                 <p className="text-sm text-slate-700 mt-3 pt-3 border-t border-slate-100"><span className="font-semibold">Risk note:</span> {riskAssessment}</p>
               )}
+            </div>
+          </motion.div>
+
+          <motion.div variants={item} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="bg-slate-50 border-b border-slate-200 p-4">
+              <h3 className="text-slate-800 font-bold text-sm">Execution cancellation</h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Use when execution has started but should be stopped with a captured reason.
+              </p>
+            </div>
+            <div className="p-4 space-y-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">Reason code</label>
+                <select
+                  value={cancelReasonCode}
+                  onChange={(e) => setCancelReasonCode(e.target.value)}
+                  className="w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm"
+                  disabled={isCaseCancelled || cancelSubmitting}
+                >
+                  <option value="strategy_change">Strategy change</option>
+                  <option value="budget_cut">Budget cut</option>
+                  <option value="scope_change">Scope change</option>
+                  <option value="supplier_issue">Supplier issue</option>
+                  <option value="duplicate_case">Duplicate case</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">Reason details (optional)</label>
+                <textarea
+                  value={cancelReasonText}
+                  onChange={(e) => setCancelReasonText(e.target.value)}
+                  rows={2}
+                  className="w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm"
+                  placeholder="Explain why execution is being cancelled..."
+                  disabled={isCaseCancelled || cancelSubmitting}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleCancelCase()}
+                disabled={isCaseCancelled || cancelSubmitting}
+                className="inline-flex items-center justify-center rounded-md bg-red-600 text-white px-3 py-2 text-xs font-semibold hover:bg-red-700 disabled:opacity-50"
+              >
+                {isCaseCancelled ? "Case already cancelled" : cancelSubmitting ? "Cancelling..." : "Cancel execution"}
+              </button>
             </div>
           </motion.div>
 

@@ -191,6 +191,8 @@ def persist_intake_opportunity(
         recommended_action_window=None,
         justification_summary=justification,
         status="Pending",
+        disposition="new_request",
+        not_pursue_reason_code=None,
         source="intake",
         estimated_spend_usd=float(estimated_spend_usd),
         implementation_timeline_months=float(implementation_timeline_months),

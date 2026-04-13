@@ -34,6 +34,8 @@ class Opportunity(SQLModel, table=True):
     justification_summary: Optional[str] = Field(default=None)
     confidence_level: str = Field(default="High")
     status: str = Field(default="Pending") # Pending, Approved, Rejected
+    disposition: str = Field(default="renewal_candidate")  # renewal_candidate, not_pursuing, supplier_exit_planned, deferred, new_request
+    not_pursue_reason_code: Optional[str] = Field(default=None)
     last_refresh_ts: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     record_created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -43,6 +45,7 @@ class Opportunity(SQLModel, table=True):
     implementation_timeline_months: Optional[float] = Field(default=None)
     request_title: Optional[str] = Field(default=None)
     preferred_supplier_status: Optional[str] = Field(default=None)
+    contract_end_date: Optional[datetime] = Field(default=None, index=True)
 
 
 class OpportunitySignal(SQLModel, table=True):

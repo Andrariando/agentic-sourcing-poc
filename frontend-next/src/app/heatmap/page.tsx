@@ -100,6 +100,23 @@ const WEIGHT_LABELS: Record<string, string> = {
   w_sas_contract: "SAS — strategic alignment (renewal)",
 };
 
+const DISPOSITION_OPTIONS = [
+  { value: "renewal_candidate", label: "Renewal candidate" },
+  { value: "not_pursuing", label: "Do not pursue" },
+  { value: "supplier_exit_planned", label: "Supplier exit planned" },
+  { value: "deferred", label: "Deferred" },
+  { value: "new_request", label: "New request" },
+] as const;
+
+const NOT_PURSUE_REASON_OPTIONS = [
+  "strategy_change",
+  "performance_concerns",
+  "supplier_consolidation",
+  "budget_constraints",
+  "replaced_by_alternative",
+  "other",
+] as const;
+
 function parseInlineMarkdown(text: string): React.ReactNode {
   const parts: React.ReactNode[] = [];
   let key = 0;
@@ -236,6 +253,8 @@ export default function HeatmapPriorityPage() {
   /** Selected reason ids from PRIORITY_OVERRIDE_REASONS (multi-select). */
   const [feedbackReasonKeys, setFeedbackReasonKeys] = useState<string[]>([]);
   const [feedbackReason, setFeedbackReason] = useState<string>("");
+  const [reviewDisposition, setReviewDisposition] = useState<string>("renewal_candidate");
+  const [reviewNotPursueReason, setReviewNotPursueReason] = useState<string>("");
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [feedbackHistory, setFeedbackHistory] = useState<
     | {
@@ -395,6 +414,8 @@ export default function HeatmapPriorityPage() {
     setFeedbackTier(opp.tier);
     setFeedbackReason("");
     setFeedbackReasonKeys([]);
+    setReviewDisposition(String(opp?.disposition || (opp?.contract_id ? "renewal_candidate" : "new_request")));
+    setReviewNotPursueReason(String(opp?.not_pursue_reason_code || ""));
     setFeedbackHistory(null);
     setFeedbackHistoryLoading(true);
     setScoringWeights(null);
@@ -428,11 +449,16 @@ export default function HeatmapPriorityPage() {
   // Feedback Submission Logic
   const submitFeedback = async () => {
     if (!reviewOpp) return;
-    if (feedbackReasonKeys.length === 0 && feedbackReason.trim().length < 8) {
+    const isNotPursuing = reviewDisposition === "not_pursuing";
+    if (isNotPursuing && reviewNotPursueReason.trim().length < 2) {
+      window.alert("Select a do-not-pursue reason code.");
+      return;
+    }
+    if (!isNotPursuing && feedbackReasonKeys.length === 0 && feedbackReason.trim().length < 8) {
       window.alert("Select at least one reason for the adjustment, or enter a short rationale in the text box (or both).");
       return;
     }
-    if (feedbackReasonKeys.includes("other") && feedbackReason.trim().length < 8) {
+    if (!isNotPursuing && feedbackReasonKeys.includes("other") && feedbackReason.trim().length < 8) {
       window.alert('When "Others" is selected, add a bit more detail in the additional notes box.');
       return;
     }
@@ -454,6 +480,24 @@ export default function HeatmapPriorityPage() {
           : undefined;
 
       const combinedNotes = buildPriorityOverrideNotes(feedbackReasonKeys, feedbackReason);
+
+      // Persist pursuit disposition from review workflow first.
+      const dispRes = await apiFetch(`${getApiBaseUrl()}/api/heatmap/opportunities/disposition`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          opportunity_id: reviewOpp.id,
+          disposition: reviewDisposition,
+          not_pursue_reason_code: isNotPursuing ? reviewNotPursueReason : undefined,
+          updated_by: "human-manager",
+        }),
+      });
+      if (!dispRes.ok) {
+        const t = await dispRes.text().catch(() => "");
+        throw new Error(t || `Disposition update failed (${dispRes.status})`);
+      }
+      const dispData = await dispRes.json().catch(() => ({} as { opportunity?: Record<string, unknown> }));
+      const dispOpp = (dispData?.opportunity ?? {}) as Record<string, unknown>;
 
       const payload = {
         opportunity_id: reviewOpp.id,
@@ -482,6 +526,8 @@ export default function HeatmapPriorityPage() {
               ...o,
               tier: snap?.tier ?? feedbackTier,
               total_score: snap?.total_score ?? o.total_score,
+              disposition: String(dispOpp.disposition ?? reviewDisposition),
+              not_pursue_reason_code: dispOpp.not_pursue_reason_code ?? (isNotPursuing ? reviewNotPursueReason : null),
               reviewed: true,
               kli_metrics: {
                 ...(o?.kli_metrics ?? {}),
@@ -497,7 +543,7 @@ export default function HeatmapPriorityPage() {
           snap?.total_score != null && !Number.isNaN(Number(snap.total_score))
             ? ` Priority score is now ${Number(snap.total_score).toFixed(1)}/10.`
             : "";
-        const baseSavedMsg = `Review saved for ${reviewOpp.supplier_name || "this opportunity"} (priority ${heatmapTierLabel(feedbackTier)}).${scorePart} Your feedback is stored in the audit log.`;
+        const baseSavedMsg = `Review saved for ${reviewOpp.supplier_name || "this opportunity"} (priority ${heatmapTierLabel(feedbackTier)}).${scorePart} Pursuit decision is updated and stored in the audit log.`;
 
         setReviewOpp(null);
 
@@ -521,6 +567,11 @@ export default function HeatmapPriorityPage() {
   };
 
   const handleApproveToExecution = async (opp: any) => {
+    const disposition = String(opp?.disposition || "");
+    if (disposition === "not_pursuing" || disposition === "supplier_exit_planned") {
+      alert("This opportunity is marked as not for execution. Change disposition first if needed.");
+      return;
+    }
     if (isOpportunityApproved(opp)) return;
     if (!isOpportunityReviewed(opp)) {
       alert("Review this opportunity first before approving to S2C Execution.");
@@ -562,6 +613,7 @@ export default function HeatmapPriorityPage() {
       alert("Network error approving to S2C Execution.");
     }
   };
+
 
   const handleRefreshScores = async () => {
     setPipelineRunning(true);
@@ -1308,6 +1360,8 @@ export default function HeatmapPriorityPage() {
                               <span className="inline-flex items-center text-xs font-semibold uppercase px-2 py-1 rounded bg-green-100 text-green-700 border border-green-200">
                                 Approved
                               </span>
+                            ) : opp?.disposition === "not_pursuing" || opp?.disposition === "supplier_exit_planned" ? (
+                              <span className="text-xs text-slate-400">Execution blocked by disposition</span>
                             ) : reviewed ? (
                               <button
                                 type="button"
@@ -1881,6 +1935,36 @@ export default function HeatmapPriorityPage() {
                   </p>
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div className="lg:border-r lg:border-slate-100 lg:pr-6">
+                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Pursuit Decision</label>
+                      <select
+                        className="w-full border border-slate-300 rounded-lg shadow-sm py-2.5 px-3 text-sm focus:ring-2 focus:ring-sponsor-blue/20 focus:border-sponsor-blue font-medium bg-slate-50 cursor-pointer"
+                        value={reviewDisposition}
+                        onChange={(e) => setReviewDisposition(e.target.value)}
+                      >
+                        {DISPOSITION_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                      {reviewDisposition === "not_pursuing" && (
+                        <div className="mt-3">
+                          <label className="block text-[11px] font-semibold text-slate-600 mb-1.5">Do-not-pursue reason code</label>
+                          <select
+                            className="w-full border border-slate-300 rounded-lg shadow-sm py-2 px-3 text-sm focus:ring-2 focus:ring-sponsor-blue/20 focus:border-sponsor-blue bg-white"
+                            value={reviewNotPursueReason}
+                            onChange={(e) => setReviewNotPursueReason(e.target.value)}
+                          >
+                            <option value="">Select a reason</option>
+                            {NOT_PURSUE_REASON_OPTIONS.map((code) => (
+                              <option key={code} value={code}>
+                                {code}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                      <div className="my-4 border-t border-slate-100" />
                       <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Adjust Priority</label>
                       <select 
                         className="w-full border border-slate-300 rounded-lg shadow-sm py-2.5 px-3 text-sm focus:ring-2 focus:ring-sponsor-blue/20 focus:border-sponsor-blue font-medium bg-slate-50 cursor-pointer"

@@ -150,6 +150,8 @@ def run_init():
                 recommended_action_window=opp.get("action_window"),
                 justification_summary=opp.get("justification_summary"),
                 status="Pending",
+                disposition="new_request" if is_new else "renewal_candidate",
+                not_pursue_reason_code=None,
                 source="batch",
                 estimated_spend_usd=est,
                 implementation_timeline_months=impl_mo,

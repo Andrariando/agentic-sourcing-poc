@@ -69,6 +69,9 @@ def init_db():
     engine = get_engine()
     SQLModel.metadata.create_all(engine)
     _sqlite_add_column_if_missing("case_states", "working_documents_json", "working_documents_json TEXT")
+    _sqlite_add_column_if_missing("case_states", "cancel_reason_code", "cancel_reason_code TEXT")
+    _sqlite_add_column_if_missing("case_states", "cancel_reason_text", "cancel_reason_text TEXT")
+    _sqlite_add_column_if_missing("case_states", "cancelled_at", "cancelled_at TEXT")
 
 
 def get_session() -> Generator[Session, None, None]:

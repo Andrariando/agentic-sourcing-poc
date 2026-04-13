@@ -142,6 +142,9 @@ class CaseBridgeService:
                 if not opp:
                     continue
 
+                if opp.disposition in {"not_pursuing", "supplier_exit_planned"}:
+                    continue
+
                 existing = self._existing_case_for_opportunity(session, opp_id)
                 if existing:
                     if opp.status != "Approved":

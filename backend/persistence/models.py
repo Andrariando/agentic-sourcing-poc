@@ -202,6 +202,9 @@ class CaseState(SQLModel, table=True):
     # Core state
     dtp_stage: str = Field(default="DTP-01")
     status: str = Field(default="Open")
+    cancel_reason_code: Optional[str] = None
+    cancel_reason_text: Optional[str] = None
+    cancelled_at: Optional[str] = None
     
     # Identifiers
     category_id: str

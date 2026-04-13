@@ -137,6 +137,58 @@ def test_data_quality_warnings_helper():
     assert any("category" in x.lower() for x in w)
 
 
+def test_opportunity_not_pursue_and_filter_exclusion(client: TestClient):
+    r = client.get("/api/heatmap/opportunities?enrich=false")
+    assert r.status_code == 200
+    opps = r.json()["opportunities"]
+    assert opps
+    oid = opps[0]["id"]
+
+    u = client.post(
+        "/api/heatmap/opportunities/disposition",
+        json={
+            "opportunity_id": oid,
+            "disposition": "not_pursuing",
+            "not_pursue_reason_code": "strategy_change",
+            "comment_text": "No longer in scope",
+            "updated_by": "pytest",
+        },
+    )
+    assert u.status_code == 200
+    updated = u.json()["opportunity"]
+    assert updated["disposition"] == "not_pursuing"
+    assert updated["not_pursue_reason_code"] == "strategy_change"
+
+    f = client.get("/api/heatmap/opportunities?enrich=false&include_not_pursuing=false")
+    assert f.status_code == 200
+    ids = {o["id"] for o in f.json()["opportunities"]}
+    assert oid not in ids
+
+
+def test_case_cancel_with_reason(client: TestClient):
+    c = client.post(
+        "/api/cases",
+        json={"category_id": "IT Infrastructure", "trigger_source": "pytest"},
+    )
+    assert c.status_code == 200
+    case_id = c.json()["case_id"]
+
+    k = client.post(
+        f"/api/cases/{case_id}/cancel",
+        json={
+            "reason_code": "budget_cut",
+            "reason_text": "Stopped after budget re-baseline",
+            "cancelled_by": "pytest-user",
+        },
+    )
+    assert k.status_code == 200
+    assert k.json()["status"] == "Cancelled"
+
+    g = client.get(f"/api/cases/{case_id}")
+    assert g.status_code == 200
+    assert g.json()["status"] == "Cancelled"
+
+
 def test_category_cards_extract_from_unstructured_text(client: TestClient):
     raw_text = """
     Default supplier status: allowed
