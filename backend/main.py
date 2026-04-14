@@ -177,13 +177,25 @@ app.add_middleware(
 
 from backend.heatmap.heatmap_router import heatmap_router, _start_heatmap_pipeline_background
 from backend.heatmap.persistence.heatmap_models import Opportunity
-from backend.heatmap.services.intake_scoring import persist_intake_opportunity
+from backend.heatmap.services.system1_scoring_orchestrator import enrich_rows_for_preview
 app.include_router(heatmap_router, prefix="/api/heatmap", tags=["heatmap"])
 
 
 ALLOWED_SYSTEM1_UPLOAD_EXTENSIONS = {".pdf", ".docx", ".txt", ".csv", ".xls", ".xlsx"}
 _system1_upload_jobs: Dict[str, Dict[str, Any]] = {}
 _system1_upload_lock = threading.Lock()
+_SYSTEM1_TEMPLATES: Dict[str, str] = {
+    "renewals_template.csv": (
+        "row_type,category,subcategory,supplier_name,contract_id,contract_end_date,months_to_expiry,"
+        "estimated_spend_usd,preferred_supplier_status,rss_score,scs_score,sas_score\n"
+        "renewal,IT Infrastructure,Cloud Hosting,TechGlobal Inc,CNT-2026-100,2026-12-31,8,2500000,allowed,,,\n"
+    ),
+    "new_business_template.csv": (
+        "row_type,category,subcategory,supplier_name,request_title,estimated_spend_usd,"
+        "implementation_timeline_months,preferred_supplier_status\n"
+        "new_business,Software,SaaS,WidgetCo,Enterprise SSO rollout,500000,5,preferred\n"
+    ),
+}
 
 
 class System1UploadPreviewRow(BaseModel):
@@ -205,6 +217,14 @@ class System1UploadPreviewRow(BaseModel):
     rss_score: Optional[float] = None
     scs_score: Optional[float] = None
     sas_score: Optional[float] = None
+    score_components: Dict[str, Any] = Field(default_factory=dict)
+    weights_used: Dict[str, float] = Field(default_factory=dict)
+    computed_total_score: Optional[float] = None
+    computed_tier: Optional[str] = None
+    computed_confidence: Optional[float] = None
+    readiness_status: str = "ready"
+    readiness_warnings: List[str] = Field(default_factory=list)
+    recommended_action_window: Optional[str] = None
     warnings: List[str] = Field(default_factory=list)
     valid_for_approval: bool = True
 
@@ -242,6 +262,7 @@ class System1UploadApproveRequest(BaseModel):
     approved_row_ids: List[str]
     approver_id: str = "human-user"
     row_overrides: Optional[Dict[str, System1UploadRowOverride]] = None
+    acknowledge_warning_row_ids: List[str] = Field(default_factory=list)
 
 
 class System1UploadApproveResponse(BaseModel):
@@ -262,6 +283,7 @@ class System1UploadJobStatusResponse(BaseModel):
     created_opportunity_ids: List[int] = Field(default_factory=list)
     run_triggered: bool = False
     parsing_notes: List[str] = Field(default_factory=list)
+    warning_rows_count: int = 0
 
 
 def _safe_float(raw: Any, default: float = 0.0) -> float:
@@ -442,7 +464,11 @@ Text source: {filename}
         return []
 
 
-def _extract_rows_from_structured_file(content: bytes, filename: str) -> List[Dict[str, Any]]:
+def _extract_rows_from_structured_file(
+    content: bytes,
+    filename: str,
+    column_mapping: Optional[Dict[str, str]] = None,
+) -> List[Dict[str, Any]]:
     try:
         import pandas as pd
     except Exception:
@@ -455,8 +481,15 @@ def _extract_rows_from_structured_file(content: bytes, filename: str) -> List[Di
     else:
         return []
     out: List[Dict[str, Any]] = []
+    mapping = {str(k).strip().lower(): str(v).strip().lower() for k, v in (column_mapping or {}).items()}
     for row in df.to_dict(orient="records"):
-        out.append({str(k).strip().lower(): v for k, v in row.items()})
+        normalized = {str(k).strip().lower(): v for k, v in row.items()}
+        if mapping:
+            remapped: Dict[str, Any] = {}
+            for k, v in normalized.items():
+                remapped[mapping.get(k, k)] = v
+            normalized = remapped
+        out.append(normalized)
     return out
 
 
@@ -511,32 +544,6 @@ def _build_preview_row(raw: Dict[str, Any], filename: str, source_kind: str, row
         valid_for_approval=True,
     )
     return _finalize_upload_preview_row(row)
-
-
-def _eus_from_expiry_months(months_to_expiry: Optional[float]) -> float:
-    m = months_to_expiry if months_to_expiry is not None else 9.0
-    if m <= 1:
-        return 10.0
-    if m <= 3:
-        return 9.0
-    if m <= 6:
-        return 7.0
-    if m <= 12:
-        return 5.0
-    if m <= 24:
-        return 3.0
-    return 1.0
-
-
-def _window_from_expiry_months(months_to_expiry: Optional[float]) -> str:
-    m = months_to_expiry if months_to_expiry is not None else 9.0
-    if m <= 3:
-        return "Critical (<3 mo)"
-    if m <= 6:
-        return "High (3–6 mo)"
-    if m <= 12:
-        return "Standard (6–12 mo)"
-    return "Planned (>12 mo)"
 
 
 # ============================================================
@@ -1459,9 +1466,35 @@ async def get_ingestion_history(
 # SYSTEM 1 STAGED UPLOAD ENDPOINTS
 # ============================================================
 
+@app.get("/api/system1/upload/templates")
+async def system1_upload_templates():
+    return {
+        "templates": [
+            {
+                "name": name,
+                "download_url": f"/api/system1/upload/templates/{name}",
+            }
+            for name in sorted(_SYSTEM1_TEMPLATES.keys())
+        ]
+    }
+
+
+@app.get("/api/system1/upload/templates/{template_name}")
+async def system1_upload_template_download(template_name: str):
+    if template_name not in _SYSTEM1_TEMPLATES:
+        raise HTTPException(status_code=404, detail="Template not found.")
+    content = _SYSTEM1_TEMPLATES[template_name].encode("utf-8")
+    return StreamingResponse(
+        BytesIO(content),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{template_name}"'},
+    )
+
+
 @app.post("/api/system1/upload/preview", response_model=System1UploadPreviewResponse)
 async def system1_upload_preview(
     files: List[UploadFile] = File(...),
+    column_mapping_json: Optional[str] = Form(None),
 ):
     """
     Stage 1: Upload files and preview normalized opportunity rows.
@@ -1472,6 +1505,15 @@ async def system1_upload_preview(
 
     candidates: List[System1UploadPreviewRow] = []
     parsing_notes: List[str] = []
+
+    column_mapping: Optional[Dict[str, str]] = None
+    if column_mapping_json:
+        try:
+            parsed = json.loads(column_mapping_json)
+            if isinstance(parsed, dict):
+                column_mapping = {str(k): str(v) for k, v in parsed.items()}
+        except Exception:
+            raise HTTPException(status_code=400, detail="column_mapping_json must be valid JSON object.")
 
     for f in files:
         filename = (f.filename or "").strip() or "upload.bin"
@@ -1487,7 +1529,7 @@ async def system1_upload_preview(
         raw_rows: List[Dict[str, Any]] = []
         source_kind = "structured" if ext in {".csv", ".xls", ".xlsx"} else "document"
         if source_kind == "structured":
-            raw_rows = _extract_rows_from_structured_file(content, filename)
+            raw_rows = _extract_rows_from_structured_file(content, filename, column_mapping=column_mapping)
             if not raw_rows:
                 parsing_notes.append(f"No parseable rows found in {filename}")
         else:
@@ -1511,6 +1553,12 @@ async def system1_upload_preview(
             detail="No candidate opportunities extracted. Use CSV/XLS with mapped columns or richer document content.",
         )
 
+    scored_rows = enrich_rows_for_preview([c.model_dump() for c in candidates])
+    candidates = [System1UploadPreviewRow(**r) for r in scored_rows]
+    for c in candidates:
+        c.warnings = list(dict.fromkeys([*c.warnings, *c.readiness_warnings]))
+        c.valid_for_approval = bool(c.valid_for_approval and c.readiness_status != "needs_review")
+
     job_id = f"up-{uuid4().hex[:12]}"
     valid_candidates = sum(1 for c in candidates if c.valid_for_approval)
     with _system1_upload_lock:
@@ -1522,6 +1570,7 @@ async def system1_upload_preview(
             "approved_count": 0,
             "created_opportunity_ids": [],
             "run_triggered": False,
+            "warning_rows_count": len([c for c in candidates if c.readiness_status == "ready_with_warnings"]),
             "parsing_notes": parsing_notes,
             "candidates": [c.model_dump() for c in candidates],
         }
@@ -1556,87 +1605,76 @@ async def system1_upload_approve(body: System1UploadApproveRequest):
         if not base:
             continue
         merged.append(_merge_system1_upload_row(base, overrides.get(rid)))
-    selected = [r for r in merged if r.valid_for_approval]
+    rescored = enrich_rows_for_preview([r.model_dump() for r in merged])
+    rescored_rows = [System1UploadPreviewRow(**r) for r in rescored]
+    selected = [r for r in rescored_rows if r.valid_for_approval and r.readiness_status != "needs_review"]
     if not selected:
         raise HTTPException(
             status_code=400,
             detail="No valid selected rows to approve after edits. Ensure spend is positive and required fields are set.",
         )
+    warning_row_ids = {r.row_id for r in selected if r.readiness_status == "ready_with_warnings"}
+    acknowledged = set(body.acknowledge_warning_row_ids or [])
+    missing_ack = sorted(list(warning_row_ids - acknowledged))
+    if missing_ack:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Some selected rows have warnings and require acknowledgment before approval: "
+                + ", ".join(missing_ack[:10])
+            ),
+        )
 
     session = get_heatmap_db().get_db_session()
     created_ids: List[int] = []
     try:
-        renewals = [r for r in selected if r.row_type == "renewal"]
-        renewal_max_spend = max([r.estimated_spend_usd for r in renewals], default=1.0)
-
         for row in selected:
-            if row.row_type == "new_business":
-                opp = persist_intake_opportunity(
-                    session,
-                    request_title=row.request_title,
-                    category=row.category,
-                    subcategory=row.subcategory,
-                    supplier_name=row.supplier_name,
-                    estimated_spend_usd=max(0.0, float(row.estimated_spend_usd)),
-                    implementation_timeline_months=float(row.implementation_timeline_months or 6.0),
-                    preferred_supplier_status=row.preferred_supplier_status,
-                    justification_summary_text=f"Staged upload approved by {body.approver_id}",
-                )
-                created_ids.append(int(opp.id))
-                continue
-
-            # Renewal scoring path (contract-like): EUS, FIS, RSS, SCS, SAS weighted sum.
-            eus = _eus_from_expiry_months(row.months_to_expiry)
-            fis = round(min(10.0, max(0.0, (row.estimated_spend_usd / max(renewal_max_spend, 1.0)) * 10.0)), 2)
-            rss = round(min(10.0, max(0.0, float(row.rss_score if row.rss_score is not None else 5.0))), 2)
-            scs = round(min(10.0, max(0.0, float(row.scs_score if row.scs_score is not None else 5.0))), 2)
-            sas = round(min(10.0, max(0.0, float(row.sas_score if row.sas_score is not None else 5.0))), 2)
-            total = round((0.30 * eus) + (0.25 * fis) + (0.20 * rss) + (0.15 * scs) + (0.10 * sas), 2)
-            tier = "T1" if total >= 8.0 else "T2" if total >= 6.0 else "T3" if total >= 4.0 else "T4"
+            comp = row.score_components or {}
+            ius = comp.get("ius_score", {}).get("value")
+            es = comp.get("es_score", {}).get("value")
+            csis = comp.get("csis_score", {}).get("value")
+            eus = comp.get("eus_score", {}).get("value")
+            fis = comp.get("fis_score", {}).get("value")
+            rss = comp.get("rss_score", {}).get("value")
+            scs = comp.get("scs_score", {}).get("value")
+            sas = comp.get("sas_score", {}).get("value")
+            is_new = row.row_type == "new_business"
             justification = (
-                f"Contract scored {total:.2f}. "
-                f"EUS({eus})*0.3 + FIS({fis})*0.25 + RSS({rss})*0.2 + SCS({scs})*0.15 + SAS({sas})*0.1 "
-                f"| Source: staged upload approved by {body.approver_id}"
+                f"System1 staged scoring ({row.row_type}) by specialist orchestration. "
+                f"Readiness={row.readiness_status}; confidence={row.computed_confidence}."
             )
-
             opp = Opportunity(
-                contract_id=row.contract_id or f"CNT-UP-{uuid4().hex[:10].upper()}",
-                request_id=None,
+                contract_id=None if is_new else (row.contract_id or f"CNT-UP-{uuid4().hex[:10].upper()}"),
+                request_id=(f"REQ-UP-{uuid4().hex[:10].upper()}" if is_new else None),
                 supplier_name=row.supplier_name,
                 category=row.category,
                 subcategory=row.subcategory,
-                eus_score=eus,
-                ius_score=None,
-                fis_score=fis,
-                es_score=None,
-                rss_score=rss,
-                scs_score=scs,
-                csis_score=None,
-                sas_score=sas,
-                total_score=total,
-                tier=tier,
-                recommended_action_window=_window_from_expiry_months(row.months_to_expiry),
+                eus_score=float(eus) if eus is not None else None,
+                ius_score=float(ius) if ius is not None else None,
+                fis_score=float(fis) if fis is not None else None,
+                es_score=float(es) if es is not None else None,
+                rss_score=float(rss) if rss is not None else None,
+                scs_score=float(scs) if scs is not None else None,
+                csis_score=float(csis) if csis is not None else None,
+                sas_score=float(sas) if sas is not None else None,
+                total_score=float(row.computed_total_score or 0.0),
+                tier=str(row.computed_tier or "T4"),
+                recommended_action_window=row.recommended_action_window,
                 justification_summary=justification,
                 status="Pending",
-                disposition="renewal_candidate",
+                disposition="new_request" if is_new else "renewal_candidate",
                 not_pursue_reason_code=None,
                 source="upload_staged",
                 estimated_spend_usd=row.estimated_spend_usd,
-                implementation_timeline_months=None,
+                implementation_timeline_months=row.implementation_timeline_months if is_new else None,
                 request_title=row.request_title,
                 preferred_supplier_status=row.preferred_supplier_status,
                 contract_end_date=row.contract_end_date
                 or (datetime.utcnow() + timedelta(days=(30.4375 * float(row.months_to_expiry or 9.0)))),
-                weights_used_json=json.dumps(
-                    {
-                        "w_eus": 0.30,
-                        "w_fis": 0.25,
-                        "w_rss": 0.20,
-                        "w_scs": 0.15,
-                        "w_sas_contract": 0.10,
-                        "source": "staged_upload_defaults",
-                    }
-                ),
+                weights_used_json=json.dumps(row.weights_used or {}),
+                score_provenance_json=json.dumps(comp),
+                system1_readiness_status=row.readiness_status,
+                system1_warnings_json=json.dumps(row.readiness_warnings or []),
             )
             session.add(opp)
             session.commit()
@@ -1653,6 +1691,7 @@ async def system1_upload_approve(body: System1UploadApproveRequest):
         job["approved_count"] = len(selected)
         job["created_opportunity_ids"] = created_ids
         job["run_triggered"] = run_triggered
+        job["warning_rows_count"] = len([r for r in selected if r.readiness_status == "ready_with_warnings"])
         _system1_upload_jobs[body.job_id] = job
 
     return System1UploadApproveResponse(
@@ -1680,6 +1719,7 @@ async def system1_upload_job_status(job_id: str):
         created_opportunity_ids=[int(x) for x in job.get("created_opportunity_ids", [])],
         run_triggered=bool(job.get("run_triggered", False)),
         parsing_notes=list(job.get("parsing_notes", [])),
+        warning_rows_count=int(job.get("warning_rows_count", 0)),
     )
 
 

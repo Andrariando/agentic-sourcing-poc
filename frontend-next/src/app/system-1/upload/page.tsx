@@ -20,6 +20,20 @@ type PreviewRow = {
   implementation_timeline_months?: number | null;
   months_to_expiry?: number | null;
   preferred_supplier_status?: string | null;
+  score_components?: Record<string, {
+    value: number;
+    confidence: number;
+    source_type: "provided" | "derived" | "defaulted";
+    evidence_refs: string[];
+    explanation: string;
+  }>;
+  weights_used?: Record<string, number>;
+  computed_total_score?: number | null;
+  computed_tier?: string | null;
+  computed_confidence?: number | null;
+  readiness_status?: "ready" | "ready_with_warnings" | "needs_review";
+  readiness_warnings?: string[];
+  recommended_action_window?: string | null;
   warnings: string[];
   valid_for_approval: boolean;
 };
@@ -63,15 +77,8 @@ type JobStatus = {
   created_opportunity_ids: number[];
   run_triggered: boolean;
   parsing_notes: string[];
+  warning_rows_count?: number;
 };
-
-function money(v: number): string {
-  try {
-    return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(v);
-  } catch {
-    return `$${v.toFixed(0)}`;
-  }
-}
 
 function mergeRow(base: PreviewRow, edit?: RowEdit): PreviewRow {
   if (!edit) return base;
@@ -143,6 +150,8 @@ export default function System1UploadPage() {
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [edits, setEdits] = useState<Record<string, RowEdit>>({});
   const [status, setStatus] = useState<JobStatus | null>(null);
+  const [columnMappingJson, setColumnMappingJson] = useState("");
+  const [ackWarnings, setAckWarnings] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -193,6 +202,7 @@ export default function System1UploadPage() {
     }
     const body = new FormData();
     for (const f of files) body.append("files", f);
+    if (columnMappingJson.trim()) body.append("column_mapping_json", columnMappingJson.trim());
     setUploading(true);
     try {
       const res = await apiFetch(`${getApiBaseUrl()}/api/system1/upload/preview`, {
@@ -215,6 +225,7 @@ export default function System1UploadPage() {
       setSelected(defaults);
       setMessage(`Preview ready: ${p.valid_candidates}/${p.total_candidates} rows can be approved.`);
       setStatus(null);
+      setAckWarnings(false);
     } catch {
       setError(`Network error. ${apiConnectivityHint()}`);
     } finally {
@@ -242,6 +253,13 @@ export default function System1UploadPage() {
       );
       if (o) row_overrides[id] = o;
     }
+    const warningRowIds = approvedIds.filter(
+      (id) => (mergedById[id]?.readiness_status || "ready") === "ready_with_warnings"
+    );
+    if (warningRowIds.length > 0 && !ackWarnings) {
+      setError("Some selected rows have warning-level scoring. Check acknowledgment to proceed.");
+      return;
+    }
     setApproving(true);
     setError(null);
     try {
@@ -253,6 +271,7 @@ export default function System1UploadPage() {
           approved_row_ids: approvedIds,
           approver_id: "human-user",
           row_overrides: Object.keys(row_overrides).length ? row_overrides : undefined,
+          acknowledge_warning_row_ids: warningRowIds,
         }),
       });
       const data = (await res.json().catch(() => ({}))) as Partial<ApproveResponse> & { detail?: string };
@@ -279,7 +298,8 @@ export default function System1UploadPage() {
       const next = { ...cur, ...patch };
       const keys = Object.keys(next);
       if (keys.length === 0) {
-        const { [rowId]: _, ...rest } = prev;
+        const rest = { ...prev };
+        delete rest[rowId];
         return rest;
       }
       return { ...prev, [rowId]: next };
@@ -296,6 +316,22 @@ export default function System1UploadPage() {
             anything looks wrong, approve selected rows, then trigger scoring refresh. Nothing is persisted until approval. System
             integration (for example ERP APIs) is the intended primary feed over time.
           </p>
+          <p className="text-xs text-slate-500 mt-3">
+            Download templates:{" "}
+            <a
+              href={`${getApiBaseUrl()}/api/system1/upload/templates/renewals_template.csv`}
+              className="text-sponsor-blue hover:underline"
+            >
+              renewals
+            </a>
+            {" · "}
+            <a
+              href={`${getApiBaseUrl()}/api/system1/upload/templates/new_business_template.csv`}
+              className="text-sponsor-blue hover:underline"
+            >
+              new business
+            </a>
+          </p>
         </header>
 
         <section className="bg-white border border-slate-200 rounded-xl shadow-sm p-6 space-y-4">
@@ -310,6 +346,19 @@ export default function System1UploadPage() {
             />
             <p className="text-xs text-slate-500 mt-2">
               Supported: PDF, DOCX, TXT, CSV, XLS, XLSX. Structured files provide the most reliable extraction.
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">Optional column mapping (JSON)</label>
+            <textarea
+              rows={3}
+              value={columnMappingJson}
+              onChange={(e) => setColumnMappingJson(e.target.value)}
+              className="w-full border border-slate-200 rounded-lg p-2 text-xs font-mono"
+              placeholder='{"supplier":"supplier_name","spend":"estimated_spend_usd","expiry_months":"months_to_expiry"}'
+            />
+            <p className="text-xs text-slate-500 mt-1">
+              Map sponsor-specific headers to canonical fields for bulk upload.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -370,6 +419,14 @@ export default function System1UploadPage() {
                 </button>
               </div>
             </div>
+            <label className="inline-flex items-center gap-2 text-xs text-slate-600">
+              <input
+                type="checkbox"
+                checked={ackWarnings}
+                onChange={(e) => setAckWarnings(e.target.checked)}
+              />
+              I acknowledge warning rows (defaulted/low-confidence components) before approval.
+            </label>
 
             {preview.parsing_notes.length > 0 && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
@@ -380,7 +437,7 @@ export default function System1UploadPage() {
             )}
 
             <div className="overflow-x-auto rounded-lg border border-slate-200">
-              <table className="w-full text-left text-sm min-w-[1100px]">
+              <table className="w-full text-left text-sm min-w-[1400px]">
                 <thead className="bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
                   <tr>
                     <th className="px-2 py-2 w-10">OK</th>
@@ -391,6 +448,9 @@ export default function System1UploadPage() {
                     <th className="px-2 py-2">Contract / Request</th>
                     <th className="px-2 py-2">Timeline / Expiry (mo)</th>
                     <th className="px-2 py-2">Source</th>
+                    <th className="px-2 py-2">Computed</th>
+                    <th className="px-2 py-2">Confidence</th>
+                    <th className="px-2 py-2">Readiness</th>
                     <th className="px-2 py-2">Warnings</th>
                     <th className="px-2 py-2 w-16" />
                   </tr>
@@ -553,10 +613,46 @@ export default function System1UploadPage() {
                           <span className="break-all">{r.source_filename}</span>
                         </td>
                         <td className="px-2 py-2 text-xs">
+                          <div className="font-semibold text-slate-700">
+                            {m.computed_total_score != null ? `${m.computed_total_score.toFixed(2)} / 10` : "—"}
+                          </div>
+                          <div className="text-[11px] text-slate-500">{m.computed_tier || "—"}</div>
+                        </td>
+                        <td className="px-2 py-2 text-xs">
+                          {m.computed_confidence != null ? `${Math.round(m.computed_confidence * 100)}%` : "—"}
+                        </td>
+                        <td className="px-2 py-2 text-xs">
+                          <span
+                            className={`inline-flex px-2 py-0.5 rounded-full border ${
+                              (m.readiness_status || "ready") === "ready"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : (m.readiness_status || "ready") === "ready_with_warnings"
+                                ? "bg-amber-50 text-amber-800 border-amber-200"
+                                : "bg-rose-50 text-rose-700 border-rose-200"
+                            }`}
+                          >
+                            {m.readiness_status || "ready"}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2 text-xs">
                           {m.warnings.length === 0 ? (
                             <span className="text-emerald-700">No issues</span>
                           ) : (
-                            <span className="text-amber-700">{m.warnings.join("; ")}</span>
+                            <div className="space-y-1">
+                              <span className="text-amber-700">{m.warnings.join("; ")}</span>
+                              {m.score_components && Object.keys(m.score_components).length > 0 && (
+                                <details>
+                                  <summary className="cursor-pointer text-sponsor-blue">Evidence</summary>
+                                  <div className="mt-1 space-y-1 text-[11px] text-slate-600">
+                                    {Object.entries(m.score_components).map(([k, v]) => (
+                                      <p key={k}>
+                                        <strong>{k}</strong>: {v.value} ({v.source_type}, {(v.confidence * 100).toFixed(0)}%)
+                                      </p>
+                                    ))}
+                                  </div>
+                                </details>
+                              )}
+                            </div>
                           )}
                         </td>
                         <td className="px-2 py-2">
@@ -565,7 +661,8 @@ export default function System1UploadPage() {
                             className="text-xs text-sponsor-blue hover:underline"
                             onClick={() =>
                               setEdits((prev) => {
-                                const { [r.row_id]: _, ...rest } = prev;
+                                const rest = { ...prev };
+                                delete rest[r.row_id];
                                 return rest;
                               })
                             }
@@ -592,6 +689,9 @@ export default function System1UploadPage() {
             </p>
             <p className="text-xs text-slate-500 mt-1">
               Scoring refresh triggered: {status.run_triggered ? "Yes" : "No"}
+            </p>
+            <p className="text-xs text-slate-500 mt-1">
+              Warning rows approved: {status.warning_rows_count ?? 0}
             </p>
             <div className="mt-3 flex gap-3">
               <Link

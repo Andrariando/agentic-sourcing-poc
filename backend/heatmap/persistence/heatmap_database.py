@@ -76,6 +76,9 @@ class HeatmapDatabase(DatabaseInterface):
                 ("contract_end_date", "TIMESTAMP"),
                 ("disposition", "TEXT"),
                 ("not_pursue_reason_code", "TEXT"),
+                ("score_provenance_json", "TEXT"),
+                ("system1_readiness_status", "TEXT"),
+                ("system1_warnings_json", "TEXT"),
             ):
                 if name not in cols:
                     conn.execute(text(f"ALTER TABLE opportunity ADD COLUMN {name} {typ}"))
@@ -91,6 +94,14 @@ class HeatmapDatabase(DatabaseInterface):
                     "ELSE 'renewal_candidate' "
                     "END"
                 )
+            )
+            conn.commit()
+            conn.execute(
+                text("UPDATE opportunity SET score_provenance_json = '{}' WHERE score_provenance_json IS NULL")
+            )
+            conn.commit()
+            conn.execute(
+                text("UPDATE opportunity SET system1_warnings_json = '[]' WHERE system1_warnings_json IS NULL")
             )
             conn.commit()
             conn.execute(

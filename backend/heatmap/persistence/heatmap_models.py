@@ -36,6 +36,9 @@ class Opportunity(SQLModel, table=True):
     status: str = Field(default="Pending") # Pending, Approved, Rejected
     disposition: str = Field(default="renewal_candidate")  # renewal_candidate, not_pursuing, supplier_exit_planned, deferred, new_request
     not_pursue_reason_code: Optional[str] = Field(default=None)
+    score_provenance_json: str = Field(default="{}")
+    system1_readiness_status: Optional[str] = Field(default=None)
+    system1_warnings_json: str = Field(default="[]")
     last_refresh_ts: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     record_created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

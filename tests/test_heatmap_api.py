@@ -262,3 +262,65 @@ def test_apply_category_cards_patch_merge_tmp_path(tmp_path):
     assert out["merged_card"]["supplier_preferred_status"]["NewCo"] == "allowed"
     reloaded = json.loads(p.read_text(encoding="utf-8"))
     assert reloaded["Software"]["category_strategy_sas"] == 8.0
+
+
+def test_system1_preview_includes_scoring_readiness(client: TestClient):
+    csv_bytes = (
+        b"row_type,category,supplier_name,estimated_spend_usd,contract_id,months_to_expiry\n"
+        b"renewal,IT Infrastructure,VendorA,1200000,CNT-1,6\n"
+    )
+    r = client.post(
+        "/api/system1/upload/preview",
+        files={"files": ("rows.csv", csv_bytes, "text/csv")},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["candidates"]
+    row = data["candidates"][0]
+    assert "score_components" in row
+    assert "computed_total_score" in row
+    assert "readiness_status" in row
+
+
+def test_system1_approve_requires_warning_ack(client: TestClient):
+    # Missing months_to_expiry makes at least one component defaulted => warning row.
+    csv_bytes = (
+        b"row_type,category,supplier_name,estimated_spend_usd,contract_id\n"
+        b"renewal,IT Infrastructure,VendorB,900000,CNT-2\n"
+    )
+    p = client.post(
+        "/api/system1/upload/preview",
+        files={"files": ("rows.csv", csv_bytes, "text/csv")},
+    )
+    assert p.status_code == 200
+    payload = p.json()
+    rid = payload["candidates"][0]["row_id"]
+    job_id = payload["job_id"]
+
+    fail = client.post(
+        "/api/system1/upload/approve",
+        json={"job_id": job_id, "approved_row_ids": [rid], "approver_id": "pytest"},
+    )
+    assert fail.status_code == 400
+
+    ok = client.post(
+        "/api/system1/upload/approve",
+        json={
+            "job_id": job_id,
+            "approved_row_ids": [rid],
+            "approver_id": "pytest",
+            "acknowledge_warning_row_ids": [rid],
+        },
+    )
+    assert ok.status_code == 200
+    assert ok.json()["success"] is True
+
+
+def test_system1_templates_endpoint(client: TestClient):
+    r = client.get("/api/system1/upload/templates")
+    assert r.status_code == 200
+    templates = r.json().get("templates", [])
+    assert templates
+    names = {t["name"] for t in templates}
+    assert "renewals_template.csv" in names
+    assert "new_business_template.csv" in names
