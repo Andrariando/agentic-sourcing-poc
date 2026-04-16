@@ -39,8 +39,8 @@ from datetime import datetime
 import json
 import os
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 from langchain_core.output_parsers import JsonOutputParser
+from backend.services.llm_provider import get_langchain_chat_model
 
 
 # Lazy agent initialization - agents created on demand to avoid API key check at import time
@@ -166,15 +166,13 @@ def decide_next_agent_llm(
     Used when deterministic rules have no prior output to guide them.
     """
     try:
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            return None, "no_api_key_fallback"
-
-        llm = ChatOpenAI(
-            model="gpt-4o-mini", # Fast model for routing
+        llm = get_langchain_chat_model(
+            default_model="gpt-4o-mini",
             temperature=0,
-            api_key=api_key
+            deployment_env="AZURE_OPENAI_ROUTER_DEPLOYMENT",
         )
+        if llm is None:
+            return None, "no_api_key_fallback"
         
         dtp_stage = state.get("dtp_stage", "DTP-01")
         has_output = state.get("latest_agent_output") is not None

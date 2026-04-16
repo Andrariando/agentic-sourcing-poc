@@ -10,6 +10,7 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from backend.infrastructure.storage_providers import get_heatmap_vector_store
+from backend.services.llm_provider import get_openai_client, resolve_chat_model
 
 MAX_ABS_DELTA = 0.6
 TOP_K = 5
@@ -114,12 +115,10 @@ def _llm_nudge(
     is_new: bool,
     weights: Optional[Dict[str, float]],
 ) -> Tuple[float, str]:
-    key = (os.getenv("OPENAI_API_KEY") or "").strip()
-    if not key or not snippets:
+    if not snippets:
         return _deterministic_nudge(snippets, base_total)
-    try:
-        from openai import OpenAI
-    except ImportError:
+    client = get_openai_client()
+    if not client:
         return _deterministic_nudge(snippets, base_total)
 
     past_lines: List[str] = []
@@ -183,9 +182,9 @@ Respond with ONLY a JSON object:
   "user_note": "<string>"
 }}"""
 
-    model = os.getenv("HEATMAP_LEARNING_MODEL", "gpt-4o-mini")
+    default_model = os.getenv("HEATMAP_LEARNING_MODEL", "gpt-4o-mini")
+    model = resolve_chat_model(default_model, deployment_env="AZURE_OPENAI_HEATMAP_LEARNING_DEPLOYMENT")
     try:
-        client = OpenAI(api_key=key)
         resp = client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": prompt}],

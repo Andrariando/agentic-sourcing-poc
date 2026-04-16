@@ -1,11 +1,11 @@
 Supplier Number,Supplier Parent,Supplier,Site,Category,Subcategory,Sector,Region,Country,State,City,Spend Tier (USD),Supplier Parent Risk Rating,Supplier Risk Score,Criticality Risk Level,Criticality Risk Score,Strategic Risk Score,BPRA Security Scorecard,BPRA Vendor Status,Ethics,Labor & Human Rights,Resilinc Alerts by Supplier,"Sanctions, AML+ABC due diligence",Environment,Supplier Financial Health,Sustainable Procurement
-SUP-1000,TechGlobal Inc,TechGlobal Inc,HQ,IT Infrastructure,Cybersecurity,Tech,NA,USA,NY,New York,Tier 2,Medium,2.15,Medium,2.57,2.02,A,Approved,Pass,Pass,0,Clear,Pass,Weak,Pass
-SUP-1001,NetSystems LLC,NetSystems LLC,HQ,IT Infrastructure,Cybersecurity,Tech,NA,USA,NY,New York,Tier 3,High,4.01,Medium,2.69,1.83,A,Approved,Pass,Pass,0,Clear,Pass,Stable,Pass
-SUP-1002,CloudServe Group,CloudServe Group,HQ,IT Infrastructure,Network Infrastructure,Tech,NA,USA,NY,New York,Tier 2,Low,3.73,High,3.82,2.79,A,Approved,Pass,Pass,0,Clear,Pass,Weak,Pass
-SUP-1003,SecureShield Tech,SecureShield Tech,HQ,IT Infrastructure,Network Infrastructure,Tech,NA,USA,NY,New York,Tier 2,Low,1.48,Low,2.15,3.03,A,Approved,Pass,Pass,0,Clear,Pass,Weak,Pass
-SUP-1004,DataCenter Partners,DataCenter Partners,HQ,IT Infrastructure,Network Infrastructure,Tech,NA,USA,NY,New York,Tier 1,High,4.45,Low,4.31,2.14,A,Approved,Pass,Pass,0,Clear,Pass,Strong,Pass
-SUP-1005,Endpoint Solutions Corp,Endpoint Solutions Corp,HQ,IT Infrastructure,Network Infrastructure,Tech,NA,USA,NY,New York,Tier 1,Low,1.78,High,1.91,4.19,A,Approved,Pass,Pass,0,Clear,Pass,Stable,Pass
-SUP-1006,AlphaNetwork Services,AlphaNetwork Services,HQ,IT Infrastructure,Data Center,Tech,NA,USA,NY,New York,Tier 3,High,4.59,Medium,3.32,2.38,A,Approved,Pass,Pass,0,Clear,Pass,Stable,Pass
-SUP-1007,CyberGuard Ltd,CyberGuard Ltd,HQ,IT Infrastructure,Cybersecurity,Tech,NA,USA,NY,New York,Tier 2,High,2.88,Low,1.02,3.98,A,Approved,Pass,Pass,0,Clear,Pass,Strong,Pass
-SUP-1008,DeltaStorage Systems,DeltaStorage Systems,HQ,IT Infrastructure,Cybersecurity,Tech,NA,USA,NY,New York,Tier 2,Medium,3.18,Medium,1.14,2.55,A,Approved,Pass,Pass,0,Clear,Pass,Weak,Pass
-SUP-1009,Infinite Computing,Infinite Computing,HQ,IT Infrastructure,Cloud Hosting,Tech,NA,USA,NY,New York,Tier 3,High,1.48,Medium,4.31,4.19,A,Approved,Pass,Pass,0,Clear,Pass,Weak,Pass
+SUP-1000,TechGlobal Inc,TechGlobal Inc,HQ,IT Infrastructure,End User Computing,Tech,NA,USA,NY,New York,Tier 2,Low,4.43,High,2.79,1.56,A,Approved,Pass,Pass,0,Clear,Pass,Strong,Pass
+SUP-1001,NetSystems LLC,NetSystems LLC,HQ,IT Infrastructure,Data Center,Tech,NA,USA,NY,New York,Tier 1,Low,1.1,Medium,1.51,1.66,A,Approved,Pass,Pass,0,Clear,Pass,Weak,Pass
+SUP-1002,CloudServe Group,CloudServe Group,HQ,IT Infrastructure,Data Center,Tech,NA,USA,NY,New York,Tier 1,Medium,4.95,Medium,1.23,2.64,A,Approved,Pass,Pass,0,Clear,Pass,Strong,Pass
+SUP-1003,SecureShield Tech,SecureShield Tech,HQ,IT Infrastructure,Data Center,Tech,NA,USA,NY,New York,Tier 3,High,4.48,High,3.22,3.5,A,Approved,Pass,Pass,0,Clear,Pass,Weak,Pass
+SUP-1004,DataCenter Partners,DataCenter Partners,HQ,IT Infrastructure,Cybersecurity,Tech,NA,USA,NY,New York,Tier 2,High,4.47,High,1.76,1.61,A,Approved,Pass,Pass,0,Clear,Pass,Stable,Pass
+SUP-1005,Endpoint Solutions Corp,Endpoint Solutions Corp,HQ,IT Infrastructure,Cloud Hosting,Tech,NA,USA,NY,New York,Tier 1,Medium,1.09,Low,1.44,4.82,A,Approved,Pass,Pass,0,Clear,Pass,Stable,Pass
+SUP-1006,AlphaNetwork Services,AlphaNetwork Services,HQ,IT Infrastructure,End User Computing,Tech,NA,USA,NY,New York,Tier 3,Medium,4.07,Low,2.58,1.07,A,Approved,Pass,Pass,0,Clear,Pass,Stable,Pass
+SUP-1007,CyberGuard Ltd,CyberGuard Ltd,HQ,IT Infrastructure,Network Infrastructure,Tech,NA,USA,NY,New York,Tier 3,Low,3.5,Low,3.67,1.01,A,Approved,Pass,Pass,0,Clear,Pass,Strong,Pass
+SUP-1008,DeltaStorage Systems,DeltaStorage Systems,HQ,IT Infrastructure,Data Center,Tech,NA,USA,NY,New York,Tier 3,Medium,2.84,Medium,3.06,2.22,A,Approved,Pass,Pass,0,Clear,Pass,Stable,Pass
+SUP-1009,Infinite Computing,Infinite Computing,HQ,IT Infrastructure,End User Computing,Tech,NA,USA,NY,New York,Tier 3,High,2.09,Low,4.36,3.41,A,Approved,Pass,Pass,0,Clear,Pass,Weak,Pass

@@ -15,21 +15,16 @@ import os
 import re
 from typing import Any, Dict, Optional, Tuple
 
+from backend.services.llm_provider import get_openai_client, resolve_chat_model
+
 
 def _interpreter_model() -> str:
-    return os.getenv("HEATMAP_INTERPRETER_MODEL") or "gpt-4o-mini"
+    default_model = os.getenv("HEATMAP_INTERPRETER_MODEL") or "gpt-4o-mini"
+    return resolve_chat_model(default_model, deployment_env="AZURE_OPENAI_HEATMAP_INTERPRETER_DEPLOYMENT")
 
 
 def _openai_client():
-    key = (os.getenv("OPENAI_API_KEY") or "").strip()
-    if not key:
-        return None
-    try:
-        from openai import OpenAI
-
-        return OpenAI(api_key=key)
-    except ImportError:
-        return None
+    return get_openai_client()
 
 
 _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -52,7 +47,7 @@ def extract_expiration_date_iso(
 
     client = _openai_client()
     if not client:
-        return None, 0.0, "LLM interpreter unavailable (missing OPENAI_API_KEY or openai import).", False
+        return None, 0.0, "LLM interpreter unavailable (missing OpenAI/Azure configuration).", False
 
     # Keep the payload small and safe.
     # Prefer the most likely fields, but also include a short flattened blob.

@@ -21,11 +21,11 @@ import os
 from typing import Any, Dict, List, Optional, Union
 from datetime import datetime
 
-from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from shared.copilot_focus import format_copilot_focus_for_prompt
 from shared.working_documents_prompt import format_working_documents_for_prompt
+from backend.services.llm_provider import get_langchain_chat_model
 
 logger = logging.getLogger(__name__)
 
@@ -62,8 +62,17 @@ class LLMResponder:
     
     def __init__(self, model: str = "gpt-4o-mini", temperature: float = 0.7):
         _rt = _env_int("LLM_RESPONSE_MAX_TOKENS", 3072)
-        self.llm = ChatOpenAI(model=model, temperature=temperature, max_tokens=_rt)
-        self.analysis_llm = ChatOpenAI(model=model, temperature=0)  # Deterministic for analysis
+        self.llm = get_langchain_chat_model(
+            default_model=model,
+            temperature=temperature,
+            max_tokens=_rt,
+            deployment_env="AZURE_OPENAI_LLM_RESPONDER_DEPLOYMENT",
+        )
+        self.analysis_llm = get_langchain_chat_model(
+            default_model=model,
+            temperature=0,
+            deployment_env="AZURE_OPENAI_LLM_RESPONDER_DEPLOYMENT",
+        )  # Deterministic for analysis
     
     def analyze_intent(
         self,
@@ -178,6 +187,8 @@ If the user asks how to edit/upload/download Word documents, RFx files, or contr
 Respond with valid JSON only, no explanation."""
 
         try:
+            if self.analysis_llm is None:
+                raise ValueError("LLM unavailable")
             # Revert to standard invoke to avoid potential config issues
             # We enforce JSON in prompt which is usually sufficient for gpt-4o-mini
             response = self.analysis_llm.invoke([HumanMessage(content=prompt)])
@@ -314,6 +325,8 @@ USER MESSAGE: "{user_message}"
 Generate a natural, helpful response:"""
 
         try:
+            if self.llm is None:
+                raise ValueError("LLM unavailable")
             response = self.llm.invoke([
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=user_prompt)
@@ -374,6 +387,8 @@ Case Context: {case_context.get('category_id', 'General')} procurement
 Generate a friendly, specific request for the missing information. Be conversational."""
 
         try:
+            if self.llm is None:
+                raise ValueError("LLM unavailable")
             response = self.llm.invoke([HumanMessage(content=prompt)])
             return response.content
         except Exception as e:

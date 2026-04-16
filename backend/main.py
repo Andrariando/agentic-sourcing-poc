@@ -21,6 +21,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
+from backend.services.llm_provider import get_openai_client, resolve_chat_model, using_azure_openai, has_llm_credentials
 
 # Load environment variables
 load_dotenv()
@@ -95,22 +96,18 @@ def _summarize_image_for_chat(
     Use a vision-capable OpenAI model to extract useful context from an image.
     Returns a short textual summary or None when unavailable.
     """
-    key = (os.getenv("OPENAI_API_KEY") or "").strip()
-    if not key:
+    client = get_openai_client()
+    if not client:
         return None
     ext = os.path.splitext(filename)[1].lower()
     mime = _image_mime_from_ext(ext)
     if not mime:
         return None
 
-    try:
-        from openai import OpenAI
-    except ImportError:
-        return None
-
     b64 = base64.b64encode(content).decode("ascii")
     data_url = f"data:{mime};base64,{b64}"
-    model = os.getenv("OPENAI_VISION_MODEL", "gpt-4o-mini")
+    default_model = os.getenv("OPENAI_VISION_MODEL", "gpt-4o-mini")
+    model = resolve_chat_model(default_model, deployment_env="AZURE_OPENAI_VISION_DEPLOYMENT")
     prompt = (
         "You are extracting business-relevant details from an uploaded image for a sourcing copilot. "
         "Summarize key facts, numbers, entities, and risks in 4-7 bullet points. "
@@ -120,7 +117,6 @@ def _summarize_image_for_chat(
         prompt += f"\n\nUser question/context: {user_message.strip()}"
 
     try:
-        client = OpenAI(api_key=key)
         resp = client.chat.completions.create(
             model=model,
             messages=[
@@ -178,6 +174,8 @@ app.add_middleware(
 from backend.heatmap.heatmap_router import heatmap_router, _start_heatmap_pipeline_background
 from backend.heatmap.persistence.heatmap_models import Opportunity
 from backend.heatmap.services.system1_scoring_orchestrator import enrich_rows_for_preview
+from backend.heatmap.services.system1_upload_import import extract_rows_from_structured_file
+from backend.heatmap.services.system1_bundle_scan import fuse_bundle_rows
 app.include_router(heatmap_router, prefix="/api/heatmap", tags=["heatmap"])
 
 
@@ -291,6 +289,9 @@ def _safe_float(raw: Any, default: float = 0.0) -> float:
         if raw is None:
             return default
         txt = str(raw).strip().replace(",", "")
+        for sym in ("$", "€", "£"):
+            txt = txt.replace(sym, "")
+        txt = txt.strip()
         if not txt:
             return default
         return float(txt)
@@ -302,6 +303,9 @@ def _safe_opt_float(raw: Any) -> Optional[float]:
     if raw is None:
         return None
     txt = str(raw).strip().replace(",", "")
+    for sym in ("$", "€", "£"):
+        txt = txt.replace(sym, "")
+    txt = txt.strip()
     if not txt:
         return None
     try:
@@ -423,13 +427,12 @@ def _extract_text_for_upload(content: bytes, filename: str) -> str:
 
 
 def _extract_rows_from_text_with_llm(text: str, filename: str) -> List[Dict[str, Any]]:
-    key = (os.getenv("OPENAI_API_KEY") or "").strip()
-    if not key or not text.strip():
+    client = get_openai_client()
+    if not client or not text.strip():
         return []
     try:
-        from openai import OpenAI
-        client = OpenAI(api_key=key)
-        model = os.getenv("SYSTEM1_UPLOAD_EXTRACT_MODEL", "gpt-4o-mini")
+        default_model = os.getenv("SYSTEM1_UPLOAD_EXTRACT_MODEL", "gpt-4o-mini")
+        model = resolve_chat_model(default_model, deployment_env="AZURE_OPENAI_SYSTEM1_EXTRACT_DEPLOYMENT")
         prompt = f"""
 Extract sourcing opportunities from the uploaded text.
 Return JSON object with key "rows", where each row may contain:
@@ -462,35 +465,6 @@ Text source: {filename}
         return []
     except Exception:
         return []
-
-
-def _extract_rows_from_structured_file(
-    content: bytes,
-    filename: str,
-    column_mapping: Optional[Dict[str, str]] = None,
-) -> List[Dict[str, Any]]:
-    try:
-        import pandas as pd
-    except Exception:
-        return []
-    ext = os.path.splitext(filename)[1].lower()
-    if ext == ".csv":
-        df = pd.read_csv(io.BytesIO(content))
-    elif ext in {".xls", ".xlsx"}:
-        df = pd.read_excel(io.BytesIO(content))
-    else:
-        return []
-    out: List[Dict[str, Any]] = []
-    mapping = {str(k).strip().lower(): str(v).strip().lower() for k, v in (column_mapping or {}).items()}
-    for row in df.to_dict(orient="records"):
-        normalized = {str(k).strip().lower(): v for k, v in row.items()}
-        if mapping:
-            remapped: Dict[str, Any] = {}
-            for k, v in normalized.items():
-                remapped[mapping.get(k, k)] = v
-            normalized = remapped
-        out.append(normalized)
-    return out
 
 
 def _build_preview_row(raw: Dict[str, Any], filename: str, source_kind: str, row_index: int) -> System1UploadPreviewRow:
@@ -550,18 +524,44 @@ def _build_preview_row(raw: Dict[str, Any], filename: str, source_kind: str, row
 # HEALTH CHECK
 # ============================================================
 
+def _llm_runtime_status() -> Dict[str, Any]:
+    azure_mode = using_azure_openai()
+    azure_key_present = bool((os.getenv("AZURE_OPENAI_API_KEY") or "").strip())
+    openai_key_present = bool((os.getenv("OPENAI_API_KEY") or "").strip())
+    if azure_mode:
+        key_source = "azure_openai_api_key" if azure_key_present else ("openai_api_key_fallback" if openai_key_present else "missing")
+        provider = "azure_openai"
+    else:
+        key_source = "openai_api_key" if openai_key_present else "missing"
+        provider = "openai"
+    return {
+        "provider": provider,
+        "configured": bool(has_llm_credentials()),
+        "azure_mode": azure_mode,
+        "key_source": key_source,
+    }
+
+
 @app.get("/health", response_model=HealthCheckResponse)
 async def health_check():
     """Health check endpoint."""
+    llm = _llm_runtime_status()
     return HealthCheckResponse(
         status="healthy",
         version="1.0.0",
         components={
             "database": "ok",
             "vector_store": "ok",
-            "agents": "ok"
+            "agents": "ok",
+            "llm_provider": llm["provider"],
         }
     )
+
+
+@app.get("/api/llm/provider")
+async def get_llm_provider_status():
+    """Runtime LLM provider status (safe, no secrets)."""
+    return _llm_runtime_status()
 
 
 # ============================================================
@@ -1529,7 +1529,10 @@ async def system1_upload_preview(
         raw_rows: List[Dict[str, Any]] = []
         source_kind = "structured" if ext in {".csv", ".xls", ".xlsx"} else "document"
         if source_kind == "structured":
-            raw_rows = _extract_rows_from_structured_file(content, filename, column_mapping=column_mapping)
+            raw_rows, struct_notes = extract_rows_from_structured_file(
+                content, filename, column_mapping=column_mapping
+            )
+            parsing_notes.extend(struct_notes)
             if not raw_rows:
                 parsing_notes.append(f"No parseable rows found in {filename}")
         else:
@@ -1552,6 +1555,114 @@ async def system1_upload_preview(
             status_code=400,
             detail="No candidate opportunities extracted. Use CSV/XLS with mapped columns or richer document content.",
         )
+
+    scored_rows = enrich_rows_for_preview([c.model_dump() for c in candidates])
+    candidates = [System1UploadPreviewRow(**r) for r in scored_rows]
+    for c in candidates:
+        c.warnings = list(dict.fromkeys([*c.warnings, *c.readiness_warnings]))
+        c.valid_for_approval = bool(c.valid_for_approval and c.readiness_status != "needs_review")
+
+    job_id = f"up-{uuid4().hex[:12]}"
+    valid_candidates = sum(1 for c in candidates if c.valid_for_approval)
+    with _system1_upload_lock:
+        _system1_upload_jobs[job_id] = {
+            "job_id": job_id,
+            "status": "preview_ready",
+            "created_at": datetime.utcnow().isoformat(),
+            "total_candidates": len(candidates),
+            "approved_count": 0,
+            "created_opportunity_ids": [],
+            "run_triggered": False,
+            "warning_rows_count": len([c for c in candidates if c.readiness_status == "ready_with_warnings"]),
+            "parsing_notes": parsing_notes,
+            "candidates": [c.model_dump() for c in candidates],
+        }
+
+    return System1UploadPreviewResponse(
+        job_id=job_id,
+        status="preview_ready",
+        total_candidates=len(candidates),
+        valid_candidates=valid_candidates,
+        candidates=candidates,
+        parsing_notes=parsing_notes,
+    )
+
+
+@app.post("/api/system1/upload/scan-bundle", response_model=System1UploadPreviewResponse)
+async def system1_upload_scan_bundle(
+    files: List[UploadFile] = File(...),
+    column_mapping_json: Optional[str] = Form(None),
+):
+    """
+    Bundle scan mode:
+    - Parse multiple structured files
+    - Fuse contract/spend/metrics rows into deduplicated candidates
+    - Return scored preview rows for human review
+    """
+    if not files:
+        raise HTTPException(status_code=400, detail="Upload at least one file.")
+
+    column_mapping: Optional[Dict[str, str]] = None
+    if column_mapping_json:
+        try:
+            parsed = json.loads(column_mapping_json)
+            if isinstance(parsed, dict):
+                column_mapping = {str(k): str(v) for k, v in parsed.items()}
+        except Exception:
+            raise HTTPException(status_code=400, detail="column_mapping_json must be valid JSON object.")
+
+    rows_by_file: Dict[str, List[Dict[str, Any]]] = {}
+    parsing_notes: List[str] = []
+    skipped_non_structured: List[str] = []
+
+    for f in files:
+        filename = (f.filename or "").strip() or "upload.bin"
+        ext = os.path.splitext(filename)[1].lower()
+        if ext not in ALLOWED_SYSTEM1_UPLOAD_EXTENSIONS:
+            parsing_notes.append(f"Skipped {filename}: unsupported type {ext}")
+            continue
+        content = await f.read()
+        if not content:
+            parsing_notes.append(f"Skipped {filename}: empty file")
+            continue
+
+        if ext not in {".csv", ".xls", ".xlsx"}:
+            skipped_non_structured.append(filename)
+            continue
+
+        raw_rows, struct_notes = extract_rows_from_structured_file(
+            content, filename, column_mapping=column_mapping
+        )
+        parsing_notes.extend(struct_notes)
+        if raw_rows:
+            rows_by_file[filename] = raw_rows
+        else:
+            parsing_notes.append(f"No parseable rows found in {filename}")
+
+    if skipped_non_structured:
+        parsing_notes.append(
+            "Bundle scan currently fuses structured files only; non-structured files were skipped: "
+            + ", ".join(skipped_non_structured[:8])
+            + ("..." if len(skipped_non_structured) > 8 else "")
+        )
+
+    if not rows_by_file:
+        raise HTTPException(
+            status_code=400,
+            detail="No structured candidate rows extracted. Upload CSV/XLS/XLSX files for bundle scan.",
+        )
+
+    fused_rows, fusion_notes = fuse_bundle_rows(rows_by_file)
+    parsing_notes.extend(fusion_notes)
+    if not fused_rows:
+        raise HTTPException(
+            status_code=400,
+            detail="Bundle scan produced no fused opportunities. Check supplier/category/spend coverage.",
+        )
+
+    candidates: List[System1UploadPreviewRow] = []
+    for idx, raw in enumerate(fused_rows, start=1):
+        candidates.append(_build_preview_row(raw, "bundle_scan", "structured", idx))
 
     scored_rows = enrich_rows_for_preview([c.model_dump() for c in candidates])
     candidates = [System1UploadPreviewRow(**r) for r in scored_rows]

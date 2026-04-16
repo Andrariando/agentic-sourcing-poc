@@ -324,3 +324,107 @@ def test_system1_templates_endpoint(client: TestClient):
     names = {t["name"] for t in templates}
     assert "renewals_template.csv" in names
     assert "new_business_template.csv" in names
+
+
+def test_system1_preview_sponsor_style_headers(client: TestClient):
+    """Excel/CSV exports often use vendor / commodity / TCV style columns."""
+    csv_bytes = (
+        b"Opportunity Type,Commodity,Vendor Name,Agreement #,TCV,Expiration Date\n"
+        b"renewal,Cloud Services,Acme Corp,AGR-99,\"$1,200,000\",2026-11-30\n"
+    )
+    r = client.post(
+        "/api/system1/upload/preview",
+        files={"files": ("sponsor_export.csv", csv_bytes, "text/csv")},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["candidates"]
+    row = data["candidates"][0]
+    assert row["supplier_name"] == "Acme Corp"
+    assert row["category"] == "Cloud Services"
+    assert row["contract_id"] == "AGR-99"
+    assert float(row["estimated_spend_usd"]) == 1_200_000.0
+    assert row["row_type"] == "renewal"
+
+
+def test_system1_preview_capstone_contract_export_headers(client: TestClient):
+    """J&J-style contract workbook columns (Supplier, Value in USD, Master Agreement, Expiry)."""
+    csv_bytes = (
+        b"Supplier,Category,Sub Category,Expiry Date,Value in USD,Master Agreement Reference Number,Contract Name\n"
+        b"RENTACOM INC,IT Infrastructure,zIT - Other - DO NOT USE,2016-06-30,2800,C2015023508,Dermatology Work Order\n"
+    )
+    r = client.post(
+        "/api/system1/upload/preview",
+        files={"files": ("contract_export.csv", csv_bytes, "text/csv")},
+    )
+    assert r.status_code == 200
+    row = r.json()["candidates"][0]
+    assert row["supplier_name"] == "RENTACOM INC"
+    assert row["category"] == "IT Infrastructure"
+    assert row["subcategory"] == "zIT - Other - DO NOT USE"
+    assert row["contract_id"] == "C2015023508"
+    assert float(row["estimated_spend_usd"]) == 2800.0
+    assert "Dermatology" in (row.get("request_title") or "")
+
+
+def test_system1_preview_capstone_spend_export_headers(client: TestClient):
+    """IT Infra Spend grain: booked hierarchy + SMD supplier + invoice amount."""
+    csv_bytes = (
+        b"key_spend_id,Booked category,Booked subcategory,Commodity,SMD cleansed name,Invoice amount (USD)\n"
+        b"k1,IT Infrastructure,IT Infrastructure - Mobile,Mobile Device Management,DISCORP NV,15.76\n"
+    )
+    r = client.post(
+        "/api/system1/upload/preview",
+        files={"files": ("spend_lines.csv", csv_bytes, "text/csv")},
+    )
+    assert r.status_code == 200
+    row = r.json()["candidates"][0]
+    assert row["supplier_name"] == "DISCORP NV"
+    assert row["category"] == "IT Infrastructure"
+    assert "Mobile" in (row.get("subcategory") or "")
+    assert float(row["estimated_spend_usd"]) == 15.76
+    assert row.get("request_title")
+
+
+def test_system1_scan_bundle_fuses_contract_spend_metrics(client: TestClient):
+    contract_csv = (
+        b"Supplier,Category,Sub Category,Expiry Date,Master Agreement Reference Number,Contract Name\n"
+        b"ACME CORP,IT Infrastructure,Cloud Hosting,2027-06-30,CNT-ACME-1,Cloud Renewal\n"
+    )
+    spend_csv = (
+        b"SMD cleansed name,Booked category,Booked subcategory,Invoice amount (USD),key_spend_id\n"
+        b"ACME CORP,IT Infrastructure,Cloud Hosting,1000000,sp-1\n"
+    )
+    metrics_csv = (
+        b"Supplier,Category,Subcategory,Supplier Risk Score,BPRA Vendor Status\n"
+        b"ACME CORP,IT Infrastructure,Cloud Hosting,7.2,preferred\n"
+    )
+    r = client.post(
+        "/api/system1/upload/scan-bundle",
+        files=[
+            ("files", ("contracts.csv", contract_csv, "text/csv")),
+            ("files", ("spend.csv", spend_csv, "text/csv")),
+            ("files", ("metrics.csv", metrics_csv, "text/csv")),
+        ],
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["total_candidates"] >= 1
+    rows = data["candidates"]
+    # Contract-led fusion should produce a renewal row for ACME.
+    acme = [x for x in rows if (x.get("supplier_name") or "").upper() == "ACME CORP"]
+    assert acme
+    row = acme[0]
+    assert row["row_type"] == "renewal"
+    assert row["contract_id"] == "CNT-ACME-1"
+    assert float(row["estimated_spend_usd"]) > 0
+    assert row.get("computed_total_score") is not None
+
+
+def test_system1_scan_bundle_rejects_non_structured_only(client: TestClient):
+    txt_bytes = b"This is guidance text only."
+    r = client.post(
+        "/api/system1/upload/scan-bundle",
+        files=[("files", ("guidance.txt", txt_bytes, "text/plain"))],
+    )
+    assert r.status_code == 400

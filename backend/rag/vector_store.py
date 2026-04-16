@@ -10,12 +10,7 @@ from uuid import uuid4
 import chromadb
 from chromadb.config import Settings
 
-# Optional: OpenAI embeddings
-try:
-    from langchain_openai import OpenAIEmbeddings
-    HAS_OPENAI = True
-except ImportError:
-    HAS_OPENAI = False
+from backend.services.llm_provider import get_langchain_embeddings
 
 
 # Vector store path - use temp directory for Streamlit Cloud
@@ -66,13 +61,13 @@ class VectorStore:
         
         # Initialize embedding function
         self._embedding_fn = None
-        if HAS_OPENAI and os.getenv("OPENAI_API_KEY"):
-            try:
-                self._embedding_fn = OpenAIEmbeddings(
-                    model="text-embedding-3-small"
-                )
-            except Exception:
-                pass
+        try:
+            self._embedding_fn = get_langchain_embeddings(
+                default_model="text-embedding-3-small",
+                deployment_env="AZURE_OPENAI_EMBEDDING_DEPLOYMENT",
+            )
+        except Exception:
+            self._embedding_fn = None
     
     def add_chunks(
         self,

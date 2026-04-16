@@ -6,10 +6,10 @@ from utils.schemas import CaseSummary, CacheMeta
 from utils.caching import get_cache_meta, set_cache
 from utils.token_accounting import calculate_cost, update_budget_state, TIER_1_MAX_OUTPUT_TOKENS, TIER_2_MAX_OUTPUT_TOKENS
 from utils.logging_utils import create_agent_log
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 import json
 import os
+from backend.services.llm_provider import get_langchain_chat_model
 
 
 class BaseAgent:
@@ -22,16 +22,14 @@ class BaseAgent:
         self.max_output_tokens = TIER_1_MAX_OUTPUT_TOKENS if tier == 1 else TIER_2_MAX_OUTPUT_TOKENS
         self.temperature = 0.2 if tier == 1 else 0.1
         
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY environment variable not set")
-        
-        self.llm = ChatOpenAI(
-            model=self.model_name,
+        self.llm = get_langchain_chat_model(
+            default_model=self.model_name,
             temperature=self.temperature,
             max_tokens=self.max_output_tokens,
-            api_key=api_key
+            deployment_env="AZURE_OPENAI_AGENTS_DEPLOYMENT",
         )
+        if self.llm is None:
+            raise ValueError("No OpenAI/Azure OpenAI credentials configured")
     
     def check_cache(
         self,

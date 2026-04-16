@@ -7,8 +7,8 @@ import logging
 import os
 from typing import Optional
 
-from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
+from backend.services.llm_provider import get_langchain_chat_model
 
 logger = logging.getLogger(__name__)
 
@@ -25,11 +25,6 @@ def revise_working_document_text(
     """
     Return full revised plain text, or None if API unavailable / error.
     """
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        logger.warning("OPENAI_API_KEY missing — cannot revise working document")
-        return None
-
     instr = (instruction or "").strip()
     if not instr:
         instr = "Improve clarity, fix inconsistencies, and strengthen procurement-appropriate language. Keep the same sections."
@@ -58,7 +53,15 @@ CURRENT DRAFT (plain text):
 """
 
     try:
-        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.25, max_tokens=4096)
+        llm = get_langchain_chat_model(
+            default_model="gpt-4o-mini",
+            temperature=0.25,
+            max_tokens=4096,
+            deployment_env="AZURE_OPENAI_WORKING_DOC_DEPLOYMENT",
+        )
+        if llm is None:
+            logger.warning("OpenAI/Azure configuration missing — cannot revise working document")
+            return None
         msg = llm.invoke(
             [SystemMessage(content=system), HumanMessage(content=user)]
         )

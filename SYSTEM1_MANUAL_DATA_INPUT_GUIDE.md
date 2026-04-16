@@ -4,11 +4,19 @@ This guide explains what data to manually input so System 1 can compute reliable
 
 Use this when you are not doing bulk upload, or when you want to validate a few opportunities manually first.
 
+If you are uploading multiple sponsor exports (contract + spend + metrics), use **bundle scan**
+first (`POST /api/system1/upload/scan-bundle`) and then manually fix only exceptions.
+
 ## 1) Where to input manually
 
 - Primary UI path: `frontend-next` Heatmap/Intake pages (single-opportunity input).
 - API path (if needed): `POST /api/heatmap/intake` for new business requests.
 - For renewals, use System 1 staged upload preview/approve and enter one row at a time if no dedicated renewal form is available.
+
+For bulk sponsor ingestion:
+
+- `POST /api/system1/upload/preview` = row-level parse of uploaded files
+- `POST /api/system1/upload/scan-bundle` = fused/deduplicated multi-file candidate generation
 
 ## 2) Minimum data required per opportunity
 
@@ -120,4 +128,9 @@ For sponsor rollout:
 - Compare computed tiers with business expectations.
 - Tune category cards/policies if systematic bias appears.
 - Then move to bulk upload using templates and mapping.
+
+At larger scale:
+
+- Prefer **bundle scan** for initial candidate generation.
+- Use manual edits only for `ready_with_warnings` / `needs_review` rows.
 

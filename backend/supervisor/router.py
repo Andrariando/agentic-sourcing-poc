@@ -23,11 +23,11 @@ import os
 import hashlib
 import json
 from typing import Optional, Dict, Any, List, Tuple
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
 from shared.constants import UserIntent, UserGoal, WorkType, AgentName
 from shared.schemas import IntentResult, ActionPlan
+from backend.services.llm_provider import get_langchain_chat_model
 import logging
 
 logger = logging.getLogger(__name__)
@@ -786,19 +786,17 @@ Return ONLY valid JSON in this exact format (no markdown, no code blocks):
 }}"""
 
         try:
-            api_key = os.getenv("OPENAI_API_KEY")
-            if not api_key:
+            llm = get_langchain_chat_model(
+                default_model="gpt-4o-mini",
+                temperature=0.1,
+                max_tokens=200,
+                deployment_env="AZURE_OPENAI_INTENT_ROUTER_DEPLOYMENT",
+                model_kwargs={"response_format": {"type": "json_object"}},
+            )
+            if llm is None:
                 # Fallback to rule-based if no API key
                 logger.warning("No OpenAI API key found, using rule-based fallback")
                 return cls.classify_intent_two_level(user_message, context)
-            
-            llm = ChatOpenAI(
-                model="gpt-4o-mini",
-                temperature=0.1,
-                max_tokens=200,
-                api_key=api_key,
-                model_kwargs={"response_format": {"type": "json_object"}}  # JSON mode
-            )
             
             response = llm.invoke(prompt)
             content = response.content.strip()

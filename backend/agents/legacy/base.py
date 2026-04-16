@@ -8,10 +8,10 @@ from typing import Dict, Any, Optional, List
 from abc import ABC, abstractmethod
 from datetime import datetime
 
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
 from backend.rag.retriever import get_retriever
+from backend.services.llm_provider import get_langchain_chat_model
 from shared.schemas import ExecutionMetadata, TaskExecutionDetail
 
 
@@ -35,16 +35,12 @@ class BaseAgent(ABC):
         
         self.retriever = get_retriever()
         
-        api_key = os.getenv("OPENAI_API_KEY")
-        if api_key:
-            self.llm = ChatOpenAI(
-                model=self.model_name,
-                temperature=self.temperature,
-                max_tokens=self.max_tokens,
-                api_key=api_key
-            )
-        else:
-            self.llm = None
+        self.llm = get_langchain_chat_model(
+            default_model=self.model_name,
+            temperature=self.temperature,
+            max_tokens=self.max_tokens,
+            deployment_env="AZURE_OPENAI_AGENTS_DEPLOYMENT",
+        )
     
     def retrieve_documents(
         self,
@@ -118,7 +114,7 @@ class BaseAgent(ABC):
             (response_content, input_tokens, output_tokens)
         """
         if not self.llm:
-            raise ValueError("LLM not initialized - OPENAI_API_KEY not set")
+            raise ValueError("LLM not initialized - configure OpenAI/Azure OpenAI credentials")
         
         response = self.llm.invoke(prompt)
         

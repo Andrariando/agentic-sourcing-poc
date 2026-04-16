@@ -6,12 +6,7 @@ from typing import List, Dict, Any, Optional
 import chromadb
 from chromadb.config import Settings
 from backend.rag.vector_store_interface import VectorStoreInterface
-
-try:
-    from langchain_openai import OpenAIEmbeddings
-    HAS_OPENAI = True
-except ImportError:
-    HAS_OPENAI = False
+from backend.services.llm_provider import get_langchain_embeddings
 
 
 def _get_chroma_path() -> Path:
@@ -51,13 +46,13 @@ class HeatmapVectorStore(VectorStoreInterface):
         )
         
         self._embedding_fn = None
-        if HAS_OPENAI and os.getenv("OPENAI_API_KEY"):
-            try:
-                self._embedding_fn = OpenAIEmbeddings(
-                    model="text-embedding-3-small"
-                )
-            except Exception:
-                pass
+        try:
+            self._embedding_fn = get_langchain_embeddings(
+                default_model="text-embedding-3-small",
+                deployment_env="AZURE_OPENAI_EMBEDDING_DEPLOYMENT",
+            )
+        except Exception:
+            self._embedding_fn = None
     
     def add_chunks(self, chunks: List[str], document_id: str, metadata: Dict[str, Any]) -> List[str]:
         if not chunks:

@@ -74,16 +74,14 @@ class BaseTask(ABC):
     def llm(self):
         """Lazy load LLM."""
         if self._llm is None:
-            import os
-            from langchain_openai import ChatOpenAI
-            api_key = os.getenv("OPENAI_API_KEY")
-            if api_key:
-                self._llm = ChatOpenAI(
-                    model="gpt-4o-mini",
-                    temperature=0.2,
-                    max_tokens=2000,
-                    api_key=api_key
-                )
+            from backend.services.llm_provider import get_langchain_chat_model
+
+            self._llm = get_langchain_chat_model(
+                default_model="gpt-4o-mini",
+                temperature=0.2,
+                max_tokens=2000,
+                deployment_env="AZURE_OPENAI_TASKS_DEPLOYMENT",
+            )
         return self._llm
     
     def execute(self, context: Dict[str, Any]) -> TaskResult:

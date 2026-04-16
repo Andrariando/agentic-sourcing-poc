@@ -272,7 +272,12 @@ Open:
 ## 🔐 Environment Variables (high-signal)
 
 ### Shared
-- `OPENAI_API_KEY`: enables LLM-powered features; both systems have graceful fallbacks when unset.
+- `OPENAI_API_KEY`: OpenAI API key (also accepted as fallback key for Azure mode when `AZURE_OPENAI_API_KEY` is omitted).
+- `AZURE_OPENAI_ENDPOINT`: optional Azure OpenAI endpoint. When set, backend uses Azure OpenAI client mode.
+- `AZURE_OPENAI_API_KEY`: optional Azure OpenAI API key (falls back to `OPENAI_API_KEY` if unset).
+- `AZURE_OPENAI_API_VERSION`: Azure API version (default `2024-02-01`).
+- `AZURE_OPENAI_CHAT_DEPLOYMENT`: default Azure chat deployment name (used when service-specific deployment vars are not set).
+- `AZURE_OPENAI_EMBEDDING_DEPLOYMENT`: Azure embedding deployment (for vector embeddings).
 - `APP_DB_BACKEND`: app DB provider (`sqlite` default, future: `azure_sql`)
 - `HEATMAP_DB_BACKEND`: heatmap DB provider (`sqlite` default, future: `azure_sql`)
 - `LEGACY_VECTOR_BACKEND`: legacy vector provider (`chroma` default, future: `azure_ai_search`)

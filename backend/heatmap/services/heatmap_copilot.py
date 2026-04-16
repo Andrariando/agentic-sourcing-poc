@@ -16,6 +16,7 @@ from backend.heatmap.context_builder import load_category_cards
 from backend.heatmap.persistence.heatmap_models import Opportunity, ReviewFeedback
 from backend.infrastructure.storage_providers import get_heatmap_vector_store
 from backend.heatmap.services.feedback_memory import _parse_chroma_results
+from backend.services.llm_provider import get_openai_client, resolve_chat_model
 
 MAX_OPPS_IN_CONTEXT = 80
 MAX_TARGETED_OPPS_IN_CONTEXT = 40
@@ -24,18 +25,12 @@ CHROMA_QA_TOP_K = 8
 
 
 def _copilot_model() -> str:
-    return os.getenv("HEATMAP_COPILOT_MODEL") or os.getenv("HEATMAP_LEARNING_MODEL") or "gpt-4o-mini"
+    default_model = os.getenv("HEATMAP_COPILOT_MODEL") or os.getenv("HEATMAP_LEARNING_MODEL") or "gpt-4o-mini"
+    return resolve_chat_model(default_model, deployment_env="AZURE_OPENAI_HEATMAP_COPILOT_DEPLOYMENT")
 
 
 def _openai_client():
-    key = (os.getenv("OPENAI_API_KEY") or "").strip()
-    if not key:
-        return None
-    try:
-        from openai import OpenAI
-        return OpenAI(api_key=key)
-    except ImportError:
-        return None
+    return get_openai_client()
 
 
 def _format_opportunity_line(o: Opportunity) -> str:
@@ -307,8 +302,8 @@ def check_feedback_vs_policy(
         return {
             "contradicts": False,
             "severity": "unknown",
-            "summary": "OpenAI API key not set; cannot analyze policy alignment.",
-            "suggestion": "Configure OPENAI_API_KEY for automatic checks.",
+            "summary": "OpenAI/Azure OpenAI is not configured; cannot analyze policy alignment.",
+            "suggestion": "Configure OPENAI_API_KEY or AZURE_OPENAI_* variables for automatic checks.",
         }, False
 
     tier_hint = f"Current AI/human tier context: {current_tier}" if current_tier else "Tier context: unknown."
@@ -378,7 +373,7 @@ def assist_category_card_edit(*, category: str, instruction: str) -> Tuple[Dict[
         return {
             "category": category,
             "proposed_patch": {},
-            "notes": "OPENAI_API_KEY not set.",
+            "notes": "OpenAI/Azure OpenAI is not configured.",
         }, False
 
     prompt = f"""You help edit sourcing category_cards.json entries.

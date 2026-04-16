@@ -152,6 +152,7 @@ export default function System1UploadPage() {
   const [status, setStatus] = useState<JobStatus | null>(null);
   const [columnMappingJson, setColumnMappingJson] = useState("");
   const [ackWarnings, setAckWarnings] = useState(false);
+  const [bundleScanMode, setBundleScanMode] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -205,7 +206,10 @@ export default function System1UploadPage() {
     if (columnMappingJson.trim()) body.append("column_mapping_json", columnMappingJson.trim());
     setUploading(true);
     try {
-      const res = await apiFetch(`${getApiBaseUrl()}/api/system1/upload/preview`, {
+      const endpoint = bundleScanMode
+        ? `${getApiBaseUrl()}/api/system1/upload/scan-bundle`
+        : `${getApiBaseUrl()}/api/system1/upload/preview`;
+      const res = await apiFetch(endpoint, {
         method: "POST",
         body,
       });
@@ -223,7 +227,10 @@ export default function System1UploadPage() {
         if (merged.valid_for_approval) defaults[c.row_id] = true;
       }
       setSelected(defaults);
-      setMessage(`Preview ready: ${p.valid_candidates}/${p.total_candidates} rows can be approved.`);
+      setMessage(
+        `${bundleScanMode ? "Bundle scan" : "Preview"} ready: ` +
+          `${p.valid_candidates}/${p.total_candidates} rows can be approved.`
+      );
       setStatus(null);
       setAckWarnings(false);
     } catch {
@@ -347,6 +354,14 @@ export default function System1UploadPage() {
             <p className="text-xs text-slate-500 mt-2">
               Supported: PDF, DOCX, TXT, CSV, XLS, XLSX. Structured files provide the most reliable extraction.
             </p>
+            <label className="inline-flex items-center gap-2 text-xs text-slate-600 mt-3">
+              <input
+                type="checkbox"
+                checked={bundleScanMode}
+                onChange={(e) => setBundleScanMode(e.target.checked)}
+              />
+              Bundle scan mode (fuse contract + spend + metrics into deduplicated candidates)
+            </label>
           </div>
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-2">Optional column mapping (JSON)</label>
@@ -368,7 +383,13 @@ export default function System1UploadPage() {
               disabled={uploading || files.length === 0}
               className="px-4 py-2 bg-sponsor-blue text-white rounded-lg text-sm font-medium disabled:opacity-50"
             >
-              {uploading ? "Building preview…" : "Preview extracted rows"}
+              {uploading
+                ? bundleScanMode
+                  ? "Scanning bundle…"
+                  : "Building preview…"
+                : bundleScanMode
+                ? "Scan files and fuse opportunities"
+                : "Preview extracted rows"}
             </button>
             {preview && (
               <span className="text-xs text-slate-500">
