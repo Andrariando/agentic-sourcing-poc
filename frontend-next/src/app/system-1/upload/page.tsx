@@ -1,9 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useVirtualizer, type VirtualItem } from "@tanstack/react-virtual";
 import { apiFetch } from "@/lib/api-fetch";
 import { apiConnectivityHint, getApiBaseUrl } from "@/lib/api-base";
+import {
+  buildExportRows,
+  exportPreviewCsv,
+  exportPreviewDocx,
+  exportPreviewPdf,
+  exportPreviewXlsx,
+  type ExportScope,
+} from "@/lib/system1-export";
 
 type PreviewRow = {
   row_id: string;
@@ -142,6 +151,239 @@ function buildRowOverrides(
   return Object.keys(o).length ? o : null;
 }
 
+const PREVIEW_ROW_ESTIMATE_PX = 152;
+
+function UploadPreviewTableRow({
+  r,
+  m,
+  e,
+  canSelect,
+  selected,
+  virtualRow,
+  onToggleSelect,
+  updateEdit,
+  onResetEdit,
+}: {
+  r: PreviewRow;
+  m: PreviewRow;
+  e: RowEdit | undefined;
+  canSelect: boolean;
+  selected: boolean;
+  virtualRow: VirtualItem;
+  onToggleSelect: (checked: boolean) => void;
+  updateEdit: (rowId: string, patch: RowEdit) => void;
+  onResetEdit: () => void;
+}) {
+  return (
+    <tr
+      data-index={virtualRow.index}
+      style={{
+        display: "table",
+        width: "100%",
+        tableLayout: "fixed",
+        position: "absolute",
+        top: 0,
+        left: 0,
+        transform: `translateY(${virtualRow.start}px)`,
+        height: `${virtualRow.size}px`,
+      }}
+      className="hover:bg-slate-50 align-top"
+    >
+      <td className="px-2 py-2">
+        <input
+          type="checkbox"
+          disabled={!canSelect}
+          title={!canSelect ? "Fix spend (must be > 0) to approve" : undefined}
+          checked={selected}
+          onChange={(ev) => onToggleSelect(ev.target.checked)}
+        />
+      </td>
+      <td className="px-2 py-2">
+        <select
+          className="w-full min-w-[7.5rem] text-xs border border-slate-200 rounded px-1.5 py-1 bg-white"
+          value={e?.row_type ?? r.row_type}
+          onChange={(ev) =>
+            updateEdit(r.row_id, {
+              row_type: ev.target.value as "renewal" | "new_business",
+            })
+          }
+        >
+          <option value="renewal">Renewal</option>
+          <option value="new_business">New business</option>
+        </select>
+      </td>
+      <td className="px-2 py-2">
+        <input
+          className="w-full min-w-[8rem] text-xs border border-slate-200 rounded px-1.5 py-1"
+          value={e?.category ?? r.category}
+          onChange={(ev) => updateEdit(r.row_id, { category: ev.target.value })}
+        />
+        <input
+          className="w-full min-w-[8rem] text-xs border border-dashed border-slate-200 rounded px-1.5 py-0.5 mt-1 text-slate-500"
+          placeholder="Subcategory"
+          value={e?.subcategory !== undefined ? e.subcategory ?? "" : r.subcategory || ""}
+          onChange={(ev) => updateEdit(r.row_id, { subcategory: ev.target.value })}
+        />
+      </td>
+      <td className="px-2 py-2">
+        <input
+          className="w-full min-w-[7rem] text-xs border border-slate-200 rounded px-1.5 py-1"
+          value={e?.supplier_name !== undefined ? e.supplier_name ?? "" : r.supplier_name || ""}
+          onChange={(ev) => updateEdit(r.row_id, { supplier_name: ev.target.value })}
+        />
+      </td>
+      <td className="px-2 py-2">
+        <input
+          type="number"
+          min={0}
+          step={1}
+          className="w-full min-w-[6rem] text-xs font-mono border border-slate-200 rounded px-1.5 py-1"
+          value={
+            e?.estimated_spend_usd !== undefined ? e.estimated_spend_usd : r.estimated_spend_usd || ""
+          }
+          onChange={(ev) => {
+            const v = ev.target.value;
+            if (v === "") {
+              updateEdit(r.row_id, { estimated_spend_usd: 0 });
+              return;
+            }
+            const n = parseFloat(v);
+            updateEdit(r.row_id, {
+              estimated_spend_usd: Number.isFinite(n) ? n : 0,
+            });
+          }}
+        />
+      </td>
+      <td className="px-2 py-2">
+        {(e?.row_type ?? r.row_type) === "renewal" ? (
+          <input
+            className="w-full min-w-[7rem] text-xs border border-slate-200 rounded px-1.5 py-1"
+            placeholder="Contract ID"
+            value={e?.contract_id !== undefined ? e.contract_id ?? "" : r.contract_id || ""}
+            onChange={(ev) => updateEdit(r.row_id, { contract_id: ev.target.value })}
+          />
+        ) : (
+          <input
+            className="w-full min-w-[7rem] text-xs border border-slate-200 rounded px-1.5 py-1"
+            placeholder="Request title"
+            value={
+              e?.request_title !== undefined ? e.request_title ?? "" : r.request_title || ""
+            }
+            onChange={(ev) => updateEdit(r.row_id, { request_title: ev.target.value })}
+          />
+        )}
+      </td>
+      <td className="px-2 py-2">
+        {(e?.row_type ?? r.row_type) === "renewal" ? (
+          <input
+            type="number"
+            min={0}
+            step={0.5}
+            className="w-full min-w-[5rem] text-xs border border-slate-200 rounded px-1.5 py-1"
+            placeholder="Months to expiry"
+            value={
+              e?.months_to_expiry !== undefined ? e.months_to_expiry ?? "" : r.months_to_expiry ?? ""
+            }
+            onChange={(ev) => {
+              const v = ev.target.value;
+              if (v === "") {
+                updateEdit(r.row_id, { months_to_expiry: null });
+                return;
+              }
+              const n = parseFloat(v);
+              updateEdit(r.row_id, {
+                months_to_expiry: Number.isFinite(n) ? n : null,
+              });
+            }}
+          />
+        ) : (
+          <input
+            type="number"
+            min={0}
+            step={0.5}
+            className="w-full min-w-[5rem] text-xs border border-slate-200 rounded px-1.5 py-1"
+            placeholder="Implementation (mo)"
+            value={
+              e?.implementation_timeline_months !== undefined
+                ? e.implementation_timeline_months ?? ""
+                : r.implementation_timeline_months ?? ""
+            }
+            onChange={(ev) => {
+              const v = ev.target.value;
+              if (v === "") {
+                updateEdit(r.row_id, { implementation_timeline_months: null });
+                return;
+              }
+              const n = parseFloat(v);
+              updateEdit(r.row_id, {
+                implementation_timeline_months: Number.isFinite(n) ? n : null,
+              });
+            }}
+          />
+        )}
+      </td>
+      <td className="px-2 py-2 text-xs text-slate-500">
+        {r.source_kind}
+        <br />
+        <span className="break-all">{r.source_filename}</span>
+      </td>
+      <td className="px-2 py-2 text-xs">
+        <div className="font-semibold text-slate-700">
+          {m.computed_total_score != null ? `${m.computed_total_score.toFixed(2)} / 10` : "—"}
+        </div>
+        <div className="text-[11px] text-slate-500">{m.computed_tier || "—"}</div>
+      </td>
+      <td className="px-2 py-2 text-xs">
+        {m.computed_confidence != null ? `${Math.round(m.computed_confidence * 100)}%` : "—"}
+      </td>
+      <td className="px-2 py-2 text-xs">
+        <span
+          className={`inline-flex px-2 py-0.5 rounded-full border ${
+            (m.readiness_status || "ready") === "ready"
+              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+              : (m.readiness_status || "ready") === "ready_with_warnings"
+                ? "bg-amber-50 text-amber-800 border-amber-200"
+                : "bg-rose-50 text-rose-700 border-rose-200"
+          }`}
+        >
+          {m.readiness_status || "ready"}
+        </span>
+      </td>
+      <td className="px-2 py-2 text-xs">
+        {m.warnings.length === 0 ? (
+          <span className="text-emerald-700">No issues</span>
+        ) : (
+          <div className="space-y-1">
+            <span className="text-amber-700">{m.warnings.join("; ")}</span>
+            {m.score_components && Object.keys(m.score_components).length > 0 && (
+              <details>
+                <summary className="cursor-pointer text-sponsor-blue">Evidence</summary>
+                <div className="mt-1 space-y-1 text-[11px] text-slate-600">
+                  {Object.entries(m.score_components).map(([k, v]) => (
+                    <p key={k}>
+                      <strong>{k}</strong>: {v.value} ({v.source_type},{" "}
+                      {(v.confidence * 100).toFixed(0)}%)
+                    </p>
+                  ))}
+                </div>
+              </details>
+            )}
+          </div>
+        )}
+      </td>
+      <td className="px-2 py-2">
+        <button
+          type="button"
+          className="text-xs text-sponsor-blue hover:underline"
+          onClick={onResetEdit}
+        >
+          Reset
+        </button>
+      </td>
+    </tr>
+  );
+}
+
 export default function System1UploadPage() {
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -155,6 +397,17 @@ export default function System1UploadPage() {
   const [bundleScanMode, setBundleScanMode] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [exportScope, setExportScope] = useState<ExportScope>("all");
+  const [exporting, setExporting] = useState<string | null>(null);
+
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const candidateCount = preview?.candidates.length ?? 0;
+  const rowVirtualizer = useVirtualizer({
+    count: candidateCount,
+    getScrollElement: () => tableScrollRef.current,
+    estimateSize: () => PREVIEW_ROW_ESTIMATE_PX,
+    overscan: 8,
+  });
 
   const selectedCount = useMemo(
     () => Object.entries(selected).filter(([, v]) => v).length,
@@ -175,6 +428,11 @@ export default function System1UploadPage() {
     return preview.candidates.filter((c) => mergedById[c.row_id]?.valid_for_approval).map((c) => c.row_id);
   }, [preview, mergedById]);
 
+  const exportRows = useMemo(() => {
+    if (!preview) return [];
+    return buildExportRows(preview.candidates, mergedById, exportScope, 10);
+  }, [preview, mergedById, exportScope]);
+
   useEffect(() => {
     if (!preview) return;
     setSelected((sel) => {
@@ -193,6 +451,40 @@ export default function System1UploadPage() {
       return changed ? next : sel;
     });
   }, [edits, preview]);
+
+  useEffect(() => {
+    tableScrollRef.current?.scrollTo({ top: 0 });
+  }, [preview?.job_id]);
+
+  const runExport = async (kind: "csv" | "xlsx" | "pdf" | "docx") => {
+    if (!preview || exportRows.length === 0) {
+      setError(
+        exportScope === "renewal_showcase"
+          ? "No renewal rows with readiness “ready” to export. Try “Full preview” or adjust data."
+          : "Nothing to export."
+      );
+      return;
+    }
+    setError(null);
+    setExporting(kind);
+    const slug = exportScope === "renewal_showcase" ? "renewal-showcase-10" : "full-preview";
+    const base = `system1-${preview.job_id}-${slug}`;
+    const title =
+      exportScope === "renewal_showcase"
+        ? `Top renewal opportunities (export of ${exportRows.length})`
+        : `Sourcing preview export (${exportRows.length} rows)`;
+    try {
+      if (kind === "csv") exportPreviewCsv(exportRows, base);
+      else if (kind === "xlsx") await exportPreviewXlsx(exportRows, base);
+      else if (kind === "pdf") await exportPreviewPdf(exportRows, base, title);
+      else await exportPreviewDocx(exportRows, base, title);
+      setMessage(`Downloaded ${kind.toUpperCase()} (${exportRows.length} row(s)).`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Export failed.");
+    } finally {
+      setExporting(null);
+    }
+  };
 
   const handlePreview = async () => {
     setError(null);
@@ -449,6 +741,68 @@ export default function System1UploadPage() {
               I acknowledge warning rows (defaulted/low-confidence components) before approval.
             </label>
 
+            <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-4 space-y-3">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-800">Export preview</h3>
+                <p className="text-xs text-slate-600 mt-1">
+                  Download what you see (including inline edits) as CSV or Excel with all columns. PDF and Word use a
+                  compact summary table. For sponsor demos, use{" "}
+                  <strong>Top renewals (ready)</strong> — highest-scoring renewal rows, deduplicated by contract (up to
+                  10).
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="text-xs text-slate-600">
+                  Scope:{" "}
+                  <select
+                    value={exportScope}
+                    onChange={(e) => setExportScope(e.target.value as ExportScope)}
+                    className="ml-1 border border-slate-200 rounded-md px-2 py-1 bg-white text-slate-800"
+                  >
+                    <option value="all">Full preview (all rows)</option>
+                    <option value="renewal_showcase">Top renewals (ready, up to 10)</option>
+                  </select>
+                </label>
+                <span className="text-xs text-slate-500">
+                  {exportRows.length.toLocaleString()} row(s) in this export
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={!!exporting}
+                  onClick={() => void runExport("csv")}
+                  className="text-xs px-3 py-1.5 rounded-md border border-slate-200 bg-white text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  {exporting === "csv" ? "Working…" : "CSV"}
+                </button>
+                <button
+                  type="button"
+                  disabled={!!exporting}
+                  onClick={() => void runExport("xlsx")}
+                  className="text-xs px-3 py-1.5 rounded-md border border-slate-200 bg-white text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  {exporting === "xlsx" ? "Working…" : "Excel (.xlsx)"}
+                </button>
+                <button
+                  type="button"
+                  disabled={!!exporting}
+                  onClick={() => void runExport("pdf")}
+                  className="text-xs px-3 py-1.5 rounded-md border border-slate-200 bg-white text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  {exporting === "pdf" ? "Working…" : "PDF"}
+                </button>
+                <button
+                  type="button"
+                  disabled={!!exporting}
+                  onClick={() => void runExport("docx")}
+                  className="text-xs px-3 py-1.5 rounded-md border border-slate-200 bg-white text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  {exporting === "docx" ? "Working…" : "Word (.docx)"}
+                </button>
+              </div>
+            </div>
+
             {preview.parsing_notes.length > 0 && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
                 {preview.parsing_notes.map((n, idx) => (
@@ -457,245 +811,68 @@ export default function System1UploadPage() {
               </div>
             )}
 
-            <div className="overflow-x-auto rounded-lg border border-slate-200">
-              <table className="w-full text-left text-sm min-w-[1400px]">
-                <thead className="bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                  <tr>
-                    <th className="px-2 py-2 w-10">OK</th>
-                    <th className="px-2 py-2">Type</th>
-                    <th className="px-2 py-2">Category</th>
-                    <th className="px-2 py-2">Supplier</th>
-                    <th className="px-2 py-2">Spend (USD)</th>
-                    <th className="px-2 py-2">Contract / Request</th>
-                    <th className="px-2 py-2">Timeline / Expiry (mo)</th>
-                    <th className="px-2 py-2">Source</th>
-                    <th className="px-2 py-2">Computed</th>
-                    <th className="px-2 py-2">Confidence</th>
-                    <th className="px-2 py-2">Readiness</th>
-                    <th className="px-2 py-2">Warnings</th>
-                    <th className="px-2 py-2 w-16" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {preview.candidates.map((r) => {
-                    const m = mergedById[r.row_id] || r;
-                    const e = edits[r.row_id];
-                    const canSelect = m.valid_for_approval;
-                    return (
-                      <tr key={r.row_id} className="hover:bg-slate-50 align-top">
-                        <td className="px-2 py-2">
-                          <input
-                            type="checkbox"
-                            disabled={!canSelect}
-                            title={!canSelect ? "Fix spend (must be &gt; 0) to approve" : undefined}
-                            checked={Boolean(selected[r.row_id])}
-                            onChange={(ev) =>
-                              setSelected((prev) => ({ ...prev, [r.row_id]: ev.target.checked }))
-                            }
-                          />
-                        </td>
-                        <td className="px-2 py-2">
-                          <select
-                            className="w-full min-w-[7.5rem] text-xs border border-slate-200 rounded px-1.5 py-1 bg-white"
-                            value={e?.row_type ?? r.row_type}
-                            onChange={(ev) =>
-                              updateEdit(r.row_id, {
-                                row_type: ev.target.value as "renewal" | "new_business",
-                              })
-                            }
-                          >
-                            <option value="renewal">Renewal</option>
-                            <option value="new_business">New business</option>
-                          </select>
-                        </td>
-                        <td className="px-2 py-2">
-                          <input
-                            className="w-full min-w-[8rem] text-xs border border-slate-200 rounded px-1.5 py-1"
-                            value={e?.category ?? r.category}
-                            onChange={(ev) => updateEdit(r.row_id, { category: ev.target.value })}
-                          />
-                          <input
-                            className="w-full min-w-[8rem] text-xs border border-dashed border-slate-200 rounded px-1.5 py-0.5 mt-1 text-slate-500"
-                            placeholder="Subcategory"
-                            value={e?.subcategory !== undefined ? e.subcategory ?? "" : r.subcategory || ""}
-                            onChange={(ev) => updateEdit(r.row_id, { subcategory: ev.target.value })}
-                          />
-                        </td>
-                        <td className="px-2 py-2">
-                          <input
-                            className="w-full min-w-[7rem] text-xs border border-slate-200 rounded px-1.5 py-1"
-                            value={
-                              e?.supplier_name !== undefined ? e.supplier_name ?? "" : r.supplier_name || ""
-                            }
-                            onChange={(ev) => updateEdit(r.row_id, { supplier_name: ev.target.value })}
-                          />
-                        </td>
-                        <td className="px-2 py-2">
-                          <input
-                            type="number"
-                            min={0}
-                            step={1}
-                            className="w-full min-w-[6rem] text-xs font-mono border border-slate-200 rounded px-1.5 py-1"
-                            value={
-                              e?.estimated_spend_usd !== undefined
-                                ? e.estimated_spend_usd
-                                : r.estimated_spend_usd || ""
-                            }
-                            onChange={(ev) => {
-                              const v = ev.target.value;
-                              if (v === "") {
-                                updateEdit(r.row_id, { estimated_spend_usd: 0 });
-                                return;
-                              }
-                              const n = parseFloat(v);
-                              updateEdit(r.row_id, {
-                                estimated_spend_usd: Number.isFinite(n) ? n : 0,
-                              });
-                            }}
-                          />
-                        </td>
-                        <td className="px-2 py-2">
-                          {(e?.row_type ?? r.row_type) === "renewal" ? (
-                            <input
-                              className="w-full min-w-[7rem] text-xs border border-slate-200 rounded px-1.5 py-1"
-                              placeholder="Contract ID"
-                              value={
-                                e?.contract_id !== undefined ? e.contract_id ?? "" : r.contract_id || ""
-                              }
-                              onChange={(ev) => updateEdit(r.row_id, { contract_id: ev.target.value })}
-                            />
-                          ) : (
-                            <input
-                              className="w-full min-w-[7rem] text-xs border border-slate-200 rounded px-1.5 py-1"
-                              placeholder="Request title"
-                              value={
-                                e?.request_title !== undefined
-                                  ? e.request_title ?? ""
-                                  : r.request_title || ""
-                              }
-                              onChange={(ev) => updateEdit(r.row_id, { request_title: ev.target.value })}
-                            />
-                          )}
-                        </td>
-                        <td className="px-2 py-2">
-                          {(e?.row_type ?? r.row_type) === "renewal" ? (
-                            <input
-                              type="number"
-                              min={0}
-                              step={0.5}
-                              className="w-full min-w-[5rem] text-xs border border-slate-200 rounded px-1.5 py-1"
-                              placeholder="Months to expiry"
-                              value={
-                                e?.months_to_expiry !== undefined
-                                  ? e.months_to_expiry ?? ""
-                                  : r.months_to_expiry ?? ""
-                              }
-                              onChange={(ev) => {
-                                const v = ev.target.value;
-                                if (v === "") {
-                                  updateEdit(r.row_id, { months_to_expiry: null });
-                                  return;
-                                }
-                                const n = parseFloat(v);
-                                updateEdit(r.row_id, {
-                                  months_to_expiry: Number.isFinite(n) ? n : null,
-                                });
-                              }}
-                            />
-                          ) : (
-                            <input
-                              type="number"
-                              min={0}
-                              step={0.5}
-                              className="w-full min-w-[5rem] text-xs border border-slate-200 rounded px-1.5 py-1"
-                              placeholder="Implementation (mo)"
-                              value={
-                                e?.implementation_timeline_months !== undefined
-                                  ? e.implementation_timeline_months ?? ""
-                                  : r.implementation_timeline_months ?? ""
-                              }
-                              onChange={(ev) => {
-                                const v = ev.target.value;
-                                if (v === "") {
-                                  updateEdit(r.row_id, { implementation_timeline_months: null });
-                                  return;
-                                }
-                                const n = parseFloat(v);
-                                updateEdit(r.row_id, {
-                                  implementation_timeline_months: Number.isFinite(n) ? n : null,
-                                });
-                              }}
-                            />
-                          )}
-                        </td>
-                        <td className="px-2 py-2 text-xs text-slate-500">
-                          {r.source_kind}
-                          <br />
-                          <span className="break-all">{r.source_filename}</span>
-                        </td>
-                        <td className="px-2 py-2 text-xs">
-                          <div className="font-semibold text-slate-700">
-                            {m.computed_total_score != null ? `${m.computed_total_score.toFixed(2)} / 10` : "—"}
-                          </div>
-                          <div className="text-[11px] text-slate-500">{m.computed_tier || "—"}</div>
-                        </td>
-                        <td className="px-2 py-2 text-xs">
-                          {m.computed_confidence != null ? `${Math.round(m.computed_confidence * 100)}%` : "—"}
-                        </td>
-                        <td className="px-2 py-2 text-xs">
-                          <span
-                            className={`inline-flex px-2 py-0.5 rounded-full border ${
-                              (m.readiness_status || "ready") === "ready"
-                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                : (m.readiness_status || "ready") === "ready_with_warnings"
-                                ? "bg-amber-50 text-amber-800 border-amber-200"
-                                : "bg-rose-50 text-rose-700 border-rose-200"
-                            }`}
-                          >
-                            {m.readiness_status || "ready"}
-                          </span>
-                        </td>
-                        <td className="px-2 py-2 text-xs">
-                          {m.warnings.length === 0 ? (
-                            <span className="text-emerald-700">No issues</span>
-                          ) : (
-                            <div className="space-y-1">
-                              <span className="text-amber-700">{m.warnings.join("; ")}</span>
-                              {m.score_components && Object.keys(m.score_components).length > 0 && (
-                                <details>
-                                  <summary className="cursor-pointer text-sponsor-blue">Evidence</summary>
-                                  <div className="mt-1 space-y-1 text-[11px] text-slate-600">
-                                    {Object.entries(m.score_components).map(([k, v]) => (
-                                      <p key={k}>
-                                        <strong>{k}</strong>: {v.value} ({v.source_type}, {(v.confidence * 100).toFixed(0)}%)
-                                      </p>
-                                    ))}
-                                  </div>
-                                </details>
-                              )}
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-2 py-2">
-                          <button
-                            type="button"
-                            className="text-xs text-sponsor-blue hover:underline"
-                            onClick={() =>
-                              setEdits((prev) => {
-                                const rest = { ...prev };
-                                delete rest[r.row_id];
-                                return rest;
-                              })
-                            }
-                          >
-                            Reset
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <p className="text-xs text-slate-500">
+              Large previews use virtual scrolling (about {PREVIEW_ROW_ESTIMATE_PX}px per row) so the page stays responsive.
+              Showing {candidateCount.toLocaleString()} row(s); scroll the grid to review and edit.
+            </p>
+            <div className="rounded-lg border border-slate-200">
+              <div ref={tableScrollRef} className="overflow-auto max-h-[min(70vh,720px)]">
+                <table className="w-full text-left text-sm min-w-[1400px] table-fixed">
+                  <thead className="sticky top-0 z-20 bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500 shadow-sm">
+                    <tr>
+                      <th className="px-2 py-2 w-10">OK</th>
+                      <th className="px-2 py-2">Type</th>
+                      <th className="px-2 py-2">Category</th>
+                      <th className="px-2 py-2">Supplier</th>
+                      <th className="px-2 py-2">Spend (USD)</th>
+                      <th className="px-2 py-2">Contract / Request</th>
+                      <th className="px-2 py-2">Timeline / Expiry (mo)</th>
+                      <th className="px-2 py-2">Source</th>
+                      <th className="px-2 py-2">Computed</th>
+                      <th className="px-2 py-2">Confidence</th>
+                      <th className="px-2 py-2">Readiness</th>
+                      <th className="px-2 py-2">Warnings</th>
+                      <th className="px-2 py-2 w-16" />
+                    </tr>
+                  </thead>
+                  <tbody
+                    style={{
+                      display: "block",
+                      height: candidateCount ? rowVirtualizer.getTotalSize() : 0,
+                      position: "relative",
+                    }}
+                  >
+                    {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                      const r = preview.candidates[virtualRow.index];
+                      const m = mergedById[r.row_id] || r;
+                      const e = edits[r.row_id];
+                      const canSelect = m.valid_for_approval;
+                      return (
+                        <UploadPreviewTableRow
+                          key={r.row_id}
+                          r={r}
+                          m={m}
+                          e={e}
+                          canSelect={canSelect}
+                          selected={Boolean(selected[r.row_id])}
+                          virtualRow={virtualRow}
+                          onToggleSelect={(checked) =>
+                            setSelected((prev) => ({ ...prev, [r.row_id]: checked }))
+                          }
+                          updateEdit={updateEdit}
+                          onResetEdit={() =>
+                            setEdits((prev) => {
+                              const rest = { ...prev };
+                              delete rest[r.row_id];
+                              return rest;
+                            })
+                          }
+                        />
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </section>
         )}
