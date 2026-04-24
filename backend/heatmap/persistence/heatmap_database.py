@@ -50,6 +50,7 @@ class HeatmapDatabase(DatabaseInterface):
             AuditLog,
             HeatmapLearnedWeights,
             HeatmapProcuraBotFeedback,
+            ScoringConfigVersion,
         )
         from sqlalchemy import text
         engine = get_engine()

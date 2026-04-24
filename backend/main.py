@@ -10,14 +10,14 @@ import base64
 import io
 import re
 from io import BytesIO
-from typing import Optional, List, Dict, Any, Literal
+from typing import Optional, List, Dict, Any, Literal, Tuple
 from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
 from uuid import uuid4
 import threading
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
@@ -45,7 +45,7 @@ from backend.services.chat_service import get_chat_service
 from backend.services.ingestion_service import get_ingestion_service
 from backend.persistence.models import CaseState, S2CProcuraBotFeedback, DocumentRecord, ArtifactPack
 from backend.infrastructure.storage_providers import initialize_storage_backends, get_app_db, get_heatmap_db
-from sqlmodel import select, func
+from sqlmodel import select, func, delete
 
 # Import shared schemas
 from shared.schemas import (
@@ -172,16 +172,44 @@ app.add_middleware(
 )
 
 from backend.heatmap.heatmap_router import heatmap_router, _start_heatmap_pipeline_background
-from backend.heatmap.persistence.heatmap_models import Opportunity
-from backend.heatmap.services.system1_scoring_orchestrator import enrich_rows_for_preview
-from backend.heatmap.services.system1_upload_import import extract_rows_from_structured_file
-from backend.heatmap.services.system1_bundle_scan import fuse_bundle_rows
+from backend.heatmap.persistence.heatmap_models import Opportunity, ReviewFeedback, AuditLog
+from backend.heatmap.services.system1_scoring_orchestrator import (
+    enrich_rows_for_preview,
+    summarize_preview_completeness,
+)
+from backend.heatmap.services.system1_flexible_ingestion import (
+    ErpJsonAdapter,
+    StructuredFileAdapter,
+)
+from backend.heatmap.services.system1_ingestion_graph import get_system1_ingestion_graph
 app.include_router(heatmap_router, prefix="/api/heatmap", tags=["heatmap"])
 
 
 ALLOWED_SYSTEM1_UPLOAD_EXTENSIONS = {".pdf", ".docx", ".txt", ".csv", ".xls", ".xlsx"}
 _system1_upload_jobs: Dict[str, Dict[str, Any]] = {}
 _system1_upload_lock = threading.Lock()
+_SYSTEM1_UPLOAD_FILES_DIR = os.path.join(os.path.dirname(__file__), "data", "system1_uploads")
+os.makedirs(_SYSTEM1_UPLOAD_FILES_DIR, exist_ok=True)
+
+
+def _sanitize_uploaded_filename(filename: str) -> str:
+    base = os.path.basename((filename or "").strip()) or "upload.bin"
+    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", base).strip("._")
+    return cleaned or "upload.bin"
+
+
+def _persist_system1_uploaded_file(raw: bytes, filename: str) -> Dict[str, Any]:
+    safe_name = _sanitize_uploaded_filename(filename)
+    stored_name = f"{uuid4().hex}_{safe_name}"
+    abs_path = os.path.join(_SYSTEM1_UPLOAD_FILES_DIR, stored_name)
+    with open(abs_path, "wb") as f:
+        f.write(raw)
+    return {
+        "stored_name": stored_name,
+        "original_filename": filename,
+        "size_bytes": len(raw),
+        "download_url": f"/api/system1/upload/files/{stored_name}",
+    }
 _SYSTEM1_TEMPLATES: Dict[str, str] = {
     "renewals_template.csv": (
         "row_type,category,subcategory,supplier_name,contract_id,contract_end_date,months_to_expiry,"
@@ -192,6 +220,13 @@ _SYSTEM1_TEMPLATES: Dict[str, str] = {
         "row_type,category,subcategory,supplier_name,request_title,estimated_spend_usd,"
         "implementation_timeline_months,preferred_supplier_status\n"
         "new_business,Software,SaaS,WidgetCo,Enterprise SSO rollout,500000,5,preferred\n"
+    ),
+    "complete_dataset_template.csv": (
+        "row_type,category,subcategory,supplier_name,contract_id,request_title,contract_end_date,months_to_expiry,"
+        "estimated_spend_usd,implementation_timeline_months,preferred_supplier_status,rss_score,scs_score,sas_score\n"
+        "renewal,IT Infrastructure,Cloud Hosting,TechGlobal Inc,CNT-2026-100,,2026-12-31,8,2500000,,allowed,6.4,7.8,8.5\n"
+        "new_business,IT Infrastructure,Network Security,CyberShield LLC,,REQ-SEC-2026-12,,"
+        "1200000,5,preferred,4.2,6.5,9.0\n"
     ),
 }
 
@@ -225,6 +260,11 @@ class System1UploadPreviewRow(BaseModel):
     recommended_action_window: Optional[str] = None
     warnings: List[str] = Field(default_factory=list)
     valid_for_approval: bool = True
+    completeness_score: float = 0.0
+    defaulted_components: List[str] = Field(default_factory=list)
+    low_confidence_components: List[str] = Field(default_factory=list)
+    missing_critical_fields: List[str] = Field(default_factory=list)
+    suggested_actions: List[Dict[str, str]] = Field(default_factory=list)
 
 
 class System1UploadPreviewResponse(BaseModel):
@@ -234,6 +274,7 @@ class System1UploadPreviewResponse(BaseModel):
     valid_candidates: int
     candidates: List[System1UploadPreviewRow]
     parsing_notes: List[str] = Field(default_factory=list)
+    analysis: Dict[str, Any] = Field(default_factory=dict)
 
 
 class System1UploadRowOverride(BaseModel):
@@ -282,6 +323,15 @@ class System1UploadJobStatusResponse(BaseModel):
     run_triggered: bool = False
     parsing_notes: List[str] = Field(default_factory=list)
     warning_rows_count: int = 0
+
+
+class System1ErpPreviewRequest(BaseModel):
+    source_system: str = "erp"
+    rows: List[Dict[str, Any]] = Field(default_factory=list)
+    mapping_profile: Optional[str] = "erp_generic"
+    column_mapping: Optional[Dict[str, str]] = None
+    top_n: Optional[int] = None
+    rank_by: Optional[str] = "completeness"
 
 
 def _safe_float(raw: Any, default: float = 0.0) -> float:
@@ -346,6 +396,9 @@ def _months_to_expiry_from_contract_end(contract_end_date: Optional[datetime]) -
 
 def _normalize_type(raw: Any, contract_id: Optional[str]) -> str:
     txt = (str(raw or "")).strip().lower()
+    # If source data explicitly declares row type, trust it.
+    if txt in {"renewal", "new_business"}:
+        return txt
     if contract_id:
         return "renewal"
     if "renew" in txt or txt in {"contract", "existing"}:
@@ -404,6 +457,40 @@ def _merge_system1_upload_row(
 def _normalize_category(raw: Any) -> str:
     out = (str(raw or "")).strip()
     return out or "Uncategorized"
+
+
+def _normalize_rank_by(raw: Optional[str]) -> str:
+    v = str(raw or "completeness").strip().lower()
+    if v in {"completeness", "score", "hybrid"}:
+        return v
+    return "completeness"
+
+
+def _rank_candidates(candidates: List[Any], rank_by: str) -> List[Any]:
+    rb = _normalize_rank_by(rank_by)
+    if rb == "score":
+        key_fn = lambda c: (
+            float(getattr(c, "computed_total_score", None) or 0.0),
+            float(getattr(c, "completeness_score", None) or 0.0),
+            float(getattr(c, "computed_confidence", None) or 0.0),
+            float(getattr(c, "estimated_spend_usd", None) or 0.0),
+        )
+    elif rb == "hybrid":
+        key_fn = lambda c: (
+            (0.6 * float(getattr(c, "completeness_score", None) or 0.0))
+            + (0.3 * (10.0 * float(getattr(c, "computed_confidence", None) or 0.0)))
+            + (0.1 * float(getattr(c, "computed_total_score", None) or 0.0)),
+            float(getattr(c, "computed_total_score", None) or 0.0),
+            float(getattr(c, "estimated_spend_usd", None) or 0.0),
+        )
+    else:
+        key_fn = lambda c: (
+            float(getattr(c, "completeness_score", None) or 0.0),
+            float(getattr(c, "computed_confidence", None) or 0.0),
+            float(getattr(c, "computed_total_score", None) or 0.0),
+            float(getattr(c, "estimated_spend_usd", None) or 0.0),
+        )
+    return sorted(candidates, key=key_fn, reverse=True)
 
 
 def _extract_text_for_upload(content: bytes, filename: str) -> str:
@@ -1491,10 +1578,85 @@ async def system1_upload_template_download(template_name: str):
     )
 
 
+@app.get("/api/system1/upload/files/{stored_name}")
+async def system1_upload_download_file(stored_name: str):
+    safe_stored = os.path.basename(stored_name or "").strip()
+    if not safe_stored:
+        raise HTTPException(status_code=400, detail="Invalid file identifier.")
+    abs_path = os.path.join(_SYSTEM1_UPLOAD_FILES_DIR, safe_stored)
+    if not os.path.isfile(abs_path):
+        raise HTTPException(status_code=404, detail="Uploaded file not found.")
+
+    download_name = safe_stored
+    with _system1_upload_lock:
+        for job in _system1_upload_jobs.values():
+            for file_meta in (job.get("uploaded_files") or []):
+                if str(file_meta.get("stored_name") or "") == safe_stored:
+                    download_name = str(file_meta.get("original_filename") or safe_stored)
+                    break
+            if download_name != safe_stored:
+                break
+    return FileResponse(abs_path, filename=download_name, media_type="application/octet-stream")
+
+
+@app.post("/api/system1/admin/clear")
+async def system1_admin_clear_uploaded_data():
+    """
+    Temporary admin utility: clear staged upload artifacts/jobs and upload-staged opportunities.
+    Keep this low-visibility in UI; later wire to proper auth/role checks.
+    """
+    removed_files = 0
+    for name in os.listdir(_SYSTEM1_UPLOAD_FILES_DIR):
+        p = os.path.join(_SYSTEM1_UPLOAD_FILES_DIR, name)
+        if os.path.isfile(p):
+            try:
+                os.remove(p)
+                removed_files += 1
+            except Exception:
+                pass
+
+    with _system1_upload_lock:
+        cleared_jobs = len(_system1_upload_jobs)
+        _system1_upload_jobs.clear()
+
+    session = get_heatmap_db().get_db_session()
+    try:
+        upload_ids = [
+            int(x)
+            for x in session.exec(
+                select(Opportunity.id).where(Opportunity.source == "upload_staged")
+            ).all()
+            if x is not None
+        ]
+        if upload_ids:
+            session.exec(delete(ReviewFeedback).where(ReviewFeedback.opportunity_id.in_(upload_ids)))
+            session.exec(
+                delete(AuditLog).where(
+                    AuditLog.event_type.in_(["SCORE_OVERRIDE", "OPPORTUNITY_DISPOSITION_UPDATED"]),
+                    AuditLog.entity_id.in_([str(i) for i in upload_ids]),
+                )
+            )
+            session.exec(delete(Opportunity).where(Opportunity.id.in_(upload_ids)))
+            session.commit()
+        removed_opps = len(upload_ids)
+    finally:
+        session.close()
+
+    return {
+        "success": True,
+        "removed_files": removed_files,
+        "cleared_jobs": cleared_jobs,
+        "removed_opportunities": removed_opps,
+    }
+
+
 @app.post("/api/system1/upload/preview", response_model=System1UploadPreviewResponse)
 async def system1_upload_preview(
     files: List[UploadFile] = File(...),
     column_mapping_json: Optional[str] = Form(None),
+    ingestion_profile: Optional[str] = Form("default"),
+    top_n: Optional[int] = Form(None),
+    rank_by: Optional[str] = Form("completeness"),
 ):
     """
     Stage 1: Upload files and preview normalized opportunity rows.
@@ -1504,6 +1666,7 @@ async def system1_upload_preview(
         raise HTTPException(status_code=400, detail="Upload at least one file.")
 
     candidates: List[System1UploadPreviewRow] = []
+    uploaded_files: List[Dict[str, Any]] = []
     parsing_notes: List[str] = []
 
     column_mapping: Optional[Dict[str, str]] = None
@@ -1515,6 +1678,7 @@ async def system1_upload_preview(
         except Exception:
             raise HTTPException(status_code=400, detail="column_mapping_json must be valid JSON object.")
 
+    structured_files: List[Tuple[str, bytes]] = []
     for f in files:
         filename = (f.filename or "").strip() or "upload.bin"
         ext = os.path.splitext(filename)[1].lower()
@@ -1525,16 +1689,11 @@ async def system1_upload_preview(
         if not content:
             parsing_notes.append(f"Skipped {filename}: empty file")
             continue
+        uploaded_files.append(_persist_system1_uploaded_file(content, filename))
 
-        raw_rows: List[Dict[str, Any]] = []
         source_kind = "structured" if ext in {".csv", ".xls", ".xlsx"} else "document"
         if source_kind == "structured":
-            raw_rows, struct_notes = extract_rows_from_structured_file(
-                content, filename, column_mapping=column_mapping
-            )
-            parsing_notes.extend(struct_notes)
-            if not raw_rows:
-                parsing_notes.append(f"No parseable rows found in {filename}")
+            structured_files.append((filename, content))
         else:
             text = _extract_text_for_upload(content, filename)
             if not text.strip():
@@ -1547,8 +1706,19 @@ async def system1_upload_preview(
                 parsing_notes.append(f"{filename}: LLM extraction unavailable; provide CSV/XLS for deterministic parsing.")
                 raw_rows = []
 
-        for idx, raw in enumerate(raw_rows, start=1):
-            candidates.append(_build_preview_row(raw, filename, source_kind, idx))
+            for idx, raw in enumerate(raw_rows, start=1):
+                candidates.append(_build_preview_row(raw, filename, source_kind, idx))
+
+    if structured_files:
+        structured_result = StructuredFileAdapter(
+            structured_files,
+            profile=ingestion_profile or "default",
+            explicit_mapping=column_mapping,
+        ).ingest()
+        parsing_notes.extend(structured_result.notes)
+        for filename, rows in structured_result.rows_by_source.items():
+            for idx, raw in enumerate(rows, start=1):
+                candidates.append(_build_preview_row(raw, filename, "structured", idx))
 
     if not candidates:
         raise HTTPException(
@@ -1561,9 +1731,21 @@ async def system1_upload_preview(
     for c in candidates:
         c.warnings = list(dict.fromkeys([*c.warnings, *c.readiness_warnings]))
         c.valid_for_approval = bool(c.valid_for_approval and c.readiness_status != "needs_review")
+    rank_by_norm = _normalize_rank_by(rank_by)
+    candidates = _rank_candidates(candidates, rank_by_norm)
+    all_candidates = list(candidates)
+    if top_n is not None and top_n > 0 and len(candidates) > top_n:
+        candidates = candidates[:top_n]
+        parsing_notes.append(
+            f"Applied top_n={top_n} with rank_by={rank_by_norm}; returned {len(candidates)} rows."
+        )
 
     job_id = f"up-{uuid4().hex[:12]}"
-    valid_candidates = sum(1 for c in candidates if c.valid_for_approval)
+    valid_candidates = sum(1 for c in all_candidates if c.valid_for_approval)
+    analysis = summarize_preview_completeness([c.model_dump() for c in all_candidates])
+    analysis["returned_rows"] = len(candidates)
+    analysis["top_n_applied"] = int(top_n) if top_n is not None and top_n > 0 else None
+    analysis["rank_by_applied"] = rank_by_norm
     with _system1_upload_lock:
         _system1_upload_jobs[job_id] = {
             "job_id": job_id,
@@ -1576,15 +1758,18 @@ async def system1_upload_preview(
             "warning_rows_count": len([c for c in candidates if c.readiness_status == "ready_with_warnings"]),
             "parsing_notes": parsing_notes,
             "candidates": [c.model_dump() for c in candidates],
+            "analysis": analysis,
+            "uploaded_files": uploaded_files,
         }
 
     return System1UploadPreviewResponse(
         job_id=job_id,
         status="preview_ready",
-        total_candidates=len(candidates),
+        total_candidates=len(all_candidates),
         valid_candidates=valid_candidates,
         candidates=candidates,
         parsing_notes=parsing_notes,
+        analysis=analysis,
     )
 
 
@@ -1592,6 +1777,9 @@ async def system1_upload_preview(
 async def system1_upload_scan_bundle(
     files: List[UploadFile] = File(...),
     column_mapping_json: Optional[str] = Form(None),
+    ingestion_profile: Optional[str] = Form("default"),
+    top_n: Optional[int] = Form(None),
+    rank_by: Optional[str] = Form("completeness"),
 ):
     """
     Bundle scan mode:
@@ -1614,6 +1802,8 @@ async def system1_upload_scan_bundle(
     rows_by_file: Dict[str, List[Dict[str, Any]]] = {}
     parsing_notes: List[str] = []
     skipped_non_structured: List[str] = []
+    uploaded_files: List[Dict[str, Any]] = []
+    structured_files: List[Tuple[str, bytes]] = []
 
     for f in files:
         filename = (f.filename or "").strip() or "upload.bin"
@@ -1625,19 +1815,13 @@ async def system1_upload_scan_bundle(
         if not content:
             parsing_notes.append(f"Skipped {filename}: empty file")
             continue
+        uploaded_files.append(_persist_system1_uploaded_file(content, filename))
 
         if ext not in {".csv", ".xls", ".xlsx"}:
             skipped_non_structured.append(filename)
             continue
 
-        raw_rows, struct_notes = extract_rows_from_structured_file(
-            content, filename, column_mapping=column_mapping
-        )
-        parsing_notes.extend(struct_notes)
-        if raw_rows:
-            rows_by_file[filename] = raw_rows
-        else:
-            parsing_notes.append(f"No parseable rows found in {filename}")
+        structured_files.append((filename, content))
 
     if skipped_non_structured:
         parsing_notes.append(
@@ -1646,23 +1830,99 @@ async def system1_upload_scan_bundle(
             + ("..." if len(skipped_non_structured) > 8 else "")
         )
 
+    if structured_files:
+        structured_result = StructuredFileAdapter(
+            structured_files,
+            profile=ingestion_profile or "default",
+            explicit_mapping=column_mapping,
+        ).ingest()
+        parsing_notes.extend(structured_result.notes)
+        rows_by_file = structured_result.rows_by_source
+
     if not rows_by_file:
         raise HTTPException(
             status_code=400,
             detail="No structured candidate rows extracted. Upload CSV/XLS/XLSX files for bundle scan.",
         )
 
-    fused_rows, fusion_notes = fuse_bundle_rows(rows_by_file)
-    parsing_notes.extend(fusion_notes)
-    if not fused_rows:
+    graph = get_system1_ingestion_graph()
+    graph_state = graph.invoke(
+        {
+            "rows_by_file": rows_by_file,
+            "parsing_notes": parsing_notes,
+            "top_n": top_n,
+            "rank_by": _normalize_rank_by(rank_by),
+            "row_builder": _build_preview_row,
+            "execution_trace": [],
+        },
+        config={"recursion_limit": 50},
+    )
+
+    parsing_notes = list(graph_state.get("parsing_notes") or [])
+    candidates_dicts = list(graph_state.get("candidates") or [])
+    total_candidates = int(graph_state.get("total_candidates") or 0)
+    valid_candidates = int(graph_state.get("valid_candidates") or 0)
+    analysis = dict(graph_state.get("analysis") or {})
+
+    if total_candidates <= 0 or not candidates_dicts:
         raise HTTPException(
             status_code=400,
             detail="Bundle scan produced no fused opportunities. Check supplier/category/spend coverage.",
         )
 
+    candidates = [System1UploadPreviewRow(**r) for r in candidates_dicts]
+
+    job_id = f"up-{uuid4().hex[:12]}"
+    with _system1_upload_lock:
+        _system1_upload_jobs[job_id] = {
+            "job_id": job_id,
+            "status": "preview_ready",
+            "created_at": datetime.utcnow().isoformat(),
+            "total_candidates": total_candidates,
+            "approved_count": 0,
+            "created_opportunity_ids": [],
+            "run_triggered": False,
+            "warning_rows_count": len([c for c in candidates if c.readiness_status == "ready_with_warnings"]),
+            "parsing_notes": parsing_notes,
+            "candidates": [c.model_dump() for c in candidates],
+            "analysis": analysis,
+            "uploaded_files": uploaded_files,
+        }
+
+    return System1UploadPreviewResponse(
+        job_id=job_id,
+        status="preview_ready",
+        total_candidates=total_candidates,
+        valid_candidates=valid_candidates,
+        candidates=candidates,
+        parsing_notes=parsing_notes,
+        analysis=analysis,
+    )
+
+
+@app.post("/api/system1/upload/preview-erp", response_model=System1UploadPreviewResponse)
+async def system1_upload_preview_erp(body: System1ErpPreviewRequest):
+    """
+    Stage 1 variant for API/ERP integrations.
+    Accepts JSON rows, normalizes through ERP adapter, and returns the same preview contract as bulk upload.
+    """
+    if not body.rows:
+        raise HTTPException(status_code=400, detail="rows is required.")
+
+    result = ErpJsonAdapter(
+        source_system=body.source_system,
+        rows=body.rows,
+        profile=body.mapping_profile or "erp_generic",
+        explicit_mapping=body.column_mapping or {},
+    ).ingest()
+
     candidates: List[System1UploadPreviewRow] = []
-    for idx, raw in enumerate(fused_rows, start=1):
-        candidates.append(_build_preview_row(raw, "bundle_scan", "structured", idx))
+    for source_name, rows in result.rows_by_source.items():
+        for idx, raw in enumerate(rows, start=1):
+            candidates.append(_build_preview_row(raw, source_name, "structured", idx))
+
+    if not candidates:
+        raise HTTPException(status_code=400, detail="No candidate opportunities extracted from ERP payload.")
 
     scored_rows = enrich_rows_for_preview([c.model_dump() for c in candidates])
     candidates = [System1UploadPreviewRow(**r) for r in scored_rows]
@@ -1670,8 +1930,23 @@ async def system1_upload_scan_bundle(
         c.warnings = list(dict.fromkeys([*c.warnings, *c.readiness_warnings]))
         c.valid_for_approval = bool(c.valid_for_approval and c.readiness_status != "needs_review")
 
+    rank_by_norm = _normalize_rank_by(body.rank_by)
+    candidates = _rank_candidates(candidates, rank_by_norm)
+    all_candidates = list(candidates)
+    if body.top_n is not None and body.top_n > 0 and len(candidates) > body.top_n:
+        candidates = candidates[: body.top_n]
+        result.notes.append(
+            f"Applied top_n={body.top_n} with rank_by={rank_by_norm}; returned {len(candidates)} rows."
+        )
+
     job_id = f"up-{uuid4().hex[:12]}"
-    valid_candidates = sum(1 for c in candidates if c.valid_for_approval)
+    valid_candidates = sum(1 for c in all_candidates if c.valid_for_approval)
+    analysis = summarize_preview_completeness([c.model_dump() for c in all_candidates])
+    analysis["returned_rows"] = len(candidates)
+    analysis["top_n_applied"] = int(body.top_n) if body.top_n is not None and body.top_n > 0 else None
+    analysis["rank_by_applied"] = rank_by_norm
+    analysis["ingestion_diagnostics"] = result.diagnostics
+
     with _system1_upload_lock:
         _system1_upload_jobs[job_id] = {
             "job_id": job_id,
@@ -1682,17 +1957,20 @@ async def system1_upload_scan_bundle(
             "created_opportunity_ids": [],
             "run_triggered": False,
             "warning_rows_count": len([c for c in candidates if c.readiness_status == "ready_with_warnings"]),
-            "parsing_notes": parsing_notes,
+            "parsing_notes": result.notes,
             "candidates": [c.model_dump() for c in candidates],
+            "analysis": analysis,
+            "uploaded_files": [],
         }
 
     return System1UploadPreviewResponse(
         job_id=job_id,
         status="preview_ready",
-        total_candidates=len(candidates),
+        total_candidates=len(all_candidates),
         valid_candidates=valid_candidates,
         candidates=candidates,
-        parsing_notes=parsing_notes,
+        parsing_notes=result.notes,
+        analysis=analysis,
     )
 
 
@@ -1709,6 +1987,7 @@ async def system1_upload_approve(body: System1UploadApproveRequest):
     candidates = [System1UploadPreviewRow(**r) for r in job.get("candidates", [])]
     approved_ids = set(body.approved_row_ids or [])
     overrides = body.row_overrides or {}
+    uploaded_files = list(job.get("uploaded_files") or [])
     by_id = {r.row_id: r for r in candidates}
     merged: List[System1UploadPreviewRow] = []
     for rid in body.approved_row_ids or []:
@@ -1754,6 +2033,36 @@ async def system1_upload_approve(body: System1UploadApproveRequest):
                 f"System1 staged scoring ({row.row_type}) by specialist orchestration. "
                 f"Readiness={row.readiness_status}; confidence={row.computed_confidence}."
             )
+            row_source_name = str(row.source_filename or "").strip()
+            row_source_name_lc = row_source_name.lower()
+            if row_source_name_lc in {"bundle_scan", "scan_bundle", "bundle-scan", "bundle scan"}:
+                # Fused bundle rows are synthesized from multiple uploaded files.
+                row_artifacts = list(uploaded_files)
+            else:
+                row_artifacts = [
+                    f
+                    for f in uploaded_files
+                    if str(f.get("original_filename") or "").strip().lower() == row_source_name_lc
+                ]
+            months_to_expiry = row.months_to_expiry or _months_to_expiry_from_contract_end(row.contract_end_date)
+            score_provenance = {
+                "score_components": comp,
+                "row_type": row.row_type,
+                "source_kind": row.source_kind,
+                "source_filename": row.source_filename,
+                "supporting_artifacts": row_artifacts,
+                "scoring_inputs": {
+                    "contract_end_date": row.contract_end_date.isoformat() if row.contract_end_date else None,
+                    "months_to_expiry": months_to_expiry,
+                    "estimated_spend_usd": row.estimated_spend_usd,
+                    "implementation_timeline_months": row.implementation_timeline_months,
+                    "preferred_supplier_status": row.preferred_supplier_status,
+                    "request_title": row.request_title,
+                    "supplier_name": row.supplier_name,
+                    "category": row.category,
+                    "subcategory": row.subcategory,
+                },
+            }
             opp = Opportunity(
                 contract_id=None if is_new else (row.contract_id or f"CNT-UP-{uuid4().hex[:10].upper()}"),
                 request_id=(f"REQ-UP-{uuid4().hex[:10].upper()}" if is_new else None),
@@ -1783,7 +2092,7 @@ async def system1_upload_approve(body: System1UploadApproveRequest):
                 contract_end_date=row.contract_end_date
                 or (datetime.utcnow() + timedelta(days=(30.4375 * float(row.months_to_expiry or 9.0)))),
                 weights_used_json=json.dumps(row.weights_used or {}),
-                score_provenance_json=json.dumps(comp),
+                score_provenance_json=json.dumps(score_provenance),
                 system1_readiness_status=row.readiness_status,
                 system1_warnings_json=json.dumps(row.readiness_warnings or []),
             )

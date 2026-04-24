@@ -95,6 +95,13 @@ def _merge_key(*, supplier_name: Optional[str], category: Optional[str], subcate
     return f"{_norm(supplier_name)}|{_norm(category)}|{_norm(subcategory)}"
 
 
+def _row_type_from_raw(raw_row_type: Any, contract_id: Optional[str]) -> str:
+    t = _norm(raw_row_type)
+    if t in {"renewal", "new_business"}:
+        return t
+    return "renewal" if contract_id else "new_business"
+
+
 def fuse_bundle_rows(rows_by_file: Dict[str, List[Dict[str, Any]]]) -> Tuple[List[Dict[str, Any]], List[str]]:
     """
     Returns (fused_rows, notes) where fused_rows are canonical-ish raw rows
@@ -123,16 +130,27 @@ def fuse_bundle_rows(rows_by_file: Dict[str, List[Dict[str, Any]]]) -> Tuple[Lis
 
         if is_contract:
             for r in rows:
+                cid = _coalesce(r.get("contract_id"))
                 contracts.append(
                     {
                         "source_filename": filename,
+                        "row_type": _row_type_from_raw(
+                            r.get("row_type") or r.get("type") or r.get("opportunity_type"),
+                            cid,
+                        ),
                         "supplier_name": _coalesce(r.get("supplier_name"), r.get("supplier")),
                         "category": _coalesce(r.get("category"), "Uncategorized"),
                         "subcategory": _coalesce(r.get("subcategory")),
-                        "contract_id": _coalesce(r.get("contract_id")),
+                        "contract_id": cid,
                         "contract_end_date": r.get("contract_end_date"),
+                        "months_to_expiry": _safe_float(r.get("months_to_expiry")),
+                        "implementation_timeline_months": _safe_float(r.get("implementation_timeline_months")),
                         "estimated_spend_usd": _safe_float(r.get("estimated_spend_usd")),
                         "request_title": _coalesce(r.get("request_title")),
+                        "preferred_supplier_status": _coalesce(
+                            r.get("preferred_supplier_status"), r.get("bpra_vendor_status")
+                        ),
+                        "rss_score": _safe_float(r.get("rss_score") or r.get("supplier_risk_score")),
                     }
                 )
             continue
@@ -182,22 +200,29 @@ def fuse_bundle_rows(rows_by_file: Dict[str, List[Dict[str, Any]]]) -> Tuple[Lis
         supplier = c.get("supplier_name")
         category = c.get("category")
         subcategory = c.get("subcategory")
+        row_type = str(c.get("row_type") or "renewal")
         key = _merge_key(supplier_name=supplier, category=category, subcategory=subcategory)
         spend = spend_agg.get(key, {})
         metric = metrics_by_key.get(key, {})
         merged_spend = c.get("estimated_spend_usd") or spend.get("estimated_spend_usd") or 0.0
         fused.append(
             {
-                "row_type": "renewal",
+                "row_type": row_type,
                 "category": category or "Uncategorized",
                 "subcategory": subcategory,
                 "supplier_name": supplier,
-                "contract_id": c.get("contract_id"),
+                "contract_id": c.get("contract_id") if row_type == "renewal" else None,
                 "contract_end_date": c.get("contract_end_date"),
+                "months_to_expiry": c.get("months_to_expiry"),
                 "estimated_spend_usd": round(float(merged_spend), 2),
                 "request_title": c.get("request_title"),
-                "rss_score": metric.get("rss_score"),
-                "preferred_supplier_status": metric.get("preferred_supplier_status"),
+                "implementation_timeline_months": c.get("implementation_timeline_months"),
+                "rss_score": c.get("rss_score") if c.get("rss_score") is not None else metric.get("rss_score"),
+                "preferred_supplier_status": (
+                    c.get("preferred_supplier_status")
+                    if c.get("preferred_supplier_status")
+                    else metric.get("preferred_supplier_status")
+                ),
             }
         )
         seen_keys.add(key)

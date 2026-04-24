@@ -1,6 +1,7 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { HEATMAP_GLOSSARY, type HeatmapGlossaryKey } from "@/lib/heatmap-glossary";
 import { heatmapTierLabel } from "@/lib/heatmap-tier-display";
 
@@ -10,6 +11,8 @@ const TIER_TOOLTIP: Record<string, HeatmapGlossaryKey> = {
   T3: "t3",
   T4: "t4",
 };
+
+const DETAIL_PAGE_SIZES = [25, 50, 100] as const;
 
 export interface SourcingOpportunityMatrixProps {
   /** Raw opportunity rows from `/api/heatmap/opportunities`. */
@@ -31,6 +34,21 @@ export interface SourcingOpportunityMatrixProps {
  */
 export default function SourcingOpportunityMatrix({ opportunities, summary }: SourcingOpportunityMatrixProps) {
   const rows = opportunities;
+  const [detailPage, setDetailPage] = useState(1);
+  const [detailPageSize, setDetailPageSize] = useState<number>(DETAIL_PAGE_SIZES[0]);
+
+  const totalDetailPages = Math.max(1, Math.ceil(rows.length / detailPageSize));
+  useEffect(() => {
+    setDetailPage((p) => Math.min(Math.max(1, p), totalDetailPages));
+  }, [totalDetailPages, rows.length, detailPageSize]);
+
+  const safeDetailPage = Math.min(detailPage, totalDetailPages);
+  const detailStart = rows.length === 0 ? 0 : (safeDetailPage - 1) * detailPageSize + 1;
+  const detailEnd = Math.min(safeDetailPage * detailPageSize, rows.length);
+  const pagedRows = useMemo(
+    () => rows.slice((safeDetailPage - 1) * detailPageSize, safeDetailPage * detailPageSize),
+    [rows, safeDetailPage, detailPageSize]
+  );
   const reliabilities = rows
     .map((o) => Number(o?.kli_metrics?.ai_reliability_pct))
     .filter((v) => !Number.isNaN(v));
@@ -86,11 +104,60 @@ export default function SourcingOpportunityMatrix({ opportunities, summary }: So
       </div>
 
       <div className="overflow-x-auto px-0">
-        <div className="px-5 py-3 border-b border-slate-200 bg-slate-50/50">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">2. Detailed Performance</h3>
-          <p className="text-xs text-slate-500 mt-1">
-            AI reliability decreases as humans edit/override more during review.
-          </p>
+        <div className="px-5 py-3 border-b border-slate-200 bg-slate-50/50 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">2. Detailed Performance</h3>
+            <p className="text-xs text-slate-500 mt-1">
+              AI reliability decreases as humans edit/override more during review.
+            </p>
+          </div>
+          {rows.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-slate-600 whitespace-nowrap">
+                {detailStart.toLocaleString()}–{detailEnd.toLocaleString()} of {rows.length.toLocaleString()}
+              </span>
+              <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                <span className="whitespace-nowrap">Per page</span>
+                <select
+                  value={detailPageSize}
+                  onChange={(e) => {
+                    setDetailPageSize(Number(e.target.value));
+                    setDetailPage(1);
+                  }}
+                  className="border border-slate-200 rounded-md px-2 py-1 bg-white text-slate-800 text-xs font-medium"
+                >
+                  {DETAIL_PAGE_SIZES.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="flex items-center gap-0.5 border border-slate-200 rounded-md bg-white px-0.5">
+                <button
+                  type="button"
+                  onClick={() => setDetailPage((p) => Math.max(1, p - 1))}
+                  disabled={safeDetailPage <= 1}
+                  className="p-1 rounded text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  aria-label="Previous page"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="text-[11px] text-slate-600 px-1.5 tabular-nums min-w-[4.5rem] text-center">
+                  {safeDetailPage}/{totalDetailPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setDetailPage((p) => Math.min(totalDetailPages, p + 1))}
+                  disabled={safeDetailPage >= totalDetailPages}
+                  className="p-1 rounded text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  aria-label="Next page"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
         <table className="w-full text-left border-collapse text-sm min-w-[760px]">
           <thead>
@@ -120,12 +187,12 @@ export default function SourcingOpportunityMatrix({ opportunities, summary }: So
                 </td>
               </tr>
             ) : (
-              rows.slice(0, 25).map((opp, i) => {
+              pagedRows.map((opp, i) => {
                 const km = opp.kli_metrics as { ai_reliability_pct?: number; override_count?: number } | undefined;
                 const reliability = Number(km?.ai_reliability_pct ?? 0);
                 const humanChanges = Number(km?.override_count ?? 0);
                 return (
-                  <tr key={`perf-${opp.id ?? i}`} className="hover:bg-slate-50 transition-colors">
+                  <tr key={`perf-${opp.id ?? `${safeDetailPage}-${i}`}`} className="hover:bg-slate-50 transition-colors">
                     <td
                       className="px-4 py-3 font-semibold text-slate-800 border-r border-slate-100 truncate max-w-[200px]"
                       title={opp.supplier_name || "New Request"}

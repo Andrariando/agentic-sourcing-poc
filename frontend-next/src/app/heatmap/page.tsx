@@ -12,6 +12,8 @@ import {
   ThumbsUp,
   ThumbsDown,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import {
   ScatterChart,
@@ -38,14 +40,79 @@ const TIER_TOOLTIP: Record<string, HeatmapGlossaryKey> = {
   T4: "t4",
 };
 
+/** Table view: page size options; matrix caps points for chart responsiveness. */
+const HEATMAP_TABLE_PAGE_SIZES = [25, 50, 100] as const;
+const HEATMAP_MATRIX_MAX_POINTS = 500;
+
 function isHeatmapNewRequest(o: { request_id?: string | null; contract_id?: string | null }): boolean {
   return Boolean(o.request_id) && !o.contract_id;
+}
+
+function opportunityType(o: Record<string, unknown>): "renewal" | "new_business" {
+  if (o?.opportunity_type === "new_business" || o?.opportunity_type === "renewal") {
+    return o.opportunity_type;
+  }
+  return isHeatmapNewRequest(o) ? "new_business" : "renewal";
+}
+
+function opportunityLabel(o: Record<string, unknown>): string {
+  const title = String(o?.request_title || "").trim();
+  const supplier = String(o?.supplier_name || "").trim();
+  if (supplier) return supplier;
+  if (title) return title;
+  return opportunityType(o) === "new_business" ? "New Sourcing Request" : "Unassigned Renewal";
+}
+
+function opportunityRef(o: Record<string, unknown>): string {
+  const title = String(o?.request_title || "").trim();
+  return o?.contract_id || o?.request_id || title || "—";
+}
+
+function monthsToExpiryDisplay(o: Record<string, unknown>): string {
+  const direct = Number(o?.months_to_expiry);
+  if (Number.isFinite(direct)) return String(Math.round(direct * 10) / 10);
+
+  const provenance = (o?.score_provenance as Record<string, unknown> | undefined) || {};
+  const scoringInputs = (provenance?.scoring_inputs as Record<string, unknown> | undefined) || {};
+  const fromProvenance = Number(scoringInputs?.months_to_expiry);
+  if (Number.isFinite(fromProvenance)) return String(Math.round(fromProvenance * 10) / 10);
+
+  const endRaw = String(o?.contract_end_date || "").trim();
+  if (!endRaw) return "—";
+  const end = new Date(endRaw);
+  if (Number.isNaN(end.getTime())) return "—";
+  const now = new Date();
+  const months = Math.max(0, (end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24 * 30.4375));
+  return String(Math.round(months * 10) / 10);
 }
 
 function formatScore(n: unknown): string {
   const v = Number(n);
   if (!Number.isFinite(v)) return "—";
   return v.toFixed(1);
+}
+
+function rowEffectiveWeightsFromOpportunity(o: Record<string, unknown>): Record<string, number> | null {
+  const raw = o?.weights_used_json;
+  let parsed: unknown = null;
+  if (typeof raw === "string" && raw.trim()) {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      parsed = null;
+    }
+  } else if (raw && typeof raw === "object") {
+    parsed = raw;
+  }
+  if (!parsed || typeof parsed !== "object") return null;
+  const eff = (parsed as Record<string, unknown>)?.effective_weights;
+  if (!eff || typeof eff !== "object") return null;
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(eff as Record<string, unknown>)) {
+    const n = Number(v);
+    if (Number.isFinite(n)) out[k] = n;
+  }
+  return Object.keys(out).length ? out : null;
 }
 
 function matrixScatterFillForTier(tier: string | undefined): string {
@@ -270,6 +337,12 @@ export default function HeatmapPriorityPage() {
   const [loading, setLoading] = useState(true);
   const [pipelineRunning, setPipelineRunning] = useState(false);
   const [viewMode, setViewMode] = useState<'table' | 'heatmap'>('table');
+  const [tablePage, setTablePage] = useState(1);
+  const [tablePageSize, setTablePageSize] = useState<number>(HEATMAP_TABLE_PAGE_SIZES[0]);
+  const [tableQuery, setTableQuery] = useState("");
+  const [tableTypeFilter, setTableTypeFilter] = useState<"all" | "renewal" | "new_business">("all");
+  const [tableSortBy, setTableSortBy] = useState<"score_desc" | "spend_desc" | "expiry_asc" | "name_asc">("score_desc");
+  const [clearingUploadedData, setClearingUploadedData] = useState(false);
   
   // Review Modal State
   const [reviewOpp, setReviewOpp] = useState<any | null>(null);
@@ -343,7 +416,58 @@ export default function HeatmapPriorityPage() {
   const [pendingPatch, setPendingPatch] = useState<Record<string, unknown> | null>(null);
   const [applyLoading, setApplyLoading] = useState(false);
   const [cardCategories, setCardCategories] = useState<string[]>(["IT Infrastructure", "Software", "Hardware"]);
-  const activeOpportunities = opportunities;
+  const activeOpportunities = useMemo(() => {
+    const q = tableQuery.trim().toLowerCase();
+    const filtered = opportunities.filter((o) => {
+      const type = opportunityType(o);
+      if (tableTypeFilter !== "all" && type !== tableTypeFilter) return false;
+      if (!q) return true;
+      const hay = [
+        opportunityLabel(o),
+        opportunityRef(o),
+        o?.category,
+        o?.subcategory,
+        o?.tier,
+        type === "new_business" ? "new" : "renewal",
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
+    });
+    const sorted = [...filtered];
+    sorted.sort((a, b) => {
+      if (tableSortBy === "name_asc") {
+        return opportunityLabel(a).localeCompare(opportunityLabel(b));
+      }
+      if (tableSortBy === "spend_desc") {
+        const av = Number(a?.estimated_spend_usd ?? a?.estimated_spend ?? 0);
+        const bv = Number(b?.estimated_spend_usd ?? b?.estimated_spend ?? 0);
+        return bv - av;
+      }
+      if (tableSortBy === "expiry_asc") {
+        const av = Number(a?.months_to_expiry ?? Number.MAX_SAFE_INTEGER);
+        const bv = Number(b?.months_to_expiry ?? Number.MAX_SAFE_INTEGER);
+        return av - bv;
+      }
+      return Number(b?.total_score ?? 0) - Number(a?.total_score ?? 0);
+    });
+    return sorted;
+  }, [opportunities, tableQuery, tableTypeFilter, tableSortBy]);
+
+  const totalTablePages = Math.max(1, Math.ceil(activeOpportunities.length / tablePageSize));
+  useEffect(() => {
+    setTablePage((p) => Math.min(Math.max(1, p), totalTablePages));
+  }, [totalTablePages, activeOpportunities.length, tablePageSize]);
+
+  const safeTablePage = Math.min(tablePage, totalTablePages);
+  const tableRangeStart =
+    activeOpportunities.length === 0 ? 0 : (safeTablePage - 1) * tablePageSize + 1;
+  const tableRangeEnd = Math.min(safeTablePage * tablePageSize, activeOpportunities.length);
+  const paginatedTableRows = activeOpportunities.slice(
+    (safeTablePage - 1) * tablePageSize,
+    safeTablePage * tablePageSize
+  );
   const activeReviewReasonOptions =
     reviewPursuitDecision === "not_pursue"
       ? PRIORITY_OVERRIDE_REASONS_NOT_PURSUE
@@ -427,17 +551,32 @@ export default function HeatmapPriorityPage() {
   const tier1 = activeOpportunities.filter((o) => o.tier === "T1").length;
   const tier2 = activeOpportunities.filter((o) => o.tier === "T2").length;
   const tier3 = activeOpportunities.filter((o) => o.tier === "T3").length;
+
+  const asMoneyNumber = (raw: unknown): number => {
+    if (typeof raw === "number") return Number.isFinite(raw) ? raw : 0;
+    if (typeof raw === "string") {
+      const cleaned = raw.replace(/[$,\s]/g, "");
+      const parsed = Number.parseFloat(cleaned);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    return 0;
+  };
   
   // Calculate total pipeline value
   const totalValue = activeOpportunities.reduce((acc, curr) => {
-    // Check various possible value fields
-    const val = curr.estimated_spend || curr.es_value || curr.total_contract_value || 0;
-    return acc + Number(val);
+    // Prefer canonical spend field, then fallback aliases.
+    const val =
+      curr?.estimated_spend_usd ??
+      curr?.estimated_spend ??
+      curr?.total_contract_value ??
+      curr?.es_value ??
+      0;
+    return acc + asMoneyNumber(val);
   }, 0);
   
-  // Format to roughly match "$14.2M" if large enough, or fallback
+  // Format actual computed pipeline value (no demo fallback)
   const formatMillions = (val: number) => {
-    if (val === 0) return "$14.2M"; // Demo fallback if no real financial data exists yet
+    if (val === 0) return "$0";
     if (val >= 1000000) return `$${(val / 1000000).toFixed(1)}M`;
     if (val >= 1000) return `$${(val / 1000).toFixed(1)}K`;
     return `$${val}`;
@@ -446,7 +585,6 @@ export default function HeatmapPriorityPage() {
   const pipelineValueText = formatMillions(totalValue);
 
   const openReviewModal = async (opp: any) => {
-    if (isOpportunityApproved(opp)) return;
     setReviewOpp(opp);
     setFeedbackTier(opp.tier);
     setFeedbackReason("");
@@ -471,7 +609,8 @@ export default function HeatmapPriorityPage() {
       if (wRes.ok) {
         const wd = (await wRes.json()) as { weights?: Record<string, number> };
         if (wd.weights && typeof wd.weights === "object") {
-          const snap = { ...wd.weights };
+          const rowEff = rowEffectiveWeightsFromOpportunity(opp as Record<string, unknown>);
+          const snap = rowEff ? { ...wd.weights, ...rowEff } : { ...wd.weights };
           setScoringWeights(snap);
           setBaselineScoringWeights({ ...snap });
         }
@@ -480,6 +619,35 @@ export default function HeatmapPriorityPage() {
       setFeedbackHistory([]);
     } finally {
       setFeedbackHistoryLoading(false);
+    }
+  };
+
+  const clearUploadedData = async () => {
+    const ok = window.confirm(
+      "Clear all uploaded System 1 rows/artifacts from this environment?"
+    );
+    if (!ok) return;
+    setClearingUploadedData(true);
+    try {
+      const res = await apiFetch(`${getApiBaseUrl()}/api/system1/admin/clear`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        throw new Error(`Clear failed (${res.status})`);
+      }
+      const oppRes = await apiFetch(`${getApiBaseUrl()}/api/heatmap/opportunities`, {
+        cache: "no-store",
+      });
+      const oppJson = await oppRes.json().catch(() => ({} as { opportunities?: any[] }));
+      if (oppJson.opportunities) {
+        setOpportunities(rankOpportunities(oppJson.opportunities));
+      }
+      alert("Uploaded System 1 data cleared.");
+    } catch (e) {
+      console.error(e);
+      alert("Failed to clear uploaded System 1 data.");
+    } finally {
+      setClearingUploadedData(false);
     }
   };
 
@@ -539,14 +707,13 @@ export default function HeatmapPriorityPage() {
         const t = await dispRes.text().catch(() => "");
         throw new Error(t || `Disposition update failed (${dispRes.status})`);
       }
-      const dispData = await dispRes.json().catch(() => ({} as { opportunity?: Record<string, unknown> }));
-      const dispOpp = (dispData?.opportunity ?? {}) as Record<string, unknown>;
+      await dispRes.json().catch(() => ({}));
 
       const payload = {
         opportunity_id: reviewOpp.id,
         user_id: "human-manager",
         original_tier: reviewOpp.tier,
-        suggested_tier: feedbackTier,
+        suggested_tier: weightAdjustPreview?.mathTier ?? feedbackTier,
         feedback_notes: combinedNotes,
         ...(scoring_weight_overrides ? { scoring_weight_overrides } : {}),
       };
@@ -562,31 +729,20 @@ export default function HeatmapPriorityPage() {
           opportunity?: { tier?: string; total_score?: number };
         };
         const snap = data.opportunity;
-        const updated = opportunities.map((o) => {
-          if (o.id === reviewOpp.id) {
-            const oldFeedbackRows = Number(o?.kli_metrics?.feedback_rows ?? 0);
-            return {
-              ...o,
-              tier: snap?.tier ?? feedbackTier,
-              total_score: snap?.total_score ?? o.total_score,
-              disposition: String(dispOpp.disposition ?? targetDisposition),
-              not_pursue_reason_code: dispOpp.not_pursue_reason_code ?? (isNotPursuing ? reviewNotPursueReason : null),
-              reviewed: true,
-              kli_metrics: {
-                ...(o?.kli_metrics ?? {}),
-                feedback_rows: oldFeedbackRows + 1,
-              },
-            };
-          }
-          return o;
+        const oppRes = await apiFetch(`${getApiBaseUrl()}/api/heatmap/opportunities`, {
+          cache: "no-store",
         });
-        setOpportunities(rankOpportunities(updated));
+        const oppJson = await oppRes.json().catch(() => ({} as { opportunities?: any[] }));
+        if (oppJson.opportunities) {
+          setOpportunities(rankOpportunities(oppJson.opportunities));
+        }
 
         const scorePart =
           snap?.total_score != null && !Number.isNaN(Number(snap.total_score))
             ? ` Priority score is now ${Number(snap.total_score).toFixed(1)}/10.`
             : "";
-        const baseSavedMsg = `Review saved for ${reviewOpp.supplier_name || "this opportunity"} (priority ${heatmapTierLabel(feedbackTier)}).${scorePart} Pursuit decision is updated and stored in the audit log.`;
+        const finalTierLabel = heatmapTierLabel(snap?.tier || weightAdjustPreview?.mathTier || feedbackTier);
+        const baseSavedMsg = `Review saved for ${opportunityLabel(reviewOpp)} (priority ${finalTierLabel}).${scorePart} Pursuit decision is updated and stored in the audit log.`;
 
         setReviewOpp(null);
 
@@ -911,6 +1067,11 @@ export default function HeatmapPriorityPage() {
     };
   });
 
+  const scatterChartData =
+    chartData.length > HEATMAP_MATRIX_MAX_POINTS
+      ? chartData.slice(0, HEATMAP_MATRIX_MAX_POINTS)
+      : chartData;
+
   const weightAdjustPreview = useMemo(() => {
     if (!reviewOpp || !scoringWeights) return null;
     const isNew = reviewOpp.contract_id == null || reviewOpp.contract_id === "";
@@ -936,7 +1097,9 @@ export default function HeatmapPriorityPage() {
       const totalStr = Number.isFinite(total) ? total.toFixed(1) : "—";
       return (
         <div className="bg-white p-3 border border-slate-200 shadow-xl rounded-lg max-w-sm max-h-[min(80vh,480px)] overflow-y-auto">
-          <p className="font-bold text-slate-800">{String(data.supplier_name || "New Request")}</p>
+          <p className="font-bold text-slate-800">
+            {opportunityLabel(data as { supplier_name?: string; request_title?: string; request_id?: string; contract_id?: string })}
+          </p>
           <p className="text-xs text-slate-500 mb-2">{String(data.contract_id || data.request_id || "")}</p>
           <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-1">
             {isNew ? "New request" : "Renewal"} · matrix position
@@ -1146,7 +1309,7 @@ export default function HeatmapPriorityPage() {
                   <Tooltip content={<CustomTooltip />} cursor={{ strokeDasharray: "3 3" }} />
                   <Scatter
                     name="Opportunities"
-                    data={chartData}
+                    data={scatterChartData}
                     shape={HeatmapMatrixScatterDot}
                     onClick={(data) => {
                       void openReviewModal(data.payload);
@@ -1155,6 +1318,13 @@ export default function HeatmapPriorityPage() {
                 </ScatterChart>
               </ResponsiveContainer>
             </div>
+            {chartData.length > HEATMAP_MATRIX_MAX_POINTS && (
+              <p className="mt-3 text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed">
+                Matrix shows the first <strong>{HEATMAP_MATRIX_MAX_POINTS}</strong> opportunities in priority order (same
+                sort as the table). Open <strong>Table</strong> view to page through all{" "}
+                <strong>{chartData.length}</strong> rows.
+              </p>
+            )}
 
             <details className="group w-full mt-4 rounded-lg border border-slate-200 bg-slate-50/90 text-left">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-slate-800 [&::-webkit-details-marker]:hidden">
@@ -1248,13 +1418,112 @@ export default function HeatmapPriorityPage() {
                 >
                   {pipelineRunning ? "Refreshing..." : "Refresh Scores"}
                 </button>
+                <button
+                  onClick={() => void clearUploadedData()}
+                  disabled={clearingUploadedData}
+                  className="px-3 py-2 bg-white border border-slate-200 rounded-md text-xs font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  title="Admin utility: clear upload-staged rows and artifacts"
+                >
+                  {clearingUploadedData ? "Clearing..." : "Clear uploaded data"}
+                </button>
               </div>
             </div>
+            {!loading && opportunities.length > 0 && (
+              <div className="px-4 py-2.5 border-b border-slate-100 bg-white flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-slate-600">
+                  Showing{" "}
+                  <span className="font-semibold text-slate-800">
+                    {tableRangeStart.toLocaleString()}–{tableRangeEnd.toLocaleString()}
+                  </span>{" "}
+                  of <span className="font-semibold text-slate-800">{activeOpportunities.length.toLocaleString()}</span>
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    value={tableQuery}
+                    onChange={(e) => {
+                      setTableQuery(e.target.value);
+                      setTablePage(1);
+                    }}
+                    placeholder="Search supplier, request title, contract ID..."
+                    className="w-64 border border-slate-200 rounded-md px-2 py-1.5 text-xs bg-white"
+                  />
+                  <label className="flex items-center gap-2 text-xs text-slate-600">
+                    <span className="whitespace-nowrap">Type</span>
+                    <select
+                      value={tableTypeFilter}
+                      onChange={(e) => {
+                        setTableTypeFilter(e.target.value as "all" | "renewal" | "new_business");
+                        setTablePage(1);
+                      }}
+                      className="border border-slate-200 rounded-md px-2 py-1.5 bg-white text-slate-800 text-xs font-medium"
+                    >
+                      <option value="all">All</option>
+                      <option value="renewal">Renewal</option>
+                      <option value="new_business">New Opportunity</option>
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-slate-600">
+                    <span className="whitespace-nowrap">Sort</span>
+                    <select
+                      value={tableSortBy}
+                      onChange={(e) => setTableSortBy(e.target.value as "score_desc" | "spend_desc" | "expiry_asc" | "name_asc")}
+                      className="border border-slate-200 rounded-md px-2 py-1.5 bg-white text-slate-800 text-xs font-medium"
+                    >
+                      <option value="score_desc">Score (high to low)</option>
+                      <option value="spend_desc">Spend (high to low)</option>
+                      <option value="expiry_asc">Expiry (soonest first)</option>
+                      <option value="name_asc">Name (A-Z)</option>
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-slate-600">
+                    <span className="whitespace-nowrap">Rows per page</span>
+                    <select
+                      value={tablePageSize}
+                      onChange={(e) => {
+                        setTablePageSize(Number(e.target.value));
+                        setTablePage(1);
+                      }}
+                      className="border border-slate-200 rounded-md px-2 py-1.5 bg-white text-slate-800 text-xs font-medium"
+                    >
+                      {HEATMAP_TABLE_PAGE_SIZES.map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="flex items-center gap-1 border border-slate-200 rounded-md bg-slate-50/80 p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setTablePage((p) => Math.max(1, p - 1))}
+                      disabled={safeTablePage <= 1}
+                      className="p-1.5 rounded text-slate-600 hover:bg-white hover:shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                      aria-label="Previous page"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <span className="text-xs text-slate-600 px-2 min-w-[5.5rem] text-center tabular-nums">
+                      {safeTablePage} / {totalTablePages}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setTablePage((p) => Math.min(totalTablePages, p + 1))}
+                      disabled={safeTablePage >= totalTablePages}
+                      className="p-1.5 rounded text-slate-600 hover:bg-white hover:shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                      aria-label="Next page"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-200 text-left">
                     <th className="px-6 py-4 font-medium">Supplier / Request</th>
+                    <th className="px-6 py-4 font-medium">Type</th>
                     <th className="px-6 py-4 font-medium">Category</th>
                     <th className="px-6 py-4 font-medium cursor-help" title={HEATMAP_GLOSSARY.tier}>
                       Priority
@@ -1272,28 +1541,39 @@ export default function HeatmapPriorityPage() {
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {loading ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
+                      <td colSpan={8} className="px-6 py-12 text-center text-slate-500">
                         <div className="flex flex-col items-center justify-center">
                           <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-sponsor-blue animate-spin mb-3"></div>
                           <p>Loading scored opportunities from backend...</p>
                         </div>
                       </td>
                     </tr>
-                  ) : opportunities.length === 0 ? (
+                  ) : activeOpportunities.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
-                        No opportunities found in the scoring engine.
+                      <td colSpan={8} className="px-6 py-12 text-center text-slate-500">
+                        No opportunities match the current filter/search.
                       </td>
                     </tr>
                   ) : (
-                    activeOpportunities.map((opp) => {
+                    paginatedTableRows.map((opp) => {
                       const reviewed = isOpportunityReviewed(opp);
                       const approved = isOpportunityApproved(opp);
                       return (
                         <tr key={opp.id} className="transition-colors hover:bg-slate-50">
                           <td className="px-6 py-4">
-                            <div className="font-semibold text-slate-900">{opp.supplier_name || 'New Requirement'}</div>
-                            <div className="text-xs text-slate-500 font-mono mt-0.5">{opp.contract_id || opp.request_id}</div>
+                            <div className="font-semibold text-slate-900">{opportunityLabel(opp)}</div>
+                            <div className="text-xs text-slate-500 font-mono mt-0.5">{opportunityRef(opp)}</div>
+                          </td>
+                          <td className="px-6 py-4">
+                            {opportunityType(opp) === "renewal" ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                                Renewal
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-violet-50 text-violet-700 border border-violet-200">
+                                New Opportunity
+                              </span>
+                            )}
                           </td>
                           <td className="px-6 py-4 text-sm text-slate-600">
                             {opp.category}<br/>
@@ -1372,11 +1652,7 @@ export default function HeatmapPriorityPage() {
                             </div>
                           </td>
                           <td className="px-6 py-4 align-middle">
-                            {approved ? (
-                              <span className="inline-flex items-center text-xs font-semibold uppercase px-2 py-1 rounded bg-slate-100 text-slate-500 border border-slate-200">
-                                Reviewed (Locked)
-                              </span>
-                            ) : reviewed ? (
+                            {reviewed ? (
                               <button
                                 onClick={() => {
                                   void openReviewModal(opp);
@@ -1538,10 +1814,10 @@ export default function HeatmapPriorityPage() {
                           >
                             <td className="px-3 py-2">
                               <div className="font-medium text-slate-800 truncate max-w-[340px]">
-                                {o.supplier_name || "New Sourcing Request"}
+                                {opportunityLabel(o)}
                               </div>
                               <div className="font-mono text-[10px] text-slate-400">
-                                {o.contract_id || o.request_id || `id=${o.id}`}
+                                {opportunityRef(o) || `id=${o.id}`}
                               </div>
                             </td>
                             <td className="px-3 py-2">
@@ -1779,10 +2055,12 @@ export default function HeatmapPriorityPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Upload policy (.txt / paste into a file)</label>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      Upload policy (.txt, .md, or .docx — max 500KB)
+                    </label>
                     <input
                       type="file"
-                      accept=".txt,text/plain"
+                      accept=".txt,.md,.docx,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                       onChange={(e) => void onPolicyFileSelected(e)}
                       disabled={uploadLoading}
                       className="block w-full text-sm text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-slate-100 file:text-slate-700"
@@ -1811,8 +2089,10 @@ export default function HeatmapPriorityPage() {
                     </summary>
                     <div className="border-t border-slate-200 px-4 pb-4 pt-3 text-xs leading-relaxed space-y-2">
                       <p className="text-slate-600">
-                        Upload a policy document (plain text) or describe changes below. The system drafts a structured patch for{" "}
-                        <code className="text-slate-700">data/heatmap/category_cards.json</code>.
+                        Upload a policy document (plain text, Markdown, or Word .docx) or describe changes below. The server extracts
+                        text from Word (paragraphs and tables), then drafts a structured patch for{" "}
+                        <code className="text-slate-700">data/heatmap/category_cards.json</code>. Narrative-heavy guidance may need{" "}
+                        <strong>Suggest patch (LLM)</strong> after upload if deterministic extract finds few signals.
                       </p>
                       <ul className="list-disc list-inside space-y-1 text-slate-600">
                         <li>
@@ -1905,8 +2185,8 @@ export default function HeatmapPriorityPage() {
               <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:justify-between sm:items-start gap-6">
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Opportunity</p>
-                  <p className="text-2xl font-bold text-slate-900 tracking-tight">{reviewOpp.supplier_name || "New Requirement"}</p>
-                  <p className="text-sm font-mono text-slate-500 mt-1">{reviewOpp.contract_id || reviewOpp.request_id}</p>
+                  <p className="text-2xl font-bold text-slate-900 tracking-tight">{opportunityLabel(reviewOpp)}</p>
+                  <p className="text-sm font-mono text-slate-500 mt-1">{opportunityRef(reviewOpp)}</p>
                   <div className="mt-4 flex flex-wrap gap-2">
                     <span className="px-2.5 py-1 bg-slate-100 rounded-md text-xs font-medium text-slate-700 border border-slate-200">
                       {reviewOpp.category}
@@ -1950,22 +2230,51 @@ export default function HeatmapPriorityPage() {
                 <HeatmapScoreBreakdown opportunity={reviewOpp as HeatmapOpportunityLike} />
               </div>
 
+              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Scoring Inputs Used</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                  <p><span className="text-slate-500">Type:</span> <span className="font-medium text-slate-800">{opportunityType(reviewOpp) === "renewal" ? "Renewal" : "New Opportunity"}</span></p>
+                  <p><span className="text-slate-500">Total spend:</span> <span className="font-medium text-slate-800">${Number(reviewOpp?.estimated_spend_usd ?? reviewOpp?.estimated_spend ?? 0).toLocaleString()}</span></p>
+                  <p><span className="text-slate-500">Contract end:</span> <span className="font-medium text-slate-800">{reviewOpp?.contract_end_date ? String(reviewOpp.contract_end_date).slice(0, 10) : "—"}</span></p>
+                  <p><span className="text-slate-500">Months to expiry:</span> <span className="font-medium text-slate-800">{monthsToExpiryDisplay(reviewOpp as Record<string, unknown>)}</span></p>
+                  <p><span className="text-slate-500">Implementation timeline:</span> <span className="font-medium text-slate-800">{reviewOpp?.implementation_timeline_months ?? "—"} mo</span></p>
+                  <p><span className="text-slate-500">Preferred supplier status:</span> <span className="font-medium text-slate-800">{reviewOpp?.preferred_supplier_status || "—"}</span></p>
+                </div>
+              </div>
+
               <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-slate-50 to-slate-100 rounded-bl-full border-l border-b border-slate-100"></div>
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2 relative z-10">Supporting Artifacts</p>
                   <ul className="space-y-3 relative z-10">
-                    <li className="flex items-center gap-3 text-sm text-slate-700 hover:text-sponsor-blue cursor-pointer transition">
-                      <div className="w-8 h-8 rounded bg-red-50 text-red-500 flex items-center justify-center font-bold text-xs">PDF</div>
-                      <span className="underline decoration-slate-200 underline-offset-2">Master_Agreement_2021.pdf</span>
-                    </li>
-                    <li className="flex items-center gap-3 text-sm text-slate-700 hover:text-sponsor-blue cursor-pointer transition">
-                      <div className="w-8 h-8 rounded bg-green-50 text-green-600 flex items-center justify-center font-bold text-xs">XLSX</div>
-                      <span className="underline decoration-slate-200 underline-offset-2">PO_Spend_History_12M.xlsx</span>
-                    </li>
-                    <li className="flex items-center gap-3 text-sm text-slate-700 hover:text-sponsor-blue cursor-pointer transition">
-                      <div className="w-8 h-8 rounded bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs">DOC</div>
-                      <span className="underline decoration-slate-200 underline-offset-2">Supplier_QBR_Notes.docx</span>
-                    </li>
+                    {Array.isArray(reviewOpp?.supporting_artifacts) && reviewOpp.supporting_artifacts.length > 0 ? (
+                      reviewOpp.supporting_artifacts.map((a: Record<string, unknown>, idx: number) => {
+                        const filename = String(a?.original_filename || a?.stored_name || "Uploaded file");
+                        const url = String(a?.download_url || "");
+                        const ext = filename.includes(".") ? filename.split(".").pop()?.toUpperCase() : "FILE";
+                        const extLabel = (ext || "FILE").slice(0, 4);
+                        return (
+                          <li key={`artifact-${idx}`} className="flex items-center gap-3 text-sm text-slate-700">
+                            <div className="w-8 h-8 rounded bg-slate-100 text-slate-700 flex items-center justify-center font-bold text-xs">
+                              {extLabel}
+                            </div>
+                            {url ? (
+                              <a
+                                href={`${getApiBaseUrl()}${url}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="underline decoration-slate-200 underline-offset-2 hover:text-sponsor-blue"
+                              >
+                                {filename}
+                              </a>
+                            ) : (
+                              <span className="underline decoration-slate-200 underline-offset-2">{filename}</span>
+                            )}
+                          </li>
+                        );
+                      })
+                    ) : (
+                      <li className="text-sm text-slate-500">No uploaded source artifacts attached to this row.</li>
+                    )}
                   </ul>
               </div>
 
@@ -1992,16 +2301,12 @@ export default function HeatmapPriorityPage() {
                       </select>
                       <div className="my-4 border-t border-slate-100" />
                       <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Adjust Priority</label>
-                      <select 
-                        className="w-full border border-slate-300 rounded-lg shadow-sm py-2.5 px-3 text-sm focus:ring-2 focus:ring-sponsor-blue/20 focus:border-sponsor-blue font-medium bg-slate-50 cursor-pointer"
-                        value={feedbackTier} 
-                        onChange={(e) => setFeedbackTier(e.target.value)}
-                      >
-                        <option value="T1">High — Immediate</option>
-                        <option value="T2">Medium — Benchmark</option>
-                        <option value="T3">Low — Monitor</option>
-                        <option value="T4">Lowest — Defer</option>
-                      </select>
+                      <div className="w-full border border-slate-300 rounded-lg shadow-sm py-2.5 px-3 text-sm font-medium bg-slate-50 text-slate-700">
+                        {heatmapTierLabel(weightAdjustPreview?.mathTier || reviewOpp?.tier || feedbackTier)}
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-2">
+                        Derived from weighted score to keep the dashboard ranking consistent.
+                      </p>
                     </div>
                     <div className="lg:col-span-2 space-y-4">
                       <div>

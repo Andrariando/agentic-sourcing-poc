@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useVirtualizer, type VirtualItem } from "@tanstack/react-virtual";
 import { apiFetch } from "@/lib/api-fetch";
 import { apiConnectivityHint, getApiBaseUrl } from "@/lib/api-base";
 import {
@@ -43,6 +42,11 @@ type PreviewRow = {
   readiness_status?: "ready" | "ready_with_warnings" | "needs_review";
   readiness_warnings?: string[];
   recommended_action_window?: string | null;
+  completeness_score?: number;
+  defaulted_components?: string[];
+  low_confidence_components?: string[];
+  missing_critical_fields?: string[];
+  suggested_actions?: Array<{ action: string; reason: string }>;
   warnings: string[];
   valid_for_approval: boolean;
 };
@@ -66,6 +70,17 @@ type PreviewResponse = {
   valid_candidates: number;
   candidates: PreviewRow[];
   parsing_notes: string[];
+  analysis?: {
+    total_rows_analyzed?: number;
+    scoreable_rows?: number;
+    readiness_breakdown?: Record<string, number>;
+    defaulted_component_counts?: Record<string, number>;
+    imputation_action_candidates?: Array<{ action: string; rows: number }>;
+    returned_rows?: number;
+    top_n_applied?: number | null;
+    rank_by_applied?: "completeness" | "score" | "hybrid" | string;
+    execution_trace?: string[];
+  };
 };
 
 type ApproveResponse = {
@@ -110,7 +125,7 @@ function mergeRow(base: PreviewRow, edit?: RowEdit): PreviewRow {
   if (rt === "new_business" && (impl === null || impl === undefined)) {
     warnings.push("New business row missing implementation_timeline_months (will default to 6)");
   }
-  if (!(edit.supplier_name ?? base.supplier_name ?? "").trim()) {
+  if (rt === "renewal" && !(edit.supplier_name ?? base.supplier_name ?? "").trim()) {
     warnings.push("Supplier name missing");
   }
   const valid = Number.isFinite(spend) && spend > 0;
@@ -151,7 +166,22 @@ function buildRowOverrides(
   return Object.keys(o).length ? o : null;
 }
 
-const PREVIEW_ROW_ESTIMATE_PX = 152;
+const PREVIEW_PAGE_SIZE = 20;
+
+function normalizeWarnings(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((entry) => {
+      if (typeof entry === "string") return entry.trim();
+      if (entry == null) return "";
+      try {
+        return JSON.stringify(entry);
+      } catch {
+        return String(entry).trim();
+      }
+    })
+    .filter((entry) => entry.length > 0);
+}
 
 function UploadPreviewTableRow({
   r,
@@ -159,36 +189,23 @@ function UploadPreviewTableRow({
   e,
   canSelect,
   selected,
-  virtualRow,
   onToggleSelect,
   updateEdit,
-  onResetEdit,
 }: {
   r: PreviewRow;
   m: PreviewRow;
   e: RowEdit | undefined;
   canSelect: boolean;
   selected: boolean;
-  virtualRow: VirtualItem;
   onToggleSelect: (checked: boolean) => void;
   updateEdit: (rowId: string, patch: RowEdit) => void;
-  onResetEdit: () => void;
 }) {
+  const rowType = (e?.row_type ?? m.row_type) as "renewal" | "new_business";
+  const warnings = normalizeWarnings(m.warnings).filter(
+    (w) => rowType === "renewal" || !w.toLowerCase().includes("supplier name missing")
+  );
   return (
-    <tr
-      data-index={virtualRow.index}
-      style={{
-        display: "table",
-        width: "100%",
-        tableLayout: "fixed",
-        position: "absolute",
-        top: 0,
-        left: 0,
-        transform: `translateY(${virtualRow.start}px)`,
-        height: `${virtualRow.size}px`,
-      }}
-      className="hover:bg-slate-50 align-top"
-    >
+    <tr className="hover:bg-slate-50 align-top">
       <td className="px-2 py-2">
         <input
           type="checkbox"
@@ -325,16 +342,16 @@ function UploadPreviewTableRow({
       <td className="px-2 py-2 text-xs text-slate-500">
         {r.source_kind}
         <br />
-        <span className="break-all">{r.source_filename}</span>
+        <span className="break-all line-clamp-3 block">{r.source_filename}</span>
       </td>
       <td className="px-2 py-2 text-xs">
         <div className="font-semibold text-slate-700">
           {m.computed_total_score != null ? `${m.computed_total_score.toFixed(2)} / 10` : "—"}
         </div>
         <div className="text-[11px] text-slate-500">{m.computed_tier || "—"}</div>
-      </td>
-      <td className="px-2 py-2 text-xs">
-        {m.computed_confidence != null ? `${Math.round(m.computed_confidence * 100)}%` : "—"}
+        <div className="text-[11px] text-slate-500">
+          Completeness: {m.completeness_score != null ? `${m.completeness_score.toFixed(1)}%` : "—"}
+        </div>
       </td>
       <td className="px-2 py-2 text-xs">
         <span
@@ -349,20 +366,33 @@ function UploadPreviewTableRow({
           {m.readiness_status || "ready"}
         </span>
       </td>
-      <td className="px-2 py-2 text-xs">
-        {m.warnings.length === 0 ? (
+      <td className="px-2 py-2 text-xs w-[16rem] min-w-[16rem]">
+        {warnings.length === 0 ? (
           <span className="text-emerald-700">No issues</span>
         ) : (
-          <div className="space-y-1">
-            <span className="text-amber-700">{m.warnings.join("; ")}</span>
+          <div className="space-y-1 max-h-20 overflow-y-auto pr-1">
+            <span className="text-amber-700 break-words whitespace-normal block">
+              {warnings.join("; ")}
+            </span>
             {m.score_components && Object.keys(m.score_components).length > 0 && (
               <details>
                 <summary className="cursor-pointer text-sponsor-blue">Evidence</summary>
                 <div className="mt-1 space-y-1 text-[11px] text-slate-600">
                   {Object.entries(m.score_components).map(([k, v]) => (
                     <p key={k}>
-                      <strong>{k}</strong>: {v.value} ({v.source_type},{" "}
-                      {(v.confidence * 100).toFixed(0)}%)
+                      <strong>{k}</strong>: {v.value} ({v.source_type})
+                    </p>
+                  ))}
+                </div>
+              </details>
+            )}
+            {m.suggested_actions && m.suggested_actions.length > 0 && (
+              <details>
+                <summary className="cursor-pointer text-sponsor-blue">Suggested actions</summary>
+                <div className="mt-1 space-y-1 text-[11px] text-slate-600">
+                  {m.suggested_actions.slice(0, 4).map((a, idx) => (
+                    <p key={`${r.row_id}-action-${idx}`}>
+                      <strong>{a.action}</strong>: {a.reason}
                     </p>
                   ))}
                 </div>
@@ -370,15 +400,6 @@ function UploadPreviewTableRow({
             )}
           </div>
         )}
-      </td>
-      <td className="px-2 py-2">
-        <button
-          type="button"
-          className="text-xs text-sponsor-blue hover:underline"
-          onClick={onResetEdit}
-        >
-          Reset
-        </button>
       </td>
     </tr>
   );
@@ -395,19 +416,16 @@ export default function System1UploadPage() {
   const [columnMappingJson, setColumnMappingJson] = useState("");
   const [ackWarnings, setAckWarnings] = useState(false);
   const [bundleScanMode, setBundleScanMode] = useState(true);
+  const [topN, setTopN] = useState(100);
+  const [topNInput, setTopNInput] = useState("100");
+  const [rankBy, setRankBy] = useState<"completeness" | "score" | "hybrid">("completeness");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [exportScope, setExportScope] = useState<ExportScope>("all");
   const [exporting, setExporting] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(PREVIEW_PAGE_SIZE);
 
   const tableScrollRef = useRef<HTMLDivElement>(null);
-  const candidateCount = preview?.candidates.length ?? 0;
-  const rowVirtualizer = useVirtualizer({
-    count: candidateCount,
-    getScrollElement: () => tableScrollRef.current,
-    estimateSize: () => PREVIEW_ROW_ESTIMATE_PX,
-    overscan: 8,
-  });
 
   const selectedCount = useMemo(
     () => Object.entries(selected).filter(([, v]) => v).length,
@@ -423,10 +441,31 @@ export default function System1UploadPage() {
     return m;
   }, [preview, edits]);
 
-  const validSelectableIds = useMemo(() => {
+  const sortedCandidates = useMemo(() => {
     if (!preview) return [];
-    return preview.candidates.filter((c) => mergedById[c.row_id]?.valid_for_approval).map((c) => c.row_id);
+    const ranked = [...preview.candidates];
+    ranked.sort((a, b) => {
+      const ma = mergedById[a.row_id] || a;
+      const mb = mergedById[b.row_id] || b;
+      const scoreDelta =
+        Number(mb.computed_total_score ?? 0) - Number(ma.computed_total_score ?? 0);
+      if (scoreDelta !== 0) return scoreDelta;
+      return Number(mb.estimated_spend_usd ?? 0) - Number(ma.estimated_spend_usd ?? 0);
+    });
+    return ranked;
   }, [preview, mergedById]);
+  const candidateCount = sortedCandidates.length;
+  const visibleCandidates = useMemo(
+    () => sortedCandidates.slice(0, visibleCount),
+    [sortedCandidates, visibleCount]
+  );
+  const visibleCandidateCount = visibleCandidates.length;
+
+  const validSelectableIds = useMemo(() => {
+    return visibleCandidates
+      .filter((c) => mergedById[c.row_id]?.valid_for_approval)
+      .map((c) => c.row_id);
+  }, [visibleCandidates, mergedById]);
 
   const exportRows = useMemo(() => {
     if (!preview) return [];
@@ -453,8 +492,10 @@ export default function System1UploadPage() {
   }, [edits, preview]);
 
   useEffect(() => {
+    if (!preview) return;
+    setVisibleCount(PREVIEW_PAGE_SIZE);
     tableScrollRef.current?.scrollTo({ top: 0 });
-  }, [preview?.job_id]);
+  }, [preview?.job_id, preview]);
 
   const runExport = async (kind: "csv" | "xlsx" | "pdf" | "docx") => {
     if (!preview || exportRows.length === 0) {
@@ -496,6 +537,13 @@ export default function System1UploadPage() {
     const body = new FormData();
     for (const f of files) body.append("files", f);
     if (columnMappingJson.trim()) body.append("column_mapping_json", columnMappingJson.trim());
+    const parsedTopN = Number.parseInt(topNInput.trim(), 10);
+    const effectiveTopN =
+      Number.isFinite(parsedTopN) && parsedTopN > 0 ? Math.min(Math.max(parsedTopN, 1), 5000) : 100;
+    setTopN(effectiveTopN);
+    setTopNInput(String(effectiveTopN));
+    body.append("top_n", String(effectiveTopN));
+    body.append("rank_by", rankBy);
     setUploading(true);
     try {
       const endpoint = bundleScanMode
@@ -513,12 +561,7 @@ export default function System1UploadPage() {
       const p = data as PreviewResponse;
       setPreview(p);
       setEdits({});
-      const defaults: Record<string, boolean> = {};
-      for (const c of p.candidates) {
-        const merged = mergeRow(c, undefined);
-        if (merged.valid_for_approval) defaults[c.row_id] = true;
-      }
-      setSelected(defaults);
+      setSelected({});
       setMessage(
         `${bundleScanMode ? "Bundle scan" : "Preview"} ready: ` +
           `${p.valid_candidates}/${p.total_candidates} rows can be approved.`
@@ -579,7 +622,28 @@ export default function System1UploadPage() {
         return;
       }
       const ok = data as ApproveResponse;
-      setMessage(ok.message);
+      const approvedSet = new Set(approvedIds);
+      setPreview((prev) => {
+        if (!prev) return prev;
+        const remaining = prev.candidates.filter((c) => !approvedSet.has(c.row_id));
+        return {
+          ...prev,
+          candidates: remaining,
+          total_candidates: remaining.length,
+          valid_candidates: remaining.filter((c) => (mergedById[c.row_id] || c).valid_for_approval).length,
+        };
+      });
+      setSelected((prev) => {
+        const next = { ...prev };
+        for (const id of approvedIds) delete next[id];
+        return next;
+      });
+      setEdits((prev) => {
+        const next = { ...prev };
+        for (const id of approvedIds) delete next[id];
+        return next;
+      });
+      setMessage(`${ok.message} Removed ${approvedIds.length} approved row(s) from the preview list.`);
       const st = await apiFetch(`${getApiBaseUrl()}/api/system1/upload/jobs/${preview.job_id}`);
       if (st.ok) {
         setStatus((await st.json()) as JobStatus);
@@ -603,6 +667,18 @@ export default function System1UploadPage() {
       }
       return { ...prev, [rowId]: next };
     });
+  };
+
+  const commitTopNInput = () => {
+    const parsed = Number.parseInt(topNInput.trim(), 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      setTopN(100);
+      setTopNInput("100");
+      return;
+    }
+    const clamped = Math.min(Math.max(parsed, 1), 5000);
+    setTopN(clamped);
+    setTopNInput(String(clamped));
   };
 
   return (
@@ -654,6 +730,69 @@ export default function System1UploadPage() {
               />
               Bundle scan mode (fuse contract + spend + metrics into deduplicated candidates)
             </label>
+            <div className="mt-2 flex items-center gap-2 text-xs text-slate-600">
+              <label htmlFor="top-n-input">Top rows</label>
+              <input
+                id="top-n-input"
+                type="number"
+                min={1}
+                step={1}
+                inputMode="numeric"
+                value={topNInput}
+                onChange={(e) => setTopNInput(e.target.value)}
+                onBlur={commitTopNInput}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    commitTopNInput();
+                  }
+                }}
+                className="w-24 border border-slate-200 rounded px-2 py-1 text-xs"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setTopN(50);
+                  setTopNInput("50");
+                }}
+                className="px-2 py-1 rounded border border-slate-200 bg-white hover:bg-slate-50"
+              >
+                50
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setTopN(100);
+                  setTopNInput("100");
+                }}
+                className="px-2 py-1 rounded border border-slate-200 bg-white hover:bg-slate-50"
+              >
+                100
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setTopN(200);
+                  setTopNInput("200");
+                }}
+                className="px-2 py-1 rounded border border-slate-200 bg-white hover:bg-slate-50"
+              >
+                200
+              </button>
+            </div>
+            <div className="mt-2 flex items-center gap-2 text-xs text-slate-600">
+              <label htmlFor="rank-by-select">Rank by</label>
+              <select
+                id="rank-by-select"
+                value={rankBy}
+                onChange={(e) => setRankBy(e.target.value as "completeness" | "score" | "hybrid")}
+                className="border border-slate-200 rounded px-2 py-1 text-xs bg-white"
+              >
+                <option value="completeness">Completeness</option>
+                <option value="score">Score</option>
+                <option value="hybrid">Hybrid</option>
+              </select>
+            </div>
           </div>
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-2">Optional column mapping (JSON)</label>
@@ -724,6 +863,23 @@ export default function System1UploadPage() {
                 </button>
                 <button
                   type="button"
+                  onClick={() =>
+                    setEdits((prev) => {
+                      const next = { ...prev };
+                      for (const [id, isSelected] of Object.entries(selected)) {
+                        if (isSelected) delete next[id];
+                      }
+                      return next;
+                    })
+                  }
+                  disabled={selectedCount === 0}
+                  className="text-xs px-3 py-1.5 rounded-md border border-slate-200 text-slate-700 bg-white disabled:opacity-50"
+                  title="Undo edits on selected rows"
+                >
+                  Reset selected edits
+                </button>
+                <button
+                  type="button"
                   onClick={handleApprove}
                   disabled={approving || selectedCount === 0}
                   className="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-medium disabled:opacity-50"
@@ -738,7 +894,7 @@ export default function System1UploadPage() {
                 checked={ackWarnings}
                 onChange={(e) => setAckWarnings(e.target.checked)}
               />
-              I acknowledge warning rows (defaulted/low-confidence components) before approval.
+              I acknowledge warning rows (defaulted/derived components) before approval.
             </label>
 
             <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-4 space-y-3">
@@ -810,14 +966,63 @@ export default function System1UploadPage() {
                 ))}
               </div>
             )}
+            {preview.analysis && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 space-y-2">
+                <p className="text-sm font-semibold text-slate-800">Agentic completeness analysis</p>
+                <div className="text-xs text-slate-700 flex flex-wrap gap-4">
+                  <span>
+                    Total analyzed: <strong>{preview.analysis.total_rows_analyzed ?? preview.total_candidates}</strong>
+                  </span>
+                  <span>
+                    Scoreable: <strong>{preview.analysis.scoreable_rows ?? preview.valid_candidates}</strong>
+                  </span>
+                  <span>
+                    Returned: <strong>{preview.analysis.returned_rows ?? preview.candidates.length}</strong>
+                  </span>
+                  <span>
+                    Top N: <strong>{preview.analysis.top_n_applied ?? "all"}</strong>
+                  </span>
+                  <span>
+                    Rank by: <strong>{preview.analysis.rank_by_applied ?? rankBy}</strong>
+                  </span>
+                </div>
+                {preview.analysis.execution_trace && preview.analysis.execution_trace.length > 0 && (
+                  <p className="text-xs text-slate-600">
+                    Flow: {preview.analysis.execution_trace.join(" -> ")}
+                  </p>
+                )}
+                {preview.analysis.imputation_action_candidates &&
+                  preview.analysis.imputation_action_candidates.length > 0 && (
+                    <div className="text-xs text-slate-700">
+                      <p className="font-medium">Suggested actions (most common)</p>
+                      <p>
+                        {preview.analysis.imputation_action_candidates
+                          .slice(0, 5)
+                          .map((a) => `${a.action} (${a.rows})`)
+                          .join(", ")}
+                      </p>
+                    </div>
+                  )}
+                {preview.analysis.readiness_breakdown && (
+                  <div className="text-xs text-slate-700">
+                    <p className="font-medium">Readiness breakdown</p>
+                    <p>
+                      {Object.entries(preview.analysis.readiness_breakdown)
+                        .map(([k, v]) => `${k}: ${v}`)
+                        .join(" | ")}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             <p className="text-xs text-slate-500">
-              Large previews use virtual scrolling (about {PREVIEW_ROW_ESTIMATE_PX}px per row) so the page stays responsive.
-              Showing {candidateCount.toLocaleString()} row(s); scroll the grid to review and edit.
+              Showing top {visibleCandidateCount.toLocaleString()} of {candidateCount.toLocaleString()} row(s), ranked by
+              score. Use Load more to continue.
             </p>
             <div className="rounded-lg border border-slate-200">
               <div ref={tableScrollRef} className="overflow-auto max-h-[min(70vh,720px)]">
-                <table className="w-full text-left text-sm min-w-[1400px] table-fixed">
+                <table className="w-full text-left text-sm min-w-[1200px] table-auto">
                   <thead className="sticky top-0 z-20 bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500 shadow-sm">
                     <tr>
                       <th className="px-2 py-2 w-10">OK</th>
@@ -829,21 +1034,12 @@ export default function System1UploadPage() {
                       <th className="px-2 py-2">Timeline / Expiry (mo)</th>
                       <th className="px-2 py-2">Source</th>
                       <th className="px-2 py-2">Computed</th>
-                      <th className="px-2 py-2">Confidence</th>
                       <th className="px-2 py-2">Readiness</th>
-                      <th className="px-2 py-2">Warnings</th>
-                      <th className="px-2 py-2 w-16" />
+                      <th className="px-2 py-2 w-[16rem] min-w-[16rem]">Warnings</th>
                     </tr>
                   </thead>
-                  <tbody
-                    style={{
-                      display: "block",
-                      height: candidateCount ? rowVirtualizer.getTotalSize() : 0,
-                      position: "relative",
-                    }}
-                  >
-                    {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                      const r = preview.candidates[virtualRow.index];
+                  <tbody>
+                    {visibleCandidates.map((r) => {
                       const m = mergedById[r.row_id] || r;
                       const e = edits[r.row_id];
                       const canSelect = m.valid_for_approval;
@@ -855,18 +1051,10 @@ export default function System1UploadPage() {
                           e={e}
                           canSelect={canSelect}
                           selected={Boolean(selected[r.row_id])}
-                          virtualRow={virtualRow}
                           onToggleSelect={(checked) =>
                             setSelected((prev) => ({ ...prev, [r.row_id]: checked }))
                           }
                           updateEdit={updateEdit}
-                          onResetEdit={() =>
-                            setEdits((prev) => {
-                              const rest = { ...prev };
-                              delete rest[r.row_id];
-                              return rest;
-                            })
-                          }
                         />
                       );
                     })}
@@ -874,6 +1062,22 @@ export default function System1UploadPage() {
                 </table>
               </div>
             </div>
+            {visibleCandidateCount < candidateCount && (
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs text-slate-500">
+                  {candidateCount - visibleCandidateCount} row(s) hidden for performance.
+                </p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setVisibleCount((n) => Math.min(n + PREVIEW_PAGE_SIZE, candidateCount))
+                  }
+                  className="text-xs px-3 py-1.5 rounded-md border border-slate-200 bg-white text-slate-800 hover:bg-slate-50"
+                >
+                  Load more (+{PREVIEW_PAGE_SIZE})
+                </button>
+              </div>
+            )}
           </section>
         )}
 

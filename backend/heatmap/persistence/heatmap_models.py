@@ -120,3 +120,15 @@ class HeatmapProcuraBotFeedback(SQLModel, table=True):
     vote: str = Field(index=True)  # up | down
     user_id: str = Field(default="human-user")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class ScoringConfigVersion(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    version: int = Field(default=1, index=True)
+    status: str = Field(default="draft", index=True)  # draft | active | archived
+    title: str = Field(default="Scoring Config")
+    config_json: str = Field(default="{}")
+    created_by: str = Field(default="human-manager")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    published_at: Optional[datetime] = Field(default=None)

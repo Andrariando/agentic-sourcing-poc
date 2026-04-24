@@ -7,6 +7,7 @@ import json
 import threading
 import time
 from uuid import uuid4
+from pathlib import Path
 
 from backend.heatmap.services.feedback_service import get_feedback_service
 from backend.heatmap.services.case_bridge import get_case_bridge_service
@@ -17,6 +18,7 @@ from backend.heatmap.persistence.heatmap_models import (
     ReviewFeedback,
     AuditLog,
     HeatmapProcuraBotFeedback,
+    ScoringConfigVersion,
 )
 from backend.heatmap.context_builder import (
     load_category_cards,
@@ -32,6 +34,15 @@ from backend.heatmap.services.heatmap_copilot import (
     check_feedback_vs_policy,
 )
 from backend.heatmap.services.category_cards_store import apply_category_cards_patch
+from backend.heatmap.category_scoring_mix import apply_category_scoring_overlay
+from backend.heatmap.scoring_framework import eus_from_months_to_expiry, ius_from_implementation_months
+from backend.heatmap.services.learned_weights import load_learned_weights, normalize_full, recompute_total_and_tier
+from backend.heatmap.services.scoring_config_registry import (
+    ensure_default_scoring_config,
+    extract_weight_overrides,
+    parse_config_json,
+    validate_scoring_config,
+)
 
 heatmap_router = APIRouter()
 _pipeline_lock = threading.Lock()
@@ -73,6 +84,24 @@ class ScoringWeightsResponse(BaseModel):
 class ScoringWeightsUpdateRequest(BaseModel):
     weights: Optional[Dict[str, float]] = None
     deltas: Optional[Dict[str, float]] = None
+
+
+class ScoringConfigVersionOut(BaseModel):
+    id: int
+    version: int
+    status: str
+    title: str
+    config: Dict[str, Any]
+    created_by: str
+    created_at: datetime
+    updated_at: datetime
+    published_at: Optional[datetime] = None
+
+
+class ScoringConfigDraftRequest(BaseModel):
+    title: str = Field(default="Scoring Config Draft", min_length=3, max_length=140)
+    config: Dict[str, Any] = Field(default_factory=dict)
+    created_by: str = Field(default="human-manager", min_length=1, max_length=80)
 
 
 class FeedbackHistoryItem(BaseModel):
@@ -357,19 +386,26 @@ async def heatmap_category_cards_extract_upload(
     category: str = Form(...),
     file: UploadFile = File(...),
 ):
-    """Read uploaded text file and run the same unstructured extract as /category-cards/extract."""
+    """Read uploaded file (.txt / .md / .docx) and run the same unstructured extract as /category-cards/extract."""
+    from backend.heatmap.services.upload_plain_text import upload_bytes_to_plain_text
+
     raw = await file.read()
     if len(raw) > _MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="File too large (max 500KB).")
     try:
-        text = raw.decode("utf-8")
-    except UnicodeDecodeError:
-        text = raw.decode("utf-8", errors="replace")
+        text = upload_bytes_to_plain_text(raw, file.filename or "")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     payload, used_llm = assist_category_card_from_unstructured(
         category=category.strip(),
         raw_text=text,
     )
-    return {"used_llm": used_llm, **payload, "filename": file.filename or "upload"}
+    return {
+        "used_llm": used_llm,
+        **payload,
+        "filename": file.filename or "upload",
+        "source_format": Path(file.filename or "").suffix.lower() or ".txt",
+    }
 
 
 @heatmap_router.post("/category-cards/apply")
@@ -480,6 +516,71 @@ def _last_pipeline_audit_payload(session) -> Optional[Dict[str, Any]]:
         return None
 
 
+def _safe_json_loads(raw: Any, fallback: Any):
+    if raw is None:
+        return fallback
+    if isinstance(raw, (dict, list)):
+        return raw
+    try:
+        return json.loads(str(raw))
+    except Exception:
+        return fallback
+
+
+def _months_until(dt: Optional[datetime], now: datetime) -> Optional[float]:
+    if dt is None:
+        return None
+    t = dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+    return max(0.0, (t - now).total_seconds() / (86400.0 * 30.4375))
+
+
+def _refresh_time_dependent_scores(session, opps: List[Opportunity]) -> None:
+    if not opps:
+        return
+    cards = load_category_cards()
+    global_weights = normalize_full(load_learned_weights(session))
+    now = datetime.now(timezone.utc)
+    changed = False
+    for o in opps:
+        is_new = o.contract_id is None
+        if is_new:
+            if o.implementation_timeline_months is None or o.record_created_at is None:
+                continue
+            created = (
+                o.record_created_at
+                if o.record_created_at.tzinfo is not None
+                else o.record_created_at.replace(tzinfo=timezone.utc)
+            )
+            elapsed_months = max(0.0, (now - created).total_seconds() / (86400.0 * 30.4375))
+            remaining = max(0.0, float(o.implementation_timeline_months) - elapsed_months)
+            new_ius = round(float(ius_from_implementation_months(remaining)), 2)
+            if abs(float(o.ius_score or 0.0) - new_ius) >= 0.01:
+                o.ius_score = new_ius
+                changed = True
+        else:
+            months = _months_until(o.contract_end_date, now)
+            if months is None:
+                continue
+            new_eus = round(float(eus_from_months_to_expiry(months)), 2)
+            if abs(float(o.eus_score or 0.0) - new_eus) >= 0.01:
+                o.eus_score = new_eus
+                changed = True
+
+        raw_c = cards.get((o.category or "").strip()) or cards.get(o.category or "")
+        ccard = raw_c if isinstance(raw_c, dict) else {}
+        w_effective = apply_category_scoring_overlay(global_weights, ccard)
+        new_total, new_tier = recompute_total_and_tier(o, w_effective)
+        if abs(float(o.total_score or 0.0) - float(new_total)) >= 0.01:
+            o.total_score = float(new_total)
+            changed = True
+        if str(o.tier or "") != str(new_tier):
+            o.tier = new_tier
+            changed = True
+        session.add(o)
+    if changed:
+        session.commit()
+
+
 @heatmap_router.get("/opportunities")
 def list_opportunities(
     enrich: bool = Query(
@@ -499,6 +600,7 @@ def list_opportunities(
                 Opportunity.disposition.not_in(["not_pursuing", "supplier_exit_planned"])
             )
         results = session.exec(statement).all()
+        _refresh_time_dependent_scores(session, results)
         cards = load_category_cards()
         cat_keys = iter_category_card_names(cards)
         fb_counts = _feedback_counts_by_opportunity(session) if enrich else {}
@@ -516,6 +618,17 @@ def list_opportunities(
         out: List[Dict[str, Any]] = []
         for opt in results:
             d = opt.model_dump(mode="json")
+            provenance = _safe_json_loads(d.get("score_provenance_json"), {})
+            warnings = _safe_json_loads(d.get("system1_warnings_json"), [])
+            is_new_request = not bool(d.get("contract_id"))
+            d["opportunity_type"] = "new_business" if is_new_request else "renewal"
+            d["score_provenance"] = provenance if isinstance(provenance, dict) else {}
+            d["supporting_artifacts"] = (
+                d["score_provenance"].get("supporting_artifacts", [])
+                if isinstance(d["score_provenance"], dict)
+                else []
+            )
+            d["system1_warnings"] = warnings if isinstance(warnings, list) else []
             if enrich:
                 oid = int(opt.id) if opt.id is not None else 0
                 d = enrich_opportunity_dict(
@@ -731,6 +844,150 @@ def heatmap_scoring_weights_put(req: ScoringWeightsUpdateRequest):
         session.commit()
         w = normalize_full(load_learned_weights(session))
         return ScoringWeightsResponse(weights=w, defaults=dict(DEFAULT_WEIGHTS_FLAT))
+    finally:
+        session.close()
+
+
+def _serialize_scoring_config_row(row: ScoringConfigVersion) -> ScoringConfigVersionOut:
+    payload = parse_config_json(row.config_json)
+    return ScoringConfigVersionOut(
+        id=int(row.id or 0),
+        version=int(row.version),
+        status=str(row.status),
+        title=str(row.title),
+        config=payload,
+        created_by=str(row.created_by),
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+        published_at=row.published_at,
+    )
+
+
+@heatmap_router.get("/scoring-config/active", response_model=ScoringConfigVersionOut)
+def heatmap_scoring_config_active():
+    session = heatmap_db.get_db_session()
+    try:
+        row = ensure_default_scoring_config(session)
+        return _serialize_scoring_config_row(row)
+    finally:
+        session.close()
+
+
+@heatmap_router.get("/scoring-config/versions", response_model=List[ScoringConfigVersionOut])
+def heatmap_scoring_config_versions():
+    session = heatmap_db.get_db_session()
+    try:
+        ensure_default_scoring_config(session)
+        rows = session.exec(
+            select(ScoringConfigVersion).order_by(ScoringConfigVersion.version.desc(), ScoringConfigVersion.id.desc())
+        ).all()
+        return [_serialize_scoring_config_row(r) for r in rows]
+    finally:
+        session.close()
+
+
+@heatmap_router.post("/scoring-config/draft", response_model=ScoringConfigVersionOut)
+def heatmap_scoring_config_create_draft(req: ScoringConfigDraftRequest):
+    ok, errors = validate_scoring_config(req.config)
+    if not ok:
+        raise HTTPException(status_code=400, detail="; ".join(errors))
+    session = heatmap_db.get_db_session()
+    try:
+        ensure_default_scoring_config(session)
+        latest = session.exec(select(func.max(ScoringConfigVersion.version))).one()
+        max_version = int((latest[0] if isinstance(latest, (tuple, list)) else latest) or 1)
+        now = datetime.now(timezone.utc)
+        row = ScoringConfigVersion(
+            version=max_version + 1,
+            status="draft",
+            title=req.title,
+            config_json=json.dumps(req.config),
+            created_by=req.created_by,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+        return _serialize_scoring_config_row(row)
+    finally:
+        session.close()
+
+
+@heatmap_router.put("/scoring-config/draft/{config_id}", response_model=ScoringConfigVersionOut)
+def heatmap_scoring_config_update_draft(config_id: int, req: ScoringConfigDraftRequest):
+    ok, errors = validate_scoring_config(req.config)
+    if not ok:
+        raise HTTPException(status_code=400, detail="; ".join(errors))
+    session = heatmap_db.get_db_session()
+    try:
+        row = session.get(ScoringConfigVersion, config_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="Scoring config draft not found")
+        if row.status != "draft":
+            raise HTTPException(status_code=400, detail="Only draft versions can be edited")
+        row.title = req.title
+        row.config_json = json.dumps(req.config)
+        row.created_by = req.created_by
+        row.updated_at = datetime.now(timezone.utc)
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+        return _serialize_scoring_config_row(row)
+    finally:
+        session.close()
+
+
+@heatmap_router.post("/scoring-config/draft/{config_id}/validate")
+def heatmap_scoring_config_validate_draft(config_id: int):
+    session = heatmap_db.get_db_session()
+    try:
+        row = session.get(ScoringConfigVersion, config_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="Scoring config draft not found")
+        payload = parse_config_json(row.config_json)
+        ok, errors = validate_scoring_config(payload)
+        return {"valid": ok, "errors": errors}
+    finally:
+        session.close()
+
+
+@heatmap_router.post("/scoring-config/draft/{config_id}/publish", response_model=ScoringConfigVersionOut)
+def heatmap_scoring_config_publish_draft(config_id: int):
+    from backend.heatmap.services.learned_weights import normalize_full, save_learned_weights
+
+    session = heatmap_db.get_db_session()
+    try:
+        row = session.get(ScoringConfigVersion, config_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="Scoring config draft not found")
+        if row.status != "draft":
+            raise HTTPException(status_code=400, detail="Only draft versions can be published")
+        payload = parse_config_json(row.config_json)
+        ok, errors = validate_scoring_config(payload)
+        if not ok:
+            raise HTTPException(status_code=400, detail="; ".join(errors))
+
+        active_rows = session.exec(
+            select(ScoringConfigVersion).where(ScoringConfigVersion.status == "active")
+        ).all()
+        for ar in active_rows:
+            ar.status = "archived"
+            ar.updated_at = datetime.now(timezone.utc)
+            session.add(ar)
+
+        row.status = "active"
+        row.published_at = datetime.now(timezone.utc)
+        row.updated_at = datetime.now(timezone.utc)
+        session.add(row)
+        # Wire published config to live scoring by syncing configured weight values
+        # into learned weights (shared by table + bulk scoring paths).
+        overrides = extract_weight_overrides(payload)
+        if overrides:
+            save_learned_weights(session, normalize_full(overrides))
+        session.commit()
+        session.refresh(row)
+        return _serialize_scoring_config_row(row)
     finally:
         session.close()
 

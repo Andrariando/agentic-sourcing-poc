@@ -23,7 +23,7 @@ This repository contains **two independent systems** that share the same FastAPI
 
 ### System B — Opportunity Heatmap (agentic scoring + intake)
 
-**Purpose**: continuously evaluate sourcing opportunities (renewals + new requests) and prioritize them using a deterministic scoring framework with optional LLM layers (explanations, policy check, bounded learning, interpreter fallbacks).
+**Purpose**: continuously evaluate sourcing opportunities (renewals + new requests) and prioritize them using a deterministic scoring framework with optional LLM layers (explanations, policy check, bounded learning, interpreter fallbacks)
 
 **Core layers**
 - **API Layer (FastAPI)**: `/api/heatmap/*`
@@ -1254,4 +1254,189 @@ This removes the mismatch where artifacts were retrievable by agents but missing
 | `frontend-next/src/app/cases/[id]/copilot/page.tsx` | Decision Console moved to chat side and decision-triggered chat follow-up behavior |
 | `frontend-next/src/app/cases/copilot/page.tsx` | New no-case-selected default shell route |
 | `backend/scripts/seed_it_demo_data.py` | Added synthetic document catalog reuse and `document_records` upsert |
+
+---
+
+## 🧩 17. System 1 + Heatmap Consistency Patch Log (April 2026)
+
+This section records the full patch stream implemented for System 1 upload UX, score consistency, review workflow behavior, and config-driven scoring governance.
+
+### A. System 1 Upload UX and Data Quality Improvements
+
+#### 1) Top rows control made easier and defaulted to 100
+- **File:** `frontend-next/src/app/system-1/upload/page.tsx`
+- **Changes:**
+  - Default `Top rows` changed from `50` to `100`.
+  - Added separate input state (`topNInput`) so typing does not auto-reset mid-edit.
+  - Added commit-on-blur/Enter behavior with clamped range.
+  - Added quick preset buttons (`50`, `100`, `200`).
+- **Purpose:** reduce friction in batch preview controls.
+
+#### 2) Confidence removed from System 1 preview UI
+- **File:** `frontend-next/src/app/system-1/upload/page.tsx`
+- **Changes:**
+  - Removed user-facing confidence column/percentages from the preview table.
+  - Simplified warning acknowledgment text to avoid confidence terminology.
+- **Purpose:** avoid confusion while keeping backend confidence computation available for internal logic.
+
+#### 3) Warnings behavior corrected for new business
+- **File:** `frontend-next/src/app/system-1/upload/page.tsx`
+- **Changes:**
+  - `Supplier name missing` warning now only applies to renewal rows.
+  - Added display-level warning filtering to suppress that warning for `new_business` even if present in merged warnings.
+- **Purpose:** align warnings with expected data semantics.
+
+#### 4) Reset workflow moved from row-level to selected-row bulk action
+- **File:** `frontend-next/src/app/system-1/upload/page.tsx`
+- **Changes:**
+  - Removed per-row reset action column/button.
+  - Added `Reset selected edits` action near approve controls.
+- **Purpose:** cleaner workflow for larger datasets and less table clutter.
+
+#### 5) Table spacing/layout cleanup
+- **File:** `frontend-next/src/app/system-1/upload/page.tsx`
+- **Changes:**
+  - Tuned table layout/column widths to eliminate right-gap and readability issues.
+  - Balanced warnings column sizing after action-column removal.
+- **Purpose:** stable, readable table rendering with fewer visual artifacts.
+
+### B. System 1 Data Consumption and Provenance Fixes
+
+#### 1) Preserve score-relevant fields during bundle fusion
+- **File:** `backend/heatmap/services/system1_bundle_scan.py`
+- **Changes:**
+  - Preserved/propagated `preferred_supplier_status`, `rss_score`, `months_to_expiry`, `implementation_timeline_months`.
+  - Prioritized row-level values before metric fallback when fusing.
+- **Purpose:** prevent unnecessary defaulted components and improve completeness/readiness quality.
+
+#### 2) Bulk-upload months/artifacts fixes at approval persistence
+- **File:** `backend/main.py`
+- **Changes:**
+  - Derive `months_to_expiry` from `contract_end_date` when missing.
+  - For bundle-scan synthesized rows, attach all uploaded files as supporting artifacts.
+  - Preserve richer `scoring_inputs` in `score_provenance`.
+- **Purpose:** ensure review drawer displays expected scoring inputs/artifacts for upload-staged opportunities.
+
+#### 3) Review modal fallback for months-to-expiry display
+- **File:** `frontend-next/src/app/heatmap/page.tsx`
+- **Changes:**
+  - Added fallback resolution: top-level field -> provenance scoring input -> computed from `contract_end_date`.
+- **Purpose:** avoid blank months-to-expiry when source is present indirectly.
+
+### C. Heatmap Score Consistency and Review Workflow Corrections
+
+#### 1) Pipeline value `$0` aggregation bug fixed
+- **File:** `frontend-next/src/app/heatmap/page.tsx`
+- **Changes:**
+  - Total pipeline value now sums canonical `estimated_spend_usd` first, with robust numeric parsing and alias fallback.
+- **Purpose:** accurate KPI display for mixed data sources.
+
+#### 2) Renewal urgency policy updated (<12 months treated as urgent)
+- **File:** `backend/heatmap/scoring_framework.py`
+- **Changes:**
+  - Updated EUS bands:
+    - `<=3: 10`, `<=6: 9`, `<=12: 8`, `<=18: 5`, `>18: 2`.
+- **Purpose:** align urgency model with business expectation.
+
+#### 3) Review modal/table mismatch reduced
+- **Files:**
+  - `frontend-next/src/app/heatmap/page.tsx`
+  - `backend/heatmap/services/feedback_service.py`
+- **Changes:**
+  - Modal slider baseline now prefers row effective weights (`weights_used_json.effective_weights`) when available.
+  - Save flow now recomputes opportunities with updated learned/global mix for better table consistency.
+- **Purpose:** reduce confusing discrepancy between “preview before save” and table score state.
+
+#### 4) Save review now visibly updates reviewed row score
+- **File:** `backend/heatmap/services/feedback_service.py`
+- **Changes:**
+  - On save with `scoring_weight_overrides`, reviewed row total is directly recomputed from saved slider mix and persisted.
+- **Purpose:** enforce user expectation that review-save immediately reflects in table score.
+
+#### 5) Reviewed vs Approved state separation
+- **File:** `frontend-next/src/app/heatmap/page.tsx`
+- **Changes:**
+  - Removed “Reviewed (Locked)” behavior for approved rows in review-status column.
+  - Review modal can be opened/updated independent of S2 approval state.
+- **Purpose:** maintain clear separation:
+  - **Review** = scoring/human assessment
+  - **Approve to S2C** = explicit execution action
+
+### D. Bulk Scoring and Table Scoring Alignment
+
+#### 1) Bulk preview now uses learned weights + category overlay
+- **File:** `backend/heatmap/services/system1_scoring_orchestrator.py`
+- **Changes:**
+  - Loads learned weights from DB.
+  - Applies category scoring overlay per row.
+  - Uses effective weights in total-score calculation (renewal/new formulas).
+- **Purpose:** avoid divergent hardcoded-weight path in bulk scoring.
+
+#### 2) Bulk preview now applies feedback-memory learning nudge
+- **File:** `backend/heatmap/services/system1_scoring_orchestrator.py`
+- **Changes:**
+  - Added `apply_learning_nudge(...)` after weighted baseline.
+  - Emits final nudged `total_score` and `tier` in preview output.
+- **Purpose:** match final table-style scoring behavior (weights + nudge), reducing remaining parity gaps.
+
+### E. Config-Driven Scoring (Phase foundation implemented)
+
+#### 1) Versioned scoring config persistence
+- **Files:**
+  - `backend/heatmap/persistence/heatmap_models.py`
+  - `backend/heatmap/persistence/heatmap_database.py`
+- **Changes:**
+  - Added `ScoringConfigVersion` table (`draft|active|archived`, JSON payload, metadata timestamps).
+
+#### 2) Config schema/validator/registry service
+- **File:** `backend/heatmap/services/scoring_config_registry.py`
+- **Changes:**
+  - Added structured config schema models.
+  - Added default config bootstrap with parameters + formulas.
+  - Added validation for keys/rules/formulas/weight values.
+  - Added extractor to map published config formula weight values into learned-weight overrides.
+
+#### 3) Scoring config API endpoints
+- **File:** `backend/heatmap/heatmap_router.py`
+- **Endpoints added:**
+  - `GET /api/heatmap/scoring-config/active`
+  - `GET /api/heatmap/scoring-config/versions`
+  - `POST /api/heatmap/scoring-config/draft`
+  - `PUT /api/heatmap/scoring-config/draft/{id}`
+  - `POST /api/heatmap/scoring-config/draft/{id}/validate`
+  - `POST /api/heatmap/scoring-config/draft/{id}/publish`
+
+#### 4) Publish wiring to live scoring
+- **File:** `backend/heatmap/heatmap_router.py`
+- **Changes:**
+  - On publish, configured formula `weight_values` are normalized and synced into learned weights.
+- **Purpose:** ensure published config immediately influences both bulk + table scoring paths that depend on learned weights.
+
+#### 5) Initial management UI page
+- **Files:**
+  - `frontend-next/src/app/heatmap/scoring-parameters/page.tsx`
+  - `frontend-next/src/app/SidebarNav.tsx`
+- **Changes:**
+  - Added new navigation entry and page for:
+    - viewing active config,
+    - creating/updating draft JSON,
+    - validating draft,
+    - publishing draft.
+
+### F. Test and Validation Summary
+
+Backend tests were run repeatedly after each major scoring/config change to keep regression risk low.
+
+- `python -m py_compile ...` executed for modified backend modules.
+- `python -m pytest tests/test_heatmap_api.py` results progressed and remained green:
+  - 31 passed
+  - 32 passed
+  - 34 passed
+  - **35 passed** (latest, includes scoring-config publish/weight-sync path)
+
+New/expanded automated coverage includes:
+- System1 preserved fields and warning behavior.
+- Learned-weight usage in System1 preview scoring.
+- Scoring config draft/validate/publish lifecycle.
+- Scoring config publish -> learned weights sync verification.
 

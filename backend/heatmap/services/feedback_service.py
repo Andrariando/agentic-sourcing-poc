@@ -8,7 +8,9 @@ from backend.infrastructure.storage_providers import get_heatmap_db, get_heatmap
 from backend.heatmap.category_scoring_mix import apply_category_scoring_overlay
 from backend.heatmap.context_builder import load_category_cards
 from backend.heatmap.services.learned_weights import (
+    normalize_full,
     sync_opportunity_scores_after_weight_change,
+    tier_from_total,
     update_weights_from_feedback,
 )
 
@@ -79,6 +81,46 @@ class FeedbackService:
                     w_effective,
                     suggested_tier=suggested_tier,
                 )
+                if scoring_weight_overrides:
+                    # User expectation: "Save review" should immediately reflect on table score
+                    # for the reviewed row. Apply saved slider mix directly to this row.
+                    w_manual = normalize_full(scoring_weight_overrides)
+                    if opp.contract_id is None:
+                        total_manual = (
+                            float(w_manual.get("w_ius", 0.0)) * float(opp.ius_score or 0.0)
+                            + float(w_manual.get("w_es", 0.0)) * float(opp.es_score or 0.0)
+                            + float(w_manual.get("w_csis", 0.0)) * float(opp.csis_score or 0.0)
+                            + float(w_manual.get("w_sas_new", 0.0)) * float(opp.sas_score or 0.0)
+                        )
+                    else:
+                        total_manual = (
+                            float(w_manual.get("w_eus", 0.0)) * float(opp.eus_score or 0.0)
+                            + float(w_manual.get("w_fis", 0.0)) * float(opp.fis_score or 0.0)
+                            + float(w_manual.get("w_rss", 0.0)) * float(opp.rss_score or 0.0)
+                            + float(w_manual.get("w_scs", 0.0)) * float(opp.scs_score or 0.0)
+                            + float(w_manual.get("w_sas_contract", 0.0)) * float(opp.sas_score or 0.0)
+                        )
+                    total_manual = round(max(0.0, min(10.0, total_manual)), 2)
+                    opp.total_score = total_manual
+                    st = (suggested_tier or "").strip().upper()
+                    opp.tier = st if st in {"T1", "T2", "T3", "T4"} else tier_from_total(total_manual)
+                    session.add(opp)
+                # Keep dashboard consistent with the latest learned/global mix:
+                # recompute all opportunity totals (per-row category overlay) so
+                # table/list scores match what users see in weight sliders.
+                all_opps = session.exec(select(Opportunity)).all()
+                for other in all_opps:
+                    if not other or (opp.id is not None and other.id == opp.id):
+                        continue
+                    raw_other = cards.get((other.category or "").strip()) or cards.get(other.category or "")
+                    ccard_other = raw_other if isinstance(raw_other, dict) else {}
+                    w_other = apply_category_scoring_overlay(w, ccard_other)
+                    sync_opportunity_scores_after_weight_change(
+                        session,
+                        other,
+                        w_other,
+                        suggested_tier=None,
+                    )
 
             session.commit()
 

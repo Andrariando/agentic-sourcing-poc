@@ -15,6 +15,7 @@ export default function SidebarNav() {
   const onWelcome = pathname === "/welcome";
   const onHeatmap = pathname === "/heatmap";
   const onHeatmapMatrix = pathname === "/heatmap/matrix";
+  const onScoringParameters = pathname === "/heatmap/scoring-parameters";
   const onIntake = pathname === "/intake";
   const onSystem1Upload = pathname === "/system-1/upload";
   const onCases = pathname === "/cases";
@@ -43,6 +44,9 @@ export default function SidebarNav() {
           </Link>
           <Link href="/heatmap/matrix" className={navCls(onHeatmapMatrix)}>
             Performance Dashboard
+          </Link>
+          <Link href="/heatmap/scoring-parameters" className={navCls(onScoringParameters)}>
+            Scoring Parameters
           </Link>
           <Link href="/intake" className={navCls(onIntake)}>
             Sourcing Intake Form (New Request)

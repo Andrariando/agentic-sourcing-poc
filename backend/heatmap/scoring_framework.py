@@ -26,12 +26,12 @@ def eus_from_months_to_expiry(months: float) -> float:
     if months <= 3:
         return 10.0
     if months <= 6:
-        return 8.0
+        return 9.0
     if months <= 12:
-        return 6.0
+        return 8.0
     if months <= 18:
-        return 4.0
-    return 1.0
+        return 5.0
+    return 2.0
 
 
 def ius_from_implementation_months(months: float) -> float:

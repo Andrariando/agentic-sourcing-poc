@@ -232,6 +232,56 @@ WidgetCo: preferred
     assert r.status_code == 200
     data = r.json()
     assert data.get("filename") == "policy.txt"
+    assert data.get("source_format") == ".txt"
+    assert data["proposed_patch"]["default_preferred_status"] == "allowed"
+    assert data["proposed_patch"]["supplier_preferred_status"]["WidgetCo"] == "preferred"
+
+
+def test_upload_plain_text_extracts_docx():
+    pytest.importorskip("docx", reason="python-docx not installed")
+    import io
+
+    from docx import Document
+
+    from backend.heatmap.services.upload_plain_text import upload_bytes_to_plain_text
+
+    buf = io.BytesIO()
+    d = Document()
+    d.add_paragraph("Default supplier status: allowed")
+    d.add_paragraph("Line for extract")
+    d.save(buf)
+    text = upload_bytes_to_plain_text(buf.getvalue(), "guidance.docx")
+    assert "allowed" in text
+    assert "extract" in text
+
+
+def test_category_cards_extract_upload_docx(client: TestClient):
+    pytest.importorskip("docx", reason="python-docx not installed")
+    import io
+
+    from docx import Document
+
+    buf = io.BytesIO()
+    d = Document()
+    d.add_paragraph("Default supplier status: allowed")
+    d.add_paragraph("Category Strategy SAS = 8.0")
+    d.add_paragraph("WidgetCo: preferred")
+    d.save(buf)
+    r = client.post(
+        "/api/heatmap/category-cards/extract-upload",
+        data={"category": "Software"},
+        files={
+            "file": (
+                "policy.docx",
+                buf.getvalue(),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data.get("filename") == "policy.docx"
+    assert data.get("source_format") == ".docx"
     assert data["proposed_patch"]["default_preferred_status"] == "allowed"
     assert data["proposed_patch"]["supplier_preferred_status"]["WidgetCo"] == "preferred"
 
@@ -421,6 +471,164 @@ def test_system1_scan_bundle_fuses_contract_spend_metrics(client: TestClient):
     assert row.get("computed_total_score") is not None
 
 
+def test_system1_scan_bundle_top_n_and_completeness_analysis(client: TestClient):
+    contract_csv = (
+        b"Supplier,Category,Sub Category,Expiry Date,Master Agreement Reference Number,Contract Name,Value in USD\n"
+        b"ACME CORP,IT Infrastructure,Cloud Hosting,2027-06-30,CNT-ACME-1,Cloud Renewal,1000000\n"
+        b"BETA LLC,IT Infrastructure,Service Desk,2028-01-31,CNT-BETA-1,Service Renewal,500000\n"
+    )
+    spend_csv = (
+        b"SMD cleansed name,Booked category,Booked subcategory,(P) Payment amount (USD),key_spend_id\n"
+        b"ACME CORP,IT Infrastructure,Cloud Hosting,1000000,sp-1\n"
+        b"BETA LLC,IT Infrastructure,Service Desk,100,sp-2\n"
+    )
+    metrics_csv = (
+        b"Supplier,Category,Subcategory,Supplier Risk Score,BPRA Vendor Status\n"
+        b"ACME CORP,IT Infrastructure,Cloud Hosting,7.2,preferred\n"
+        b"BETA LLC,IT Infrastructure,Service Desk,4.9,allowed\n"
+    )
+    r = client.post(
+        "/api/system1/upload/scan-bundle",
+        data={"top_n": "1", "rank_by": "score"},
+        files=[
+            ("files", ("contracts.csv", contract_csv, "text/csv")),
+            ("files", ("spend.csv", spend_csv, "text/csv")),
+            ("files", ("metrics.csv", metrics_csv, "text/csv")),
+        ],
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["total_candidates"] >= 2
+    assert len(data["candidates"]) == 1
+    assert "analysis" in data
+    assert data["analysis"]["top_n_applied"] == 1
+    assert data["analysis"]["rank_by_applied"] == "score"
+    assert "imputation_action_candidates" in data["analysis"]
+    assert data["analysis"].get("execution_trace") == [
+        "fuse_bundle_rows",
+        "score_and_enrich_candidates",
+        "summarize_completeness",
+        "prioritize_top_n",
+    ]
+    c0 = data["candidates"][0]
+    assert "completeness_score" in c0
+    assert "suggested_actions" in c0
+
+
+def test_system1_scan_bundle_preserves_preferred_status_from_contract_rows(client: TestClient):
+    contract_csv = (
+        b"row_type,category,subcategory,supplier_name,contract_id,contract_end_date,months_to_expiry,estimated_spend_usd,preferred_supplier_status\n"
+        b"renewal,IT Infrastructure,Cloud Hosting,ACME CORP,CNT-ACME-2,2027-06-30,12,1000000,preferred\n"
+    )
+    r = client.post(
+        "/api/system1/upload/scan-bundle",
+        files=[("files", ("complete_dataset_template_1.csv", contract_csv, "text/csv"))],
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["candidates"]
+    row = data["candidates"][0]
+    assert row["preferred_supplier_status"] == "preferred"
+    assert row["row_type"] == "renewal"
+    # With preferred status present, RSS should be derived (not defaulted) and warning should not mention fallback.
+    warns = " ".join(row.get("warnings") or []).lower()
+    assert "rss_score used fallback default" not in warns
+
+
+def test_system1_preview_rank_by_score_with_top_n(client: TestClient):
+    csv_bytes = (
+        b"row_type,category,supplier_name,estimated_spend_usd,contract_id,months_to_expiry\n"
+        b"renewal,IT Infrastructure,VendorA,1200000,CNT-1,6\n"
+        b"renewal,IT Infrastructure,VendorB,1000,CNT-2,2\n"
+    )
+    r = client.post(
+        "/api/system1/upload/preview",
+        data={"top_n": "1", "rank_by": "score"},
+        files={"files": ("rows.csv", csv_bytes, "text/csv")},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert len(data["candidates"]) == 1
+    assert data["analysis"]["top_n_applied"] == 1
+    assert data["analysis"]["rank_by_applied"] == "score"
+
+
+def test_system1_preview_uses_learned_weight_mix(client: TestClient):
+    wr = client.put(
+        "/api/heatmap/scoring-weights",
+        json={
+            "weights": {
+                "w_eus": 0.70,
+                "w_fis": 0.10,
+                "w_rss": 0.10,
+                "w_scs": 0.05,
+                "w_sas_contract": 0.05,
+            }
+        },
+    )
+    assert wr.status_code == 200
+    csv_bytes = (
+        b"row_type,category,supplier_name,estimated_spend_usd,contract_id,months_to_expiry\n"
+        b"renewal,ZZZ Unmapped Category,VendorA,1200000,CNT-1,2\n"
+    )
+    r = client.post(
+        "/api/system1/upload/preview",
+        files={"files": ("rows.csv", csv_bytes, "text/csv")},
+    )
+    assert r.status_code == 200
+    row = r.json()["candidates"][0]
+    wu = row.get("weights_used") or {}
+    assert abs(float(wu.get("w_eus", 0.0)) - 0.70) < 0.02
+    assert abs(float(wu.get("w_fis", 0.0)) - 0.10) < 0.02
+
+
+def test_system1_preview_preserves_explicit_new_business_even_with_contract_id(client: TestClient):
+    csv_bytes = (
+        b"row_type,category,supplier_name,estimated_spend_usd,contract_id,request_title,implementation_timeline_months\n"
+        b"new_business,IT Infrastructure,,1200000,CNT-NEW-1,ERP Request,6\n"
+    )
+    r = client.post(
+        "/api/system1/upload/preview",
+        files={"files": ("rows.csv", csv_bytes, "text/csv")},
+    )
+    assert r.status_code == 200
+    row = r.json()["candidates"][0]
+    assert row["row_type"] == "new_business"
+
+
+def test_system1_preview_erp_adapter_normalizes_rows(client: TestClient):
+    payload = {
+        "source_system": "sap_s4",
+        "mapping_profile": "erp_generic",
+        "rows": [
+            {
+                "opportunity_type": "new_business",
+                "vendor_name": "Acme Corp",
+                "request_name": "Network Segmentation Rollout",
+                "amount_usd": "450000",
+                "implementation_months": 5,
+                "category": "IT Infrastructure",
+            },
+            {
+                "opportunity_type": "renewal",
+                "vendor_name": "Blue Systems",
+                "agreement_number": "AGR-1001",
+                "amount_usd": "900000",
+                "months_remaining": 4,
+                "category": "IT Infrastructure",
+            },
+        ],
+    }
+    r = client.post("/api/system1/upload/preview-erp", json=payload)
+    assert r.status_code == 200
+    data = r.json()
+    assert len(data["candidates"]) == 2
+    types = sorted([c["row_type"] for c in data["candidates"]])
+    assert types == ["new_business", "renewal"]
+    assert "analysis" in data
+    assert "ingestion_diagnostics" in data["analysis"]
+
+
 def test_system1_scan_bundle_rejects_non_structured_only(client: TestClient):
     txt_bytes = b"This is guidance text only."
     r = client.post(
@@ -428,3 +636,98 @@ def test_system1_scan_bundle_rejects_non_structured_only(client: TestClient):
         files=[("files", ("guidance.txt", txt_bytes, "text/plain"))],
     )
     assert r.status_code == 400
+
+
+def test_scoring_config_endpoints_crud_validate_publish(client: TestClient):
+    active = client.get("/api/heatmap/scoring-config/active")
+    assert active.status_code == 200
+    active_json = active.json()
+    assert active_json["status"] == "active"
+    assert isinstance(active_json.get("config"), dict)
+
+    draft_payload = {
+        "title": "Pytest scoring config draft",
+        "created_by": "pytest",
+        "config": active_json["config"],
+    }
+    created = client.post("/api/heatmap/scoring-config/draft", json=draft_payload)
+    assert created.status_code == 200
+    draft = created.json()
+    assert draft["status"] == "draft"
+    draft_id = int(draft["id"])
+
+    validated = client.post(f"/api/heatmap/scoring-config/draft/{draft_id}/validate")
+    assert validated.status_code == 200
+    assert validated.json().get("valid") is True
+
+    published = client.post(f"/api/heatmap/scoring-config/draft/{draft_id}/publish")
+    assert published.status_code == 200
+    assert published.json()["status"] == "active"
+
+    versions = client.get("/api/heatmap/scoring-config/versions")
+    assert versions.status_code == 200
+    rows = versions.json()
+    assert any(v["status"] == "active" and int(v["id"]) == draft_id for v in rows)
+
+
+def test_scoring_config_create_draft_rejects_invalid_config(client: TestClient):
+    bad = client.post(
+        "/api/heatmap/scoring-config/draft",
+        json={
+            "title": "Bad config",
+            "created_by": "pytest",
+            "config": {
+                "name": "bad",
+                "parameters": [
+                    {
+                        "key": "x",
+                        "label": "X",
+                        "applies_to": ["renewal"],
+                        "input_fields": [],
+                        "rule_type": "direct_numeric",
+                        "rule_config": {},
+                        "default_policy": {"strategy": "constant", "value": 1},
+                        "weight_key": "w_not_real",
+                    }
+                ],
+                "formulas": {
+                    "renewal": {"weight_keys": ["w_eus"]},
+                    "new_business": {"weight_keys": ["w_ius"]},
+                },
+            },
+        },
+    )
+    assert bad.status_code == 400
+
+
+def test_scoring_config_publish_syncs_learned_weights(client: TestClient):
+    base_cfg = client.get("/api/heatmap/scoring-config/active").json()["config"]
+    cfg = json.loads(json.dumps(base_cfg))
+    cfg["formulas"]["renewal"]["weight_values"] = {
+        "w_eus": 0.55,
+        "w_fis": 0.20,
+        "w_rss": 0.10,
+        "w_scs": 0.10,
+        "w_sas_contract": 0.05,
+    }
+    cfg["formulas"]["new_business"]["weight_values"] = {
+        "w_ius": 0.40,
+        "w_es": 0.25,
+        "w_csis": 0.20,
+        "w_sas_new": 0.15,
+    }
+    created = client.post(
+        "/api/heatmap/scoring-config/draft",
+        json={"title": "weights sync draft", "created_by": "pytest", "config": cfg},
+    )
+    assert created.status_code == 200
+    draft_id = int(created.json()["id"])
+    pub = client.post(f"/api/heatmap/scoring-config/draft/{draft_id}/publish")
+    assert pub.status_code == 200
+
+    wr = client.get("/api/heatmap/scoring-weights")
+    assert wr.status_code == 200
+    w = wr.json()["weights"]
+    assert abs(float(w["w_eus"]) - 0.55) < 0.02
+    assert abs(float(w["w_ius"]) - 0.40) < 0.02
+
