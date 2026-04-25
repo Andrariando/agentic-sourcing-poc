@@ -596,6 +596,22 @@ def test_system1_preview_preserves_explicit_new_business_even_with_contract_id(c
     assert row["row_type"] == "new_business"
 
 
+def test_system1_preview_new_business_without_supplier_can_still_be_complete(client: TestClient):
+    csv_bytes = (
+        b"row_type,category,supplier_name,estimated_spend_usd,request_title,implementation_timeline_months\n"
+        b"new_business,IT Infrastructure,,1200000,ERP Request,6\n"
+    )
+    r = client.post(
+        "/api/system1/upload/preview",
+        files={"files": ("rows.csv", csv_bytes, "text/csv")},
+    )
+    assert r.status_code == 200
+    row = r.json()["candidates"][0]
+    assert row["row_type"] == "new_business"
+    assert row.get("completeness_score") == 100.0
+    assert "supplier_name" not in (row.get("missing_critical_fields") or [])
+
+
 def test_system1_preview_erp_adapter_normalizes_rows(client: TestClient):
     payload = {
         "source_system": "sap_s4",

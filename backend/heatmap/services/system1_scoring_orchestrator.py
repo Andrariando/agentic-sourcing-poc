@@ -395,7 +395,7 @@ def _derive_completeness_annotations(row: Dict[str, Any]) -> Dict[str, Any]:
     missing_critical: List[str] = []
     if spend <= 0:
         missing_critical.append("estimated_spend_usd")
-    if not supplier:
+    if row_type == "renewal" and not supplier:
         missing_critical.append("supplier_name")
     if not category:
         missing_critical.append("category")
@@ -438,7 +438,7 @@ def _derive_completeness_annotations(row: Dict[str, Any]) -> Dict[str, Any]:
                 "reason": "Non-positive spend blocks reliable prioritization.",
             }
         )
-    if not supplier:
+    if row_type == "renewal" and not supplier:
         suggested_actions.append(
             {
                 "action": "resolve_supplier_identity_mapping",
