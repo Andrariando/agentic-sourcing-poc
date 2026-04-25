@@ -1,0 +1,51 @@
+contract_key,supplier,category,months_to_expiry,contract_value_usd,eus,fis,rss_raw,rss_src,rss,scs_observed,supplier_share_observed_pct,scs_effective,supplier_share_effective_pct,scs_impute_mode,sas,ps_observed_scs,ps_imputed_scs,tier_observed,tier_imputed,strict_complete,supplier_total_spend_usd,practical_complete
+C2017008763,MICROSOFT CORPORATION,IT Infrastructure,0.0,300151456.0,10.0,9.2,2.55432653061225,metrics.Supplier Parent,5.1,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,7.32,7.77,T2,T2,False,0.0,False
+C2017008763,MICROSOFT CORPORATION,IT Infrastructure,0.0,300151456.0,10.0,9.2,2.55432653061225,metrics.Supplier Parent,5.1,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,7.32,7.77,T2,T2,False,0.0,False
+C2021009319,CRESULTS LLC,IT Infrastructure,0.0,82334.0,10.0,0.0,5.004,metrics.Supplier Parent,10.0,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,6.0,6.45,T2,T2,False,0.0,False
+,INNOFECT,IT Infrastructure,0.0,168100.0,10.0,0.01,4.99387755102041,metrics.Supplier,10.0,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,6.0,6.45,T2,T2,False,0.0,False
+C2019018682,GLOBAL HEALTHCARE EXCHANGE,IT Infrastructure,0.0,659906.12,10.0,0.02,4.902849122807018,metrics.Supplier Parent,9.8,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.97,6.42,T3,T2,False,0.0,False
+C2019016846,SECURITY RISK ADVISORS,IT Infrastructure,0.0,6017040.0,10.0,0.18,4.68157894736842,metrics.Supplier,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.93,6.38,T3,T2,False,0.0,False
+C2019016846,SECURITY RISK ADVISORS,IT Infrastructure,0.0,5942040.0,10.0,0.18,4.68157894736842,metrics.Supplier,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.93,6.38,T3,T2,False,0.0,False
+C2019016846,SECURITY RISK ADVISORS,IT Infrastructure,0.0,5942040.0,10.0,0.18,4.68157894736842,metrics.Supplier,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.93,6.38,T3,T2,False,0.0,False
+C2019016846,SECURITY RISK ADVISORS,IT Infrastructure,0.0,5942040.0,10.0,0.18,4.68157894736842,metrics.Supplier,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.93,6.38,T3,T2,False,0.0,False
+,EQUINIX INC,IT Infrastructure,0.0,1000000.0,10.0,0.03,4.68,metrics.Supplier Parent,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.89,6.34,T3,T2,False,0.0,False
+C2021013362,BOOZ ALLEN HAMILTON INC,IT Infrastructure,0.0,37500.0,10.0,0.0,4.71842105263158,metrics.Supplier Parent,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+C2021013362,BOOZ ALLEN HAMILTON INC,IT Infrastructure,0.0,230000.0,10.0,0.01,4.71842105263158,metrics.Supplier Parent,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+C2021013362,BOOZ ALLEN HAMILTON INC,IT Infrastructure,0.0,20000.0,10.0,0.0,4.71842105263158,metrics.Supplier Parent,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+C2021013362,BOOZ ALLEN HAMILTON INC,IT Infrastructure,0.0,49875.0,10.0,0.0,4.71842105263158,metrics.Supplier Parent,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+C2021013362,BOOZ ALLEN HAMILTON INC,IT Infrastructure,0.0,569150.0,10.0,0.02,4.71842105263158,metrics.Supplier Parent,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+C2021013362,BOOZ ALLEN HAMILTON INC,IT Infrastructure,0.0,95000.0,10.0,0.0,4.71842105263158,metrics.Supplier Parent,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+C2021013362,BOOZ ALLEN HAMILTON INC,IT Infrastructure,0.0,250000.0,10.0,0.01,4.71842105263158,metrics.Supplier Parent,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+C2021013362,BOOZ ALLEN HAMILTON INC,IT Infrastructure,0.0,69400.0,10.0,0.0,4.71842105263158,metrics.Supplier Parent,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+C2021013362,BOOZ ALLEN HAMILTON INC,IT Infrastructure,0.0,248000.0,10.0,0.01,4.71842105263158,metrics.Supplier Parent,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+C2021013362,BOOZ ALLEN HAMILTON INC,IT Infrastructure,0.0,77000.0,10.0,0.0,4.71842105263158,metrics.Supplier Parent,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+C2021013362,BOOZ ALLEN HAMILTON INC,IT Infrastructure,0.0,162500.0,10.0,0.0,4.71842105263158,metrics.Supplier Parent,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+C2021013362,BOOZ ALLEN HAMILTON INC,IT Infrastructure,0.0,162500.0,10.0,0.0,4.71842105263158,metrics.Supplier Parent,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+C2021013362,BOOZ ALLEN HAMILTON INC,IT Infrastructure,0.0,149820.0,10.0,0.0,4.71842105263158,metrics.Supplier Parent,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+C2021013362,BOOZ ALLEN HAMILTON INC,IT Infrastructure,0.0,220800.0,10.0,0.01,4.71842105263158,metrics.Supplier Parent,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+,BOOZ ALLEN HAMILTON INC,IT Infrastructure,0.0,77000.0,10.0,0.0,4.71842105263158,metrics.Supplier Parent,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+C2021013362,BOOZ ALLEN HAMILTON INC,IT Infrastructure,0.0,240842.5,10.0,0.01,4.71842105263158,metrics.Supplier Parent,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+C2021013362,BOOZ ALLEN HAMILTON INC,IT Infrastructure,0.0,239000.0,10.0,0.01,4.71842105263158,metrics.Supplier Parent,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+C2021013362,BOOZ ALLEN HAMILTON INC,IT Infrastructure,0.0,92000.0,10.0,0.0,4.71842105263158,metrics.Supplier Parent,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+C2021013362,BOOZ ALLEN HAMILTON INC,IT Infrastructure,0.0,186000.0,10.0,0.01,4.71842105263158,metrics.Supplier Parent,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+C2019016846,SECURITY RISK ADVISORS,IT Infrastructure,0.0,95000.0,10.0,0.0,4.68157894736842,metrics.Supplier,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+C2021013362,BOOZ ALLEN HAMILTON INC,IT Infrastructure,0.0,249000.0,10.0,0.01,4.71842105263158,metrics.Supplier Parent,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+C2021013362,BOOZ ALLEN HAMILTON INC,IT Infrastructure,0.0,186000.0,10.0,0.01,4.71842105263158,metrics.Supplier Parent,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+C2021013362,BOOZ ALLEN HAMILTON INC,IT Infrastructure,0.0,124500.0,10.0,0.0,4.71842105263158,metrics.Supplier Parent,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+C2021013362,BOOZ ALLEN HAMILTON INC,IT Infrastructure,0.0,80600.0,10.0,0.0,4.71842105263158,metrics.Supplier Parent,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+C2015017491,EQUINIX INC,IT Infrastructure,0.0,81346.32,10.0,0.0,4.68,metrics.Supplier Parent,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+C2015017557,EQUINIX,IT Infrastructure,0.0,100.0,10.0,0.0,4.68,metrics.Supplier,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+C2015017491,EQUINIX INC,IT Infrastructure,0.0,57518.64,10.0,0.0,4.68,metrics.Supplier Parent,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+C2019016846,SECURITY RISK ADVISORS,IT Infrastructure,0.0,89776.0,10.0,0.0,4.68157894736842,metrics.Supplier,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+C2019016846,SECURITY RISK ADVISORS,IT Infrastructure,0.0,79388.0,10.0,0.0,4.68157894736842,metrics.Supplier,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+C2015017491,EQUINIX INC,IT Infrastructure,0.0,57012.12,10.0,0.0,4.68,metrics.Supplier Parent,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+,SECURITY RISK ADVISORS,IT Infrastructure,0.0,350000.0,10.0,0.01,4.68157894736842,metrics.Supplier,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+C2019016846,SECURITY RISK ADVISORS,IT Infrastructure,0.0,95000.0,10.0,0.0,4.68157894736842,metrics.Supplier,9.4,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.88,6.33,T3,T2,False,0.0,False
+C2015010413,3E COMPANY,IT Infrastructure,0.0,8000.0,10.0,0.0,4.66,metrics.Supplier,9.3,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.86,6.31,T3,T2,False,0.0,False
+,ZEROEYES INC,IT Infrastructure,0.0,10600.0,10.0,0.0,9.218,metrics.Supplier Parent,9.2,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.84,6.29,T3,T2,False,0.0,False
+,ZEROEYES INC,IT Infrastructure,0.0,10600.0,10.0,0.0,9.218,metrics.Supplier Parent,9.2,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.84,6.29,T3,T2,False,0.0,False
+,WINDSTREAM,IT Infrastructure,0.0,150000.0,10.0,0.0,4.598,metrics.Supplier,9.2,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.84,6.29,T3,T2,False,0.0,False
+C2018014766,TEVORA BUSINESS SOLUTIONS INC,IT Infrastructure,0.0,53000.0,10.0,0.0,4.62,metrics.Supplier Parent,9.2,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.84,6.29,T3,T2,False,0.0,False
+C2018014766,TEVORA BUSINESS SOLUTIONS INC,IT Infrastructure,0.0,254000.0,10.0,0.01,4.62,metrics.Supplier Parent,9.2,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.84,6.29,T3,T2,False,0.0,False
+,TEVORA BUSINESS SOLUTIONS INC,IT Infrastructure,0.0,500000.0,10.0,0.02,4.62,metrics.Supplier Parent,9.2,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.84,6.29,T3,T2,False,0.0,False
+,TEVORA BUSINESS SOLUTIONS INC,IT Infrastructure,0.0,500000.0,10.0,0.02,4.62,metrics.Supplier Parent,9.2,2.0,0.0,5.0,15.0,imputed_neutral_band,7.0,5.84,6.29,T3,T2,False,0.0,False

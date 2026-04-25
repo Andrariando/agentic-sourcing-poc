@@ -1,0 +1,101 @@
+row_type,category,subcategory,supplier_name,contract_id,request_title,contract_end_date,months_to_expiry,estimated_spend_usd,implementation_timeline_months,preferred_supplier_status
+renewal,IT Infrastructure,IT Infrastructure - Personal Productivity Solutions,Microsoft Corporation,C2023001085,,2028-01-26,21,26356419,,preferred
+new_business,IT Infrastructure,IT Infrastructure - Print Services,,,Electronic Document Storage Expansion,,,220000,4,allowed
+renewal,IT Infrastructure,IT Infrastructure - Security & Risk Mgt.,Tufin Software North America Inc,C2022022968,,2027-08-31,16,1423689,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Network Hardware & Managed Services,Ltimindtree Limited,C2025054360,,2026-12-31,8,3749250,,preferred
+renewal,IT Infrastructure,IT Infrastructure - Data Center Hardware & Services,Citrix Systems Inc,C2024019053,,2027-08-29,16,3531000,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Data Center Hardware & Services,"Netapp, Inc",C2018023928,,,,15000000,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Data Center Hardware & Services,"System Loco, Ltd",C2022014094,,2027-05-31,13,2000000,,allowed
+new_business,IT Infrastructure,IT Infrastructure - Security & Risk Mgt.,,,Penetration Testing Services - EMEA,,,680000,4,allowed
+renewal,IT Infrastructure,IT Infrastructure - Network Hardware & Managed Services,Telesoft Llc,C2023005165,,2027-07-01,14,900000,,allowed
+new_business,IT Infrastructure,IT Infrastructure - Data Center Hardware & Services,,,Data Warehouse Modernisation,,,9278755,8.0,
+new_business,IT Infrastructure,IT Infrastructure - Network Hardware & Managed Services,,,Wireless Access Point Rollout,,,1200000,7,preferred
+new_business,IT Infrastructure,IT Infrastructure - Data Center Hardware & Services,,,Database Licensing Review,,,950000,6,preferred
+renewal,IT Infrastructure,IT Infrastructure - Network Hardware & Managed Services,"General Telecom Services, Inc.",C2024014678,,2027-10-15,18,500000,,allowed
+new_business,IT Infrastructure,IT Infrastructure - Help Desk Services,,,Remote Support Services Expansion,,,1900000,7,preferred
+renewal,IT Infrastructure,IT Infrastructure - Mobile Communications Products and Services,Crown Castle Fiber Llc,C2025044135,,2026-06-24,2,109800,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Network  Transport Data/Voice,Cox Business,C2024019788,,2027-07-31,15,200000,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Security & Risk Mgt.,"Palo Alto Networks, Inc",C2024012622,,2027-05-15,13,899689,,allowed
+new_business,IT Infrastructure,IT Infrastructure - Data Center Hardware & Services,,,Colocation Services Procurement,,,1800000,10,allowed
+renewal,IT Infrastructure,IT Infrastructure - Security & Risk Mgt.,Hybrid Pathways Llc,C2021005230,,2027-04-01,11,2400000,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Data Center Hardware & Services,Vmware Inc,C2024024428,,2027-10-28,18,28079094,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Data Center Hardware & Services,Amazon Web Services Llc,C2025051047,,2026-05-31,1,793580,,allowed
+new_business,IT Infrastructure,IT Infrastructure - Mobile Communications Products and Services,,,Corporate Mobile Plan Consolidation,,,1100000,6,preferred
+renewal,IT Infrastructure,IT Infrastructure - Data Center Hardware & Services,Amazon Web Services Inc,C2025053645,,2026-11-21,7,1212035,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Security & Risk Mgt.,Mandiant Inc,C2025047733,,2026-07-31,3,78000,,allowed
+new_business,IT Infrastructure,IT Infrastructure - Network Transport Data/Voice,,,ISP Connectivity Upgrade - ASPAC,,,650000,6,allowed
+new_business,IT Infrastructure,IT Infrastructure - Data Center Hardware & Services,,,Server Refresh - EMEA Data Centres,,,2500000,9,allowed
+renewal,IT Infrastructure,IT Infrastructure - Data Center Hardware & Services,Sap America Inc,C2025052770,,2026-11-03,6,155445,,preferred
+renewal,IT Infrastructure,IT Infrastructure - Security & Risk Mgt.,Access Information Management Of Ge,C2024016408,,2027-09-30,18,70000,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Security & Risk Mgt.,Trend Micro Incorporated,C2023026900,,2026-12-16,8,675000,,allowed
+new_business,IT Infrastructure,IT Infrastructure - Security & Risk Mgt.,,,Privileged Access Management Solution,,,3100000,7,preferred
+renewal,IT Infrastructure,IT Infrastructure - Security & Risk Mgt.,Access Information Management Of Ge,C2024018909,,2027-09-30,18,70000,,allowed
+new_business,IT Infrastructure,IT Infrastructure - Data Center Hardware & Services,,,Virtual Desktop Infrastructure Rollout,,,4100000,12,preferred
+renewal,IT Infrastructure,IT Infrastructure - Print Services,Iron Mountain Informationmanagement,C2025053515,,2026-12-31,8,122000,,preferred
+renewal,IT Infrastructure,IT Infrastructure - Print Services,Ricoh Usa Inc,C2023008179,,2028-03-31,24,73100,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Security & Risk Mgt.,"Nozomi Networks, Inc",C2019010660,,2026-06-30,2,3000000,,allowed
+new_business,IT Infrastructure,IT Infrastructure - Personal Computers,,,Rugged Device Procurement - Field,,,920000,5,preferred
+renewal,IT Infrastructure,IT Infrastructure - Personal Productivity Solutions,Microsoft Corporation,C2019007421,,2026-12-31,8,34514400,,preferred
+renewal,IT Infrastructure,IT Infrastructure - Data Center Hardware & Services,"Intelice Solutions, Llc",C2020013103,,2026-06-30,2,122616,,allowed
+new_business,IT Infrastructure,IT Infrastructure - Network Transport Data/Voice,,,Voice over IP Migration,,,820000,7,allowed
+new_business,IT Infrastructure,IT Infrastructure - Security & Risk Mgt.,,,Vulnerability Management Tool,,,2200000,5,preferred
+new_business,IT Infrastructure,IT Infrastructure - Data Center Hardware & Services,,,Containerisation Platform Rollout,,,2800000,8,preferred
+renewal,IT Infrastructure,IT Infrastructure - Print Services,Ricoh Belgium Nv,C2025041173,,2028-05-31,26,122663,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Print Services,Iron Mountain Informationmanagement,C2025055235,,2026-12-31,8,782820,,preferred
+renewal,IT Infrastructure,IT Infrastructure - Security & Risk Mgt.,Servicenowcom,C2025051068,,2027-06-27,14,243934,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Personal Computers,Carbon Technologies Llc,C2024020733,,2027-06-30,14,1000000,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Data Center Hardware & Services,Ciberspring International Llc,C2021018667,,2027-08-31,16,1800000,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Data Center Hardware & Services,Oracle America,C2025042085,,2027-02-28,10,5250000,,allowed
+new_business,IT Infrastructure,IT Infrastructure - Help Desk Services,,,On-site Support Expansion - EMEA,,,3200000,6,preferred
+renewal,IT Infrastructure,IT Infrastructure - Personal Productivity Solutions,Microsoft Corporation,C2023029701,,2026-12-28,8,242250,,preferred
+new_business,IT Infrastructure,IT Infrastructure - Network Hardware & Managed Services,,,Next-Gen Firewall Implementation,,,2200000,6,preferred
+renewal,IT Infrastructure,IT Infrastructure - Security & Risk Mgt.,Silverfort Inc,C2024013484,,2027-08-31,16,5000000,,allowed
+new_business,IT Infrastructure,IT Infrastructure - Data Center Hardware & Services,,,Cloud Storage Capacity Expansion,,,3200000,8,preferred
+renewal,IT Infrastructure,IT Infrastructure - Security & Risk Mgt.,Access Information Management Of Ge,C2025053206,,2026-12-31,8,55697,,allowed
+new_business,IT Infrastructure,IT Infrastructure - Print Services,,,Multifunction Device Refresh,,,380000,5,preferred
+renewal,IT Infrastructure,IT Infrastructure - Security & Risk Mgt.,Mandiant,C2020013760,,2026-07-09,3,300000,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Mobile Communications Products and Services,Att Corp,C2019022082,,2027-12-31,21,32000000,,allowed
+new_business,IT Infrastructure,IT Infrastructure - Help Desk Services,,,PC Lifecycle Management Services,,,2700000,8,preferred
+new_business,IT Infrastructure,IT Infrastructure - Personal Productivity Solutions,,,E-Learning Platform Procurement,,,650000,5,allowed
+renewal,IT Infrastructure,IT Infrastructure - Help Desk Services,"Autana Business Partners, S.L.",C2022017111,,2027-07-01,14.0,528020,,
+renewal,IT Infrastructure,IT Infrastructure - Network Hardware & Managed Services,Databricks Inc,C2025051767,,2026-12-31,8,144144,,allowed
+new_business,IT Infrastructure,IT Infrastructure - Print Services,,,Document Destruction Services,,,175000,3,allowed
+renewal,IT Infrastructure,IT Infrastructure - Security & Risk Mgt.,Zafran Security Inc,C2024016623,,2027-07-24,15,2950000,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Mobile Communications Products and Services,Gigil Tech,C2022027045,,2027-08-31,16,420000,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Print Services,Ricoh Usa Inc,C2023014187,,2028-03-31,24,73100,,allowed
+new_business,IT Infrastructure,IT Infrastructure - Help Desk Services,,,Service Desk Tooling Upgrade,,,1100000,6,allowed
+renewal,IT Infrastructure,IT Infrastructure - Mobile Communications Products and Services,Vodafone Global Enterprise Limited,C2023029136,,2026-12-31,8,878430,,preferred
+renewal,IT Infrastructure,IT Infrastructure - Network  Transport Data/Voice,"World Wide Technology, Llc.",C2025032272,,2028-01-01,21,1323617,,preferred
+new_business,IT Infrastructure,IT Infrastructure - Network Hardware & Managed Services,,,Network Monitoring Tools Procurement,,,880000,5,allowed
+renewal,IT Infrastructure,IT Infrastructure - Network Hardware & Managed Services,"Eos It Management Solutions, Inc.",C2025035155,,2028-02-29,23,774486,,allowed
+new_business,IT Infrastructure,IT Infrastructure - Security & Risk Mgt.,,,Identity Governance & Administration,,,2900000,9,preferred
+renewal,IT Infrastructure,IT Infrastructure - Data Center Hardware & Services,Ibm,C2023027260,,,,11090520,,
+renewal,IT Infrastructure,IT Infrastructure - Data Center Hardware & Services,Vmware Inc,C2024024426,,2027-10-28,18,1000000,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Mobile Communications Products and Services,Vodafone Global Enterprise Limited,C2020013661,,2026-06-30,2,410682,,preferred
+renewal,IT Infrastructure,IT Infrastructure - Data Center Hardware & Services,Aifa Labs Llc,C2025047867,,2026-08-31,4,220000,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Security & Risk Mgt.,Processunity Inc.,C2024022671,,2027-12-31,21,1348750,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Data Center Hardware & Services,Sap America Inc,C2025049783,,2026-08-05,3,155446,,preferred
+renewal,IT Infrastructure,IT Infrastructure - Print Services,Iron Mountain Informationmanagement,C2025052731,,2026-12-31,8,600060,,preferred
+renewal,IT Infrastructure,IT Infrastructure - Mobile Communications Products and Services,Futura Mobility,C2022012369,,2027-03-23,11,2000000,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Security & Risk Mgt.,Access Information Management Of Ge,C2025054794,,2026-12-31,8,55697,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Print Services,Xerox Ag,C2023000133,,2026-12-01,7,1161891,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Print Services,Ricoh Usa Inc,C2024006619,,2027-09-30,18,1207655,,allowed
+new_business,IT Infrastructure,IT Infrastructure - Network Hardware & Managed Services,,,SD-WAN Deployment - LATAM,,,1100000,8,allowed
+new_business,IT Infrastructure,IT Infrastructure - Security & Risk Mgt.,,,IAM Platform Implementation,,,4500000,6.0,preferred
+renewal,IT Infrastructure,IT Infrastructure - Network Hardware & Managed Services,Megaport Limited,C2022026325,,2027-10-30,18,2000000,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Security & Risk Mgt.,Beyondtrust Corporation,C2021028341,,2027-03-20,11,1500000,,allowed
+new_business,IT Infrastructure,IT Infrastructure - Print Services,,,Print Fleet Consolidation,,,490000,7,allowed
+renewal,IT Infrastructure,IT Infrastructure - Data Center Hardware & Services,Cognizant Worldwide Limited,C2024017194,,2026-08-01,3,4923322,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Personal Computers,Gravity Enterprises Llc,C2017010765,,2026-06-30,2,500000,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Network  Transport Data/Voice,中国电信股份有限公司上海分公司,C2024029067,,2027-12-26,20,52920,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Network Hardware & Managed Services,Telesoft Llc,C2023005296,,2027-07-01,14,900000,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Network Hardware & Managed Services,Cisco Systems Inc,C2024004533,,2027-02-25,10,5000000,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Data Center Hardware & Services,Zeroeyes Inc.,C2024025096,,2028-05-29,26,126000,,allowed
+new_business,IT Infrastructure,IT Infrastructure - Personal Computers,,,Laptop Fleet Refresh - Manufacturing,,,4200000,4,preferred
+renewal,IT Infrastructure,IT Infrastructure - Data Center Hardware & Services,Ntt America Inc,C2023013978,,2026-12-19,8,2900000,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Data Center Hardware & Services,Opt Tech Llc,C2024018381,,2027-07-08,15,1500000,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Data Center Hardware & Services,Ntt United Kingdom Limited,C2023017719,,2026-12-31,8,90603,,allowed
+renewal,IT Infrastructure,IT Infrastructure - Data Center Hardware & Services,Oracle Usa Inc,C2025034259,,2028-02-26,22,235614,,preferred
+renewal,IT Infrastructure,IT Infrastructure - Network Hardware & Managed Services,Ntt United Kingdom Limited,C2023028632,,2026-12-31,8,1714604,,allowed
+new_business,IT Infrastructure,IT Infrastructure - Personal Computers,,,Desktop PC Refresh - HQ,,,1500000,7,allowed
+renewal,IT Infrastructure,IT Infrastructure - Network Hardware & Managed Services,Comcast Cable Communications,C2023020544,,2026-08-15,4,840000,,allowed

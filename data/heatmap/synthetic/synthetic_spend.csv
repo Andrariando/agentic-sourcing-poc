@@ -1,151 +1,151 @@
 PO Number,PO Line,PO Date,Requisition ID,Requisition Date,Category,Subcategory,Supplier Parent,Supplier,PO Spend (USD),Currency,Business Unit,Cost Center,Requester,Description,Month,Year,Payment Terms
-PO-80000,1,2025-10-07,REQ-60000,2025-10-07,IT Infrastructure,Network Infrastructure,CloudServe Group,CloudServe Group,86055.5,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45
-PO-80001,1,2025-07-07,REQ-60001,2025-07-07,IT Infrastructure,Network Infrastructure,SecureShield Tech,SecureShield Tech,83999.7,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jul,2025,Net 45
-PO-80002,1,2025-05-12,REQ-60002,2025-05-12,IT Infrastructure,Cybersecurity,Infinite Computing,Infinite Computing,10676.85,USD,IT,CC-IT-101,Jane Doe,Monthly Services,May,2025,Net 45
-PO-80003,1,2025-10-31,REQ-60003,2025-10-31,IT Infrastructure,Cloud Hosting,Endpoint Solutions Corp,Endpoint Solutions Corp,79358.63,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45
-PO-80004,1,2025-08-15,REQ-60004,2025-08-15,IT Infrastructure,Network Infrastructure,DeltaStorage Systems,DeltaStorage Systems,169855.77,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Aug,2025,Net 45
-PO-80005,1,2025-04-27,REQ-60005,2025-04-27,IT Infrastructure,Data Center,CloudServe Group,CloudServe Group,54861.04,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Apr,2025,Net 45
-PO-80006,1,2026-02-09,REQ-60006,2026-02-09,IT Infrastructure,Cloud Hosting,NetSystems LLC,NetSystems LLC,90634.84,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Feb,2026,Net 45
-PO-80007,1,2025-08-04,REQ-60007,2025-08-04,IT Infrastructure,Data Center,NetSystems LLC,NetSystems LLC,182760.14,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Aug,2025,Net 45
-PO-80008,1,2026-01-17,REQ-60008,2026-01-17,IT Infrastructure,Cybersecurity,CyberGuard Ltd,CyberGuard Ltd,141081.63,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
-PO-80009,1,2026-02-13,REQ-60009,2026-02-13,IT Infrastructure,Cloud Hosting,DataCenter Partners,DataCenter Partners,171586.67,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Feb,2026,Net 45
-PO-80010,1,2025-08-04,REQ-60010,2025-08-04,IT Infrastructure,End User Computing,Endpoint Solutions Corp,Endpoint Solutions Corp,50211.4,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Aug,2025,Net 45
-PO-80011,1,2025-12-18,REQ-60011,2025-12-18,IT Infrastructure,Cybersecurity,CyberGuard Ltd,CyberGuard Ltd,199233.41,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Dec,2025,Net 45
-PO-80012,1,2025-06-26,REQ-60012,2025-06-26,IT Infrastructure,Cloud Hosting,AlphaNetwork Services,AlphaNetwork Services,17282.29,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jun,2025,Net 45
-PO-80013,1,2025-09-16,REQ-60013,2025-09-16,IT Infrastructure,End User Computing,DeltaStorage Systems,DeltaStorage Systems,111382.77,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Sep,2025,Net 45
-PO-80014,1,2026-03-22,REQ-60014,2026-03-22,IT Infrastructure,Network Infrastructure,CyberGuard Ltd,CyberGuard Ltd,5134.71,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Mar,2026,Net 45
-PO-80015,1,2026-02-20,REQ-60015,2026-02-20,IT Infrastructure,Data Center,DeltaStorage Systems,DeltaStorage Systems,156579.4,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Feb,2026,Net 45
-PO-80016,1,2026-01-13,REQ-60016,2026-01-13,IT Infrastructure,Cloud Hosting,DeltaStorage Systems,DeltaStorage Systems,74596.99,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
-PO-80017,1,2025-05-28,REQ-60017,2025-05-28,IT Infrastructure,Data Center,Infinite Computing,Infinite Computing,19340.36,USD,IT,CC-IT-101,Jane Doe,Monthly Services,May,2025,Net 45
-PO-80018,1,2026-02-15,REQ-60018,2026-02-15,IT Infrastructure,End User Computing,AlphaNetwork Services,AlphaNetwork Services,13372.45,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Feb,2026,Net 45
-PO-80019,1,2025-07-29,REQ-60019,2025-07-29,IT Infrastructure,Data Center,AlphaNetwork Services,AlphaNetwork Services,38909.91,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jul,2025,Net 45
-PO-80020,1,2025-10-26,REQ-60020,2025-10-26,IT Infrastructure,End User Computing,SecureShield Tech,SecureShield Tech,137834.28,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45
-PO-80021,1,2025-09-04,REQ-60021,2025-09-04,IT Infrastructure,End User Computing,Infinite Computing,Infinite Computing,95078.62,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Sep,2025,Net 45
-PO-80022,1,2025-12-03,REQ-60022,2025-12-03,IT Infrastructure,End User Computing,TechGlobal Inc,TechGlobal Inc,139480.02,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Dec,2025,Net 45
-PO-80023,1,2025-08-18,REQ-60023,2025-08-18,IT Infrastructure,Cybersecurity,TechGlobal Inc,TechGlobal Inc,87095.28,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Aug,2025,Net 45
-PO-80024,1,2025-12-23,REQ-60024,2025-12-23,IT Infrastructure,Data Center,SecureShield Tech,SecureShield Tech,170600.47,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Dec,2025,Net 45
-PO-80025,1,2026-04-04,REQ-60025,2026-04-04,IT Infrastructure,Network Infrastructure,AlphaNetwork Services,AlphaNetwork Services,195340.55,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Apr,2026,Net 45
-PO-80026,1,2025-05-08,REQ-60026,2025-05-08,IT Infrastructure,Cybersecurity,CyberGuard Ltd,CyberGuard Ltd,8654.97,USD,IT,CC-IT-101,Jane Doe,Monthly Services,May,2025,Net 45
-PO-80027,1,2025-07-04,REQ-60027,2025-07-04,IT Infrastructure,Cybersecurity,DataCenter Partners,DataCenter Partners,153940.33,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jul,2025,Net 45
-PO-80028,1,2025-05-03,REQ-60028,2025-05-03,IT Infrastructure,Data Center,CloudServe Group,CloudServe Group,29494.62,USD,IT,CC-IT-101,Jane Doe,Monthly Services,May,2025,Net 45
-PO-80029,1,2025-07-18,REQ-60029,2025-07-18,IT Infrastructure,Cloud Hosting,Endpoint Solutions Corp,Endpoint Solutions Corp,147184.94,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jul,2025,Net 45
-PO-80030,1,2025-05-18,REQ-60030,2025-05-18,IT Infrastructure,Cloud Hosting,Infinite Computing,Infinite Computing,43543.57,USD,IT,CC-IT-101,Jane Doe,Monthly Services,May,2025,Net 45
-PO-80031,1,2025-07-25,REQ-60031,2025-07-25,IT Infrastructure,Cloud Hosting,Infinite Computing,Infinite Computing,166849.6,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jul,2025,Net 45
-PO-80032,1,2025-08-27,REQ-60032,2025-08-27,IT Infrastructure,Network Infrastructure,CloudServe Group,CloudServe Group,100264.68,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Aug,2025,Net 45
-PO-80033,1,2026-04-04,REQ-60033,2026-04-04,IT Infrastructure,Data Center,AlphaNetwork Services,AlphaNetwork Services,113634.5,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Apr,2026,Net 45
-PO-80034,1,2025-05-03,REQ-60034,2025-05-03,IT Infrastructure,Cloud Hosting,AlphaNetwork Services,AlphaNetwork Services,199595.88,USD,IT,CC-IT-101,Jane Doe,Monthly Services,May,2025,Net 45
-PO-80035,1,2025-12-22,REQ-60035,2025-12-22,IT Infrastructure,Cloud Hosting,CyberGuard Ltd,CyberGuard Ltd,44602.81,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Dec,2025,Net 45
-PO-80036,1,2025-12-03,REQ-60036,2025-12-03,IT Infrastructure,Data Center,NetSystems LLC,NetSystems LLC,191612.46,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Dec,2025,Net 45
-PO-80037,1,2025-12-27,REQ-60037,2025-12-27,IT Infrastructure,Data Center,DeltaStorage Systems,DeltaStorage Systems,131049.63,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Dec,2025,Net 45
-PO-80038,1,2026-01-29,REQ-60038,2026-01-29,IT Infrastructure,Cybersecurity,DataCenter Partners,DataCenter Partners,195479.59,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
-PO-80039,1,2025-11-15,REQ-60039,2025-11-15,IT Infrastructure,Network Infrastructure,NetSystems LLC,NetSystems LLC,156647.17,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Nov,2025,Net 45
-PO-80040,1,2026-03-10,REQ-60040,2026-03-10,IT Infrastructure,Cybersecurity,Endpoint Solutions Corp,Endpoint Solutions Corp,169978.97,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Mar,2026,Net 45
-PO-80041,1,2025-06-12,REQ-60041,2025-06-12,IT Infrastructure,Cloud Hosting,NetSystems LLC,NetSystems LLC,22352.77,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jun,2025,Net 45
-PO-80042,1,2025-10-23,REQ-60042,2025-10-23,IT Infrastructure,Network Infrastructure,DataCenter Partners,DataCenter Partners,163903.33,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45
-PO-80043,1,2026-04-13,REQ-60043,2026-04-13,IT Infrastructure,Data Center,Endpoint Solutions Corp,Endpoint Solutions Corp,38417.5,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Apr,2026,Net 45
-PO-80044,1,2025-04-20,REQ-60044,2025-04-20,IT Infrastructure,Network Infrastructure,NetSystems LLC,NetSystems LLC,145419.34,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Apr,2025,Net 45
-PO-80045,1,2025-11-17,REQ-60045,2025-11-17,IT Infrastructure,Cybersecurity,NetSystems LLC,NetSystems LLC,21500.23,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Nov,2025,Net 45
-PO-80046,1,2026-03-16,REQ-60046,2026-03-16,IT Infrastructure,End User Computing,NetSystems LLC,NetSystems LLC,40618.92,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Mar,2026,Net 45
-PO-80047,1,2025-05-01,REQ-60047,2025-05-01,IT Infrastructure,Cloud Hosting,AlphaNetwork Services,AlphaNetwork Services,113528.55,USD,IT,CC-IT-101,Jane Doe,Monthly Services,May,2025,Net 45
-PO-80048,1,2025-12-27,REQ-60048,2025-12-27,IT Infrastructure,Network Infrastructure,CloudServe Group,CloudServe Group,144794.37,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Dec,2025,Net 45
-PO-80049,1,2026-04-12,REQ-60049,2026-04-12,IT Infrastructure,Cloud Hosting,AlphaNetwork Services,AlphaNetwork Services,22680.75,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Apr,2026,Net 45
-PO-80050,1,2026-03-02,REQ-60050,2026-03-02,IT Infrastructure,Data Center,NetSystems LLC,NetSystems LLC,151901.84,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Mar,2026,Net 45
-PO-80051,1,2026-02-23,REQ-60051,2026-02-23,IT Infrastructure,End User Computing,CyberGuard Ltd,CyberGuard Ltd,103018.14,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Feb,2026,Net 45
-PO-80052,1,2025-10-14,REQ-60052,2025-10-14,IT Infrastructure,Cloud Hosting,SecureShield Tech,SecureShield Tech,65301.09,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45
-PO-80053,1,2026-04-02,REQ-60053,2026-04-02,IT Infrastructure,Cloud Hosting,DataCenter Partners,DataCenter Partners,64900.2,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Apr,2026,Net 45
-PO-80054,1,2026-01-04,REQ-60054,2026-01-04,IT Infrastructure,Cybersecurity,Endpoint Solutions Corp,Endpoint Solutions Corp,5304.37,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
-PO-80055,1,2025-07-13,REQ-60055,2025-07-13,IT Infrastructure,Data Center,DeltaStorage Systems,DeltaStorage Systems,149382.66,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jul,2025,Net 45
-PO-80056,1,2025-04-29,REQ-60056,2025-04-29,IT Infrastructure,Cloud Hosting,TechGlobal Inc,TechGlobal Inc,93373.27,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Apr,2025,Net 45
-PO-80057,1,2026-02-24,REQ-60057,2026-02-24,IT Infrastructure,Cybersecurity,Endpoint Solutions Corp,Endpoint Solutions Corp,93382.43,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Feb,2026,Net 45
-PO-80058,1,2025-12-22,REQ-60058,2025-12-22,IT Infrastructure,Cloud Hosting,CyberGuard Ltd,CyberGuard Ltd,127411.14,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Dec,2025,Net 45
-PO-80059,1,2025-09-18,REQ-60059,2025-09-18,IT Infrastructure,Network Infrastructure,AlphaNetwork Services,AlphaNetwork Services,133207.41,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Sep,2025,Net 45
-PO-80060,1,2025-10-28,REQ-60060,2025-10-28,IT Infrastructure,Cybersecurity,SecureShield Tech,SecureShield Tech,195879.32,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45
-PO-80061,1,2025-05-10,REQ-60061,2025-05-10,IT Infrastructure,End User Computing,CloudServe Group,CloudServe Group,175504.95,USD,IT,CC-IT-101,Jane Doe,Monthly Services,May,2025,Net 45
-PO-80062,1,2025-07-05,REQ-60062,2025-07-05,IT Infrastructure,Network Infrastructure,Endpoint Solutions Corp,Endpoint Solutions Corp,84022.76,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jul,2025,Net 45
-PO-80063,1,2025-12-07,REQ-60063,2025-12-07,IT Infrastructure,Cybersecurity,SecureShield Tech,SecureShield Tech,106977.27,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Dec,2025,Net 45
-PO-80064,1,2026-04-14,REQ-60064,2026-04-14,IT Infrastructure,Cloud Hosting,CloudServe Group,CloudServe Group,26658.3,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Apr,2026,Net 45
-PO-80065,1,2026-02-25,REQ-60065,2026-02-25,IT Infrastructure,Cloud Hosting,Endpoint Solutions Corp,Endpoint Solutions Corp,52044.43,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Feb,2026,Net 45
-PO-80066,1,2025-09-05,REQ-60066,2025-09-05,IT Infrastructure,Network Infrastructure,DeltaStorage Systems,DeltaStorage Systems,131453.44,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Sep,2025,Net 45
-PO-80067,1,2025-07-04,REQ-60067,2025-07-04,IT Infrastructure,Network Infrastructure,Infinite Computing,Infinite Computing,43589.18,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jul,2025,Net 45
-PO-80068,1,2026-02-02,REQ-60068,2026-02-02,IT Infrastructure,Network Infrastructure,NetSystems LLC,NetSystems LLC,122387.47,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Feb,2026,Net 45
-PO-80069,1,2026-02-14,REQ-60069,2026-02-14,IT Infrastructure,End User Computing,CloudServe Group,CloudServe Group,73188.3,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Feb,2026,Net 45
-PO-80070,1,2025-10-22,REQ-60070,2025-10-22,IT Infrastructure,Cloud Hosting,Infinite Computing,Infinite Computing,180245.35,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45
-PO-80071,1,2025-11-22,REQ-60071,2025-11-22,IT Infrastructure,End User Computing,DeltaStorage Systems,DeltaStorage Systems,158251.14,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Nov,2025,Net 45
-PO-80072,1,2025-07-09,REQ-60072,2025-07-09,IT Infrastructure,Data Center,CloudServe Group,CloudServe Group,194645.06,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jul,2025,Net 45
-PO-80073,1,2025-08-16,REQ-60073,2025-08-16,IT Infrastructure,Network Infrastructure,NetSystems LLC,NetSystems LLC,38549.14,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Aug,2025,Net 45
-PO-80074,1,2025-07-06,REQ-60074,2025-07-06,IT Infrastructure,End User Computing,DataCenter Partners,DataCenter Partners,151006.81,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jul,2025,Net 45
-PO-80075,1,2025-08-12,REQ-60075,2025-08-12,IT Infrastructure,End User Computing,SecureShield Tech,SecureShield Tech,127826.85,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Aug,2025,Net 45
-PO-80076,1,2025-10-04,REQ-60076,2025-10-04,IT Infrastructure,End User Computing,DataCenter Partners,DataCenter Partners,126058.42,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45
-PO-80077,1,2025-07-12,REQ-60077,2025-07-12,IT Infrastructure,Network Infrastructure,DeltaStorage Systems,DeltaStorage Systems,131961.91,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jul,2025,Net 45
-PO-80078,1,2025-08-27,REQ-60078,2025-08-27,IT Infrastructure,Data Center,Infinite Computing,Infinite Computing,135203.08,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Aug,2025,Net 45
-PO-80079,1,2025-11-27,REQ-60079,2025-11-27,IT Infrastructure,End User Computing,CloudServe Group,CloudServe Group,30164.05,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Nov,2025,Net 45
-PO-80080,1,2025-11-02,REQ-60080,2025-11-02,IT Infrastructure,Cloud Hosting,Endpoint Solutions Corp,Endpoint Solutions Corp,192265.93,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Nov,2025,Net 45
-PO-80081,1,2025-04-25,REQ-60081,2025-04-25,IT Infrastructure,Data Center,SecureShield Tech,SecureShield Tech,121563.18,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Apr,2025,Net 45
-PO-80082,1,2026-03-09,REQ-60082,2026-03-09,IT Infrastructure,End User Computing,AlphaNetwork Services,AlphaNetwork Services,38751.37,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Mar,2026,Net 45
-PO-80083,1,2026-02-11,REQ-60083,2026-02-11,IT Infrastructure,Network Infrastructure,DeltaStorage Systems,DeltaStorage Systems,125018.38,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Feb,2026,Net 45
-PO-80084,1,2026-01-31,REQ-60084,2026-01-31,IT Infrastructure,Data Center,SecureShield Tech,SecureShield Tech,190258.46,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
-PO-80085,1,2025-07-21,REQ-60085,2025-07-21,IT Infrastructure,Data Center,AlphaNetwork Services,AlphaNetwork Services,41598.63,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jul,2025,Net 45
-PO-80086,1,2026-01-04,REQ-60086,2026-01-04,IT Infrastructure,Data Center,Infinite Computing,Infinite Computing,142708.0,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
-PO-80087,1,2026-01-03,REQ-60087,2026-01-03,IT Infrastructure,Cloud Hosting,NetSystems LLC,NetSystems LLC,184535.12,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
-PO-80088,1,2026-02-25,REQ-60088,2026-02-25,IT Infrastructure,End User Computing,CloudServe Group,CloudServe Group,186553.38,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Feb,2026,Net 45
-PO-80089,1,2026-01-25,REQ-60089,2026-01-25,IT Infrastructure,Network Infrastructure,DataCenter Partners,DataCenter Partners,26371.98,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
-PO-80090,1,2026-01-09,REQ-60090,2026-01-09,IT Infrastructure,Cybersecurity,CyberGuard Ltd,CyberGuard Ltd,38556.45,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
-PO-80091,1,2025-11-17,REQ-60091,2025-11-17,IT Infrastructure,Cloud Hosting,Infinite Computing,Infinite Computing,34990.05,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Nov,2025,Net 45
-PO-80092,1,2025-11-18,REQ-60092,2025-11-18,IT Infrastructure,Cloud Hosting,DeltaStorage Systems,DeltaStorage Systems,40742.55,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Nov,2025,Net 45
-PO-80093,1,2025-05-16,REQ-60093,2025-05-16,IT Infrastructure,End User Computing,Infinite Computing,Infinite Computing,45713.18,USD,IT,CC-IT-101,Jane Doe,Monthly Services,May,2025,Net 45
-PO-80094,1,2025-07-26,REQ-60094,2025-07-26,IT Infrastructure,Cloud Hosting,AlphaNetwork Services,AlphaNetwork Services,75095.15,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jul,2025,Net 45
-PO-80095,1,2026-03-24,REQ-60095,2026-03-24,IT Infrastructure,End User Computing,Endpoint Solutions Corp,Endpoint Solutions Corp,11786.49,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Mar,2026,Net 45
-PO-80096,1,2025-08-21,REQ-60096,2025-08-21,IT Infrastructure,End User Computing,NetSystems LLC,NetSystems LLC,72670.04,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Aug,2025,Net 45
-PO-80097,1,2026-04-13,REQ-60097,2026-04-13,IT Infrastructure,Cloud Hosting,CloudServe Group,CloudServe Group,88475.32,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Apr,2026,Net 45
-PO-80098,1,2025-05-18,REQ-60098,2025-05-18,IT Infrastructure,Cloud Hosting,DeltaStorage Systems,DeltaStorage Systems,104655.02,USD,IT,CC-IT-101,Jane Doe,Monthly Services,May,2025,Net 45
-PO-80099,1,2025-12-13,REQ-60099,2025-12-13,IT Infrastructure,Cybersecurity,AlphaNetwork Services,AlphaNetwork Services,122206.75,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Dec,2025,Net 45
-PO-80100,1,2026-04-08,REQ-60100,2026-04-08,IT Infrastructure,Cloud Hosting,AlphaNetwork Services,AlphaNetwork Services,81681.0,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Apr,2026,Net 45
-PO-80101,1,2025-10-18,REQ-60101,2025-10-18,IT Infrastructure,Cloud Hosting,DataCenter Partners,DataCenter Partners,76526.56,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45
-PO-80102,1,2025-10-01,REQ-60102,2025-10-01,IT Infrastructure,Data Center,CyberGuard Ltd,CyberGuard Ltd,167014.19,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45
-PO-80103,1,2025-10-02,REQ-60103,2025-10-02,IT Infrastructure,Cybersecurity,DataCenter Partners,DataCenter Partners,42961.57,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45
-PO-80104,1,2025-08-17,REQ-60104,2025-08-17,IT Infrastructure,Data Center,TechGlobal Inc,TechGlobal Inc,188511.71,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Aug,2025,Net 45
-PO-80105,1,2025-08-07,REQ-60105,2025-08-07,IT Infrastructure,End User Computing,Infinite Computing,Infinite Computing,132569.84,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Aug,2025,Net 45
-PO-80106,1,2026-02-24,REQ-60106,2026-02-24,IT Infrastructure,End User Computing,CloudServe Group,CloudServe Group,8146.56,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Feb,2026,Net 45
-PO-80107,1,2025-08-24,REQ-60107,2025-08-24,IT Infrastructure,Data Center,Infinite Computing,Infinite Computing,161140.31,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Aug,2025,Net 45
-PO-80108,1,2025-11-12,REQ-60108,2025-11-12,IT Infrastructure,Data Center,DeltaStorage Systems,DeltaStorage Systems,126843.72,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Nov,2025,Net 45
-PO-80109,1,2026-02-01,REQ-60109,2026-02-01,IT Infrastructure,End User Computing,CloudServe Group,CloudServe Group,172628.28,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Feb,2026,Net 45
-PO-80110,1,2025-07-02,REQ-60110,2025-07-02,IT Infrastructure,Data Center,DeltaStorage Systems,DeltaStorage Systems,180903.39,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jul,2025,Net 45
-PO-80111,1,2026-03-25,REQ-60111,2026-03-25,IT Infrastructure,Network Infrastructure,Endpoint Solutions Corp,Endpoint Solutions Corp,169814.98,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Mar,2026,Net 45
-PO-80112,1,2026-02-18,REQ-60112,2026-02-18,IT Infrastructure,Cybersecurity,Infinite Computing,Infinite Computing,95729.94,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Feb,2026,Net 45
-PO-80113,1,2026-01-13,REQ-60113,2026-01-13,IT Infrastructure,Cloud Hosting,DeltaStorage Systems,DeltaStorage Systems,29271.28,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
-PO-80114,1,2026-01-01,REQ-60114,2026-01-01,IT Infrastructure,Cloud Hosting,NetSystems LLC,NetSystems LLC,5406.85,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
-PO-80115,1,2025-07-22,REQ-60115,2025-07-22,IT Infrastructure,End User Computing,SecureShield Tech,SecureShield Tech,32718.33,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jul,2025,Net 45
-PO-80116,1,2026-01-11,REQ-60116,2026-01-11,IT Infrastructure,Network Infrastructure,AlphaNetwork Services,AlphaNetwork Services,159979.08,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
-PO-80117,1,2025-12-21,REQ-60117,2025-12-21,IT Infrastructure,Cybersecurity,Infinite Computing,Infinite Computing,47045.12,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Dec,2025,Net 45
-PO-80118,1,2025-04-26,REQ-60118,2025-04-26,IT Infrastructure,Cloud Hosting,NetSystems LLC,NetSystems LLC,163141.55,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Apr,2025,Net 45
-PO-80119,1,2025-08-28,REQ-60119,2025-08-28,IT Infrastructure,End User Computing,DataCenter Partners,DataCenter Partners,193066.21,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Aug,2025,Net 45
-PO-80120,1,2025-04-25,REQ-60120,2025-04-25,IT Infrastructure,Network Infrastructure,AlphaNetwork Services,AlphaNetwork Services,122964.93,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Apr,2025,Net 45
-PO-80121,1,2025-05-22,REQ-60121,2025-05-22,IT Infrastructure,Network Infrastructure,SecureShield Tech,SecureShield Tech,79373.07,USD,IT,CC-IT-101,Jane Doe,Monthly Services,May,2025,Net 45
-PO-80122,1,2025-04-30,REQ-60122,2025-04-30,IT Infrastructure,Cloud Hosting,CyberGuard Ltd,CyberGuard Ltd,81448.36,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Apr,2025,Net 45
-PO-80123,1,2025-09-03,REQ-60123,2025-09-03,IT Infrastructure,End User Computing,TechGlobal Inc,TechGlobal Inc,183350.37,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Sep,2025,Net 45
-PO-80124,1,2025-04-27,REQ-60124,2025-04-27,IT Infrastructure,End User Computing,TechGlobal Inc,TechGlobal Inc,109397.6,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Apr,2025,Net 45
-PO-80125,1,2025-06-17,REQ-60125,2025-06-17,IT Infrastructure,Data Center,CyberGuard Ltd,CyberGuard Ltd,161358.22,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jun,2025,Net 45
-PO-80126,1,2025-08-30,REQ-60126,2025-08-30,IT Infrastructure,End User Computing,AlphaNetwork Services,AlphaNetwork Services,184749.91,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Aug,2025,Net 45
-PO-80127,1,2025-12-16,REQ-60127,2025-12-16,IT Infrastructure,Network Infrastructure,CyberGuard Ltd,CyberGuard Ltd,188884.38,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Dec,2025,Net 45
-PO-80128,1,2025-09-18,REQ-60128,2025-09-18,IT Infrastructure,End User Computing,Infinite Computing,Infinite Computing,173205.75,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Sep,2025,Net 45
-PO-80129,1,2026-03-16,REQ-60129,2026-03-16,IT Infrastructure,End User Computing,CyberGuard Ltd,CyberGuard Ltd,173445.02,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Mar,2026,Net 45
-PO-80130,1,2026-04-01,REQ-60130,2026-04-01,IT Infrastructure,Cloud Hosting,Infinite Computing,Infinite Computing,113910.93,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Apr,2026,Net 45
-PO-80131,1,2025-10-31,REQ-60131,2025-10-31,IT Infrastructure,Cloud Hosting,NetSystems LLC,NetSystems LLC,153291.27,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45
-PO-80132,1,2026-03-03,REQ-60132,2026-03-03,IT Infrastructure,End User Computing,CloudServe Group,CloudServe Group,77456.88,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Mar,2026,Net 45
-PO-80133,1,2026-03-21,REQ-60133,2026-03-21,IT Infrastructure,Network Infrastructure,AlphaNetwork Services,AlphaNetwork Services,183358.26,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Mar,2026,Net 45
-PO-80134,1,2026-03-07,REQ-60134,2026-03-07,IT Infrastructure,Cybersecurity,TechGlobal Inc,TechGlobal Inc,131999.72,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Mar,2026,Net 45
-PO-80135,1,2025-06-28,REQ-60135,2025-06-28,IT Infrastructure,Network Infrastructure,CloudServe Group,CloudServe Group,72575.74,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jun,2025,Net 45
-PO-80136,1,2025-09-15,REQ-60136,2025-09-15,IT Infrastructure,Network Infrastructure,CyberGuard Ltd,CyberGuard Ltd,113743.67,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Sep,2025,Net 45
-PO-80137,1,2026-01-07,REQ-60137,2026-01-07,IT Infrastructure,Cloud Hosting,CloudServe Group,CloudServe Group,40295.31,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
-PO-80138,1,2026-02-07,REQ-60138,2026-02-07,IT Infrastructure,Cloud Hosting,CyberGuard Ltd,CyberGuard Ltd,160196.93,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Feb,2026,Net 45
-PO-80139,1,2025-05-15,REQ-60139,2025-05-15,IT Infrastructure,End User Computing,CyberGuard Ltd,CyberGuard Ltd,196314.92,USD,IT,CC-IT-101,Jane Doe,Monthly Services,May,2025,Net 45
-PO-80140,1,2025-07-01,REQ-60140,2025-07-01,IT Infrastructure,Cybersecurity,SecureShield Tech,SecureShield Tech,169038.41,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jul,2025,Net 45
-PO-80141,1,2025-10-18,REQ-60141,2025-10-18,IT Infrastructure,Network Infrastructure,Endpoint Solutions Corp,Endpoint Solutions Corp,18709.57,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45
-PO-80142,1,2025-05-22,REQ-60142,2025-05-22,IT Infrastructure,Network Infrastructure,CloudServe Group,CloudServe Group,154791.06,USD,IT,CC-IT-101,Jane Doe,Monthly Services,May,2025,Net 45
-PO-80143,1,2025-12-19,REQ-60143,2025-12-19,IT Infrastructure,Network Infrastructure,CyberGuard Ltd,CyberGuard Ltd,180010.97,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Dec,2025,Net 45
-PO-80144,1,2025-07-29,REQ-60144,2025-07-29,IT Infrastructure,Cybersecurity,DeltaStorage Systems,DeltaStorage Systems,122300.96,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jul,2025,Net 45
-PO-80145,1,2025-10-19,REQ-60145,2025-10-19,IT Infrastructure,Data Center,AlphaNetwork Services,AlphaNetwork Services,40813.45,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45
-PO-80146,1,2026-01-19,REQ-60146,2026-01-19,IT Infrastructure,End User Computing,DataCenter Partners,DataCenter Partners,165147.32,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
-PO-80147,1,2025-06-27,REQ-60147,2025-06-27,IT Infrastructure,End User Computing,CloudServe Group,CloudServe Group,101502.57,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jun,2025,Net 45
-PO-80148,1,2025-07-22,REQ-60148,2025-07-22,IT Infrastructure,Cloud Hosting,CyberGuard Ltd,CyberGuard Ltd,27597.37,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jul,2025,Net 45
-PO-80149,1,2026-01-24,REQ-60149,2026-01-24,IT Infrastructure,End User Computing,DataCenter Partners,DataCenter Partners,97913.53,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
+PO-80000,1,2025-12-05,REQ-60000,2025-12-05,IT Infrastructure,Cybersecurity,TechGlobal Inc,TechGlobal Inc,163270.74,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Dec,2025,Net 45
+PO-80001,1,2025-04-29,REQ-60001,2025-04-29,IT Infrastructure,End User Computing,Infinite Computing,Infinite Computing,24807.3,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Apr,2025,Net 45
+PO-80002,1,2025-12-09,REQ-60002,2025-12-09,IT Infrastructure,End User Computing,Infinite Computing,Infinite Computing,165118.02,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Dec,2025,Net 45
+PO-80003,1,2025-10-10,REQ-60003,2025-10-10,IT Infrastructure,Network Infrastructure,CyberGuard Ltd,CyberGuard Ltd,96881.52,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45
+PO-80004,1,2026-01-04,REQ-60004,2026-01-04,IT Infrastructure,End User Computing,Endpoint Solutions Corp,Endpoint Solutions Corp,165706.08,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
+PO-80005,1,2025-05-04,REQ-60005,2025-05-04,IT Infrastructure,Cloud Hosting,DeltaStorage Systems,DeltaStorage Systems,78687.72,USD,IT,CC-IT-101,Jane Doe,Monthly Services,May,2025,Net 45
+PO-80006,1,2026-04-15,REQ-60006,2026-04-15,IT Infrastructure,Data Center,CloudServe Group,CloudServe Group,156101.79,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Apr,2026,Net 45
+PO-80007,1,2025-11-19,REQ-60007,2025-11-19,IT Infrastructure,Cloud Hosting,CyberGuard Ltd,CyberGuard Ltd,77019.08,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Nov,2025,Net 45
+PO-80008,1,2025-07-02,REQ-60008,2025-07-02,IT Infrastructure,Data Center,CyberGuard Ltd,CyberGuard Ltd,146739.0,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jul,2025,Net 45
+PO-80009,1,2025-10-04,REQ-60009,2025-10-04,IT Infrastructure,Data Center,DataCenter Partners,DataCenter Partners,74567.11,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45
+PO-80010,1,2026-04-04,REQ-60010,2026-04-04,IT Infrastructure,Cybersecurity,CyberGuard Ltd,CyberGuard Ltd,95871.97,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Apr,2026,Net 45
+PO-80011,1,2025-06-09,REQ-60011,2025-06-09,IT Infrastructure,Data Center,NetSystems LLC,NetSystems LLC,146315.21,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jun,2025,Net 45
+PO-80012,1,2025-12-05,REQ-60012,2025-12-05,IT Infrastructure,Data Center,DeltaStorage Systems,DeltaStorage Systems,68404.22,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Dec,2025,Net 45
+PO-80013,1,2025-07-05,REQ-60013,2025-07-05,IT Infrastructure,Cybersecurity,Endpoint Solutions Corp,Endpoint Solutions Corp,65202.88,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jul,2025,Net 45
+PO-80014,1,2025-11-29,REQ-60014,2025-11-29,IT Infrastructure,End User Computing,SecureShield Tech,SecureShield Tech,150852.65,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Nov,2025,Net 45
+PO-80015,1,2025-11-29,REQ-60015,2025-11-29,IT Infrastructure,End User Computing,AlphaNetwork Services,AlphaNetwork Services,120794.32,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Nov,2025,Net 45
+PO-80016,1,2026-01-07,REQ-60016,2026-01-07,IT Infrastructure,Data Center,DeltaStorage Systems,DeltaStorage Systems,196915.82,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
+PO-80017,1,2025-12-11,REQ-60017,2025-12-11,IT Infrastructure,End User Computing,Infinite Computing,Infinite Computing,65920.9,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Dec,2025,Net 45
+PO-80018,1,2025-07-16,REQ-60018,2025-07-16,IT Infrastructure,Cloud Hosting,Infinite Computing,Infinite Computing,74168.04,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jul,2025,Net 45
+PO-80019,1,2025-05-26,REQ-60019,2025-05-26,IT Infrastructure,End User Computing,CyberGuard Ltd,CyberGuard Ltd,130193.22,USD,IT,CC-IT-101,Jane Doe,Monthly Services,May,2025,Net 45
+PO-80020,1,2026-03-01,REQ-60020,2026-03-01,IT Infrastructure,Cybersecurity,NetSystems LLC,NetSystems LLC,106442.44,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Mar,2026,Net 45
+PO-80021,1,2026-01-27,REQ-60021,2026-01-27,IT Infrastructure,Network Infrastructure,DataCenter Partners,DataCenter Partners,90007.78,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
+PO-80022,1,2026-02-27,REQ-60022,2026-02-27,IT Infrastructure,End User Computing,SecureShield Tech,SecureShield Tech,33048.87,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Feb,2026,Net 45
+PO-80023,1,2025-06-23,REQ-60023,2025-06-23,IT Infrastructure,End User Computing,AlphaNetwork Services,AlphaNetwork Services,141234.57,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jun,2025,Net 45
+PO-80024,1,2025-05-09,REQ-60024,2025-05-09,IT Infrastructure,Network Infrastructure,AlphaNetwork Services,AlphaNetwork Services,172914.65,USD,IT,CC-IT-101,Jane Doe,Monthly Services,May,2025,Net 45
+PO-80025,1,2025-10-23,REQ-60025,2025-10-23,IT Infrastructure,Cloud Hosting,AlphaNetwork Services,AlphaNetwork Services,149136.21,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45
+PO-80026,1,2025-10-22,REQ-60026,2025-10-22,IT Infrastructure,Cybersecurity,CloudServe Group,CloudServe Group,168533.38,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45
+PO-80027,1,2026-01-10,REQ-60027,2026-01-10,IT Infrastructure,Cybersecurity,AlphaNetwork Services,AlphaNetwork Services,164325.66,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
+PO-80028,1,2026-02-23,REQ-60028,2026-02-23,IT Infrastructure,End User Computing,SecureShield Tech,SecureShield Tech,119149.54,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Feb,2026,Net 45
+PO-80029,1,2025-12-29,REQ-60029,2025-12-29,IT Infrastructure,Data Center,NetSystems LLC,NetSystems LLC,148020.66,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Dec,2025,Net 45
+PO-80030,1,2025-05-28,REQ-60030,2025-05-28,IT Infrastructure,Cloud Hosting,NetSystems LLC,NetSystems LLC,77260.07,USD,IT,CC-IT-101,Jane Doe,Monthly Services,May,2025,Net 45
+PO-80031,1,2025-09-12,REQ-60031,2025-09-12,IT Infrastructure,Network Infrastructure,TechGlobal Inc,TechGlobal Inc,142432.49,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Sep,2025,Net 45
+PO-80032,1,2025-12-02,REQ-60032,2025-12-02,IT Infrastructure,Data Center,CyberGuard Ltd,CyberGuard Ltd,126745.96,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Dec,2025,Net 45
+PO-80033,1,2025-12-14,REQ-60033,2025-12-14,IT Infrastructure,Data Center,Infinite Computing,Infinite Computing,171200.93,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Dec,2025,Net 45
+PO-80034,1,2025-10-05,REQ-60034,2025-10-05,IT Infrastructure,End User Computing,CloudServe Group,CloudServe Group,198869.56,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45
+PO-80035,1,2026-02-01,REQ-60035,2026-02-01,IT Infrastructure,Cybersecurity,Infinite Computing,Infinite Computing,58488.67,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Feb,2026,Net 45
+PO-80036,1,2025-05-20,REQ-60036,2025-05-20,IT Infrastructure,Cybersecurity,TechGlobal Inc,TechGlobal Inc,193649.78,USD,IT,CC-IT-101,Jane Doe,Monthly Services,May,2025,Net 45
+PO-80037,1,2025-11-14,REQ-60037,2025-11-14,IT Infrastructure,Cybersecurity,CloudServe Group,CloudServe Group,27351.3,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Nov,2025,Net 45
+PO-80038,1,2025-11-20,REQ-60038,2025-11-20,IT Infrastructure,Network Infrastructure,AlphaNetwork Services,AlphaNetwork Services,65805.02,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Nov,2025,Net 45
+PO-80039,1,2026-02-19,REQ-60039,2026-02-19,IT Infrastructure,Cloud Hosting,DataCenter Partners,DataCenter Partners,50510.8,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Feb,2026,Net 45
+PO-80040,1,2026-04-18,REQ-60040,2026-04-18,IT Infrastructure,Data Center,CyberGuard Ltd,CyberGuard Ltd,48614.81,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Apr,2026,Net 45
+PO-80041,1,2025-06-28,REQ-60041,2025-06-28,IT Infrastructure,Network Infrastructure,Endpoint Solutions Corp,Endpoint Solutions Corp,68985.24,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jun,2025,Net 45
+PO-80042,1,2025-05-17,REQ-60042,2025-05-17,IT Infrastructure,End User Computing,SecureShield Tech,SecureShield Tech,151393.16,USD,IT,CC-IT-101,Jane Doe,Monthly Services,May,2025,Net 45
+PO-80043,1,2025-07-11,REQ-60043,2025-07-11,IT Infrastructure,Network Infrastructure,AlphaNetwork Services,AlphaNetwork Services,28692.96,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jul,2025,Net 45
+PO-80044,1,2025-09-04,REQ-60044,2025-09-04,IT Infrastructure,Data Center,NetSystems LLC,NetSystems LLC,180588.62,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Sep,2025,Net 45
+PO-80045,1,2025-08-26,REQ-60045,2025-08-26,IT Infrastructure,Cybersecurity,Infinite Computing,Infinite Computing,163266.13,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Aug,2025,Net 45
+PO-80046,1,2025-06-13,REQ-60046,2025-06-13,IT Infrastructure,Cloud Hosting,TechGlobal Inc,TechGlobal Inc,190463.77,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jun,2025,Net 45
+PO-80047,1,2025-10-26,REQ-60047,2025-10-26,IT Infrastructure,End User Computing,CloudServe Group,CloudServe Group,43826.25,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45
+PO-80048,1,2026-01-02,REQ-60048,2026-01-02,IT Infrastructure,Cloud Hosting,DeltaStorage Systems,DeltaStorage Systems,146246.2,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
+PO-80049,1,2025-06-19,REQ-60049,2025-06-19,IT Infrastructure,Data Center,TechGlobal Inc,TechGlobal Inc,28171.24,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jun,2025,Net 45
+PO-80050,1,2025-08-07,REQ-60050,2025-08-07,IT Infrastructure,Network Infrastructure,SecureShield Tech,SecureShield Tech,77977.14,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Aug,2025,Net 45
+PO-80051,1,2025-05-28,REQ-60051,2025-05-28,IT Infrastructure,Data Center,Infinite Computing,Infinite Computing,197612.11,USD,IT,CC-IT-101,Jane Doe,Monthly Services,May,2025,Net 45
+PO-80052,1,2025-09-01,REQ-60052,2025-09-01,IT Infrastructure,End User Computing,NetSystems LLC,NetSystems LLC,95754.61,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Sep,2025,Net 45
+PO-80053,1,2025-07-31,REQ-60053,2025-07-31,IT Infrastructure,Data Center,Endpoint Solutions Corp,Endpoint Solutions Corp,137140.82,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jul,2025,Net 45
+PO-80054,1,2025-05-17,REQ-60054,2025-05-17,IT Infrastructure,Cybersecurity,TechGlobal Inc,TechGlobal Inc,27897.88,USD,IT,CC-IT-101,Jane Doe,Monthly Services,May,2025,Net 45
+PO-80055,1,2026-04-09,REQ-60055,2026-04-09,IT Infrastructure,Data Center,TechGlobal Inc,TechGlobal Inc,97281.51,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Apr,2026,Net 45
+PO-80056,1,2025-08-26,REQ-60056,2025-08-26,IT Infrastructure,Data Center,CyberGuard Ltd,CyberGuard Ltd,95814.55,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Aug,2025,Net 45
+PO-80057,1,2025-08-16,REQ-60057,2025-08-16,IT Infrastructure,Cybersecurity,Infinite Computing,Infinite Computing,34210.96,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Aug,2025,Net 45
+PO-80058,1,2026-02-09,REQ-60058,2026-02-09,IT Infrastructure,Data Center,Infinite Computing,Infinite Computing,138556.49,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Feb,2026,Net 45
+PO-80059,1,2025-06-29,REQ-60059,2025-06-29,IT Infrastructure,Network Infrastructure,SecureShield Tech,SecureShield Tech,90734.44,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jun,2025,Net 45
+PO-80060,1,2025-07-09,REQ-60060,2025-07-09,IT Infrastructure,Data Center,Infinite Computing,Infinite Computing,106534.95,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jul,2025,Net 45
+PO-80061,1,2026-01-09,REQ-60061,2026-01-09,IT Infrastructure,Network Infrastructure,NetSystems LLC,NetSystems LLC,96623.51,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
+PO-80062,1,2025-10-27,REQ-60062,2025-10-27,IT Infrastructure,Data Center,CyberGuard Ltd,CyberGuard Ltd,139283.39,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45
+PO-80063,1,2025-07-01,REQ-60063,2025-07-01,IT Infrastructure,End User Computing,Endpoint Solutions Corp,Endpoint Solutions Corp,34352.1,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jul,2025,Net 45
+PO-80064,1,2025-12-06,REQ-60064,2025-12-06,IT Infrastructure,Data Center,AlphaNetwork Services,AlphaNetwork Services,61938.73,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Dec,2025,Net 45
+PO-80065,1,2025-10-21,REQ-60065,2025-10-21,IT Infrastructure,End User Computing,DeltaStorage Systems,DeltaStorage Systems,123732.94,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45
+PO-80066,1,2025-08-07,REQ-60066,2025-08-07,IT Infrastructure,Cybersecurity,CyberGuard Ltd,CyberGuard Ltd,148738.49,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Aug,2025,Net 45
+PO-80067,1,2025-11-19,REQ-60067,2025-11-19,IT Infrastructure,End User Computing,NetSystems LLC,NetSystems LLC,83353.96,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Nov,2025,Net 45
+PO-80068,1,2025-04-28,REQ-60068,2025-04-28,IT Infrastructure,Cloud Hosting,Endpoint Solutions Corp,Endpoint Solutions Corp,56511.14,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Apr,2025,Net 45
+PO-80069,1,2025-05-07,REQ-60069,2025-05-07,IT Infrastructure,End User Computing,DeltaStorage Systems,DeltaStorage Systems,154192.13,USD,IT,CC-IT-101,Jane Doe,Monthly Services,May,2025,Net 45
+PO-80070,1,2026-04-02,REQ-60070,2026-04-02,IT Infrastructure,Network Infrastructure,DataCenter Partners,DataCenter Partners,157305.74,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Apr,2026,Net 45
+PO-80071,1,2025-06-10,REQ-60071,2025-06-10,IT Infrastructure,Cybersecurity,Endpoint Solutions Corp,Endpoint Solutions Corp,129659.46,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jun,2025,Net 45
+PO-80072,1,2026-01-04,REQ-60072,2026-01-04,IT Infrastructure,Data Center,DataCenter Partners,DataCenter Partners,42765.65,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
+PO-80073,1,2025-06-12,REQ-60073,2025-06-12,IT Infrastructure,End User Computing,CloudServe Group,CloudServe Group,38003.73,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jun,2025,Net 45
+PO-80074,1,2025-10-13,REQ-60074,2025-10-13,IT Infrastructure,Cloud Hosting,AlphaNetwork Services,AlphaNetwork Services,18525.56,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45
+PO-80075,1,2025-08-06,REQ-60075,2025-08-06,IT Infrastructure,End User Computing,SecureShield Tech,SecureShield Tech,116528.22,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Aug,2025,Net 45
+PO-80076,1,2025-11-11,REQ-60076,2025-11-11,IT Infrastructure,Cloud Hosting,Endpoint Solutions Corp,Endpoint Solutions Corp,75185.58,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Nov,2025,Net 45
+PO-80077,1,2026-01-22,REQ-60077,2026-01-22,IT Infrastructure,Network Infrastructure,NetSystems LLC,NetSystems LLC,174856.76,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
+PO-80078,1,2026-01-12,REQ-60078,2026-01-12,IT Infrastructure,Data Center,AlphaNetwork Services,AlphaNetwork Services,23982.95,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
+PO-80079,1,2025-12-13,REQ-60079,2025-12-13,IT Infrastructure,Network Infrastructure,DeltaStorage Systems,DeltaStorage Systems,44834.57,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Dec,2025,Net 45
+PO-80080,1,2026-04-19,REQ-60080,2026-04-19,IT Infrastructure,Network Infrastructure,Infinite Computing,Infinite Computing,44132.18,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Apr,2026,Net 45
+PO-80081,1,2026-02-06,REQ-60081,2026-02-06,IT Infrastructure,Cybersecurity,Infinite Computing,Infinite Computing,191250.81,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Feb,2026,Net 45
+PO-80082,1,2026-04-08,REQ-60082,2026-04-08,IT Infrastructure,Network Infrastructure,Endpoint Solutions Corp,Endpoint Solutions Corp,65144.24,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Apr,2026,Net 45
+PO-80083,1,2025-11-26,REQ-60083,2025-11-26,IT Infrastructure,End User Computing,SecureShield Tech,SecureShield Tech,33591.54,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Nov,2025,Net 45
+PO-80084,1,2025-05-26,REQ-60084,2025-05-26,IT Infrastructure,End User Computing,NetSystems LLC,NetSystems LLC,194932.63,USD,IT,CC-IT-101,Jane Doe,Monthly Services,May,2025,Net 45
+PO-80085,1,2025-10-13,REQ-60085,2025-10-13,IT Infrastructure,Cybersecurity,DeltaStorage Systems,DeltaStorage Systems,156501.34,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45
+PO-80086,1,2026-04-14,REQ-60086,2026-04-14,IT Infrastructure,Cloud Hosting,CyberGuard Ltd,CyberGuard Ltd,140950.13,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Apr,2026,Net 45
+PO-80087,1,2025-12-25,REQ-60087,2025-12-25,IT Infrastructure,Cybersecurity,Infinite Computing,Infinite Computing,140633.9,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Dec,2025,Net 45
+PO-80088,1,2025-08-20,REQ-60088,2025-08-20,IT Infrastructure,Cloud Hosting,AlphaNetwork Services,AlphaNetwork Services,94459.46,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Aug,2025,Net 45
+PO-80089,1,2026-03-17,REQ-60089,2026-03-17,IT Infrastructure,Network Infrastructure,SecureShield Tech,SecureShield Tech,165200.69,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Mar,2026,Net 45
+PO-80090,1,2026-01-14,REQ-60090,2026-01-14,IT Infrastructure,Data Center,DataCenter Partners,DataCenter Partners,66219.24,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
+PO-80091,1,2026-01-01,REQ-60091,2026-01-01,IT Infrastructure,Cloud Hosting,SecureShield Tech,SecureShield Tech,195186.16,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
+PO-80092,1,2026-03-02,REQ-60092,2026-03-02,IT Infrastructure,Cybersecurity,DataCenter Partners,DataCenter Partners,188546.89,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Mar,2026,Net 45
+PO-80093,1,2025-12-25,REQ-60093,2025-12-25,IT Infrastructure,Network Infrastructure,Endpoint Solutions Corp,Endpoint Solutions Corp,16405.96,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Dec,2025,Net 45
+PO-80094,1,2026-01-15,REQ-60094,2026-01-15,IT Infrastructure,Cloud Hosting,DeltaStorage Systems,DeltaStorage Systems,128843.32,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
+PO-80095,1,2025-09-23,REQ-60095,2025-09-23,IT Infrastructure,Data Center,CloudServe Group,CloudServe Group,8269.35,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Sep,2025,Net 45
+PO-80096,1,2026-03-04,REQ-60096,2026-03-04,IT Infrastructure,Cloud Hosting,DeltaStorage Systems,DeltaStorage Systems,29614.46,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Mar,2026,Net 45
+PO-80097,1,2026-02-11,REQ-60097,2026-02-11,IT Infrastructure,Cloud Hosting,SecureShield Tech,SecureShield Tech,37286.24,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Feb,2026,Net 45
+PO-80098,1,2025-10-31,REQ-60098,2025-10-31,IT Infrastructure,Network Infrastructure,NetSystems LLC,NetSystems LLC,135668.53,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45
+PO-80099,1,2026-01-02,REQ-60099,2026-01-02,IT Infrastructure,End User Computing,CloudServe Group,CloudServe Group,65938.71,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
+PO-80100,1,2025-09-06,REQ-60100,2025-09-06,IT Infrastructure,Cloud Hosting,NetSystems LLC,NetSystems LLC,142861.84,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Sep,2025,Net 45
+PO-80101,1,2025-05-22,REQ-60101,2025-05-22,IT Infrastructure,Data Center,Infinite Computing,Infinite Computing,82759.22,USD,IT,CC-IT-101,Jane Doe,Monthly Services,May,2025,Net 45
+PO-80102,1,2025-10-28,REQ-60102,2025-10-28,IT Infrastructure,End User Computing,SecureShield Tech,SecureShield Tech,171794.58,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45
+PO-80103,1,2025-10-27,REQ-60103,2025-10-27,IT Infrastructure,Network Infrastructure,CyberGuard Ltd,CyberGuard Ltd,164027.31,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45
+PO-80104,1,2025-12-15,REQ-60104,2025-12-15,IT Infrastructure,Cybersecurity,AlphaNetwork Services,AlphaNetwork Services,141235.45,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Dec,2025,Net 45
+PO-80105,1,2025-06-14,REQ-60105,2025-06-14,IT Infrastructure,Network Infrastructure,DataCenter Partners,DataCenter Partners,108564.4,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jun,2025,Net 45
+PO-80106,1,2025-12-18,REQ-60106,2025-12-18,IT Infrastructure,Cloud Hosting,Infinite Computing,Infinite Computing,37221.72,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Dec,2025,Net 45
+PO-80107,1,2026-03-04,REQ-60107,2026-03-04,IT Infrastructure,Data Center,DataCenter Partners,DataCenter Partners,90358.21,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Mar,2026,Net 45
+PO-80108,1,2025-08-10,REQ-60108,2025-08-10,IT Infrastructure,Data Center,NetSystems LLC,NetSystems LLC,62598.46,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Aug,2025,Net 45
+PO-80109,1,2025-12-15,REQ-60109,2025-12-15,IT Infrastructure,Network Infrastructure,CyberGuard Ltd,CyberGuard Ltd,183283.87,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Dec,2025,Net 45
+PO-80110,1,2026-04-19,REQ-60110,2026-04-19,IT Infrastructure,End User Computing,TechGlobal Inc,TechGlobal Inc,167172.72,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Apr,2026,Net 45
+PO-80111,1,2026-01-23,REQ-60111,2026-01-23,IT Infrastructure,Cloud Hosting,DeltaStorage Systems,DeltaStorage Systems,127480.25,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
+PO-80112,1,2025-09-23,REQ-60112,2025-09-23,IT Infrastructure,Cybersecurity,NetSystems LLC,NetSystems LLC,127053.51,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Sep,2025,Net 45
+PO-80113,1,2026-04-15,REQ-60113,2026-04-15,IT Infrastructure,Data Center,DeltaStorage Systems,DeltaStorage Systems,188618.89,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Apr,2026,Net 45
+PO-80114,1,2025-06-10,REQ-60114,2025-06-10,IT Infrastructure,Network Infrastructure,CloudServe Group,CloudServe Group,84840.45,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jun,2025,Net 45
+PO-80115,1,2025-11-13,REQ-60115,2025-11-13,IT Infrastructure,Cloud Hosting,DeltaStorage Systems,DeltaStorage Systems,127171.67,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Nov,2025,Net 45
+PO-80116,1,2025-11-28,REQ-60116,2025-11-28,IT Infrastructure,Network Infrastructure,CloudServe Group,CloudServe Group,137499.6,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Nov,2025,Net 45
+PO-80117,1,2025-10-04,REQ-60117,2025-10-04,IT Infrastructure,Data Center,Infinite Computing,Infinite Computing,110707.99,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45
+PO-80118,1,2025-11-23,REQ-60118,2025-11-23,IT Infrastructure,Cybersecurity,SecureShield Tech,SecureShield Tech,168528.05,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Nov,2025,Net 45
+PO-80119,1,2026-03-20,REQ-60119,2026-03-20,IT Infrastructure,Cybersecurity,DataCenter Partners,DataCenter Partners,77788.5,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Mar,2026,Net 45
+PO-80120,1,2025-09-18,REQ-60120,2025-09-18,IT Infrastructure,Cloud Hosting,Endpoint Solutions Corp,Endpoint Solutions Corp,199768.37,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Sep,2025,Net 45
+PO-80121,1,2026-02-16,REQ-60121,2026-02-16,IT Infrastructure,Data Center,Infinite Computing,Infinite Computing,102290.79,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Feb,2026,Net 45
+PO-80122,1,2026-03-13,REQ-60122,2026-03-13,IT Infrastructure,Data Center,Infinite Computing,Infinite Computing,114503.57,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Mar,2026,Net 45
+PO-80123,1,2025-06-24,REQ-60123,2025-06-24,IT Infrastructure,Cloud Hosting,TechGlobal Inc,TechGlobal Inc,122284.53,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jun,2025,Net 45
+PO-80124,1,2025-10-11,REQ-60124,2025-10-11,IT Infrastructure,End User Computing,AlphaNetwork Services,AlphaNetwork Services,166786.56,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45
+PO-80125,1,2026-03-21,REQ-60125,2026-03-21,IT Infrastructure,End User Computing,Endpoint Solutions Corp,Endpoint Solutions Corp,137402.22,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Mar,2026,Net 45
+PO-80126,1,2025-09-30,REQ-60126,2025-09-30,IT Infrastructure,Network Infrastructure,TechGlobal Inc,TechGlobal Inc,98260.65,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Sep,2025,Net 45
+PO-80127,1,2025-04-25,REQ-60127,2025-04-25,IT Infrastructure,Cloud Hosting,AlphaNetwork Services,AlphaNetwork Services,36007.75,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Apr,2025,Net 45
+PO-80128,1,2025-12-01,REQ-60128,2025-12-01,IT Infrastructure,Cloud Hosting,DataCenter Partners,DataCenter Partners,195289.07,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Dec,2025,Net 45
+PO-80129,1,2026-01-07,REQ-60129,2026-01-07,IT Infrastructure,Network Infrastructure,NetSystems LLC,NetSystems LLC,27644.96,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
+PO-80130,1,2026-03-03,REQ-60130,2026-03-03,IT Infrastructure,Network Infrastructure,NetSystems LLC,NetSystems LLC,115481.7,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Mar,2026,Net 45
+PO-80131,1,2025-05-02,REQ-60131,2025-05-02,IT Infrastructure,End User Computing,TechGlobal Inc,TechGlobal Inc,23382.56,USD,IT,CC-IT-101,Jane Doe,Monthly Services,May,2025,Net 45
+PO-80132,1,2026-01-06,REQ-60132,2026-01-06,IT Infrastructure,Cybersecurity,SecureShield Tech,SecureShield Tech,55986.31,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
+PO-80133,1,2025-05-14,REQ-60133,2025-05-14,IT Infrastructure,Cloud Hosting,Endpoint Solutions Corp,Endpoint Solutions Corp,134127.21,USD,IT,CC-IT-101,Jane Doe,Monthly Services,May,2025,Net 45
+PO-80134,1,2026-03-15,REQ-60134,2026-03-15,IT Infrastructure,End User Computing,NetSystems LLC,NetSystems LLC,18260.26,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Mar,2026,Net 45
+PO-80135,1,2025-10-17,REQ-60135,2025-10-17,IT Infrastructure,Network Infrastructure,DataCenter Partners,DataCenter Partners,22611.75,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45
+PO-80136,1,2026-01-24,REQ-60136,2026-01-24,IT Infrastructure,Network Infrastructure,NetSystems LLC,NetSystems LLC,35674.0,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
+PO-80137,1,2025-12-30,REQ-60137,2025-12-30,IT Infrastructure,Cloud Hosting,AlphaNetwork Services,AlphaNetwork Services,22160.45,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Dec,2025,Net 45
+PO-80138,1,2025-07-02,REQ-60138,2025-07-02,IT Infrastructure,End User Computing,SecureShield Tech,SecureShield Tech,113281.68,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jul,2025,Net 45
+PO-80139,1,2026-02-24,REQ-60139,2026-02-24,IT Infrastructure,Cloud Hosting,Infinite Computing,Infinite Computing,138519.95,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Feb,2026,Net 45
+PO-80140,1,2026-02-21,REQ-60140,2026-02-21,IT Infrastructure,Cloud Hosting,AlphaNetwork Services,AlphaNetwork Services,167109.56,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Feb,2026,Net 45
+PO-80141,1,2026-03-11,REQ-60141,2026-03-11,IT Infrastructure,Cybersecurity,TechGlobal Inc,TechGlobal Inc,119170.46,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Mar,2026,Net 45
+PO-80142,1,2025-08-17,REQ-60142,2025-08-17,IT Infrastructure,Cybersecurity,DeltaStorage Systems,DeltaStorage Systems,61737.36,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Aug,2025,Net 45
+PO-80143,1,2025-05-01,REQ-60143,2025-05-01,IT Infrastructure,Data Center,TechGlobal Inc,TechGlobal Inc,146036.73,USD,IT,CC-IT-101,Jane Doe,Monthly Services,May,2025,Net 45
+PO-80144,1,2026-03-31,REQ-60144,2026-03-31,IT Infrastructure,Network Infrastructure,NetSystems LLC,NetSystems LLC,44196.71,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Mar,2026,Net 45
+PO-80145,1,2025-06-08,REQ-60145,2025-06-08,IT Infrastructure,End User Computing,DataCenter Partners,DataCenter Partners,34795.72,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jun,2025,Net 45
+PO-80146,1,2025-12-14,REQ-60146,2025-12-14,IT Infrastructure,Cybersecurity,Infinite Computing,Infinite Computing,34181.34,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Dec,2025,Net 45
+PO-80147,1,2025-09-22,REQ-60147,2025-09-22,IT Infrastructure,End User Computing,SecureShield Tech,SecureShield Tech,61108.44,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Sep,2025,Net 45
+PO-80148,1,2026-01-14,REQ-60148,2026-01-14,IT Infrastructure,Cloud Hosting,TechGlobal Inc,TechGlobal Inc,69859.12,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Jan,2026,Net 45
+PO-80149,1,2025-10-17,REQ-60149,2025-10-17,IT Infrastructure,End User Computing,AlphaNetwork Services,AlphaNetwork Services,84565.25,USD,IT,CC-IT-101,Jane Doe,Monthly Services,Oct,2025,Net 45

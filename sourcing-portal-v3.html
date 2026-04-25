@@ -1,0 +1,1195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agentic AI Sourcing Portal — System 2</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Mono:wght@400;500&display=swap');
+
+  :root {
+    --navy:#0f2044;--navy-mid:#1a3460;--navy-light:#2a4a7f;
+    --accent:#1d6fa8;--accent-bright:#2389cc;
+    --teal:#0e8e7a;--teal-light:#e0f4f0;
+    --amber:#d97706;--amber-light:#fef3c7;
+    --green:#16a34a;--green-light:#dcfce7;
+    --red:#dc2626;--red-light:#fee2e2;
+    --purple:#7c3aed;--purple-light:#ede9fe;
+    --gray-50:#f8fafc;--gray-100:#f1f5f9;--gray-200:#e2e8f0;
+    --gray-300:#cbd5e1;--gray-400:#94a3b8;--gray-500:#64748b;
+    --gray-600:#475569;--gray-700:#334155;--gray-800:#1e293b;--gray-900:#0f172a;
+    --white:#ffffff;
+    --radius:8px;--radius-lg:12px;
+    --shadow-sm:0 1px 3px rgba(0,0,0,.08);--shadow:0 4px 12px rgba(0,0,0,.10);--shadow-lg:0 8px 24px rgba(0,0,0,.14);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'DM Sans',sans-serif;background:var(--gray-50);color:var(--gray-800);font-size:14px;line-height:1.6;}
+
+  /* ── TOP HEADER ── */
+  .top-header{background:var(--navy);color:var(--white);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:56px;border-bottom:1px solid var(--navy-light);}
+  .top-header .logo{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:600;letter-spacing:-.2px;}
+  .top-header .logo-icon{width:28px;height:28px;background:var(--accent-bright);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;}
+  .top-header .meta{display:flex;align-items:center;gap:16px;font-size:12px;color:var(--gray-400);}
+  .badge-system{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:4px;padding:2px 8px;font-size:11px;font-weight:500;color:#a5c8f0;}
+
+  /* ── DTP PROGRESS BAR ── */
+  .dtp-bar{background:var(--navy-mid);padding:0 24px;border-bottom:1px solid rgba(255,255,255,.06);}
+  .dtp-steps{display:flex;}
+  .dtp-step{flex:1;padding:11px 6px 11px 0;display:flex;flex-direction:column;align-items:flex-start;cursor:pointer;position:relative;transition:all .2s;}
+  .dtp-step::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;background:transparent;border-radius:2px 2px 0 0;transition:all .2s;}
+  .dtp-step.active::after{background:#2389cc;}
+  .dtp-step.done::after{background:var(--teal);}
+  .dtp-step-num{font-size:10px;font-weight:600;color:var(--gray-400);letter-spacing:.5px;text-transform:uppercase;margin-bottom:2px;}
+  .dtp-step.active .dtp-step-num{color:#7ec8f5;}
+  .dtp-step.done .dtp-step-num{color:#5fd1b9;}
+  .dtp-step-name{font-size:11px;font-weight:500;color:var(--gray-400);line-height:1.3;}
+  .dtp-step.active .dtp-step-name{color:var(--white);}
+  .dtp-step.done .dtp-step-name{color:#8de0d0;}
+  .dtp-check{display:none;width:13px;height:13px;background:var(--teal);border-radius:50%;font-size:8px;color:white;align-items:center;justify-content:center;margin-top:3px;}
+  .dtp-step.done .dtp-check{display:flex;}
+
+  /* ── MAIN LAYOUT ── */
+  .page-layout{display:flex;min-height:calc(100vh - 128px);}
+
+  /* LEFT SIDEBAR */
+  .sidebar{width:200px;flex-shrink:0;background:var(--white);border-right:1px solid var(--gray-200);padding:16px 0;position:sticky;top:0;height:calc(100vh - 128px);overflow-y:auto;}
+  .sidebar-section{padding:0 12px;margin-bottom:20px;}
+  .sidebar-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--gray-400);margin-bottom:7px;padding:0 4px;}
+  .sidebar-item{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:var(--radius);cursor:pointer;transition:all .15s;color:var(--gray-600);font-size:12px;}
+  .sidebar-item:hover{background:var(--gray-100);}
+  .sidebar-item.active{background:#e8f2fa;color:var(--accent);font-weight:500;}
+  .sidebar-item .dot{width:6px;height:6px;border-radius:50%;background:var(--gray-300);flex-shrink:0;}
+  .sidebar-item.active .dot{background:var(--accent);}
+  .sidebar-item.done .dot{background:var(--teal);}
+
+  /* MAIN CONTENT */
+  .main-content{flex:1;padding:22px 24px;min-width:0;overflow-x:hidden;}
+
+  /* ── PROCURABOT CHAT PANEL ── */
+  .chat-panel{width:300px;flex-shrink:0;background:var(--white);border-left:1px solid var(--gray-200);display:flex;flex-direction:column;height:calc(100vh - 128px);position:sticky;top:0;}
+  .chat-header{background:var(--navy);padding:12px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+  .chat-header-left{display:flex;align-items:center;gap:9px;}
+  .chat-bot-avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--accent-bright),var(--teal));display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:white;flex-shrink:0;}
+  .chat-header-info h3{font-size:13px;font-weight:600;color:white;margin-bottom:1px;}
+  .chat-header-info p{font-size:10px;color:rgba(255,255,255,.5);}
+  .chat-online-dot{width:7px;height:7px;border-radius:50%;background:#4ade80;box-shadow:0 0 0 2px rgba(74,222,128,.25);}
+
+  .chat-messages{flex:1;overflow-y:auto;padding:12px 10px;display:flex;flex-direction:column;gap:10px;background:var(--gray-50);}
+  .chat-msg{display:flex;flex-direction:column;gap:3px;max-width:93%;}
+  .chat-msg.bot{align-self:flex-start;}
+  .chat-msg.user{align-self:flex-end;}
+  .chat-bubble{padding:8px 11px;border-radius:12px;font-size:12px;line-height:1.5;}
+  .chat-msg.bot .chat-bubble{background:var(--white);color:var(--gray-700);border:1px solid var(--gray-200);border-bottom-left-radius:3px;}
+  .chat-msg.user .chat-bubble{background:var(--accent);color:white;border-bottom-right-radius:3px;}
+  .chat-meta{font-size:10px;color:var(--gray-400);padding:0 3px;}
+  .chat-msg.user .chat-meta{text-align:right;}
+
+  /* Like/Dislike */
+  .chat-feedback{display:flex;align-items:center;gap:4px;padding:0 3px;margin-top:1px;}
+  .chat-fb-btn{background:none;border:1px solid var(--gray-200);border-radius:4px;padding:2px 7px;cursor:pointer;font-size:11px;color:var(--gray-500);transition:all .15s;display:flex;align-items:center;gap:3px;font-family:inherit;}
+  .chat-fb-btn:hover{background:var(--gray-100);}
+  .chat-fb-btn.liked{background:#dcfce7;border-color:var(--green);color:var(--green);}
+  .chat-fb-btn.disliked{background:var(--red-light);border-color:var(--red);color:var(--red);}
+  .chat-fb-count{font-size:10px;color:var(--gray-400);}
+
+  /* Typing */
+  .typing-indicator{align-self:flex-start;}
+  .typing-dots{display:flex;align-items:center;gap:3px;padding:10px 14px;background:var(--white);border:1px solid var(--gray-200);border-radius:12px;border-bottom-left-radius:3px;}
+  .typing-dot{width:5px;height:5px;border-radius:50%;background:var(--gray-400);animation:typingBounce 1.2s infinite;}
+  .typing-dot:nth-child(2){animation-delay:.2s;}
+  .typing-dot:nth-child(3){animation-delay:.4s;}
+  @keyframes typingBounce{0%,80%,100%{transform:translateY(0);}40%{transform:translateY(-5px);}}
+
+  /* Suggested prompts */
+  .chat-suggestions{padding:8px 10px;background:var(--white);border-top:1px solid var(--gray-100);flex-shrink:0;}
+  .chat-sug-label{font-size:10px;font-weight:600;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;}
+  .chat-chips{display:flex;flex-wrap:wrap;gap:4px;}
+  .chat-chip{padding:3px 9px;background:var(--gray-100);border:1px solid var(--gray-200);border-radius:20px;font-size:11px;color:var(--gray-600);cursor:pointer;transition:all .15s;white-space:nowrap;}
+  .chat-chip:hover{background:#e8f2fa;border-color:var(--accent);color:var(--accent);}
+
+  /* Input */
+  .chat-input-area{padding:8px 10px;background:var(--white);border-top:1px solid var(--gray-200);display:flex;align-items:flex-end;gap:7px;flex-shrink:0;}
+  .chat-input-area textarea{flex:1;border:1px solid var(--gray-300);border-radius:var(--radius);padding:7px 10px;font-size:12px;font-family:inherit;resize:none;min-height:34px;max-height:90px;color:var(--gray-800);background:var(--gray-50);transition:border-color .15s;}
+  .chat-input-area textarea:focus{outline:none;border-color:var(--accent);background:white;box-shadow:0 0 0 2px rgba(29,111,168,.1);}
+  .chat-send-btn{width:32px;height:32px;background:var(--accent);color:white;border:none;border-radius:var(--radius);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;font-size:13px;}
+  .chat-send-btn:hover{background:var(--accent-bright);}
+
+  /* Performance bar */
+  .chat-perf-bar{padding:5px 10px;background:var(--navy);border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+  .chat-perf-stat{display:flex;align-items:center;gap:4px;font-size:10px;color:rgba(255,255,255,.5);}
+  .perf-num{font-weight:700;font-size:11px;}
+  .perf-num.g{color:#4ade80;}
+  .perf-num.r{color:#f87171;}
+  .perf-num.w{color:#fbbf24;}
+  .perf-divider{width:1px;height:14px;background:rgba(255,255,255,.12);}
+
+  /* ── DTP ACTION BAR ── */
+  .dtp-action-bar{background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-lg);padding:14px 18px;margin-top:22px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:var(--shadow-sm);}
+  .action-left{display:flex;align-items:center;gap:8px;}
+  .action-right{display:flex;align-items:center;gap:8px;}
+  .action-status{font-size:11px;color:var(--gray-400);display:flex;align-items:center;gap:5px;padding:0 6px;}
+  .action-status .sdot{width:6px;height:6px;border-radius:50%;}
+
+  /* Action bar buttons */
+  .btn-approve{background:var(--green);color:white;border:none;display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;}
+  .btn-approve:hover{background:#15803d;}
+  .btn-approve.approved{background:#15803d;cursor:default;opacity:.85;}
+  .btn-rework{background:var(--white);color:var(--amber);border:1.5px solid var(--amber);display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;}
+  .btn-rework:hover{background:var(--amber-light);}
+  .btn-continue{background:var(--accent);color:white;border:none;display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;}
+  .btn-continue:hover{background:var(--accent-bright);}
+  .btn-back-nav{background:var(--white);color:var(--gray-600);border:1px solid var(--gray-300);display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:var(--radius);font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .15s;}
+  .btn-back-nav:hover{background:var(--gray-100);}
+
+  /* ── CARDS ── */
+  .card{background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-lg);padding:18px 20px;margin-bottom:16px;box-shadow:var(--shadow-sm);}
+  .card-title{font-size:14px;font-weight:600;color:var(--gray-800);margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+  .card-title .icon{width:22px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11px;}
+
+  /* ── FORMS ── */
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .form-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
+  .form-group{display:flex;flex-direction:column;gap:4px;}
+  .form-group.full{grid-column:1/-1;}
+  label{font-size:12px;font-weight:500;color:var(--gray-600);}
+  input[type=text],input[type=date],input[type=number],input[type=email],select,textarea{border:1px solid var(--gray-300);border-radius:var(--radius);padding:7px 11px;font-size:13px;font-family:inherit;color:var(--gray-800);background:var(--white);transition:border-color .15s;width:100%;}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(29,111,168,.1);}
+  textarea{resize:vertical;min-height:76px;}
+
+  /* ── BUTTONS (inline) ── */
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--radius);font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;border:none;font-family:inherit;text-decoration:none;}
+  .btn-primary{background:var(--accent);color:var(--white);}
+  .btn-primary:hover{background:var(--accent-bright);}
+  .btn-secondary{background:var(--white);color:var(--gray-700);border:1px solid var(--gray-300);}
+  .btn-secondary:hover{background:var(--gray-100);}
+  .btn-success{background:var(--green);color:var(--white);}
+  .btn-success:hover{background:#15803d;}
+  .btn-warning{background:var(--amber);color:var(--white);}
+  .btn-danger{background:var(--red);color:var(--white);}
+  .btn-teal{background:var(--teal);color:var(--white);}
+  .btn-sm{padding:4px 9px;font-size:12px;}
+  .btn-group{display:flex;gap:7px;flex-wrap:wrap;margin-top:14px;}
+
+  /* ── TABLE ── */
+  .data-table{width:100%;border-collapse:collapse;font-size:13px;}
+  .data-table th{background:var(--gray-50);border:1px solid var(--gray-200);padding:9px 11px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-500);}
+  .data-table td{border:1px solid var(--gray-200);padding:9px 11px;vertical-align:top;color:var(--gray-700);}
+  .data-table tr:hover td{background:var(--gray-50);}
+  .data-table input{border:1px solid var(--gray-200);border-radius:5px;}
+
+  /* ── BADGES ── */
+  .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:500;white-space:nowrap;}
+  .badge-blue{background:#dbeafe;color:#1d4ed8;}
+  .badge-green{background:var(--green-light);color:var(--green);}
+  .badge-amber{background:var(--amber-light);color:var(--amber);}
+  .badge-red{background:var(--red-light);color:var(--red);}
+  .badge-gray{background:var(--gray-100);color:var(--gray-600);}
+  .badge-purple{background:var(--purple-light);color:var(--purple);}
+  .badge-teal{background:var(--teal-light);color:var(--teal);}
+
+  /* ── ALERTS ── */
+  .alert{padding:11px 14px;border-radius:var(--radius);font-size:13px;margin-bottom:14px;display:flex;gap:9px;}
+  .alert-info{background:#eff6ff;border-left:3px solid #3b82f6;color:#1e40af;}
+  .alert-success{background:var(--green-light);border-left:3px solid var(--green);color:#14532d;}
+  .alert-warning{background:var(--amber-light);border-left:3px solid var(--amber);color:#78350f;}
+
+  /* ── DTP INFO BOX ── */
+  .dtp-info{background:linear-gradient(135deg,var(--navy) 0%,var(--navy-mid) 100%);border-radius:var(--radius-lg);padding:14px 18px;color:var(--white);margin-bottom:16px;display:flex;align-items:center;gap:14px;}
+  .dtp-info-num{font-size:26px;font-weight:700;color:rgba(255,255,255,.22);font-family:'DM Mono',monospace;flex-shrink:0;}
+  .dtp-info-text h2{font-size:14px;font-weight:600;margin-bottom:2px;}
+  .dtp-info-text p{font-size:12px;color:rgba(255,255,255,.6);}
+
+  /* ── RFP SECTIONS ── */
+  .rfp-section-item{border:1px solid var(--gray-200);border-radius:var(--radius);margin-bottom:7px;overflow:hidden;}
+  .rfp-section-header{background:var(--gray-50);padding:9px 13px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;}
+  .rfp-section-header h4{font-size:13px;font-weight:500;color:var(--gray-700);}
+  .rfp-section-body{padding:12px;display:none;}
+  .rfp-section-body.open{display:block;}
+
+  /* ── DOCUMENT CARDS ── */
+  .doc-card{border:1px solid var(--gray-200);border-radius:var(--radius);padding:12px 14px;display:flex;align-items:flex-start;justify-content:space-between;gap:11px;margin-bottom:7px;background:var(--white);}
+  .doc-icon{width:34px;height:34px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;}
+  .doc-info h4{font-size:13px;font-weight:600;margin-bottom:2px;}
+  .doc-info p{font-size:12px;color:var(--gray-500);}
+  .doc-actions{display:flex;gap:5px;align-items:flex-start;flex-shrink:0;}
+
+  /* ── SUPPLIER EVAL ── */
+  .supplier-card{border:1px solid var(--gray-200);border-radius:var(--radius-lg);padding:14px;margin-bottom:10px;background:var(--white);}
+  .supplier-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+  .supplier-name{font-size:14px;font-weight:600;color:var(--gray-900);}
+  .score-bar{display:flex;align-items:center;gap:7px;margin-top:5px;}
+  .score-label{font-size:11px;color:var(--gray-500);width:140px;}
+  .score-track{flex:1;height:6px;background:var(--gray-200);border-radius:3px;overflow:hidden;}
+  .score-fill{height:100%;border-radius:3px;background:var(--accent);transition:width .6s ease;}
+  .score-val{font-size:11px;font-weight:600;color:var(--gray-700);width:28px;text-align:right;}
+
+  /* ── CHECK ROWS ── */
+  .check-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--gray-100);}
+  .check-row:last-child{border-bottom:none;}
+  .check-row input[type=checkbox]{width:16px;height:16px;cursor:pointer;}
+  .check-row label{margin:0;cursor:pointer;font-size:13px;color:var(--gray-700);}
+
+  /* ── CRITERIA ── */
+  .criteria-table input[type=text]{min-width:110px;}
+  .criteria-table input[type=number]{width:72px;}
+  .weightage-total{text-align:right;padding:7px 11px;font-size:13px;font-weight:600;}
+  .weightage-total.valid{color:var(--green);}
+  .weightage-total.invalid{color:var(--red);}
+
+  /* ── UPLOAD AREA ── */
+  .upload-area{border:2px dashed var(--gray-300);border-radius:var(--radius-lg);padding:20px;text-align:center;cursor:pointer;transition:all .2s;background:var(--gray-50);}
+  .upload-area:hover{border-color:var(--accent);background:#f0f7ff;}
+
+  /* ── TIMELINE ── */
+  .timeline{position:relative;padding-left:22px;}
+  .timeline::before{content:'';position:absolute;left:6px;top:0;bottom:0;width:1px;background:var(--gray-200);}
+  .timeline-item{position:relative;margin-bottom:14px;}
+  .timeline-dot{position:absolute;left:-18px;top:3px;width:10px;height:10px;border-radius:50%;background:var(--gray-300);border:2px solid var(--white);}
+  .timeline-dot.done{background:var(--teal);}
+  .timeline-dot.active{background:var(--accent);}
+  .timeline-title{font-size:13px;font-weight:500;color:var(--gray-800);}
+  .timeline-meta{font-size:12px;color:var(--gray-400);}
+
+  /* ── SYSTEM MAP ── */
+  .system-map-table th{background:var(--navy);color:var(--white);}
+  .sys-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500;margin:2px;background:#dbeafe;color:#1e3a8a;}
+
+  /* ── MISC ── */
+  .divider{border:none;border-top:1px solid var(--gray-200);margin:16px 0;}
+  .mt-4{margin-top:14px;}
+  .flex{display:flex;}
+  .gap-2{gap:8px;}
+  .items-center{align-items:center;}
+  .justify-between{justify-content:space-between;}
+  .published-banner{background:var(--green);color:var(--white);padding:10px 18px;border-radius:var(--radius);font-size:13px;font-weight:500;display:none;align-items:center;gap:8px;margin-bottom:14px;}
+  .published-banner.show{display:flex;}
+
+  /* ── MODAL ── */
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center;}
+  .modal-overlay.open{display:flex;}
+  .modal{background:var(--white);border-radius:var(--radius-lg);padding:22px;width:460px;box-shadow:var(--shadow-lg);}
+  .modal h3{font-size:16px;font-weight:600;margin-bottom:7px;}
+  .modal p{font-size:13px;color:var(--gray-500);margin-bottom:14px;}
+  .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;}
+
+  /* ── REWORK MODAL ── */
+  .rework-modal{background:var(--white);border-radius:var(--radius-lg);padding:22px;width:500px;box-shadow:var(--shadow-lg);}
+  .rework-modal h3{font-size:15px;font-weight:600;color:var(--amber);margin-bottom:6px;display:flex;align-items:center;gap:7px;}
+  .rework-modal p{font-size:13px;color:var(--gray-500);margin-bottom:12px;}
+
+  /* FOOTER */
+  .page-footer{background:var(--white);border-top:1px solid var(--gray-200);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;}
+  .page-footer .req-id{font-family:'DM Mono',monospace;font-size:12px;color:var(--gray-400);}
+
+  /* SECTION PANEL */
+  .section-panel{display:none;}
+  .section-panel.active{display:block;}
+
+  @media print{.sidebar,.chat-panel,.top-header,.dtp-bar,.page-footer,.btn,.btn-group,.dtp-action-bar{display:none!important;}.main-content{padding:0;}}
+</style>
+</head>
+<body>
+
+<!-- TOP HEADER -->
+<div class="top-header">
+  <div class="logo">
+    <div class="logo-icon">AI</div>
+    Agentic AI Sourcing Portal
+    <span class="badge-system">System 2 — S2C Execution</span>
+  </div>
+  <div class="meta">
+    <span>IT Infrastructure</span>
+    <span style="color:var(--navy-light)">|</span>
+    <span id="header-date"></span>
+    <span style="color:var(--navy-light)">|</span>
+    <span>J. Mitchell</span>
+    <span style="color:var(--navy-light)">|</span>
+    <span style="color:#4ade80;font-size:11px;">● ProcuraBot Active</span>
+  </div>
+</div>
+
+<!-- DTP PROGRESS BAR -->
+<div class="dtp-bar">
+  <div class="dtp-steps">
+    <div class="dtp-step done" onclick="goTo('dtp1')" id="step-dtp1">
+      <div class="dtp-step-num">DTP-01</div>
+      <div class="dtp-step-name">Sourcing Pathway</div>
+      <div class="dtp-check">✓</div>
+    </div>
+    <div class="dtp-step active" onclick="goTo('dtp2')" id="step-dtp2">
+      <div class="dtp-step-num">DTP-02</div>
+      <div class="dtp-step-name">Evaluation Setup</div>
+      <div class="dtp-check">✓</div>
+    </div>
+    <div class="dtp-step" onclick="goTo('dtp3')" id="step-dtp3">
+      <div class="dtp-step-num">DTP-03</div>
+      <div class="dtp-step-name">RFP Issue</div>
+      <div class="dtp-check">✓</div>
+    </div>
+    <div class="dtp-step" onclick="goTo('dtp4')" id="step-dtp4">
+      <div class="dtp-step-num">DTP-04</div>
+      <div class="dtp-step-name">Evaluate & Negotiate</div>
+      <div class="dtp-check">✓</div>
+    </div>
+    <div class="dtp-step" onclick="goTo('dtp5')" id="step-dtp5">
+      <div class="dtp-step-num">DTP-05</div>
+      <div class="dtp-step-name">Contracting</div>
+      <div class="dtp-check">✓</div>
+    </div>
+    <div class="dtp-step" onclick="goTo('dtp6')" id="step-dtp6">
+      <div class="dtp-step-num">DTP-06</div>
+      <div class="dtp-step-name">Implementation</div>
+      <div class="dtp-check">✓</div>
+    </div>
+  </div>
+</div>
+
+<!-- THREE-COLUMN LAYOUT: sidebar | main | chat -->
+<div class="page-layout">
+
+<!-- LEFT SIDEBAR -->
+<div class="sidebar">
+  <div class="sidebar-section">
+    <div class="sidebar-label">Navigation</div>
+    <div class="sidebar-item active" onclick="goTo('dtp1')" id="nav-dtp1"><span class="dot"></span>DTP-01: Pathway</div>
+    <div class="sidebar-item" onclick="goTo('dtp2')" id="nav-dtp2"><span class="dot"></span>DTP-02: Eval Setup</div>
+    <div class="sidebar-item" onclick="goTo('dtp3')" id="nav-dtp3"><span class="dot"></span>DTP-03: RFP Issue</div>
+    <div class="sidebar-item" onclick="goTo('dtp4')" id="nav-dtp4"><span class="dot"></span>DTP-04: Evaluate</div>
+    <div class="sidebar-item" onclick="goTo('dtp5')" id="nav-dtp5"><span class="dot"></span>DTP-05: Contract</div>
+    <div class="sidebar-item" onclick="goTo('dtp6')" id="nav-dtp6"><span class="dot"></span>DTP-06: Implement</div>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-label">Case Info</div>
+    <div style="padding:0 4px;font-size:12px;color:var(--gray-500);line-height:1.9;">
+      <div><b style="color:var(--gray-700)">Req ID:</b> SR-2026-0142</div>
+      <div><b style="color:var(--gray-700)">Category:</b> IT Infra</div>
+      <div><b style="color:var(--gray-700)">Value:</b> $4.2M</div>
+      <div><b style="color:var(--gray-700)">Status:</b> <span class="badge badge-blue" style="font-size:10px;">In Progress</span></div>
+    </div>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-label">Tools</div>
+    <div style="padding:0 4px;display:flex;flex-direction:column;gap:5px;">
+      <button class="btn btn-secondary btn-sm" onclick="goTo('systems')" style="width:100%;justify-content:center;">System Map</button>
+      <button class="btn btn-secondary btn-sm" onclick="window.print()" style="width:100%;justify-content:center;">Print View</button>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN CONTENT -->
+<div class="main-content">
+
+  <!-- ═══ DTP-01 ═══ -->
+  <div class="section-panel active" id="panel-dtp1">
+    <div class="dtp-info">
+      <div class="dtp-info-num">01</div>
+      <div class="dtp-info-text">
+        <h2>DTP-01 — Sourcing Pathway Selection</h2>
+        <p>Define the sourcing request, confirm pathway, and identify the initial supplier pool.</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="icon" style="background:#dbeafe;">📋</div>New Sourcing Request Details</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Sourcing Request ID</label><input type="text" value="SR-2026-0142"/></div>
+        <div class="form-group"><label>Request Date</label><input type="date" value="2026-04-10"/></div>
+        <div class="form-group"><label>Category</label><input type="text" value="IT Infrastructure"/></div>
+        <div class="form-group"><label>Sub-Category</label><input type="text" value="IT Support Services"/></div>
+        <div class="form-group"><label>Requestor Name</label><input type="text" value="Maria Torres"/></div>
+        <div class="form-group"><label>Business Unit</label><input type="text" value="Global Operations"/></div>
+        <div class="form-group"><label>Estimated Annual Value (USD)</label><input type="number" value="4200000"/></div>
+        <div class="form-group"><label>Contract Term (months)</label><input type="number" value="36"/></div>
+        <div class="form-group"><label>Required Start Date</label><input type="date" value="2026-08-01"/></div>
+        <div class="form-group"><label>Implementation Urgency</label>
+          <select><option>3–6 months (High)</option><option selected>6–12 months (Medium)</option><option>12+ months (Standard)</option></select>
+        </div>
+        <div class="form-group full"><label>Scope Description</label>
+          <textarea>End-to-end IT infrastructure support services including Level 1–3 helpdesk, network operations, server management, and 24/7 on-call support for 15,000+ end users across North America and EMEA.</textarea>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="icon" style="background:#d1fae5;">🔀</div>AI-Recommended Sourcing Pathway</div>
+      <div class="alert alert-info">AI Supervisor Agent recommends: <strong>Competitive RFP</strong> — based on spend threshold ($4.2M), no preferred supplier coverage, and 6–12 month lead time.</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Selected Pathway</label>
+          <select><option selected>Competitive RFP (Recommended)</option><option>Limited Tender</option><option>Direct Award (Sole Source)</option><option>Renewal / Extension</option></select>
+        </div>
+        <div class="form-group"><label>Pathway Justification</label><input type="text" value="Spend exceeds $500K threshold; no preferred supplier; new scope"/></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="icon" style="background:#ede9fe;">🏢</div>Initial Supplier Longlist (AI-Identified)</div>
+      <table class="data-table"><thead><tr><th>Include</th><th>Supplier Name</th><th>Preferred Status</th><th>Risk Rating</th><th>Prior Engagement</th></tr></thead>
+      <tbody>
+        <tr><td><input type="checkbox" checked></td><td>TechServe Global Inc.</td><td><span class="badge badge-green">Preferred</span></td><td><span class="badge badge-green">Low</span></td><td>Yes – 2023</td></tr>
+        <tr><td><input type="checkbox" checked></td><td>Nexus IT Solutions</td><td><span class="badge badge-blue">Approved</span></td><td><span class="badge badge-amber">Medium</span></td><td>No</td></tr>
+        <tr><td><input type="checkbox" checked></td><td>Infra Corp Americas</td><td><span class="badge badge-blue">Approved</span></td><td><span class="badge badge-green">Low</span></td><td>Yes – 2021</td></tr>
+        <tr><td><input type="checkbox"></td><td>CloudBridge Systems</td><td><span class="badge badge-gray">Non-Preferred</span></td><td><span class="badge badge-amber">Medium</span></td><td>No</td></tr>
+        <tr><td><input type="checkbox" checked></td><td>Apex Support Services</td><td><span class="badge badge-blue">Approved</span></td><td><span class="badge badge-green">Low</span></td><td>No</td></tr>
+      </tbody></table>
+    </div>
+    <!-- DTP-01 ACTION BAR -->
+    <div class="dtp-action-bar">
+      <div class="action-left">
+        <button class="btn-approve" id="approve-dtp1" onclick="approvePhase('dtp1')">✅ Save & Approve DTP-01</button>
+        <button class="btn-rework" onclick="openRework('DTP-01 — Sourcing Pathway Selection')">✏️ Add Feedback & Rework</button>
+        <span class="action-status" id="status-dtp1"><span class="sdot" style="background:var(--gray-300)"></span>Pending approval</span>
+      </div>
+      <div class="action-right">
+        <button class="btn-continue" onclick="goTo('dtp2')">Continue to DTP-02 →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ DTP-02 ═══ -->
+  <div class="section-panel" id="panel-dtp2">
+    <div class="dtp-info">
+      <div class="dtp-info-num">02</div>
+      <div class="dtp-info-text">
+        <h2>DTP-02 — Supplier Identification & Evaluation Setup</h2>
+        <p>Set evaluation criteria and define the structure for scoring supplier responses.</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="icon" style="background:#fef3c7;">⚖️</div>Set Evaluation Criteria</div>
+      <div class="alert alert-info">Define the criteria that will be used to evaluate all supplier responses. Weightage must total 100%.</div>
+      <table class="data-table criteria-table" id="criteria-table">
+        <thead><tr><th style="width:22%">Evaluation Criteria</th><th style="width:44%">Description</th><th style="width:12%">Weightage (%)</th><th style="width:12%">Mandatory</th><th style="width:10%">Action</th></tr></thead>
+        <tbody id="criteria-body">
+          <tr><td><input type="text" value="Technical Capability"/></td><td><input type="text" value="Depth of technical expertise, certifications, and service delivery methodology"/></td><td><input type="number" value="30" min="0" max="100" onchange="updateWeight()"/></td><td><input type="checkbox" checked></td><td><button class="btn btn-danger btn-sm" onclick="deleteCriteria(this)">✕</button></td></tr>
+          <tr><td><input type="text" value="Pricing & Commercial Terms"/></td><td><input type="text" value="Total cost of ownership, pricing model flexibility, and payment terms"/></td><td><input type="number" value="25" min="0" max="100" onchange="updateWeight()"/></td><td><input type="checkbox" checked></td><td><button class="btn btn-danger btn-sm" onclick="deleteCriteria(this)">✕</button></td></tr>
+          <tr><td><input type="text" value="Service Level Agreements"/></td><td><input type="text" value="Proposed SLA commitments including response times, uptime guarantees, penalties"/></td><td><input type="number" value="20" min="0" max="100" onchange="updateWeight()"/></td><td><input type="checkbox" checked></td><td><button class="btn btn-danger btn-sm" onclick="deleteCriteria(this)">✕</button></td></tr>
+          <tr><td><input type="text" value="Implementation Plan"/></td><td><input type="text" value="Transition approach, timeline, resource allocation, and risk mitigation"/></td><td><input type="number" value="15" min="0" max="100" onchange="updateWeight()"/></td><td><input type="checkbox"></td><td><button class="btn btn-danger btn-sm" onclick="deleteCriteria(this)">✕</button></td></tr>
+          <tr><td><input type="text" value="Supplier Risk & Compliance"/></td><td><input type="text" value="Financial stability, compliance certifications (ISO, SOC2), and risk profile"/></td><td><input type="number" value="10" min="0" max="100" onchange="updateWeight()"/></td><td><input type="checkbox" checked></td><td><button class="btn btn-danger btn-sm" onclick="deleteCriteria(this)">✕</button></td></tr>
+        </tbody>
+        <tfoot><tr>
+          <td colspan="2" style="padding:7px 11px;"><button class="btn btn-secondary btn-sm" onclick="addCriteria()">+ Add Criterion</button></td>
+          <td colspan="3" class="weightage-total valid" id="weight-total">Total: 100%</td>
+        </tr></tfoot>
+      </table>
+    </div>
+    <!-- DTP-02 ACTION BAR -->
+    <div class="dtp-action-bar">
+      <div class="action-left">
+        <button class="btn-approve" id="approve-dtp2" onclick="approvePhase('dtp2')">✅ Save & Approve DTP-02</button>
+        <button class="btn-rework" onclick="openRework('DTP-02 — Evaluation Setup')">✏️ Add Feedback & Rework</button>
+        <span class="action-status" id="status-dtp2"><span class="sdot" style="background:var(--gray-300)"></span>Pending approval</span>
+      </div>
+      <div class="action-right">
+        <button class="btn-back-nav" onclick="goTo('dtp1')">← Back</button>
+        <button class="btn-continue" onclick="goTo('dtp3')">Continue to DTP-03 →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ DTP-03 ═══ -->
+  <div class="section-panel" id="panel-dtp3">
+    <div class="dtp-info">
+      <div class="dtp-info-num">03</div>
+      <div class="dtp-info-text">
+        <h2>DTP-03 — RFP Preparation & Issue</h2>
+        <p>Configure RFP sections, generate documents, review, and publish to market.</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="icon" style="background:#dbeafe;">📝</div>RFP Configuration & Key Dates</div>
+      <div class="form-grid">
+        <div class="form-group"><label>RFP Title</label><input type="text" value="RFP-2026-IT-0142: IT Infrastructure Support Services"/></div>
+        <div class="form-group"><label>RFP Issue Date</label><input type="date" value="2026-05-01"/></div>
+        <div class="form-group"><label>Clarification Deadline</label><input type="date" value="2026-05-15"/></div>
+        <div class="form-group"><label>Response Due Date</label><input type="date" value="2026-06-01"/></div>
+        <div class="form-group"><label>Evaluation Period</label><input type="text" value="June 2–20, 2026"/></div>
+        <div class="form-group"><label>Supplier Notification Date</label><input type="date" value="2026-06-25"/></div>
+        <div class="form-group"><label>Shortlist for Negotiations</label><input type="date" value="2026-07-01"/></div>
+        <div class="form-group"><label>Expected Award Date</label><input type="date" value="2026-07-31"/></div>
+        <div class="form-group"><label>Contact Person</label><input type="text" value="J. Mitchell — j.mitchell@company.com"/></div>
+        <div class="form-group"><label>Submission Method</label><select><option selected>Secure Portal Upload</option><option>Email</option></select></div>
+        <div class="form-group full"><label>Special Instructions</label><textarea>All responses must be submitted through the secure supplier portal by 5:00 PM EST on the Response Due Date. Late submissions will not be accepted. All pricing must be in USD.</textarea></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="icon" style="background:#d1fae5;">🗂️</div>RFP Sections — Add / Modify / Drop</div>
+      <div id="rfp-sections-list">
+        <div class="rfp-section-item"><div class="rfp-section-header" onclick="toggleSection(this)"><div class="flex items-center gap-2"><input type="checkbox" checked onclick="event.stopPropagation()"><h4>1. Introduction & Company Overview</h4></div><span class="badge badge-green">Included</span></div><div class="rfp-section-body"><textarea style="width:100%;min-height:70px;">[Company Name] is a global healthcare leader operating in 60+ countries. This RFP seeks qualified suppliers to provide comprehensive IT infrastructure support services.</textarea></div></div>
+        <div class="rfp-section-item"><div class="rfp-section-header" onclick="toggleSection(this)"><div class="flex items-center gap-2"><input type="checkbox" checked onclick="event.stopPropagation()"><h4>2. Scope of Services</h4></div><span class="badge badge-green">Included</span></div><div class="rfp-section-body open"><textarea style="width:100%;min-height:70px;">End-to-end IT infrastructure support including Level 1–3 helpdesk, NOC, server and storage management, endpoint management, and 24/7 on-call escalation support for 15,000+ end users in North America and EMEA.</textarea></div></div>
+        <div class="rfp-section-item"><div class="rfp-section-header" onclick="toggleSection(this)"><div class="flex items-center gap-2"><input type="checkbox" checked onclick="event.stopPropagation()"><h4>3. Evaluation Criteria & Scoring</h4></div><span class="badge badge-green">Included</span></div><div class="rfp-section-body"><div class="alert alert-info" style="margin-bottom:7px;">Auto-populated from DTP-02 criteria.</div><table class="data-table" style="font-size:12px;"><thead><tr><th>Criterion</th><th>Weight</th><th>Type</th></tr></thead><tbody><tr><td>Technical Capability</td><td>30%</td><td>Scored</td></tr><tr><td>Pricing & Commercial Terms</td><td>25%</td><td>Scored</td></tr><tr><td>Service Level Agreements</td><td>20%</td><td>Scored</td></tr><tr><td>Implementation Plan</td><td>15%</td><td>Scored</td></tr><tr><td>Supplier Risk & Compliance</td><td>10%</td><td>P/F + Scored</td></tr></tbody></table></div></div>
+        <div class="rfp-section-item"><div class="rfp-section-header" onclick="toggleSection(this)"><div class="flex items-center gap-2"><input type="checkbox" checked onclick="event.stopPropagation()"><h4>4. Key Dates & Submission Requirements</h4></div><span class="badge badge-green">Included</span></div><div class="rfp-section-body"><textarea style="width:100%;min-height:60px;">RFP Issue: May 1, 2026 | Clarification Deadline: May 15 | Response Due: June 1, 2026 | Evaluation: June 2–20 | Notification: June 25. Submit via Secure Portal by 5:00 PM EST.</textarea></div></div>
+        <div class="rfp-section-item"><div class="rfp-section-header" onclick="toggleSection(this)"><div class="flex items-center gap-2"><input type="checkbox" checked onclick="event.stopPropagation()"><h4>5. Contractual Terms & Conditions</h4></div><span class="badge badge-green">Included</span></div><div class="rfp-section-body"><textarea style="width:100%;min-height:60px;">Responses are subject to the company's standard Master Service Agreement (MSA). The company reserves the right to accept or reject any submission. No commitment is made by issuing this RFP.</textarea></div></div>
+        <div class="rfp-section-item"><div class="rfp-section-header" onclick="toggleSection(this)"><div class="flex items-center gap-2"><input type="checkbox" onclick="event.stopPropagation()"><h4>6. Optional: Site Visit / Presentation Requirements</h4></div><span class="badge badge-gray">Excluded</span></div><div class="rfp-section-body"><textarea style="width:100%;min-height:60px;">Shortlisted suppliers may be requested to attend a 60-minute presentation at our headquarters or via video conference.</textarea></div></div>
+      </div>
+      <div class="mt-4"><button class="btn btn-secondary btn-sm" onclick="addSection()">+ Add Custom Section</button></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="icon" style="background:#ede9fe;">📦</div>Generated RFP Package</div>
+      <div class="alert alert-info">AI has drafted all documents. Download, review offline, then Approve or provide Feedback.</div>
+      <div class="doc-card"><div class="doc-icon" style="background:#dbeafe;">📄</div><div class="doc-info"><h4>RFP Main Document</h4><p>Complete RFP including scope, evaluation criteria, key dates — 12 pages</p></div><div class="doc-actions"><button class="btn btn-secondary btn-sm" onclick="downloadDoc('RFP_Main_Document_SR2026-0142.docx')">⬇ Download</button><button class="btn btn-success btn-sm" onclick="approveDoc(this)">Approve</button><button class="btn btn-danger btn-sm" onclick="openFeedback('RFP Main Document')">Reject / Feedback</button></div></div>
+      <div class="doc-card"><div class="doc-icon" style="background:#d1fae5;">📋</div><div class="doc-info"><h4>RFP Response Template</h4><p>Structured supplier response form aligned to evaluation criteria — 8 pages</p></div><div class="doc-actions"><button class="btn btn-secondary btn-sm" onclick="downloadDoc('RFP_Response_Template_SR2026-0142.docx')">⬇ Download</button><button class="btn btn-success btn-sm" onclick="approveDoc(this)">Approve</button><button class="btn btn-danger btn-sm" onclick="openFeedback('RFP Response Template')">Reject / Feedback</button></div></div>
+      <div class="doc-card"><div class="doc-icon" style="background:#fef3c7;">⚖️</div><div class="doc-info"><h4>Standard Master Service Agreement</h4><p>Standard MSA template for IT services engagements — 20 pages</p></div><div class="doc-actions"><button class="btn btn-secondary btn-sm" onclick="downloadDoc('MSA_Template_Standard_IT.docx')">⬇ Download</button><button class="btn btn-success btn-sm" onclick="approveDoc(this)">Approve</button><button class="btn btn-danger btn-sm" onclick="openFeedback('MSA Template')">Reject / Feedback</button></div></div>
+      <div class="doc-card"><div class="doc-icon" style="background:#fee2e2;">📑</div><div class="doc-info"><h4>Statement of Work Template</h4><p>Standard SOW template with service schedules and KPI framework — 10 pages</p></div><div class="doc-actions"><button class="btn btn-secondary btn-sm" onclick="downloadDoc('SOW_Template_IT_Infrastructure.docx')">⬇ Download</button><button class="btn btn-success btn-sm" onclick="approveDoc(this)">Approve</button><button class="btn btn-danger btn-sm" onclick="openFeedback('SOW Template')">Reject / Feedback</button></div></div>
+      <div class="doc-card"><div class="doc-icon" style="background:#ede9fe;">🏆</div><div class="doc-info"><h4>Supplier References Template</h4><p>Reference check questionnaire for nominated referees — 3 pages</p></div><div class="doc-actions"><button class="btn btn-secondary btn-sm" onclick="downloadDoc('References_Template_SR2026-0142.docx')">⬇ Download</button><button class="btn btn-success btn-sm" onclick="approveDoc(this)">Approve</button><button class="btn btn-danger btn-sm" onclick="openFeedback('References Template')">Reject / Feedback</button></div></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="icon" style="background:#d1fae5;">🚀</div>Publish RFP to Market</div>
+      <div class="published-banner" id="published-banner">✅ RFP Published — Status updated to "Published" on <span id="publish-date"></span></div>
+      <div class="form-grid">
+        <div class="form-group"><label>Publish Channel</label><select id="publish-channel"><option selected>Supplier Portal (Ariba)</option><option>Email Invitation</option><option>Both – Portal & Email</option></select></div>
+        <div class="form-group"><label>RFP Status</label><select id="rfp-status"><option>Draft</option><option>Under Review</option><option>Approved – Ready to Publish</option><option>Published</option></select></div>
+      </div>
+      <div class="btn-group"><button class="btn btn-success" onclick="publishRFP()">🚀 Publish RFP to Market</button></div>
+    </div>
+    <!-- DTP-03 ACTION BAR -->
+    <div class="dtp-action-bar">
+      <div class="action-left">
+        <button class="btn-approve" id="approve-dtp3" onclick="approvePhase('dtp3')">✅ Save & Approve DTP-03</button>
+        <button class="btn-rework" onclick="openRework('DTP-03 — RFP Preparation & Issue')">✏️ Add Feedback & Rework</button>
+        <span class="action-status" id="status-dtp3"><span class="sdot" style="background:var(--gray-300)"></span>Pending approval</span>
+      </div>
+      <div class="action-right">
+        <button class="btn-back-nav" onclick="goTo('dtp2')">← Back</button>
+        <button class="btn-continue" onclick="goTo('dtp4')">Continue to DTP-04 →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ DTP-04 ═══ -->
+  <div class="section-panel" id="panel-dtp4">
+    <div class="dtp-info">
+      <div class="dtp-info-num">04</div>
+      <div class="dtp-info-text">
+        <h2>DTP-04 — Evaluation, Negotiation & Award</h2>
+        <p>Upload supplier submissions, run AI evaluation, shortlist, negotiate, and award.</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="icon" style="background:#dbeafe;">📥</div>Enter Suppliers & Upload Responses</div>
+      <table class="data-table" id="supplier-submissions"><thead><tr><th>Supplier Name</th><th>Submission Date</th><th>Files</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>
+        <tr><td>TechServe Global Inc.</td><td>2026-06-01</td><td><span class="badge badge-green">3 files</span></td><td><span class="badge badge-blue">Evaluated</span></td><td><button class="btn btn-secondary btn-sm">View Files</button></td></tr>
+        <tr><td>Nexus IT Solutions</td><td>2026-05-31</td><td><span class="badge badge-green">4 files</span></td><td><span class="badge badge-blue">Evaluated</span></td><td><button class="btn btn-secondary btn-sm">View Files</button></td></tr>
+        <tr><td>Infra Corp Americas</td><td>2026-06-01</td><td><span class="badge badge-green">3 files</span></td><td><span class="badge badge-blue">Evaluated</span></td><td><button class="btn btn-secondary btn-sm">View Files</button></td></tr>
+        <tr><td>Apex Support Services</td><td>2026-06-01</td><td><span class="badge badge-green">2 files</span></td><td><span class="badge badge-blue">Evaluated</span></td><td><button class="btn btn-secondary btn-sm">View Files</button></td></tr>
+      </tbody></table>
+      <div class="mt-4"><div class="flex gap-2 items-center">
+        <input type="text" id="new-supplier-name" placeholder="Supplier name..." style="width:200px;"/>
+        <div class="upload-area" style="flex:1;padding:8px 14px;text-align:left;display:flex;align-items:center;gap:8px;" onclick="this.querySelector('input').click()"><input type="file" multiple style="display:none" onchange="handleUpload(this)"><span style="font-size:12px;color:var(--gray-500)">📎 Upload supplier response files (PDF, DOCX, XLSX)</span></div>
+        <button class="btn btn-primary btn-sm" onclick="addSupplier()">+ Add Supplier</button>
+      </div></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="icon" style="background:#d1fae5;">🤖</div>AI Evaluation Results</div>
+      <div class="alert alert-success">Supplier Scoring Agent has evaluated all 4 responses based on DTP-02 criteria.</div>
+      <div class="supplier-card">
+        <div class="supplier-header"><div><div class="supplier-name">TechServe Global Inc.</div><div style="font-size:12px;color:var(--gray-500);">Preferred · Low Risk · Prior 2023</div></div><div class="flex gap-2 items-center"><div style="font-size:22px;font-weight:700;color:var(--teal);">84<span style="font-size:12px;color:var(--gray-400)">/100</span></div><span class="badge badge-teal">Recommended</span></div></div>
+        <div class="score-bar"><span class="score-label">Technical Capability (30%)</span><div class="score-track"><div class="score-fill" style="width:88%;background:var(--teal)"></div></div><span class="score-val">88</span></div>
+        <div class="score-bar"><span class="score-label">Pricing & Commercial (25%)</span><div class="score-track"><div class="score-fill" style="width:78%"></div></div><span class="score-val">78</span></div>
+        <div class="score-bar"><span class="score-label">SLA Commitments (20%)</span><div class="score-track"><div class="score-fill" style="width:90%;background:var(--teal)"></div></div><span class="score-val">90</span></div>
+        <div class="score-bar"><span class="score-label">Implementation Plan (15%)</span><div class="score-track"><div class="score-fill" style="width:80%"></div></div><span class="score-val">80</span></div>
+        <div class="score-bar"><span class="score-label">Risk & Compliance (10%)</span><div class="score-track"><div class="score-fill" style="width:85%;background:var(--teal)"></div></div><span class="score-val">85</span></div>
+      </div>
+      <div class="supplier-card">
+        <div class="supplier-header"><div><div class="supplier-name">Infra Corp Americas</div><div style="font-size:12px;color:var(--gray-500);">Approved · Low Risk · Prior 2021</div></div><div class="flex gap-2 items-center"><div style="font-size:22px;font-weight:700;color:var(--accent);">79<span style="font-size:12px;color:var(--gray-400)">/100</span></div><span class="badge badge-blue">Strong</span></div></div>
+        <div class="score-bar"><span class="score-label">Technical Capability (30%)</span><div class="score-track"><div class="score-fill" style="width:80%"></div></div><span class="score-val">80</span></div>
+        <div class="score-bar"><span class="score-label">Pricing & Commercial (25%)</span><div class="score-track"><div class="score-fill" style="width:85%;background:var(--teal)"></div></div><span class="score-val">85</span></div>
+        <div class="score-bar"><span class="score-label">SLA Commitments (20%)</span><div class="score-track"><div class="score-fill" style="width:75%"></div></div><span class="score-val">75</span></div>
+        <div class="score-bar"><span class="score-label">Implementation Plan (15%)</span><div class="score-track"><div class="score-fill" style="width:82%"></div></div><span class="score-val">82</span></div>
+        <div class="score-bar"><span class="score-label">Risk & Compliance (10%)</span><div class="score-track"><div class="score-fill" style="width:70%"></div></div><span class="score-val">70</span></div>
+      </div>
+      <div class="supplier-card">
+        <div class="supplier-header"><div><div class="supplier-name">Nexus IT Solutions</div><div style="font-size:12px;color:var(--gray-500);">Approved · Medium Risk · New</div></div><div class="flex gap-2 items-center"><div style="font-size:22px;font-weight:700;color:var(--amber);">71<span style="font-size:12px;color:var(--gray-400)">/100</span></div><span class="badge badge-amber">Moderate</span></div></div>
+        <div class="score-bar"><span class="score-label">Technical Capability (30%)</span><div class="score-track"><div class="score-fill" style="width:75%"></div></div><span class="score-val">75</span></div>
+        <div class="score-bar"><span class="score-label">Pricing & Commercial (25%)</span><div class="score-track"><div class="score-fill" style="width:88%;background:var(--teal)"></div></div><span class="score-val">88</span></div>
+        <div class="score-bar"><span class="score-label">SLA Commitments (20%)</span><div class="score-track"><div class="score-fill" style="width:65%"></div></div><span class="score-val">65</span></div>
+        <div class="score-bar"><span class="score-label">Implementation Plan (15%)</span><div class="score-track"><div class="score-fill" style="width:60%"></div></div><span class="score-val">60</span></div>
+        <div class="score-bar"><span class="score-label">Risk & Compliance (10%)</span><div class="score-track"><div class="score-fill" style="width:68%"></div></div><span class="score-val">68</span></div>
+      </div>
+      <div class="supplier-card">
+        <div class="supplier-header"><div><div class="supplier-name">Apex Support Services</div><div style="font-size:12px;color:var(--gray-500);">Approved · Low Risk · New</div></div><div class="flex gap-2 items-center"><div style="font-size:22px;font-weight:700;color:var(--red);">62<span style="font-size:12px;color:var(--gray-400)">/100</span></div><span class="badge badge-red">Below Threshold</span></div></div>
+        <div class="score-bar"><span class="score-label">Technical Capability (30%)</span><div class="score-track"><div class="score-fill" style="width:58%;background:var(--red)"></div></div><span class="score-val">58</span></div>
+        <div class="score-bar"><span class="score-label">Pricing & Commercial (25%)</span><div class="score-track"><div class="score-fill" style="width:72%"></div></div><span class="score-val">72</span></div>
+        <div class="score-bar"><span class="score-label">SLA Commitments (20%)</span><div class="score-track"><div class="score-fill" style="width:60%;background:var(--red)"></div></div><span class="score-val">60</span></div>
+        <div class="score-bar"><span class="score-label">Implementation Plan (15%)</span><div class="score-track"><div class="score-fill" style="width:62%"></div></div><span class="score-val">62</span></div>
+        <div class="score-bar"><span class="score-label">Risk & Compliance (10%)</span><div class="score-track"><div class="score-fill" style="width:55%;background:var(--red)"></div></div><span class="score-val">55</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="icon" style="background:#fef3c7;">🤝</div>Shortlist for Negotiations</div>
+      <div class="alert alert-info">Select suppliers to shortlist. The system will generate a comparison document for negotiation leverage.</div>
+      <div class="check-row"><input type="checkbox" id="sl1" checked><label for="sl1">TechServe Global Inc. — Score: 84/100 ✅ Recommended</label></div>
+      <div class="check-row"><input type="checkbox" id="sl2" checked><label for="sl2">Infra Corp Americas — Score: 79/100</label></div>
+      <div class="check-row"><input type="checkbox" id="sl3"><label for="sl3">Nexus IT Solutions — Score: 71/100</label></div>
+      <div class="check-row"><input type="checkbox" id="sl4" disabled><label for="sl4" style="color:var(--gray-400)">Apex Support Services — Score: 62/100 ⚠ Below threshold (65)</label></div>
+      <div class="btn-group">
+        <button class="btn btn-teal" onclick="downloadDoc('Negotiation_Comparison_SR2026-0142.docx')">⬇ Generate Negotiation Comparison (DOCX)</button>
+        <button class="btn btn-primary" onclick="confirmShortlist()">Confirm Shortlist & Notify Suppliers</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="icon" style="background:#dcfce7;">🏆</div>Award Decision</div>
+      <div class="alert alert-warning">Complete negotiations offline. Return here to select the awarded supplier and mark as Awarded.</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Awarded Supplier</label><select id="award-supplier"><option value="">— Select Awarded Supplier —</option><option>TechServe Global Inc.</option><option>Infra Corp Americas</option><option>Nexus IT Solutions</option></select></div>
+        <div class="form-group"><label>Negotiated Contract Value (USD)</label><input type="number" id="award-value" placeholder="e.g. 3850000"/></div>
+        <div class="form-group full"><label>Award Justification</label><textarea id="award-reason" placeholder="Provide rationale..."></textarea></div>
+      </div>
+      <div class="btn-group"><button class="btn btn-success" onclick="markAwarded()">✅ Mark as Awarded</button></div>
+      <div id="award-confirmation" class="alert alert-success mt-4" style="display:none;"></div>
+    </div>
+    <!-- DTP-04 ACTION BAR -->
+    <div class="dtp-action-bar">
+      <div class="action-left">
+        <button class="btn-approve" id="approve-dtp4" onclick="approvePhase('dtp4')">✅ Save & Approve DTP-04</button>
+        <button class="btn-rework" onclick="openRework('DTP-04 — Evaluation & Negotiation')">✏️ Add Feedback & Rework</button>
+        <span class="action-status" id="status-dtp4"><span class="sdot" style="background:var(--gray-300)"></span>Pending approval</span>
+      </div>
+      <div class="action-right">
+        <button class="btn-back-nav" onclick="goTo('dtp3')">← Back</button>
+        <button class="btn-continue" onclick="goTo('dtp5')">Continue to DTP-05 →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ DTP-05 ═══ -->
+  <div class="section-panel" id="panel-dtp5">
+    <div class="dtp-info">
+      <div class="dtp-info-num">05</div>
+      <div class="dtp-info-text">
+        <h2>DTP-05 — Contracting</h2>
+        <p>Finalize contract terms, execute MSA and SOW, and update contract records.</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="icon" style="background:#dbeafe;">📜</div>Contract Details</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Awarded Supplier</label><input type="text" value="TechServe Global Inc."/></div>
+        <div class="form-group"><label>Contract Number</label><input type="text" value="CT-2026-IT-0142"/></div>
+        <div class="form-group"><label>Contract Start Date</label><input type="date" value="2026-08-01"/></div>
+        <div class="form-group"><label>Contract End Date</label><input type="date" value="2029-07-31"/></div>
+        <div class="form-group"><label>Annual Contract Value (USD)</label><input type="number" value="1283333"/></div>
+        <div class="form-group"><label>Total Contract Value (USD)</label><input type="number" value="3850000"/></div>
+        <div class="form-group"><label>Payment Terms</label><input type="text" value="Net 45 days"/></div>
+        <div class="form-group"><label>Renewal Option</label><input type="text" value="1 × 12-month optional extension"/></div>
+        <div class="form-group full"><label>Key SLAs Agreed</label><textarea>Level 1 Response: &lt;15 min | Level 2 Escalation: &lt;4 hrs | Level 3 Resolution: &lt;24 hrs | Uptime: 99.95% | Monthly SLA Reviews</textarea></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="icon" style="background:#d1fae5;">📁</div>Contract Documents Status</div>
+      <div class="doc-card"><div class="doc-icon" style="background:#dbeafe;">📄</div><div class="doc-info"><h4>Executed Master Service Agreement</h4><p>Signed MSA — TechServe Global Inc. — Aug 1, 2026</p></div><div class="doc-actions"><span class="badge badge-green">Executed</span><button class="btn btn-secondary btn-sm" onclick="downloadDoc('Executed_MSA_TechServe_2026.docx')">⬇</button></div></div>
+      <div class="doc-card"><div class="doc-icon" style="background:#d1fae5;">📑</div><div class="doc-info"><h4>Statement of Work</h4><p>SOW-2026-IT-0142 including full service schedule and KPIs</p></div><div class="doc-actions"><span class="badge badge-amber">Pending Signature</span><button class="btn btn-secondary btn-sm" onclick="downloadDoc('SOW_TechServe_2026_IT0142.docx')">⬇</button></div></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="icon" style="background:#fef3c7;">📊</div>Contract Record Update</div>
+      <div class="form-grid">
+        <div class="form-group"><label>ERP / Contract System Reference</label><input type="text" value="ARIBA-CT-2026-0142"/></div>
+        <div class="form-group"><label>Contract Owner</label><input type="text" value="J. Mitchell"/></div>
+        <div class="form-group"><label>Compliance Review Date</label><input type="date" value="2026-09-01"/></div>
+        <div class="form-group"><label>Next Review Date</label><input type="date" value="2027-07-01"/></div>
+      </div>
+      <div class="btn-group"><button class="btn btn-success" onclick="showToast('Contract record updated successfully.')">✅ Update Contract Record</button><button class="btn btn-secondary" onclick="downloadDoc('Contract_Summary_SR2026-0142.docx')">⬇ Contract Summary</button></div>
+    </div>
+    <!-- DTP-05 ACTION BAR -->
+    <div class="dtp-action-bar">
+      <div class="action-left">
+        <button class="btn-approve" id="approve-dtp5" onclick="approvePhase('dtp5')">✅ Save & Approve DTP-05</button>
+        <button class="btn-rework" onclick="openRework('DTP-05 — Contracting')">✏️ Add Feedback & Rework</button>
+        <span class="action-status" id="status-dtp5"><span class="sdot" style="background:var(--gray-300)"></span>Pending approval</span>
+      </div>
+      <div class="action-right">
+        <button class="btn-back-nav" onclick="goTo('dtp4')">← Back</button>
+        <button class="btn-continue" onclick="goTo('dtp6')">Continue to DTP-06 →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ DTP-06 ═══ -->
+  <div class="section-panel" id="panel-dtp6">
+    <div class="dtp-info">
+      <div class="dtp-info-num">06</div>
+      <div class="dtp-info-text">
+        <h2>DTP-06 — Implementation & Reporting</h2>
+        <p>Monitor rollout, track KPIs, and generate post-award implementation summary.</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="icon" style="background:#d1fae5;">🗓️</div>Implementation Timeline</div>
+      <div class="timeline">
+        <div class="timeline-item"><div class="timeline-dot done"></div><div class="timeline-title">Contract Execution</div><div class="timeline-meta">Aug 1, 2026 — Completed</div></div>
+        <div class="timeline-item"><div class="timeline-dot done"></div><div class="timeline-title">Kick-off Meeting</div><div class="timeline-meta">Aug 5, 2026 — Completed</div></div>
+        <div class="timeline-item"><div class="timeline-dot active"></div><div class="timeline-title">Knowledge Transfer & Transition</div><div class="timeline-meta">Aug 6 – Sep 30, 2026 — In Progress</div></div>
+        <div class="timeline-item"><div class="timeline-dot"></div><div class="timeline-title">Go-Live (Phased Rollout)</div><div class="timeline-meta">Oct 1, 2026 — Upcoming</div></div>
+        <div class="timeline-item"><div class="timeline-dot"></div><div class="timeline-title">Steady-State Review</div><div class="timeline-meta">Dec 1, 2026 — Planned</div></div>
+        <div class="timeline-item"><div class="timeline-dot"></div><div class="timeline-title">First Annual Contract Review</div><div class="timeline-meta">Jul 1, 2027 — Planned</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="icon" style="background:#fef3c7;">📈</div>Early Performance Indicators</div>
+      <div class="form-grid-3">
+        <div style="background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--radius);padding:14px;text-align:center;"><div style="font-size:11px;color:var(--gray-500);margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px;">Projected Annual Savings</div><div style="font-size:24px;font-weight:600;color:var(--green);">$350K</div><div style="font-size:11px;color:var(--gray-400);">vs. previous contract</div></div>
+        <div style="background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--radius);padding:14px;text-align:center;"><div style="font-size:11px;color:var(--gray-500);margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px;">Cycle Time Reduction</div><div style="font-size:24px;font-weight:600;color:var(--accent);">-34%</div><div style="font-size:11px;color:var(--gray-400);">vs. manual baseline</div></div>
+        <div style="background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--radius);padding:14px;text-align:center;"><div style="font-size:11px;color:var(--gray-500);margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px;">AI Acceptance Rate</div><div style="font-size:24px;font-weight:600;color:var(--teal);">87%</div><div style="font-size:11px;color:var(--gray-400);">first-pass acceptance</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="icon" style="background:#dbeafe;">📋</div>Post-Award Reporting</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Report Period</label><select><option>Month 1 (Aug 2026)</option><option>Month 2 (Sep 2026)</option><option>Q1 2027</option></select></div>
+        <div class="form-group"><label>Reporting Owner</label><input type="text" value="J. Mitchell"/></div>
+        <div class="form-group full"><label>Key Observations / Issues</label><textarea>Transition progressing on schedule. Knowledge transfer workshops completed for Levels 1 and 2 support. No critical escalations to date.</textarea></div>
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-primary" onclick="downloadDoc('Implementation_Report_SR2026-0142_Month1.docx')">⬇ Generate Implementation Report</button>
+        <button class="btn btn-success" onclick="markComplete()">✅ Mark Sourcing Event Complete</button>
+      </div>
+      <div id="complete-msg" class="alert alert-success mt-4" style="display:none;">🎉 Sourcing event SR-2026-0142 marked as complete. All records saved.</div>
+    </div>
+    <!-- DTP-06 ACTION BAR -->
+    <div class="dtp-action-bar">
+      <div class="action-left">
+        <button class="btn-approve" id="approve-dtp6" onclick="approvePhase('dtp6')">✅ Save & Approve DTP-06</button>
+        <button class="btn-rework" onclick="openRework('DTP-06 — Implementation & Reporting')">✏️ Add Feedback & Rework</button>
+        <span class="action-status" id="status-dtp6"><span class="sdot" style="background:var(--gray-300)"></span>Pending approval</span>
+      </div>
+      <div class="action-right">
+        <button class="btn-back-nav" onclick="goTo('dtp5')">← Back</button>
+        <button class="btn-continue" onclick="showToast('🎉 All DTPs complete! Sourcing event closed.')">Close Sourcing Event</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SYSTEMS MAP ═══ -->
+  <div class="section-panel" id="panel-systems">
+    <div style="margin-bottom:18px;"><h1 style="font-size:18px;font-weight:600;color:var(--gray-900);margin-bottom:3px;">DTP ↔ Systems & Agents Map</h1><p style="font-size:13px;color:var(--gray-500);">Systems and AI agents associated with each DTP in System 2.</p></div>
+    <div class="card">
+      <div class="card-title"><div class="icon" style="background:#dbeafe;">📋</div>Step-by-Step Requirements</div>
+      <div style="font-size:13px;line-height:2;color:var(--gray-700);">
+        <p style="font-weight:600;color:var(--gray-900);margin-bottom:4px;">DTP-01 — Sourcing Pathway Selection</p>
+        <p>R1.1 Capture new sourcing request details. R1.2 Display AI-recommended pathway. R1.3 Allow override. R1.4 Show AI-identified supplier longlist. R1.5 Include/exclude suppliers.</p>
+        <div class="divider"></div>
+        <p style="font-weight:600;color:var(--gray-900);margin-bottom:4px;">DTP-02 — Evaluation Setup</p>
+        <p>R2.1 Three-column criteria table (Criterion / Description / Weightage). R2.2 Add/edit/delete rows. R2.3 Validate total = 100%. R2.4 Mark mandatory/optional. R2.5 Save for RFP and scoring engine.</p>
+        <div class="divider"></div>
+        <p style="font-weight:600;color:var(--gray-900);margin-bottom:4px;">DTP-03 — RFP Preparation & Issue</p>
+        <p>R3.1 Capture RFP config. R3.2 Expandable section builder (add/modify/drop). R3.3 Auto-populate criteria. R3.4 Generate 5 downloadable docs. R3.5 Approve/Reject/Feedback per doc. R3.6 Publish to market.</p>
+        <div class="divider"></div>
+        <p style="font-weight:600;color:var(--gray-900);margin-bottom:4px;">DTP-04 — Evaluation & Negotiation</p>
+        <p>R4.1 Enter supplier + upload files. R4.2 AI evaluation scores with visual bars. R4.3 Select shortlist. R4.4 Generate negotiation comparison DOCX. R4.5 Notify suppliers. R4.6 Award selection + mark Awarded.</p>
+        <div class="divider"></div>
+        <p style="font-weight:600;color:var(--gray-900);margin-bottom:4px;">DTP-05 — Contracting</p>
+        <p>R5.1 Contract details form. R5.2 MSA/SOW execution status. R5.3 Update ERP record. R5.4 Contract summary download.</p>
+        <div class="divider"></div>
+        <p style="font-weight:600;color:var(--gray-900);margin-bottom:4px;">DTP-06 — Implementation & Reporting</p>
+        <p>R6.1 Timeline milestones. R6.2 KPI metrics. R6.3 Post-award report. R6.4 Mark Complete.</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><div class="icon" style="background:#ede9fe;">🗺️</div>DTP ↔ Systems & Agents Table</div>
+      <table class="data-table system-map-table">
+        <thead><tr><th>DTP</th><th>Name</th><th>AI Agents</th><th>Enterprise Systems</th><th>Key Outputs</th></tr></thead>
+        <tbody>
+          <tr><td><span class="badge badge-blue">DTP-01</span></td><td>Sourcing Pathway</td><td>Supervisor Agent<br>Market Intelligence Agent</td><td><span class="sys-badge">Contract DB</span><span class="sys-badge">Supplier Master</span><span class="sys-badge">Ariba</span></td><td>Pathway, supplier longlist</td></tr>
+          <tr><td><span class="badge badge-blue">DTP-02</span></td><td>Evaluation Setup</td><td>Supervisor Agent<br>Supplier Scoring Agent<br>Market Intelligence</td><td><span class="sys-badge">Supplier Master</span><span class="sys-badge">Performance DB</span><span class="sys-badge">Risk System</span></td><td>Criteria, scoring structure</td></tr>
+          <tr><td><span class="badge badge-blue">DTP-03</span></td><td>RFP Issue</td><td>RFx Draft Agent<br>Supervisor Agent</td><td><span class="sys-badge">Template Library</span><span class="sys-badge">Ariba</span><span class="sys-badge">DocGen</span></td><td>RFP package (5 docs)</td></tr>
+          <tr><td><span class="badge badge-blue">DTP-04</span></td><td>Evaluate & Negotiate</td><td>Supplier Scoring Agent<br>Negotiation Support Agent</td><td><span class="sys-badge">Response Portal</span><span class="sys-badge">Scoring Engine</span><span class="sys-badge">Benchmark DB</span></td><td>Eval table, shortlist, award</td></tr>
+          <tr><td><span class="badge badge-blue">DTP-05</span></td><td>Contracting</td><td>Contract Support Agent<br>Supervisor Agent</td><td><span class="sys-badge">CLM / Ariba</span><span class="sys-badge">Legal Repo</span><span class="sys-badge">ERP</span></td><td>Executed MSA, SOW, record</td></tr>
+          <tr><td><span class="badge badge-blue">DTP-06</span></td><td>Implementation</td><td>Implementation Agent<br>Supervisor Agent</td><td><span class="sys-badge">ERP</span><span class="sys-badge">Reporting DB</span><span class="sys-badge">ITSM</span></td><td>Timeline, KPIs, report</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="dtp-action-bar">
+      <div class="action-left"><button class="btn-back-nav" onclick="goTo('dtp1')">← Back to Portal</button></div>
+      <div class="action-right"></div>
+    </div>
+  </div>
+
+</div><!-- end main-content -->
+
+<!-- ══════════════════════════════════
+     PROCURABOT — AI CHAT PANEL
+══════════════════════════════════ -->
+<div class="chat-panel">
+  <!-- Header -->
+  <div class="chat-header">
+    <div class="chat-header-left">
+      <div class="chat-bot-avatar">P</div>
+      <div class="chat-header-info">
+        <h3>ProcuraBot</h3>
+        <p>Sourcing AI Assistant</p>
+      </div>
+    </div>
+    <div class="chat-online-dot"></div>
+  </div>
+
+  <!-- Messages -->
+  <div class="chat-messages" id="chat-messages">
+    <div class="chat-msg bot">
+      <div class="chat-bubble">👋 Hi, I'm <strong>ProcuraBot</strong>! I have full context on case <strong>SR-2026-0142</strong>. Ask me anything — supplier scores, RFP dates, contract status, or what to do next.</div>
+      <div class="chat-meta">ProcuraBot · Just now</div>
+      <div class="chat-feedback">
+        <button class="chat-fb-btn" onclick="feedbackMsg(this,'like')">👍 <span class="chat-fb-count" id="likes-1">0</span></button>
+        <button class="chat-fb-btn" onclick="feedbackMsg(this,'dislike')">👎 <span class="chat-fb-count" id="dislikes-1">0</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Suggested prompts -->
+  <div class="chat-suggestions">
+    <div class="chat-sug-label">Quick Questions</div>
+    <div class="chat-chips" id="chat-chips">
+      <span class="chat-chip" onclick="sendChip(this)">Who scored highest?</span>
+      <span class="chat-chip" onclick="sendChip(this)">What's the RFP deadline?</span>
+      <span class="chat-chip" onclick="sendChip(this)">Case summary</span>
+      <span class="chat-chip" onclick="sendChip(this)">Current DTP status</span>
+      <span class="chat-chip" onclick="sendChip(this)">Contract value?</span>
+      <span class="chat-chip" onclick="sendChip(this)">Which suppliers shortlisted?</span>
+    </div>
+  </div>
+
+  <!-- Input -->
+  <div class="chat-input-area">
+    <textarea id="chat-input" placeholder="Ask about this sourcing case..." rows="1" onkeydown="handleChatKey(event)" oninput="autoResize(this)"></textarea>
+    <button class="chat-send-btn" onclick="sendMessage()">➤</button>
+  </div>
+
+  <!-- Performance bar -->
+  <div class="chat-perf-bar">
+    <div class="chat-perf-stat">👍 <span class="perf-num g" id="total-likes">0</span></div>
+    <div class="perf-divider"></div>
+    <div class="chat-perf-stat">👎 <span class="perf-num r" id="total-dislikes">0</span></div>
+    <div class="perf-divider"></div>
+    <div class="chat-perf-stat">Msgs: <span class="perf-num w" id="total-msgs">1</span></div>
+    <div class="perf-divider"></div>
+    <div class="chat-perf-stat">Rating: <span class="perf-num g" id="rating-pct">—</span></div>
+  </div>
+</div>
+
+</div><!-- end page-layout -->
+
+<!-- FOOTER -->
+<div class="page-footer">
+  <div class="req-id">SR-2026-0142 · IT Infrastructure Support Services · System 2 — S2C Execution</div>
+  <div class="flex gap-2">
+    <button class="btn btn-secondary btn-sm" onclick="goTo('systems')">System Map</button>
+    <button class="btn btn-secondary btn-sm" onclick="window.print()">Print</button>
+  </div>
+</div>
+
+<!-- FEEDBACK MODAL (doc rejection) -->
+<div class="modal-overlay" id="feedback-modal">
+  <div class="modal">
+    <h3>Provide Feedback & Regenerate</h3>
+    <p id="modal-doc-name">Document: RFP Main Document</p>
+    <label style="font-size:12px;font-weight:500;color:var(--gray-600);">Your Feedback</label>
+    <textarea id="feedback-text" style="width:100%;margin-top:5px;" placeholder="Describe what needs to be changed or improved..."></textarea>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitFeedback()">🔄 Regenerate Document</button>
+    </div>
+  </div>
+</div>
+
+<!-- REWORK MODAL -->
+<div class="modal-overlay" id="rework-modal">
+  <div class="rework-modal">
+    <h3>✏️ Add Feedback & Rework</h3>
+    <p id="rework-dtp-name">DTP Phase: —</p>
+    <label style="font-size:12px;font-weight:500;color:var(--gray-600);">Feedback / Changes Required</label>
+    <textarea id="rework-text" style="width:100%;margin-top:5px;min-height:90px;" placeholder="Describe what needs to be changed, corrected, or reviewed before this DTP can be approved..."></textarea>
+    <div style="margin-top:10px;">
+      <label style="font-size:12px;font-weight:500;color:var(--gray-600);">Priority</label>
+      <select id="rework-priority" style="width:100%;margin-top:4px;">
+        <option value="low">Low — Minor edits needed</option>
+        <option value="medium" selected>Medium — Significant changes</option>
+        <option value="high">High — Cannot proceed without resolution</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeRework()">Cancel</button>
+      <button class="btn btn-warning" onclick="submitRework()" style="background:var(--amber);color:white;border:none;padding:8px 16px;border-radius:var(--radius);cursor:pointer;font-family:inherit;font-size:13px;font-weight:500;">Submit for Rework</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── CHAT DATA & STATE ──────────────────────────────────────────────────────
+let msgCount = 1, totalLikes = 0, totalDislikes = 0;
+let currentReworkDTP = '';
+
+const CASE = {
+  id: 'SR-2026-0142',
+  category: 'IT Infrastructure Support Services',
+  value: '$4.2M estimated',
+  status: 'In Progress — DTP-02',
+  rfpDeadline: 'June 1, 2026 at 5:00 PM EST',
+  rfpIssue: 'May 1, 2026',
+  awardDate: 'July 31, 2026',
+  suppliers: [
+    {name:'TechServe Global Inc.', score:84, status:'Recommended'},
+    {name:'Infra Corp Americas', score:79, status:'Strong'},
+    {name:'Nexus IT Solutions', score:71, status:'Moderate'},
+    {name:'Apex Support Services', score:62, status:'Below Threshold'}
+  ],
+  shortlisted: ['TechServe Global Inc.', 'Infra Corp Americas'],
+  contract: {supplier:'TechServe Global Inc.', value:'$3.85M', start:'Aug 1, 2026', end:'Jul 31, 2029'},
+  dtpStatus: {dtp1:'Approved',dtp2:'In Progress',dtp3:'Not Started',dtp4:'Not Started',dtp5:'Not Started',dtp6:'Not Started'}
+};
+
+const RESPONSES = {
+  'who scored highest': () => `📊 TechServe Global Inc. scored highest at **84/100** and is recommended for award.\n\n• TechServe Global: 84/100 ✅\n• Infra Corp Americas: 79/100\n• Nexus IT Solutions: 71/100\n• Apex Support Services: 62/100 ⚠️`,
+  'rfp deadline': () => `📅 The RFP Response Due Date is **${CASE.rfpDeadline}**.\n\nOther key dates:\n• RFP Issue: ${CASE.rfpIssue}\n• Evaluation: June 2–20, 2026\n• Award: ${CASE.awardDate}`,
+  'case summary': () => `📋 **Case SR-2026-0142 Summary**\n\nCategory: ${CASE.category}\nEstimated Value: ${CASE.value}\nStatus: ${CASE.status}\nSuppliers Evaluated: 4\nShortlisted: TechServe Global, Infra Corp Americas\nExpected Award: ${CASE.awardDate}`,
+  'current dtp status': () => `🔄 **DTP Status Overview**\n\n✅ DTP-01: Sourcing Pathway — Completed\n🔵 DTP-02: Evaluation Setup — In Progress\n⬜ DTP-03: RFP Issue — Not Started\n⬜ DTP-04: Evaluate & Negotiate — Not Started\n⬜ DTP-05: Contracting — Not Started\n⬜ DTP-06: Implementation — Not Started`,
+  'contract value': () => `💰 Estimated contract value is **${CASE.value}** over 3 years.\n\nPost-negotiation award value: **$3.85M** (TBC at award).\n\nPayment Terms: Net 45 days\nContract Term: August 1, 2026 – July 31, 2029`,
+  'which suppliers shortlisted': () => `🤝 **Shortlisted for Negotiations:**\n\n1. TechServe Global Inc. (Score: 84/100)\n2. Infra Corp Americas (Score: 79/100)\n\nApex Support Services was excluded as their score (62/100) fell below the 65-point threshold.`,
+  'default': (q) => {
+    const lq = q.toLowerCase();
+    if(lq.includes('techserve')) return `🏢 **TechServe Global Inc.**\n\nOverall Score: 84/100 — Recommended\nTechnical Capability: 88 | Pricing: 78 | SLA: 90 | Implementation: 80 | Risk: 85\n\nPreferred supplier status, prior engagement in 2023, low risk rating.`;
+    if(lq.includes('nexus')) return `🏢 **Nexus IT Solutions**\n\nOverall Score: 71/100 — Moderate\nTechnical: 75 | Pricing: 88 | SLA: 65 | Implementation: 60 | Risk: 68\n\nApproved supplier, new to program, medium risk. Competitive pricing but weaker SLA and implementation scores.`;
+    if(lq.includes('infra corp')) return `🏢 **Infra Corp Americas**\n\nOverall Score: 79/100 — Strong\nTechnical: 80 | Pricing: 85 | SLA: 75 | Implementation: 82 | Risk: 70\n\nApproved supplier, prior engagement 2021, low risk. Strongest on pricing and implementation.`;
+    if(lq.includes('sla') || lq.includes('service level')) return `📈 **Agreed SLA Commitments**\n\n• Level 1 Response: < 15 minutes\n• Level 2 Escalation: < 4 hours\n• Level 3 Resolution: < 24 hours\n• System Uptime: 99.95%\n• Monthly SLA Review Calls included`;
+    if(lq.includes('criteria') || lq.includes('evaluat')) return `⚖️ **Evaluation Criteria (DTP-02)**\n\n1. Technical Capability — 30%\n2. Pricing & Commercial Terms — 25%\n3. Service Level Agreements — 20%\n4. Implementation Plan — 15%\n5. Supplier Risk & Compliance — 10%\n\nTotal: 100% ✅`;
+    if(lq.includes('msa') || lq.includes('master service')) return `📜 **Master Service Agreement**\n\nThe standard MSA (v2.1) has been generated for this engagement. Key terms: Net 45 payment, liability cap at 100% of annual fees, 5-year confidentiality, 90-day termination notice. Current status: Pending execution.`;
+    if(lq.includes('award') || lq.includes('winner')) return `🏆 **Award Status**\n\nNegotiations are currently in progress. Expected award date: **July 31, 2026**.\n\nRecommended supplier: TechServe Global Inc. (score 84/100). Final decision pending negotiation completion.`;
+    if(lq.includes('scope') || lq.includes('service')) return `📋 **Scope of Services**\n\nThis engagement covers:\n• Level 1–3 Helpdesk (15,000+ users)\n• Network Operations Center (24/7)\n• Server & Storage Management\n• Endpoint Management\n• 24/7 On-Call Escalation Support\n\nGeography: North America (primary) + EMEA`;
+    if(lq.includes('help') || lq.includes('what can')) return `I can answer questions about:\n\n• 📊 Supplier scores & evaluation results\n• 📅 RFP dates & milestones\n• 📋 Case details & scope\n• 🏢 Individual supplier profiles\n• ⚖️ Evaluation criteria & weights\n• 📜 Contract terms & status\n• 🔄 DTP phase status\n• 💰 Commercial & pricing details`;
+    return `I found information related to your question about "${q.length>40?q.substring(0,40)+'...':q}".\n\nThis case (SR-2026-0142) is for IT Infrastructure Support Services with an estimated value of ${CASE.value}. Current status: ${CASE.status}.\n\nCan you be more specific? Try asking about a supplier name, DTP phase, contract terms, or evaluation criteria.`;
+  }
+};
+
+function getBotResponse(q) {
+  const lq = q.toLowerCase().trim();
+  for(const [key, fn] of Object.entries(RESPONSES)) {
+    if(key !== 'default' && lq.includes(key)) return fn();
+  }
+  return RESPONSES.default(q);
+}
+
+// ─── CHAT UI ──────────────────────────────────────────────────────────────
+function addMessage(text, role, time) {
+  const msgs = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = 'chat-msg ' + role;
+  const t = time || new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+  // Format bold (**text**) and line breaks
+  const formatted = text.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>');
+  let html = `<div class="chat-bubble">${formatted}</div><div class="chat-meta">${role==='bot'?'ProcuraBot':'You'} · ${t}</div>`;
+  if(role === 'bot') {
+    msgCount++;
+    const mid = 'msg-' + msgCount;
+    html += `<div class="chat-feedback">
+      <button class="chat-fb-btn" onclick="feedbackMsg(this,'like')" data-mid="${mid}">👍 <span class="chat-fb-count">0</span></button>
+      <button class="chat-fb-btn" onclick="feedbackMsg(this,'dislike')" data-mid="${mid}">👎 <span class="chat-fb-count">0</span></button>
+    </div>`;
+  }
+  div.innerHTML = html;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  document.getElementById('total-msgs').textContent = msgCount;
+}
+
+function showTyping() {
+  const msgs = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = 'chat-msg bot typing-indicator';
+  div.id = 'typing-indicator';
+  div.innerHTML = '<div class="typing-dots"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>';
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+function removeTyping() {
+  const t = document.getElementById('typing-indicator');
+  if(t) t.remove();
+}
+
+function sendMessage() {
+  const inp = document.getElementById('chat-input');
+  const q = inp.value.trim();
+  if(!q) return;
+  addMessage(q, 'user');
+  inp.value = '';
+  inp.style.height = '34px';
+  showTyping();
+  setTimeout(() => {
+    removeTyping();
+    const resp = getBotResponse(q);
+    addMessage(resp, 'bot');
+  }, 700 + Math.random() * 600);
+}
+
+function sendChip(el) {
+  document.getElementById('chat-input').value = el.textContent;
+  sendMessage();
+}
+
+function handleChatKey(e) {
+  if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+
+function autoResize(el) {
+  el.style.height = '34px';
+  el.style.height = Math.min(el.scrollHeight, 90) + 'px';
+}
+
+function feedbackMsg(btn, type) {
+  const row = btn.parentElement;
+  const btns = row.querySelectorAll('.chat-fb-btn');
+  btns.forEach(b => { b.classList.remove('liked','disliked'); });
+  const count = btn.querySelector('.chat-fb-count');
+  if(type === 'like') {
+    btn.classList.add('liked');
+    totalLikes++;
+  } else {
+    btn.classList.add('disliked');
+    totalDislikes++;
+  }
+  count.textContent = parseInt(count.textContent) + 1;
+  document.getElementById('total-likes').textContent = totalLikes;
+  document.getElementById('total-dislikes').textContent = totalDislikes;
+  const total = totalLikes + totalDislikes;
+  document.getElementById('rating-pct').textContent = total > 0 ? Math.round(totalLikes/total*100)+'%' : '—';
+}
+
+// ─── NAVIGATION ────────────────────────────────────────────────────────────
+const sectionOrder = ['dtp1','dtp2','dtp3','dtp4','dtp5','dtp6'];
+function goTo(section) {
+  document.querySelectorAll('.section-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.sidebar-item').forEach(i=>i.classList.remove('active'));
+  document.querySelectorAll('.dtp-step').forEach(s=>{ if(!s.classList.contains('done')) s.classList.remove('active'); });
+  const panel = document.getElementById('panel-'+section);
+  if(panel) panel.classList.add('active');
+  const nav = document.getElementById('nav-'+section);
+  if(nav) { nav.classList.add('active'); nav.classList.remove('done'); }
+  const step = document.getElementById('step-'+section);
+  if(step && !step.classList.contains('done')) step.classList.add('active');
+  const idx = sectionOrder.indexOf(section);
+  sectionOrder.forEach((s,i) => {
+    const n = document.getElementById('nav-'+s);
+    const st = document.getElementById('step-'+s);
+    if(i < idx) {
+      if(n) { n.classList.remove('active'); n.classList.add('done'); }
+      if(st) { st.classList.remove('active'); st.classList.add('done'); }
+    }
+  });
+  window.scrollTo(0,0);
+}
+
+// ─── APPROVE PHASE ─────────────────────────────────────────────────────────
+function approvePhase(dtp) {
+  const btn = document.getElementById('approve-'+dtp);
+  const status = document.getElementById('status-'+dtp);
+  btn.textContent = '✅ Approved';
+  btn.classList.add('approved');
+  btn.disabled = true;
+  status.innerHTML = '<span class="sdot" style="background:var(--green)"></span><span style="color:var(--green);font-weight:500;">Approved</span>';
+  const step = document.getElementById('step-'+dtp);
+  if(step) step.classList.add('done');
+  showToast('✅ ' + dtp.toUpperCase() + ' saved and approved');
+}
+
+// ─── REWORK MODAL ──────────────────────────────────────────────────────────
+function openRework(dtpName) {
+  currentReworkDTP = dtpName;
+  document.getElementById('rework-dtp-name').textContent = 'Phase: ' + dtpName;
+  document.getElementById('rework-text').value = '';
+  document.getElementById('rework-modal').classList.add('open');
+}
+function closeRework() {
+  document.getElementById('rework-modal').classList.remove('open');
+}
+function submitRework() {
+  const text = document.getElementById('rework-text').value.trim();
+  const priority = document.getElementById('rework-priority').value;
+  if(!text) { alert('Please describe the feedback before submitting.'); return; }
+  closeRework();
+  showToast('✏️ Feedback submitted for ' + currentReworkDTP + ' — marked for rework');
+  // Echo in chat
+  setTimeout(() => {
+    addMessage(`Rework feedback submitted for ${currentReworkDTP}:\n\n"${text}"\n\nPriority: ${priority.charAt(0).toUpperCase()+priority.slice(1)}. I'll flag this in the activity log.`, 'bot');
+  }, 500);
+}
+
+// ─── FORM HELPERS ──────────────────────────────────────────────────────────
+function toggleSection(header) {
+  const body = header.nextElementSibling;
+  const badge = header.querySelector('.badge');
+  const cb = header.querySelector('input[type=checkbox]');
+  body.classList.toggle('open');
+  if(cb.checked) badge.className='badge badge-green'; else badge.className='badge badge-gray';
+}
+function addSection() {
+  const list = document.getElementById('rfp-sections-list');
+  const num = list.children.length+1;
+  const div = document.createElement('div');
+  div.className='rfp-section-item';
+  div.innerHTML=`<div class="rfp-section-header" onclick="toggleSection(this)"><div class="flex items-center gap-2"><input type="checkbox" checked onclick="event.stopPropagation()"><h4>${num}. New Custom Section</h4></div><span class="badge badge-green">Included</span></div><div class="rfp-section-body open"><textarea style="width:100%;min-height:60px;" placeholder="Enter content..."></textarea></div>`;
+  list.appendChild(div);
+}
+function addCriteria() {
+  const tbody = document.getElementById('criteria-body');
+  const row = document.createElement('tr');
+  row.innerHTML=`<td><input type="text" placeholder="Criterion"/></td><td><input type="text" placeholder="Description"/></td><td><input type="number" value="0" min="0" max="100" onchange="updateWeight()"/></td><td><input type="checkbox"></td><td><button class="btn btn-danger btn-sm" onclick="deleteCriteria(this)">✕</button></td>`;
+  tbody.appendChild(row);
+  updateWeight();
+}
+function deleteCriteria(btn) { btn.closest('tr').remove(); updateWeight(); }
+function updateWeight() {
+  let total=0;
+  document.querySelectorAll('#criteria-body input[type=number]').forEach(i=>total+=parseInt(i.value)||0);
+  const el=document.getElementById('weight-total');
+  el.textContent='Total: '+total+'%';
+  el.className='weightage-total '+(total===100?'valid':'invalid');
+}
+function approveDoc(btn) { btn.textContent='✅ Approved'; btn.className='btn btn-secondary btn-sm'; btn.disabled=true; showToast('Document approved'); }
+function downloadDoc(fn) {
+  const blob=new Blob(['[Document content: '+fn+']'],{type:'text/plain'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=fn.replace('.docx','.txt');
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  showToast('⬇ Downloading: '+fn);
+}
+function openFeedback(name) { document.getElementById('modal-doc-name').textContent='Document: '+name; document.getElementById('feedback-modal').classList.add('open'); }
+function closeModal() { document.getElementById('feedback-modal').classList.remove('open'); }
+function submitFeedback() { closeModal(); showToast('🔄 Regenerating document...'); setTimeout(()=>showToast('✅ Document regenerated'),2000); }
+function publishRFP() {
+  document.getElementById('rfp-status').value='Published';
+  const b=document.getElementById('published-banner');
+  b.classList.add('show');
+  document.getElementById('publish-date').textContent=new Date().toLocaleDateString();
+  showToast('🚀 RFP Published to Market');
+}
+function addSupplier() {
+  const name=document.getElementById('new-supplier-name').value.trim();
+  if(!name){alert('Please enter a supplier name.');return;}
+  const tbody=document.querySelector('#supplier-submissions tbody');
+  const row=document.createElement('tr');
+  row.innerHTML=`<td>${name}</td><td>${new Date().toISOString().split('T')[0]}</td><td><span class="badge badge-amber">Pending</span></td><td><span class="badge badge-gray">Awaiting Eval</span></td><td><button class="btn btn-secondary btn-sm">Upload Files</button></td>`;
+  tbody.appendChild(row);
+  document.getElementById('new-supplier-name').value='';
+  showToast('Supplier added: '+name);
+}
+function handleUpload(inp) { if(inp.files.length>0) showToast(inp.files.length+' file(s) uploaded'); }
+function confirmShortlist() { showToast('✅ Suppliers shortlisted and notified'); }
+function markAwarded() {
+  const s=document.getElementById('award-supplier').value;
+  const v=document.getElementById('award-value').value;
+  if(!s){alert('Please select an awarded supplier.');return;}
+  const c=document.getElementById('award-confirmation');
+  c.style.display='flex';
+  c.textContent='🏆 Award confirmed: '+s+(v?' — Value: $'+parseInt(v).toLocaleString():'');
+  showToast('🏆 Awarded to '+s);
+}
+function markComplete() { document.getElementById('complete-msg').style.display='flex'; showToast('✅ Sourcing event marked as complete'); }
+
+function showToast(msg) {
+  let t=document.getElementById('toast');
+  if(!t){t=document.createElement('div');t.id='toast';t.style.cssText='position:fixed;bottom:70px;right:340px;background:var(--navy);color:white;padding:9px 15px;border-radius:8px;font-size:13px;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.3);transition:opacity .3s;';document.body.appendChild(t);}
+  t.textContent=msg;t.style.opacity='1';
+  clearTimeout(t._t);t._t=setTimeout(()=>t.style.opacity='0',2800);
+}
+
+// Init
+document.getElementById('header-date').textContent=new Date().toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'});
+goTo('dtp1');
+</script>
+</body>
+</html>

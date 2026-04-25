@@ -1379,6 +1379,14 @@ This section records the full patch stream implemented for System 1 upload UX, s
   - Emits final nudged `total_score` and `tier` in preview output.
 - **Purpose:** match final table-style scoring behavior (weights + nudge), reducing remaining parity gaps.
 
+#### 3) Bulk scan performance safeguard (interactive fast mode)
+- **File:** `backend/heatmap/services/system1_scoring_orchestrator.py`
+- **Changes:**
+  - Added `SYSTEM1_ENABLE_LEARNING_NUDGE_PREVIEW` env flag (default OFF).
+  - In preview/bundle scan, learning nudge is skipped by default to prevent long scan times.
+  - Deterministic weighted scoring remains active and uses learned/category-overlaid weights.
+- **Purpose:** keep `Scan files and fuse opportunities` responsive for interactive use while preserving consistent core scoring math.
+
 ### E. Config-Driven Scoring (Phase foundation implemented)
 
 #### 1) Versioned scoring config persistence

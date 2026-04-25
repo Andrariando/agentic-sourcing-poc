@@ -1,0 +1,3 @@
+row_type,category,subcategory,supplier_name,contract_id,request_title,contract_end_date,months_to_expiry,estimated_spend_usd,implementation_timeline_months,preferred_supplier_status
+renewal,IT Infrastructure,Cloud Hosting,TechGlobal Inc,CNT-2026-100,,2026-12-31,8,2500000,,allowed
+new_business,IT Infrastructure,Network Security,CyberShield LLC,,REQ-SEC-2026-12,,,1200000,5,preferred

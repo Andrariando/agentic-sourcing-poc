@@ -9,11 +9,16 @@ Computes score components with provenance:
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from typing import Any, Dict, List, Optional
 
 from backend.heatmap.category_scoring_mix import apply_category_scoring_overlay
 from backend.heatmap.context_builder import load_category_cards
-from backend.heatmap.services.feedback_memory import apply_learning_nudge
+from backend.heatmap.services.feedback_memory import (
+    apply_fast_cached_nudge,
+    apply_learning_nudge,
+    build_fast_nudge_cache_from_feedback,
+)
 from backend.heatmap.services.learned_weights import load_learned_weights, normalize_full
 from backend.infrastructure.storage_providers import get_heatmap_db
 from backend.heatmap.scoring_framework import (
@@ -180,6 +185,8 @@ def score_row(
     max_new_spend: float,
     category_cards: Optional[Dict[str, Any]] = None,
     effective_weights: Optional[Dict[str, float]] = None,
+    enable_learning_nudge: bool = False,
+    fast_nudge_cache: Optional[Dict[str, Dict[str, float]]] = None,
 ) -> Dict[str, Any]:
     cards = category_cards or load_category_cards()
     row_type = str(row.get("row_type") or "new_business")
@@ -312,15 +319,27 @@ def score_row(
         )
         action_window = None
 
-    _delta, learning_note, nudged_total, nudged_tier = apply_learning_nudge(
-        category=str(row.get("category") or ""),
-        subcategory=row.get("subcategory"),
-        supplier_name=row.get("supplier_name"),
-        is_new=(row_type != "renewal"),
-        baseline_summary=f"Baseline weighted total {total:.2f}. {formula_tail}",
-        base_total=float(total),
-        weights=weights,
-    )
+    learning_note = ""
+    nudged_total = float(total)
+    nudged_tier = _tier(total)
+    if fast_nudge_cache is not None:
+        _delta, learning_note, nudged_total, nudged_tier = apply_fast_cached_nudge(
+            cache=fast_nudge_cache,
+            category=str(row.get("category") or ""),
+            is_new=(row_type != "renewal"),
+            preferred_supplier_status=row.get("preferred_supplier_status"),
+            base_total=float(total),
+        )
+    elif enable_learning_nudge:
+        _delta, learning_note, nudged_total, nudged_tier = apply_learning_nudge(
+            category=str(row.get("category") or ""),
+            subcategory=row.get("subcategory"),
+            supplier_name=row.get("supplier_name"),
+            is_new=(row_type != "renewal"),
+            baseline_summary=f"Baseline weighted total {total:.2f}. {formula_tail}",
+            base_total=float(total),
+            weights=weights,
+        )
 
     if spend <= 0:
         readiness_warnings.append("Non-positive spend prevents reliable score.")
@@ -471,11 +490,21 @@ def enrich_rows_for_preview(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         session = get_heatmap_db().get_db_session()
         try:
             global_weights = normalize_full(load_learned_weights(session))
+            fast_nudge_cache = build_fast_nudge_cache_from_feedback(session)
         finally:
             session.close()
     except Exception:
         global_weights = normalize_full({})
+        fast_nudge_cache = {}
     out: List[Dict[str, Any]] = []
+    enable_learning_nudge_preview = (
+        str(os.getenv("SYSTEM1_ENABLE_LEARNING_NUDGE_PREVIEW", "0")).strip().lower()
+        in {"1", "true", "yes", "on"}
+    )
+    enable_fast_cached_nudge_preview = (
+        str(os.getenv("SYSTEM1_ENABLE_FAST_CACHED_NUDGE_PREVIEW", "1")).strip().lower()
+        in {"1", "true", "yes", "on"}
+    )
     for row in rows:
         category = str(row.get("category") or "").strip()
         raw_card = cards.get(category) or cards.get(str(row.get("category") or ""))
@@ -487,6 +516,8 @@ def enrich_rows_for_preview(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             max_new_spend=max_new_spend,
             category_cards=cards,
             effective_weights=effective_weights,
+            enable_learning_nudge=enable_learning_nudge_preview,
+            fast_nudge_cache=fast_nudge_cache if enable_fast_cached_nudge_preview else None,
         )
         d = dict(row)
         d["score_components"] = scored["components"]

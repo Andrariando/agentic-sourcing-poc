@@ -65,7 +65,22 @@ function opportunityLabel(o: Record<string, unknown>): string {
 
 function opportunityRef(o: Record<string, unknown>): string {
   const title = String(o?.request_title || "").trim();
-  return o?.contract_id || o?.request_id || title || "—";
+  return String(o?.contract_id || o?.request_id || title || "—");
+}
+
+function opportunityStableKey(
+  o: Record<string, unknown>,
+  idx: number,
+  prefix: string
+): string {
+  const id = String(o?.id ?? "").trim();
+  if (id) return `${prefix}-id-${id}`;
+  const cid = String(o?.contract_id ?? "").trim();
+  if (cid) return `${prefix}-contract-${cid}`;
+  const rid = String(o?.request_id ?? "").trim();
+  if (rid) return `${prefix}-request-${rid}`;
+  const label = opportunityLabel(o);
+  return `${prefix}-fallback-${label}-${idx}`;
 }
 
 function monthsToExpiryDisplay(o: Record<string, unknown>): string {
@@ -1555,11 +1570,11 @@ export default function HeatmapPriorityPage() {
                       </td>
                     </tr>
                   ) : (
-                    paginatedTableRows.map((opp) => {
+                    paginatedTableRows.map((opp, idx) => {
                       const reviewed = isOpportunityReviewed(opp);
                       const approved = isOpportunityApproved(opp);
                       return (
-                        <tr key={opp.id} className="transition-colors hover:bg-slate-50">
+                        <tr key={opportunityStableKey(opp, idx, "table-row")} className="transition-colors hover:bg-slate-50">
                           <td className="px-6 py-4">
                             <div className="font-semibold text-slate-900">{opportunityLabel(opp)}</div>
                             <div className="text-xs text-slate-500 font-mono mt-0.5">{opportunityRef(opp)}</div>
@@ -1797,9 +1812,9 @@ export default function HeatmapPriorityPage() {
                           return hay.includes(q);
                         })
                         .slice(0, 12)
-                        .map((o) => (
+                        .map((o, idx) => (
                           <tr
-                            key={`copilot-ref-${o.id}`}
+                            key={opportunityStableKey(o, idx, "copilot-ref")}
                             className="hover:bg-slate-50 cursor-pointer"
                             onClick={() => {
                               const tag = o.id != null ? `id=${o.id}` : (o.contract_id ? `contract_id=${o.contract_id}` : (o.request_id ? `request_id=${o.request_id}` : ""));

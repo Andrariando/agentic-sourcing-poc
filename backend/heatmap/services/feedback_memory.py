@@ -285,3 +285,90 @@ def apply_learning_nudge(
     adjusted = round(max(0.0, min(10.0, base_total + delta)), 2)
     tier = _tier_from_total(adjusted)
     return delta, note, adjusted, tier
+
+
+def _adj_value_to_delta(adjustment_value: float, adjustment_type: str) -> float:
+    at = str(adjustment_type or "").strip().lower()
+    if at == "delta":
+        return max(-MAX_ABS_DELTA, min(MAX_ABS_DELTA, float(adjustment_value or 0.0)))
+    # Legacy tier override payloads use 1..4 (T1..T4). Map to bounded directional nudge.
+    v = float(adjustment_value or 0.0)
+    if v <= 2.5:
+        return 0.12
+    if v >= 3.5:
+        return -0.12
+    return 0.0
+
+
+def build_fast_nudge_cache_from_feedback(session) -> Dict[str, Dict[str, float]]:
+    """
+    Build a cheap aggregate nudge cache from SQL feedback history.
+    Key format:
+      - "{row_type}|{category}|{preferred_status}"
+      - "{row_type}|{category}|*"
+      - "{row_type}|*|*"
+    """
+    from sqlmodel import select
+    from backend.heatmap.persistence.heatmap_models import Opportunity, ReviewFeedback
+
+    rows = session.exec(
+        select(
+            Opportunity.contract_id,
+            Opportunity.category,
+            Opportunity.preferred_supplier_status,
+            ReviewFeedback.adjustment_type,
+            ReviewFeedback.adjustment_value,
+        ).join(ReviewFeedback, ReviewFeedback.opportunity_id == Opportunity.id)
+    ).all()
+
+    buckets: Dict[str, List[float]] = {}
+    for contract_id, category, preferred_status, adj_type, adj_value in rows:
+        row_type = "new_business" if contract_id is None else "renewal"
+        cat = str(category or "").strip() or "Uncategorized"
+        status = str(preferred_status or "").strip().lower() or "*"
+        d = _adj_value_to_delta(float(adj_value or 0.0), str(adj_type or ""))
+        keys = [
+            f"{row_type}|{cat}|{status}",
+            f"{row_type}|{cat}|*",
+            f"{row_type}|*|*",
+        ]
+        for k in keys:
+            buckets.setdefault(k, []).append(d)
+
+    out: Dict[str, Dict[str, float]] = {}
+    for k, vals in buckets.items():
+        if not vals:
+            continue
+        avg = sum(vals) / max(1, len(vals))
+        out[k] = {
+            "delta": round(max(-MAX_ABS_DELTA, min(MAX_ABS_DELTA, avg)), 3),
+            "samples": float(len(vals)),
+        }
+    return out
+
+
+def apply_fast_cached_nudge(
+    *,
+    cache: Dict[str, Dict[str, float]],
+    category: str,
+    is_new: bool,
+    preferred_supplier_status: Optional[str],
+    base_total: float,
+) -> Tuple[float, str, float, str]:
+    row_type = "new_business" if is_new else "renewal"
+    cat = str(category or "").strip() or "Uncategorized"
+    status = str(preferred_supplier_status or "").strip().lower() or "*"
+    candidates = [
+        f"{row_type}|{cat}|{status}",
+        f"{row_type}|{cat}|*",
+        f"{row_type}|*|*",
+    ]
+    chosen = next((cache.get(k) for k in candidates if cache.get(k) is not None), None)
+    if not chosen:
+        b = max(0.0, min(10.0, float(base_total)))
+        return 0.0, "", round(b, 2), _tier_from_total(b)
+    delta = float(chosen.get("delta", 0.0))
+    adjusted = round(max(0.0, min(10.0, float(base_total) + delta)), 2)
+    samples = int(chosen.get("samples", 0.0))
+    note = f"Fast feedback-memory nudge ({delta:+.2f}) from {samples} similar reviewed row(s)."
+    return delta, note, adjusted, _tier_from_total(adjusted)
