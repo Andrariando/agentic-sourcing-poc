@@ -12,6 +12,8 @@ import {
   exportPreviewXlsx,
   type ExportScope,
 } from "@/lib/system1-export";
+import DtpStepper, { type DtpStage } from "@/components/workflow/DtpStepper";
+import DecisionActionBar from "@/components/workflow/DecisionActionBar";
 
 type PreviewRow = {
   row_id: string;
@@ -167,6 +169,14 @@ function buildRowOverrides(
 }
 
 const PREVIEW_PAGE_SIZE = 20;
+const DTP_STAGES: DtpStage[] = [
+  { id: "DTP-01", label: "Sourcing Pathway", shortLabel: "Pathway" },
+  { id: "DTP-02", label: "Evaluation Setup", shortLabel: "Eval setup" },
+  { id: "DTP-03", label: "RFP Issue", shortLabel: "RFP issue" },
+  { id: "DTP-04", label: "Evaluate & Negotiate", shortLabel: "Evaluate" },
+  { id: "DTP-05", label: "Contracting", shortLabel: "Contract" },
+  { id: "DTP-06", label: "Implementation", shortLabel: "Implement" },
+];
 
 function normalizeWarnings(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
@@ -709,6 +719,12 @@ export default function System1UploadPage() {
           </p>
         </header>
 
+        <DtpStepper
+          stages={DTP_STAGES}
+          currentStageId="DTP-01"
+          completedStageIds={[]}
+        />
+
         <section className="bg-white border border-slate-200 rounded-xl shadow-sm p-6 space-y-4">
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-2">Upload files</label>
@@ -896,6 +912,24 @@ export default function System1UploadPage() {
               />
               I acknowledge warning rows (defaulted/derived components) before approval.
             </label>
+            <DecisionActionBar
+              statusText={`Selected ${selectedCount} row(s). Approval writes opportunities and clears approved rows from preview.`}
+              primaryLabel={`Approve ${selectedCount} row(s)`}
+              primaryBusy={approving}
+              primaryDisabled={selectedCount === 0}
+              onPrimary={handleApprove}
+              secondaryLabel="Reset selected edits"
+              onSecondary={() =>
+                setEdits((prev) => {
+                  const next = { ...prev };
+                  for (const [id, isSelected] of Object.entries(selected)) {
+                    if (isSelected) delete next[id];
+                  }
+                  return next;
+                })
+              }
+              secondaryDisabled={selectedCount === 0}
+            />
 
             <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-4 space-y-3">
               <div>

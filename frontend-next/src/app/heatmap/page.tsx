@@ -32,6 +32,8 @@ import { heatmapTierLabel } from "@/lib/heatmap-tier-display";
 import ProcuraBotIdentity from "@/components/branding/ProcuraBotIdentity";
 import { PROCURABOT_BRAND } from "@/lib/procurabot-brand";
 import { HeatmapScoreBreakdown, type HeatmapOpportunityLike } from "@/lib/heatmap-score-breakdown";
+import DtpStepper, { type DtpStage } from "@/components/workflow/DtpStepper";
+import ContextCopilotShell from "@/components/layout/ContextCopilotShell";
 
 const TIER_TOOLTIP: Record<string, HeatmapGlossaryKey> = {
   T1: "t1",
@@ -43,6 +45,14 @@ const TIER_TOOLTIP: Record<string, HeatmapGlossaryKey> = {
 /** Table view: page size options; matrix caps points for chart responsiveness. */
 const HEATMAP_TABLE_PAGE_SIZES = [25, 50, 100] as const;
 const HEATMAP_MATRIX_MAX_POINTS = 500;
+const DTP_STAGES: DtpStage[] = [
+  { id: "DTP-01", label: "Sourcing Pathway", shortLabel: "Pathway" },
+  { id: "DTP-02", label: "Evaluation Setup", shortLabel: "Eval setup" },
+  { id: "DTP-03", label: "RFP Issue", shortLabel: "RFP issue" },
+  { id: "DTP-04", label: "Evaluate & Negotiate", shortLabel: "Evaluate" },
+  { id: "DTP-05", label: "Contracting", shortLabel: "Contract" },
+  { id: "DTP-06", label: "Implementation", shortLabel: "Implement" },
+];
 
 function isHeatmapNewRequest(o: { request_id?: string | null; contract_id?: string | null }): boolean {
   return Boolean(o.request_id) && !o.contract_id;
@@ -1236,6 +1246,40 @@ export default function HeatmapPriorityPage() {
           </div>
         </header>
 
+        <DtpStepper
+          stages={DTP_STAGES}
+          currentStageId="DTP-01"
+          completedStageIds={["DTP-01"]}
+        />
+
+        <ContextCopilotShell
+          className="mb-1"
+          left={
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Workflow context</p>
+              <p className="mt-2 text-sm text-slate-700">
+                System 1 rows become prioritized opportunities here, then reviewed and approved into S2C execution.
+              </p>
+            </div>
+          }
+          main={
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Decision model</p>
+              <p className="mt-2 text-sm text-slate-700">
+                Keep score, rationale, and disposition aligned before approving to execution.
+              </p>
+            </div>
+          }
+          right={
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Copilot context</p>
+              <p className="mt-2 text-sm text-slate-700">
+                Use ProcuraBot for explainability and next-best-action checks while preserving human approval control.
+              </p>
+            </div>
+          }
+        />
+
         {/* Dashboard Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
@@ -2195,7 +2239,6 @@ export default function HeatmapPriorityPage() {
             </div>
             
             <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-slate-50/30">
-              
               {/* Header: identity + single clear score (no raw formula) */}
               <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:justify-between sm:items-start gap-6">
                 <div className="min-w-0 flex-1">
@@ -2569,7 +2612,6 @@ export default function HeatmapPriorityPage() {
                     </ul>
                   )}
                 </div>
-              </div>
             </div>
 
             <div className="p-6 border-t border-slate-200 bg-white flex gap-4">
@@ -2589,6 +2631,7 @@ export default function HeatmapPriorityPage() {
             </div>
           </div>
         </div>
+      </div>
       )}
     </div>
   );

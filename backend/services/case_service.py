@@ -324,6 +324,64 @@ class CaseService:
         
         return True
 
+    def get_stage_intake(self, case_id: str, stage: str) -> Dict[str, Any]:
+        """Return persisted structured intake payload for a stage."""
+        case = self.get_case(case_id)
+        if not case:
+            return {}
+        hd = case.human_decision or {}
+        row = hd.get(stage, {}) if isinstance(hd, dict) else {}
+        if not isinstance(row, dict):
+            return {}
+        intake = row.get("_stage_intake")
+        if not isinstance(intake, dict):
+            return {}
+        vals = intake.get("values")
+        return vals if isinstance(vals, dict) else {}
+
+    def upsert_stage_intake(
+        self,
+        case_id: str,
+        stage: str,
+        payload: Dict[str, Any],
+        *,
+        source: str = "human_form",
+        updated_by: str = "human-manager",
+    ) -> bool:
+        """Persist stage intake under human_decision without breaking decision contract."""
+        session = get_db_session()
+        try:
+            case = session.exec(
+                select(CaseState).where(CaseState.case_id == case_id)
+            ).first()
+            if not case:
+                return False
+            hd: Dict[str, Any] = {}
+            if case.human_decision:
+                try:
+                    parsed = json.loads(case.human_decision)
+                    if isinstance(parsed, dict):
+                        hd = parsed
+                except json.JSONDecodeError:
+                    hd = {}
+            row = hd.get(stage)
+            if not isinstance(row, dict):
+                row = {}
+            row["_stage_intake"] = {
+                "values": payload or {},
+                "source": source,
+                "updated_by": updated_by,
+                "updated_at": datetime.now().isoformat(),
+            }
+            hd[stage] = row
+            case.human_decision = json.dumps(hd)
+            case.updated_at = datetime.now().isoformat()
+            session.add(case)
+            session.commit()
+            return True
+        finally:
+            session.close()
+
     def cancel_case(
         self,
         case_id: str,

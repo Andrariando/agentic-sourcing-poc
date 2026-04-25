@@ -1448,3 +1448,244 @@ New/expanded automated coverage includes:
 - Scoring config draft/validate/publish lifecycle.
 - Scoring config publish -> learned weights sync verification.
 
+## 18. Human-AI DTP Collaboration Patch Log (April 2026)
+
+This section documents the hybrid-gated, cursor-like collaboration upgrade for the Next.js case copilot workspace.
+
+### A. Stage Schema Engine (DTP-01..DTP-06)
+
+#### 1) Canonical stage field schema
+- **File:** `frontend-next/src/lib/dtp-stage-schema.ts`
+- **Added:**
+  - `DTP_STAGE_SCHEMA` with per-stage field definitions and metadata:
+    - `required`
+    - `critical`
+    - `optional`
+    - `ai_extractable`
+    - `document_dependency`
+  - Utility functions:
+    - `stageSchema(stage)`
+    - `computeStageReadiness(stage, values)` -> `blocked | ready_with_warnings | ready`
+    - `splitStageFields(stage, values)` -> prefilled/missing/optional buckets
+- **Purpose:** remove hardcoded per-stage field rendering and make DTP requirements explicit and extensible.
+
+### B. Hybrid Readiness + Progression Gating
+
+#### 1) Readiness-aware center workspace
+- **File:** `frontend-next/src/app/cases/[id]/copilot/page.tsx`
+- **Changes:**
+  - Workspace now computes stage readiness from schema + current values.
+  - Added readiness banner that clearly indicates:
+    - blocked due to critical missing fields
+    - ready with warnings
+    - ready
+  - Added missing-required summary and optional-field grouping to improve usability.
+- **Purpose:** enforce stage quality gates while preserving flexibility for non-critical context.
+
+#### 2) Gating wired to generation actions
+- **File:** `frontend-next/src/app/cases/[id]/copilot/page.tsx`
+- **Changes:**
+  - Draft-generation buttons are disabled when stage is `blocked`.
+  - Stage checklist copy now reflects blocked progression state.
+- **Purpose:** prevent premature draft generation when critical data is absent.
+
+### C. Bidirectional Form-Chat Sync (Human Confirmation First)
+
+#### 1) Persisted stage-intake API
+- **Files:**
+  - `backend/main.py`
+  - `backend/services/case_service.py`
+- **Endpoints added:**
+  - `GET /api/cases/{case_id}/stage-intake?stage=...`
+  - `PUT /api/cases/{case_id}/stage-intake`
+  - `POST /api/cases/{case_id}/stage-intake/extract`
+  - `POST /api/cases/{case_id}/stage-intake/generation-check`
+- **Behavior:**
+  - Stage intake payload is stored under `human_decision[stage]["_stage_intake"]`.
+  - Retrieval returns only the `values` object for UI prefill.
+  - Extract endpoint provides heuristic proposals; UI must confirm before applying.
+- **Purpose:** keep structured stage data auditable and synchronized with chat-assisted updates.
+
+#### 2) Frontend sync + extraction confirmation loop
+- **File:** `frontend-next/src/app/cases/[id]/copilot/page.tsx`
+- **Changes:**
+  - Auto-loads stage intake when case/stage changes.
+  - Added **Save stage input** action.
+  - Added **Extract to fields** action from pasted text or last assistant reply.
+  - Added **Confirm AI extraction** action before applying proposed updates.
+  - Structured input send action persists stage intake first, then prompts copilot.
+- **Purpose:** preserve human control; AI suggestions never silently overwrite structured values.
+
+### D. DTP-03/04 Supplier Feedback Workspace
+
+#### 1) Structured supplier-feedback capture block
+- **File:** `frontend-next/src/app/cases/[id]/copilot/page.tsx`
+- **Added for DTP-03 and DTP-04:**
+  - response receipt status
+  - clarification/evaluation notes status
+  - negotiation deltas status
+  - clear guidance on manual capture + chat extraction path
+- **Purpose:** support real supplier interaction feedback in a structured and reviewable format.
+
+### E. DTP-05/06 Confirmation Checkpoints
+
+#### 1) Critical contracting/execution fields
+- **File:** `frontend-next/src/lib/dtp-stage-schema.ts`
+- **Added critical gates:**
+  - **DTP-05:** `contract_signed`, `legal_signoff`, `contract_reference`, etc.
+  - **DTP-06:** `execution_started`, `implementation_milestones`, `kpi_monitoring_status`, `execution_confirmed_by_human`
+- **Purpose:** ensure late-stage transitions are backed by explicit human confirmations.
+
+### F. Document Generation Validation Loop
+
+#### 1) Generation precondition check endpoint
+- **File:** `backend/main.py`
+- **Added logic:**
+  - `_required_generation_keys(stage)` map
+  - `POST /api/cases/{case_id}/stage-intake/generation-check`
+  - Returns `can_generate`, `required_fields`, and `missing_fields`
+- **Purpose:** deterministic guardrail before generating RFx/contract drafts from stage data.
+
+#### 2) Frontend generation guard + refresh
+- **File:** `frontend-next/src/app/cases/[id]/copilot/page.tsx`
+- **Changes:**
+  - Generation calls precheck endpoint first.
+  - If missing fields exist, generation is blocked with actionable feedback.
+  - On successful chat/generation actions, case metadata and document center refresh automatically.
+- **Purpose:** keep generated outputs aligned with validated structured inputs.
+
+### G. Tests and Verification
+
+#### 1) New API tests
+- **File:** `tests/test_heatmap_api.py`
+- **Added tests:**
+  - `test_stage_intake_roundtrip_and_extract`
+  - `test_stage_generation_check_preconditions`
+- **Coverage:**
+  - stage-intake save/retrieve
+  - extraction proposal flow
+  - generation precondition pass/fail behavior
+
+#### 2) Execution summary
+- Frontend build:
+  - `npm run build` (Next.js) -> **passed**
+- Targeted backend tests:
+  - `python -m pytest tests/test_heatmap_api.py -k "stage_intake or generation_check"` -> **passed**
+- Existing document/export suites also remain green in prior runs:
+  - `tests/test_working_documents.py`
+  - `tests/test_artifact_export.py`
+
+## 19. DTP UX Refactor Implementation Patch Log (April 2026)
+
+This section records the implementation pass for the **DTP UX Refactor Plan** focused on simplifying the case copilot into a critical-first, hybrid-gated stage workspace.
+
+### A. Copilot Workspace Composition (Critical-First)
+
+#### 1) Secondary sections collapsed to reduce cognitive load
+- **File:** `frontend-next/src/app/cases/[id]/copilot/page.tsx`
+- **Changes:**
+  - Converted non-primary panels into explicit expanders:
+    - `Case documents`
+    - `Decision audit`
+    - `System activity` (already collapsible, retained)
+  - Kept stage-operational content in the main workspace.
+- **Purpose:** keep attention on immediate stage progression tasks while preserving access to supporting context.
+
+#### 2) Sticky action row standardized
+- **File:** `frontend-next/src/app/cases/[id]/copilot/page.tsx`
+- **Changes:**
+  - Maintained one sticky action row for stage operations:
+    - `Save stage input`
+    - `Send structured input to ProcuraBot`
+    - `Generate RFx draft`
+    - `Generate contract draft`
+    - `Advance stage` (new explicit action)
+- **Purpose:** ensure users always have the next operational actions available without scrolling.
+
+### B. Stage Schema Rendering Polish
+
+#### 1) Field badge consistency and guidance
+- **File:** `frontend-next/src/app/cases/[id]/copilot/page.tsx`
+- **Changes:**
+  - Added consistent badge/label signals for:
+    - `critical`
+    - `required`
+    - `optional`
+    - `AI-extractable`
+  - Preserved bucket-based rendering aligned with schema behavior:
+    - known/prefilled context
+    - missing/required focus
+    - optional enhancement area
+- **Purpose:** improve scanability and reduce ambiguity about field importance and AI-assist capability.
+
+### C. Hybrid Gating + Progression Guardrails
+
+#### 1) Explicit stage advance action wired to decision API
+- **File:** `frontend-next/src/app/cases/[id]/copilot/page.tsx`
+- **Changes:**
+  - Added `advanceStage()` workflow:
+    - persists current stage intake (`saveStageIntake`)
+    - builds stage decision payload (`buildDecisionDataForStage`)
+    - posts decision approval to `/api/decisions/approve`
+    - refreshes case metadata and document center
+  - Introduced UX state for progression feedback:
+    - `advanceSubmitting`
+    - `advanceMessage`
+- **Purpose:** make stage progression explicit, auditable, and aligned with decision contracts.
+
+#### 2) Readiness-gated progression and generation
+- **File:** `frontend-next/src/app/cases/[id]/copilot/page.tsx`
+- **Behavior enforced:**
+  - `blocked`: disables generation and `Advance stage`
+  - `ready_with_warnings`: allows proceed path while warnings remain visible
+  - `ready`: full action enablement
+- **Purpose:** implement hybrid gating semantics directly in UI controls and reduce invalid transitions.
+
+### D. Form-Chat Collaboration and Confirmation
+
+#### 1) Human-confirmed extraction preserved
+- **File:** `frontend-next/src/app/cases/[id]/copilot/page.tsx`
+- **Behavior retained and hardened:**
+  - `Extract to fields` produces proposal preview only.
+  - `Confirm AI extraction` required before application/persistence.
+  - Confirmed values persist through stage-intake APIs.
+- **Purpose:** keep AI assist helpful but never auto-committing critical structured data.
+
+### E. Stage-Specific UX (DTP-03..DTP-06)
+
+#### 1) Supplier feedback workspace continuity
+- **File:** `frontend-next/src/app/cases/[id]/copilot/page.tsx`
+- **Behavior retained/polished for DTP-03/04:**
+  - structured status blocks for receipt/evaluation/negotiation feedback
+  - chat extraction integration path remains available
+- **Purpose:** preserve structured supplier interaction tracking while improving overall page hierarchy.
+
+#### 2) Late-stage checkpoint usability
+- **Files:** 
+  - `frontend-next/src/app/cases/[id]/copilot/page.tsx`
+  - `frontend-next/src/lib/dtp-stage-schema.ts`
+- **Behavior:** contracting/execution checkpoints remain first-class and participate in readiness gating.
+- **Purpose:** maintain operational rigor in DTP-05/06 while aligning with simplified layout.
+
+### F. Document Generation and Output Refresh
+
+#### 1) Local stage-context generation actions
+- **File:** `frontend-next/src/app/cases/[id]/copilot/page.tsx`
+- **Behavior:**
+  - generation controls remain local to stage workspace (no global clutter)
+  - blocked readiness prevents generation
+  - post-action refresh keeps generated outputs current in document center
+- **Purpose:** keep draft-generation flow contextual, deterministic, and visible.
+
+### G. Validation Results (This Implementation Pass)
+
+#### 1) Frontend build
+- `npm run build` in `frontend-next` -> **passed**
+
+#### 2) Targeted backend/API regressions
+- `python -m pytest tests/test_heatmap_api.py -k "stage_intake or generation_check"` -> **passed**
+- `python -m pytest tests/test_working_documents.py tests/test_artifact_export.py` -> **passed**
+
+#### 3) Notes
+- Existing warnings remain non-blocking (Pydantic v2 deprecation config warning and PyPDF2 deprecation warning), unchanged by this patch.
+

@@ -731,3 +731,79 @@ def test_scoring_config_publish_syncs_learned_weights(client: TestClient):
     assert abs(float(w["w_eus"]) - 0.55) < 0.02
     assert abs(float(w["w_ius"]) - 0.40) < 0.02
 
+
+def test_stage_intake_roundtrip_and_extract(client: TestClient):
+    create = client.post(
+        "/api/cases",
+        json={"category_id": "IT Infrastructure", "trigger_source": "User", "name": "Stage Intake Test"},
+    )
+    assert create.status_code == 200
+    case_id = create.json()["case_id"]
+
+    put = client.put(
+        f"/api/cases/{case_id}/stage-intake",
+        json={
+            "stage": "DTP-01",
+            "values": {
+                "request_title": "IT Service Desk Renewal",
+                "business_unit": "Global Ops",
+            },
+            "source": "human_form",
+            "updated_by": "tester",
+        },
+    )
+    assert put.status_code == 200
+    assert put.json()["success"] is True
+
+    get = client.get(f"/api/cases/{case_id}/stage-intake?stage=DTP-01")
+    assert get.status_code == 200
+    vals = get.json()["values"]
+    assert vals.get("request_title") == "IT Service Desk Renewal"
+    assert vals.get("business_unit") == "Global Ops"
+
+    extract = client.post(
+        f"/api/cases/{case_id}/stage-intake/extract",
+        json={
+            "stage": "DTP-01",
+            "free_text": "request title: APAC Helpdesk refresh; business unit: APAC Operations; estimated value: $1250000",
+            "existing_values": vals,
+        },
+    )
+    assert extract.status_code == 200
+    proposed = extract.json()["proposed_values"]
+    assert proposed.get("business_unit")
+    assert proposed.get("estimated_annual_value_usd")
+
+
+def test_stage_generation_check_preconditions(client: TestClient):
+    create = client.post(
+        "/api/cases",
+        json={"category_id": "IT Infrastructure", "trigger_source": "User", "name": "Generation Check Test"},
+    )
+    assert create.status_code == 200
+    case_id = create.json()["case_id"]
+
+    missing = client.post(
+        f"/api/cases/{case_id}/stage-intake/generation-check",
+        json={"stage": "DTP-01", "values": {"request_title": "Only title"}},
+    )
+    assert missing.status_code == 200
+    j = missing.json()
+    assert j["can_generate"] is False
+    assert "business_unit" in j["missing_fields"]
+
+    ok = client.post(
+        f"/api/cases/{case_id}/stage-intake/generation-check",
+        json={
+            "stage": "DTP-01",
+            "values": {
+                "request_title": "IT Service Desk",
+                "business_unit": "Global Ops",
+                "scope_summary": "Full desk support",
+                "estimated_annual_value_usd": "1000000",
+            },
+        },
+    )
+    assert ok.status_code == 200
+    assert ok.json()["can_generate"] is True
+

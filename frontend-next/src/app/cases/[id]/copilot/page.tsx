@@ -8,8 +8,11 @@ import { apiFetch } from "@/lib/api-fetch";
 import { getApiBaseUrl } from "@/lib/api-base";
 import { getMockCasePerformanceInsight } from "@/lib/mock-case-performance";
 import { buildDecisionDataForStage } from "@/lib/dtp-approve-defaults";
+import { computeStageReadiness, splitStageFields, stageSchema, type DtpFieldSchema } from "@/lib/dtp-stage-schema";
 import ProcuraBotIdentity from "@/components/branding/ProcuraBotIdentity";
 import { PROCURABOT_BRAND } from "@/lib/procurabot-brand";
+import DtpStepper, { type DtpStage } from "@/components/workflow/DtpStepper";
+import OpportunityContextRail from "@/components/workflow/OpportunityContextRail";
 
 /** Normalize common LLM quirks so chat reads cleanly before Markdown pass. */
 function normalizeAssistantText(text: string): string {
@@ -132,6 +135,14 @@ function readDecisionAnswer(val: unknown): string | undefined {
 
 /** RFx focus tier: from API ``dtp02_fit`` (deterministic) or legacy shortlist seed. */
 type Dtp02ShortlistRole = "primary" | "secondary" | "included" | "user-added";
+const DTP_STAGES: DtpStage[] = [
+  { id: "DTP-01", label: "Sourcing Pathway", shortLabel: "Pathway" },
+  { id: "DTP-02", label: "Evaluation Setup", shortLabel: "Eval setup" },
+  { id: "DTP-03", label: "RFP Issue", shortLabel: "RFP issue" },
+  { id: "DTP-04", label: "Evaluate & Negotiate", shortLabel: "Evaluate" },
+  { id: "DTP-05", label: "Contracting", shortLabel: "Contract" },
+  { id: "DTP-06", label: "Implementation", shortLabel: "Implement" },
+];
 
 type Dtp02ShortlistRow = {
   supplier_id: string;
@@ -280,12 +291,74 @@ export default function CaseProcuraBotPage() {
   const [cancelReasonCode, setCancelReasonCode] = useState("strategy_change");
   const [cancelReasonText, setCancelReasonText] = useState("");
   const [cancelSubmitting, setCancelSubmitting] = useState(false);
+  const [stageInputValues, setStageInputValues] = useState<Record<string, string>>({});
+  const [stageInputSubmitting, setStageInputSubmitting] = useState(false);
+  const [draftGeneratingRole, setDraftGeneratingRole] = useState<"rfx" | "contract" | null>(null);
+  const [stageInputBusy, setStageInputBusy] = useState(false);
+  const [stageExtractBusy, setStageExtractBusy] = useState(false);
+  const [extractSourceText, setExtractSourceText] = useState("");
+  const [extractPreview, setExtractPreview] = useState<Record<string, string> | null>(null);
+  const [advanceSubmitting, setAdvanceSubmitting] = useState(false);
+  const [advanceMessage, setAdvanceMessage] = useState<string | null>(null);
+  const [chatPanelWidthPct, setChatPanelWidthPct] = useState(40);
+  const isResizingChatPanelRef = useRef(false);
 
   useEffect(() => {
     setDemoAddedShortlistRows([]);
     setOptionalSupplierName("");
     setOptionalSupplierRegion("");
   }, [caseId]);
+  useEffect(() => {
+    if (!caseDetails) return;
+    setStageInputValues((prev) => ({
+      ...prev,
+      request_title: prev.request_title || String(caseDetails?.name || ""),
+      business_unit: prev.business_unit || String(caseDetails?.business_unit || ""),
+      estimated_annual_value_usd: prev.estimated_annual_value_usd || String(caseDetails?.estimated_spend_usd || ""),
+      required_start_date: prev.required_start_date || String(caseDetails?.required_start_date || ""),
+      implementation_urgency: prev.implementation_urgency || String(caseDetails?.implementation_urgency || ""),
+    }));
+  }, [caseDetails]);
+
+  useEffect(() => {
+    if (!caseId) return;
+    const stage = String(caseDetails?.dtp_stage || "DTP-01");
+    const run = async () => {
+      try {
+        const res = await apiFetch(`${getApiBaseUrl()}/api/cases/${encodeURIComponent(caseId)}/stage-intake?stage=${encodeURIComponent(stage)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const vals = (data?.values && typeof data.values === "object") ? (data.values as Record<string, string>) : {};
+        if (Object.keys(vals).length > 0) {
+          setStageInputValues((prev) => ({ ...prev, ...vals }));
+        }
+      } catch {
+        // no-op; keep local state fallback
+      }
+    };
+    void run();
+  }, [caseId, caseDetails?.dtp_stage]);
+
+  useEffect(() => {
+    const onMouseMove = (event: MouseEvent) => {
+      if (!isResizingChatPanelRef.current) return;
+      const rawRightPct = ((window.innerWidth - event.clientX) / window.innerWidth) * 100;
+      const clamped = Math.max(28, Math.min(55, rawRightPct));
+      setChatPanelWidthPct(clamped);
+    };
+    const onMouseUp = () => {
+      isResizingChatPanelRef.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, []);
+
 
   /** Stage checklist satisfied on server (answers recorded for current DTP stage). */
   const stageDecisionComplete = Boolean(caseDetails && isStageDecisionRecordedOnServer(caseDetails));
@@ -386,29 +459,41 @@ export default function CaseProcuraBotPage() {
     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [caseDetails?.activity_log]);
 
-  // 3. Handle Live Chat
-  const handleSend = async () => {
+  const fetchDocsCenterNow = async () => {
+    try {
+      const url = `${getApiBaseUrl()}/api/cases/${caseId}/documents/center`;
+      const res = await apiFetch(url);
+      const data = await res.json();
+      setDocumentsCenter({
+        uploads: Array.isArray(data.uploads) ? data.uploads : [],
+        internal_references: Array.isArray(data.internal_references) ? data.internal_references : [],
+        generated_outputs: Array.isArray(data.generated_outputs) ? data.generated_outputs : [],
+      });
+    } catch (err) {
+      console.error("Failed to refresh document center:", err);
+    }
+  };
+
+  const sendChatTurn = async (userMsg: string, files: File[] = [], visibleMsg?: string) => {
     if (!caseDetails) return;
-    if (!input.trim() && chatFiles.length === 0) return;
-    const userMsg = input.trim();
-    const fileNames = chatFiles.map((f) => f.name);
-    const userVisibleMsg = [userMsg, fileNames.length ? `Attached: ${fileNames.join(", ")}` : ""]
+    const trimmed = userMsg.trim();
+    if (!trimmed && files.length === 0) return;
+    const fileNames = files.map((f) => f.name);
+    const userVisibleMsg = visibleMsg ?? [trimmed, fileNames.length ? `Attached: ${fileNames.join(", ")}` : ""]
       .filter(Boolean)
       .join("\n");
     setMessages(prev => [...prev, { role: "user", content: userVisibleMsg }]);
-    setInput("");
-    setChatFiles([]);
     setIsTyping(true);
-    
+
     try {
       let res: Response;
       if (fileNames.length > 0) {
         const url = `${getApiBaseUrl()}/api/chat/with-attachments`;
         const fd = new FormData();
         fd.append("case_id", caseId);
-        fd.append("user_message", userMsg);
+        fd.append("user_message", trimmed);
         fd.append("use_tier_2", "true");
-        chatFiles.forEach((f) => fd.append("files", f));
+        files.forEach((f) => fd.append("files", f));
         res = await apiFetch(url, { method: "POST", body: fd });
       } else {
         const url = `${getApiBaseUrl()}/api/chat`;
@@ -417,29 +502,186 @@ export default function CaseProcuraBotPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             case_id: caseId,
-            user_message: userMsg,
+            user_message: trimmed,
             use_tier_2: true
           })
         });
       }
-      
+
       const data = await res.json();
       if (data.messages && data.messages.length > 0) {
-        // Find the last assistant message
-        const lastMsg = [...data.messages].reverse().find(m => m.role === "assistant" || m.role === "ai");
+        const lastMsg = [...data.messages].reverse().find((m: any) => m.role === "assistant" || m.role === "ai");
         if (lastMsg) {
-            setMessages(prev => [...prev, { role: "assistant", content: lastMsg.content }]);
+          setMessages(prev => [...prev, { role: "assistant", content: lastMsg.content }]);
         }
       } else if (data.assistant_message) {
-         setMessages(prev => [...prev, { role: "assistant", content: data.assistant_message }]);
+        setMessages(prev => [...prev, { role: "assistant", content: data.assistant_message }]);
       } else if (data.response) {
-         setMessages(prev => [...prev, { role: "assistant", content: data.response }]);
+        setMessages(prev => [...prev, { role: "assistant", content: data.response }]);
       }
+      await refreshCaseMeta();
+      await fetchDocsCenterNow();
     } catch (err) {
       console.error(err);
       setMessages(prev => [...prev, { role: "assistant", content: "Error: Could not reach the LangGraph Backend API." }]);
     } finally {
       setIsTyping(false);
+    }
+  };
+
+  // 3. Handle Live Chat
+  const handleSend = async () => {
+    if (!caseDetails) return;
+    if (!input.trim() && chatFiles.length === 0) return;
+    const userMsg = input.trim();
+    const files = [...chatFiles];
+    setInput("");
+    setChatFiles([]);
+    await sendChatTurn(userMsg, files);
+  };
+
+  const getActiveStageFields = () => stageSchema(String(caseDetails?.dtp_stage || "DTP-01"));
+
+  const saveStageIntake = async (source = "human_form") => {
+    setStageInputBusy(true);
+    try {
+      await apiFetch(`${getApiBaseUrl()}/api/cases/${encodeURIComponent(caseId)}/stage-intake`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stage: String(caseDetails?.dtp_stage || "DTP-01"),
+          values: stageInputValues,
+          source,
+          updated_by: "human-manager",
+        }),
+      });
+      await refreshCaseMeta();
+    } finally {
+      setStageInputBusy(false);
+    }
+  };
+
+  const sendStructuredInputToCopilot = async () => {
+    const activeStageFields = getActiveStageFields();
+    if (activeStageFields.length === 0) return;
+    setStageInputSubmitting(true);
+    try {
+      await saveStageIntake("human_form");
+      const lines = activeStageFields.map((f) => `- ${f.key}: ${(stageInputValues[f.key] || "").trim() || "(missing)"}`);
+      const msg = [
+        `Please use this structured human input for ${displayStage}.`,
+        "",
+        "Update your case understanding, identify missing required and critical data, and guide me step-by-step to complete what is still missing.",
+        "",
+        ...lines,
+      ].join("\n");
+      await sendChatTurn(msg, [], `[Structured input submitted for ${displayStage}]`);
+    } finally {
+      setStageInputSubmitting(false);
+    }
+  };
+
+  const generateDraftFromStructuredInput = async (role: "rfx" | "contract") => {
+    const activeStageFields = getActiveStageFields();
+    if (activeStageFields.length === 0) return;
+    setDraftGeneratingRole(role);
+    try {
+      const checkRes = await apiFetch(`${getApiBaseUrl()}/api/cases/${encodeURIComponent(caseId)}/stage-intake/generation-check`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stage: displayStage,
+          values: stageInputValues,
+        }),
+      });
+      const check = await checkRes.json().catch(() => ({} as { can_generate?: boolean; missing_fields?: string[] }));
+      if (!checkRes.ok || !check.can_generate) {
+        const miss = Array.isArray(check?.missing_fields) ? check.missing_fields.join(", ") : "required fields";
+        alert(`Cannot generate yet. Missing: ${miss}`);
+        return;
+      }
+      await saveStageIntake("human_form");
+      const roleName = role === "rfx" ? "RFx" : "Contract";
+      const lines = activeStageFields.map((f) => `- ${f.label}: ${(stageInputValues[f.key] || "").trim() || "(missing)"}`);
+      const msg = [
+        `Generate a ${roleName} draft from this structured input and store it as a generated output artifact pack for this case.`,
+        "If key fields are missing, make assumptions explicit in the draft and list open questions at the end.",
+        "",
+        ...lines,
+      ].join("\n");
+      await sendChatTurn(msg, [], `[Generate ${roleName} draft request submitted]`);
+    } finally {
+      setDraftGeneratingRole(null);
+    }
+  };
+
+  const extractToStructuredFields = async () => {
+    const freeText = extractSourceText.trim() || String(messages.filter((m) => m.role === "assistant").slice(-1)[0]?.content || "").trim();
+    if (!freeText) {
+      alert("Provide text or have at least one assistant response to extract from.");
+      return;
+    }
+    setStageExtractBusy(true);
+    try {
+      const res = await apiFetch(`${getApiBaseUrl()}/api/cases/${encodeURIComponent(caseId)}/stage-intake/extract`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stage: displayStage,
+          free_text: freeText,
+          existing_values: stageInputValues,
+        }),
+      });
+      if (!res.ok) {
+        alert("Could not extract structured values from text.");
+        return;
+      }
+      const data = await res.json();
+      const proposed = (data?.proposed_values && typeof data.proposed_values === "object")
+        ? (data.proposed_values as Record<string, string>)
+        : {};
+      setExtractPreview(proposed);
+    } finally {
+      setStageExtractBusy(false);
+    }
+  };
+
+  const applyExtractPreview = async () => {
+    if (!extractPreview) return;
+    setStageInputValues((prev) => ({ ...prev, ...extractPreview }));
+    setExtractPreview(null);
+    await saveStageIntake("chat_extract_confirmed");
+  };
+
+  const advanceStage = async () => {
+    if (!caseDetails || readinessState.readiness === "blocked") return;
+    setAdvanceSubmitting(true);
+    setAdvanceMessage(null);
+    try {
+      await saveStageIntake("human_form");
+      const decisionData = buildDecisionDataForStage(displayStage, supplierId);
+      const res = await apiFetch(`${getApiBaseUrl()}/api/decisions/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          case_id: caseId,
+          decision: "Approve",
+          reason: `Advance from ${displayStage} via stage workspace`,
+          decision_data: decisionData || undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({} as { message?: string; detail?: string; new_dtp_stage?: string }));
+      if (!res.ok) {
+        setAdvanceMessage(data?.detail || data?.message || "Could not advance stage yet.");
+        return;
+      }
+      setAdvanceMessage(data?.message || `Advanced to ${data?.new_dtp_stage || "next stage"}.`);
+      await refreshCaseMeta();
+      await fetchDocsCenterNow();
+    } catch {
+      setAdvanceMessage("Could not advance stage due to network/server error.");
+    } finally {
+      setAdvanceSubmitting(false);
     }
   };
 
@@ -535,6 +777,12 @@ export default function CaseProcuraBotPage() {
   const displayName = caseDetails?.name || "Case";
   const displayCategory = caseDetails?.category_id || "Category";
   const displayStage = caseDetails?.dtp_stage || "DTP-01";
+  const activeStageFields = stageSchema(displayStage);
+  const readinessState = computeStageReadiness(displayStage, stageInputValues);
+  const fieldBuckets = splitStageFields(displayStage, stageInputValues);
+  const missingRequiredFields = readinessState.missingRequired;
+  const stageIdx = Math.max(0, DTP_STAGES.findIndex((s) => s.id === displayStage));
+  const completedStageIds = DTP_STAGES.slice(0, stageIdx).map((s) => s.id);
   const caseStatus = String(caseDetails?.status || "In Progress");
   const isCaseCancelled = caseStatus.toLowerCase() === "cancelled";
   
@@ -557,6 +805,7 @@ export default function CaseProcuraBotPage() {
   const riskAssessment = strategyOutput?.risk_assessment || null;
   const topFindings = keyFindings.slice(0, 3);
   const focus = caseDetails?.copilot_focus;
+  const stageDecisionTemplate = buildDecisionDataForStage(displayStage, supplierId);
   const suggestedChatPrompts: string[] = (focus?.suggested_chat_prompts as string[]) || [];
   const perfInsight = hasLiveCase
     ? getMockCasePerformanceInsight({
@@ -663,10 +912,13 @@ export default function CaseProcuraBotPage() {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden w-full m-0 p-0 font-sans">
+    <div className={`flex h-screen bg-slate-50 overflow-hidden w-full m-0 p-0 font-sans ${isResizingChatPanelRef.current ? "select-none" : ""}`}>
       
-      {/* LEFT PANEL: Case Details (60%) */}
-      <div className="w-[60%] flex flex-col h-full overflow-y-auto bg-slate-50/50 border-r border-slate-200">
+      {/* LEFT PANEL: Case Details (Resizable) */}
+      <div
+        className="flex flex-col h-full overflow-y-auto bg-slate-50/50 border-r border-slate-200"
+        style={{ width: `${100 - chatPanelWidthPct}%` }}
+      >
         
         {/* Condensed Header */}
         <div className="bg-sponsor-blue text-white p-6 sticky top-0 z-10 shadow-md flex flex-row flex-wrap gap-3 justify-between items-center shrink-0">
@@ -709,6 +961,11 @@ export default function CaseProcuraBotPage() {
         </div>
 
         <motion.div variants={container} initial="hidden" animate="show" className="p-8 space-y-6 flex-1">
+          <DtpStepper
+            stages={DTP_STAGES}
+            currentStageId={displayStage}
+            completedStageIds={completedStageIds}
+          />
           {!hasLiveCase ? (
             caseLoading ? (
               <div className="animate-pulse space-y-6" aria-hidden>
@@ -752,6 +1009,18 @@ export default function CaseProcuraBotPage() {
             )
           ) : (
             <>
+          <OpportunityContextRail
+            typeLabel={String(caseDetails?.opportunity_type || "workflow_case")}
+            opportunityLabel={displayName}
+            opportunityRef={caseId}
+            spendUsd={Number(caseDetails?.estimated_spend_usd || 0)}
+            monthsToExpiry={String(caseDetails?.months_to_expiry ?? "—")}
+            implementationMonths={String(caseDetails?.implementation_timeline_months ?? "—")}
+            preferredSupplierStatus={String(caseDetails?.preferred_supplier_status || "—")}
+            artifactCount={Array.isArray(caseDetails?.supporting_artifacts) ? caseDetails.supporting_artifacts.length : 0}
+            hasReview={stageDecisionComplete}
+            isApproved={String(caseDetails?.status || "").toLowerCase() === "approved"}
+          />
           {/* Essential context only — what you need to understand the case */}
           <motion.div variants={item} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="bg-amber-50 border-b border-amber-200 p-4 flex gap-3 items-start">
@@ -790,6 +1059,29 @@ export default function CaseProcuraBotPage() {
               )}
               {riskAssessment && (
                 <p className="text-sm text-slate-700 mt-3 pt-3 border-t border-slate-100"><span className="font-semibold">Risk note:</span> {riskAssessment}</p>
+              )}
+            </div>
+          </motion.div>
+
+          <motion.div variants={item} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="bg-slate-50 border-b border-slate-200 p-4">
+              <h3 className="text-slate-800 font-bold text-sm">DTP checkpoint contract</h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Stage approval uses structured decision payload keys so backend semantics stay consistent.
+              </p>
+            </div>
+            <div className="p-4">
+              {!stageDecisionTemplate || Object.keys(stageDecisionTemplate).length === 0 ? (
+                <p className="text-xs text-slate-500">No checkpoint keys defined for this stage yet.</p>
+              ) : (
+                <ul className="space-y-2 text-xs text-slate-700">
+                  {Object.entries(stageDecisionTemplate).map(([key, value]) => (
+                    <li key={key} className="flex items-center justify-between gap-3 rounded-md border border-slate-100 bg-slate-50 px-3 py-2">
+                      <span className="font-mono text-[11px] text-slate-600">{key}</span>
+                      <span className="font-semibold text-slate-800">{String(value)}</span>
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
           </motion.div>
@@ -986,13 +1278,224 @@ export default function CaseProcuraBotPage() {
             </motion.div>
           )}
 
-          {hasLiveCase && (
+          {hasLiveCase && activeStageFields.length > 0 && (
             <motion.div variants={item} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-              <div className="bg-slate-50 border-b border-slate-200 p-4 flex flex-wrap items-center justify-between gap-3">
-                <h3 className="text-slate-800 font-bold text-sm flex items-center gap-2">
+              <div className="bg-slate-50 border-b border-slate-200 p-4">
+                <h3 className="text-slate-800 font-bold text-sm">Human input workspace · {displayStage}</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Fill missing information directly here. ProcuraBot will guide completion and use this for draft generation.
+                </p>
+              </div>
+              <div className="p-4 space-y-4">
+                <div
+                  className={`rounded-md px-3 py-2 text-xs border ${
+                    readinessState.readiness === "blocked"
+                      ? "border-red-200 bg-red-50 text-red-900"
+                      : readinessState.readiness === "ready_with_warnings"
+                        ? "border-amber-200 bg-amber-50 text-amber-900"
+                        : "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  }`}
+                >
+                  {readinessState.readiness === "blocked" && (
+                    <>Blocked: critical fields missing — {readinessState.missingCritical.map((f) => f.label).join(", ")}</>
+                  )}
+                  {readinessState.readiness === "ready_with_warnings" && (
+                    <>Ready with warnings: remaining required fields — {missingRequiredFields.map((f) => f.label).join(", ")}</>
+                  )}
+                  {readinessState.readiness === "ready" && <>Ready: required fields are complete for {displayStage}.</>}
+                </div>
+
+                {missingRequiredFields.length > 0 && (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    Missing required fields: {missingRequiredFields.map((f) => f.label).join(", ")}
+                  </div>
+                )}
+
+                {fieldBuckets.prefilled.length > 0 && (
+                  <details className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                    <summary className="cursor-pointer text-xs font-semibold text-slate-700">
+                      Known prefilled fields ({fieldBuckets.prefilled.length})
+                    </summary>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      These values are already known from case context or earlier inputs.
+                    </p>
+                  </details>
+                )}
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                  {activeStageFields.map((f: DtpFieldSchema) => (
+                    <div key={f.key} className={f.multiline ? "lg:col-span-2" : ""}>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                        {f.label} {f.required ? <span className="text-red-500">*</span> : null}
+                        {f.critical ? <span className="ml-1 text-[10px] text-red-600">(critical)</span> : null}
+                        {!f.required && !f.critical ? <span className="ml-1 text-[10px] text-slate-500">(optional)</span> : null}
+                        {f.ai_extractable ? <span className="ml-1 text-[10px] text-blue-600">(AI-extractable)</span> : null}
+                      </label>
+                      {f.multiline ? (
+                        <textarea
+                          value={stageInputValues[f.key] || ""}
+                          onChange={(e) => setStageInputValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                          placeholder={f.placeholder}
+                          rows={3}
+                          className="w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm text-slate-700"
+                        />
+                      ) : (
+                        <input
+                          value={stageInputValues[f.key] || ""}
+                          onChange={(e) => setStageInputValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                          placeholder={f.placeholder}
+                          className="w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm text-slate-700"
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {fieldBuckets.optional.length > 0 && (
+                  <details className="rounded-md border border-slate-200 bg-white px-3 py-2">
+                    <summary className="cursor-pointer text-xs font-semibold text-slate-700">
+                      Optional enhancement fields ({fieldBuckets.optional.length})
+                    </summary>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Optional fields improve AI guidance quality but do not block critical progression.
+                    </p>
+                  </details>
+                )}
+
+                {(displayStage === "DTP-03" || displayStage === "DTP-04") && (
+                  <div className="rounded-md border border-slate-200 bg-white p-3">
+                    <p className="text-xs font-semibold text-slate-700 mb-2">
+                      Supplier feedback workspace (structured)
+                    </p>
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 border border-slate-200">
+                          <th className="px-2 py-1 border border-slate-200">Capture area</th>
+                          <th className="px-2 py-1 border border-slate-200">Status</th>
+                          <th className="px-2 py-1 border border-slate-200">How to update</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td className="px-2 py-1 border border-slate-200">Response receipt status</td>
+                          <td className="px-2 py-1 border border-slate-200">{stageInputValues.supplier_response_received ? "Captured" : "Missing"}</td>
+                          <td className="px-2 py-1 border border-slate-200">Field + chat extraction</td>
+                        </tr>
+                        <tr>
+                          <td className="px-2 py-1 border border-slate-200">Clarification / evaluation notes</td>
+                          <td className="px-2 py-1 border border-slate-200">
+                            {stageInputValues.supplier_clarification_feedback || stageInputValues.supplier_evaluation_feedback ? "Captured" : "Missing"}
+                          </td>
+                          <td className="px-2 py-1 border border-slate-200">Paste supplier feedback then extract</td>
+                        </tr>
+                        <tr>
+                          <td className="px-2 py-1 border border-slate-200">Negotiation deltas</td>
+                          <td className="px-2 py-1 border border-slate-200">{stageInputValues.negotiation_feedback ? "Captured" : "Missing"}</td>
+                          <td className="px-2 py-1 border border-slate-200">Manual input + copilot refinement</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-3 space-y-2">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Extract structured updates from chat or pasted feedback
+                  </label>
+                  <textarea
+                    value={extractSourceText}
+                    onChange={(e) => setExtractSourceText(e.target.value)}
+                    rows={2}
+                    placeholder="Paste supplier feedback or leave blank to use last assistant response..."
+                    className="w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm text-slate-700 bg-white"
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void extractToStructuredFields()}
+                      disabled={stageExtractBusy}
+                      className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 px-3 py-1.5 text-xs font-semibold hover:bg-slate-100 disabled:opacity-50"
+                    >
+                      {stageExtractBusy ? "Extracting..." : "Extract to fields"}
+                    </button>
+                    {extractPreview && (
+                      <button
+                        type="button"
+                        onClick={() => void applyExtractPreview()}
+                        className="inline-flex items-center justify-center rounded-md bg-emerald-600 text-white px-3 py-1.5 text-xs font-semibold hover:bg-emerald-700"
+                      >
+                        Confirm AI extraction
+                      </button>
+                    )}
+                  </div>
+                  {extractPreview && (
+                    <pre className="text-[11px] rounded border border-emerald-200 bg-emerald-50 p-2 overflow-x-auto">
+                      {JSON.stringify(extractPreview, null, 2)}
+                    </pre>
+                  )}
+                </div>
+
+                <div className="sticky bottom-0 z-10 -mx-4 mt-2 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur">
+                  <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void saveStageIntake("human_form")}
+                    disabled={stageInputBusy}
+                    className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 px-3 py-2 text-xs font-semibold hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    {stageInputBusy ? "Saving..." : "Save stage input"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void sendStructuredInputToCopilot()}
+                    disabled={stageInputSubmitting}
+                    className="inline-flex items-center justify-center rounded-md bg-sponsor-blue text-white px-3 py-2 text-xs font-semibold hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {stageInputSubmitting ? "Sending..." : "Send structured input to ProcuraBot"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void generateDraftFromStructuredInput("rfx")}
+                    disabled={draftGeneratingRole != null || readinessState.readiness === "blocked"}
+                    className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 px-3 py-2 text-xs font-semibold hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    {draftGeneratingRole === "rfx" ? "Generating..." : "Generate RFx draft"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void generateDraftFromStructuredInput("contract")}
+                    disabled={draftGeneratingRole != null || readinessState.readiness === "blocked"}
+                    className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 px-3 py-2 text-xs font-semibold hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    {draftGeneratingRole === "contract" ? "Generating..." : "Generate contract draft"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void advanceStage()}
+                    disabled={advanceSubmitting || readinessState.readiness === "blocked"}
+                    className="inline-flex items-center justify-center rounded-md bg-emerald-600 text-white px-3 py-2 text-xs font-semibold hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    {advanceSubmitting ? "Advancing..." : "Advance stage"}
+                  </button>
+                  </div>
+                  {advanceMessage ? (
+                    <p className="mt-2 text-xs text-slate-600">{advanceMessage}</p>
+                  ) : null}
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {hasLiveCase && (
+            <details className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden group">
+              <summary className="list-none cursor-pointer px-4 py-3 text-sm font-semibold text-slate-700 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                <span className="flex items-center gap-2">
                   <FileText className="w-4 h-4 text-sponsor-blue" />
                   Case documents
-                </h3>
+                </span>
+                <span className="text-[11px] text-slate-500">Expand when needed</span>
+              </summary>
+              <div className="p-4 space-y-3">
                 <div className="flex gap-1 rounded-lg border border-slate-200 bg-white p-1">
                   {([
                     ["uploads", "Case uploads"],
@@ -1014,8 +1517,7 @@ export default function CaseProcuraBotPage() {
                     </button>
                   ))}
                 </div>
-              </div>
-              <div className="p-4 space-y-3">
+
                 <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
                   <input
                     type="text"
@@ -1133,17 +1635,18 @@ export default function CaseProcuraBotPage() {
                   </ul>
                 )}
               </div>
-            </motion.div>
+            </details>
           )}
 
 
-          <motion.div variants={item} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
-              <h3 className="text-slate-800 font-bold text-[15px] flex items-center gap-2">
+          <details className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden group">
+            <summary className="list-none cursor-pointer px-4 py-3 text-sm font-semibold text-slate-700 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <span className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-sponsor-blue" />
                 Decision audit
-              </h3>
-            </div>
+              </span>
+              <span className="text-[11px] text-slate-500">Expand when needed</span>
+            </summary>
             <div className="p-4">
               {decisionAuditRows.length === 0 ? (
                 <p className="text-sm text-slate-500 italic">No recorded decisions yet for this case.</p>
@@ -1163,7 +1666,7 @@ export default function CaseProcuraBotPage() {
                 </ul>
               )}
             </div>
-          </motion.div>
+          </details>
 
           <motion.div variants={item} className="bg-white rounded-xl shadow-sm border-2 border-slate-200 overflow-hidden">
             <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
@@ -1175,7 +1678,9 @@ export default function CaseProcuraBotPage() {
             <div className="p-6">
               <p className="text-sm text-slate-600 mb-4 leading-relaxed">
                 <strong>{displayStage}</strong>
-                {focus?.pending_questions?.length
+                {readinessState.readiness === "blocked"
+                  ? " — Progression is blocked until critical stage fields are completed."
+                  : focus?.pending_questions?.length
                   ? " — Answer step-by-step in ProcuraBot chat (this same window). When all prompts are complete, type yes or approve to confirm this stage."
                   : " — Open questions look resolved in chat. Type approve when you are ready to move to the next stage."}
               </p>
@@ -1234,8 +1739,22 @@ export default function CaseProcuraBotPage() {
         </motion.div>
       </div>
 
-      {/* RIGHT PANEL: ProcuraBot Chat (40%) */}
-      <div className="w-[40%] flex flex-col h-full bg-white shadow-2xl z-20">
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize ProcuraBot panel"
+        title="Drag to resize ProcuraBot panel"
+        onMouseDown={() => {
+          isResizingChatPanelRef.current = true;
+          document.body.style.cursor = "col-resize";
+          document.body.style.userSelect = "none";
+        }}
+        onDoubleClick={() => setChatPanelWidthPct(40)}
+        className="w-2 shrink-0 cursor-col-resize bg-slate-100 hover:bg-slate-200 active:bg-slate-300 border-l border-r border-slate-200"
+      />
+
+      {/* RIGHT PANEL: ProcuraBot Chat (Resizable) */}
+      <div className="flex flex-col h-full bg-white shadow-2xl z-20" style={{ width: `${chatPanelWidthPct}%` }}>
         
         {/* Chat Header */}
         <header className="px-6 py-4 border-b border-slate-100 bg-white space-y-3">
@@ -1248,6 +1767,14 @@ export default function CaseProcuraBotPage() {
                   : "Select a case to begin"
             }
           />
+          <div className="flex items-center gap-2">
+            <span className="inline-flex rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700">
+              Context scope
+            </span>
+            <span className="text-xs text-slate-600">
+              {hasLiveCase ? `Case-level (${displayStage})` : "Portfolio-level"}
+            </span>
+          </div>
           {hasLiveCase && suggestedChatPrompts.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {suggestedChatPrompts.map((q, i) => (

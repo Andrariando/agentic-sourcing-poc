@@ -825,6 +825,72 @@ class CancelCaseRequest(BaseModel):
     cancelled_by: str = Field(default="human-manager", min_length=1, max_length=80)
 
 
+class StageIntakeUpsertRequest(BaseModel):
+    stage: str
+    values: Dict[str, str] = Field(default_factory=dict)
+    source: str = "human_form"
+    updated_by: str = "human-manager"
+
+
+class StageIntakeExtractRequest(BaseModel):
+    stage: str
+    free_text: str
+    existing_values: Dict[str, str] = Field(default_factory=dict)
+
+
+class StageGenerationCheckRequest(BaseModel):
+    stage: str
+    values: Dict[str, str] = Field(default_factory=dict)
+
+
+def _required_generation_keys(stage: str) -> List[str]:
+    s = (stage or "").strip().upper()
+    if s == "DTP-01":
+        return ["request_title", "business_unit", "scope_summary", "estimated_annual_value_usd"]
+    if s == "DTP-02":
+        return ["evaluation_criteria", "mandatory_requirements"]
+    if s == "DTP-03":
+        return ["rfx_title", "rfx_issue_date", "response_due_date"]
+    if s == "DTP-04":
+        return ["supplier_response_received", "supplier_evaluation_feedback", "award_recommendation"]
+    if s == "DTP-05":
+        return ["contract_signed", "legal_signoff", "contract_reference"]
+    if s == "DTP-06":
+        return ["execution_started", "implementation_milestones", "kpi_monitoring_status", "execution_confirmed_by_human"]
+    return []
+
+
+def _extract_stage_fields_heuristic(stage: str, free_text: str, existing: Dict[str, str]) -> Dict[str, str]:
+    out = dict(existing or {})
+    txt = (free_text or "").strip()
+    if not txt:
+        return out
+    lower = txt.lower()
+    # very lightweight deterministic extraction to support human confirmation UX.
+    if stage == "DTP-01":
+        m = re.search(r"(?:business unit|bu)\s*[:=-]\s*([^\n,;]+)", txt, flags=re.I)
+        if m:
+            out["business_unit"] = m.group(1).strip()
+        m = re.search(r"(?:request title|title)\s*[:=-]\s*([^\n]+)", txt, flags=re.I)
+        if m:
+            out["request_title"] = m.group(1).strip()
+        m = re.search(r"(?:estimated(?: annual)? value|budget|spend)\s*[:=-]\s*\$?([0-9][0-9,\.]*)", txt, flags=re.I)
+        if m:
+            out["estimated_annual_value_usd"] = m.group(1).replace(",", "").strip()
+    if stage == "DTP-03":
+        for key, label in [("rfx_issue_date", "issue"), ("response_due_date", "response due")]:
+            m = re.search(rf"{label}[^\n:]*[:=-]\s*([0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}})", lower, flags=re.I)
+            if m:
+                out[key] = m.group(1)
+    if stage == "DTP-05":
+        if "contract signed" in lower and ("yes" in lower or "done" in lower or "completed" in lower):
+            out["contract_signed"] = "yes"
+    if stage == "DTP-06":
+        if "execution started" in lower and ("yes" in lower or "started" in lower):
+            out["execution_started"] = "yes"
+    return out
+
+
 @app.post("/api/cases/{case_id}/copilot/feedback")
 async def submit_s2c_copilot_feedback(case_id: str, body: S2CProcuraBotFeedbackRequest):
     vote = (body.vote or "").strip().lower()
@@ -867,6 +933,68 @@ async def cancel_case(case_id: str, body: CancelCaseRequest):
     if not ok:
         raise HTTPException(status_code=404, detail="Case not found")
     return {"success": True, "case_id": case_id, "status": "Cancelled"}
+
+
+@app.get("/api/cases/{case_id}/stage-intake")
+async def get_stage_intake(case_id: str, stage: str = Query(...)):
+    service = get_case_service()
+    c = service.get_case(case_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Case not found")
+    values = service.get_stage_intake(case_id, stage)
+    return {"case_id": case_id, "stage": stage, "values": values}
+
+
+@app.put("/api/cases/{case_id}/stage-intake")
+async def upsert_stage_intake(case_id: str, body: StageIntakeUpsertRequest):
+    service = get_case_service()
+    c = service.get_case(case_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Case not found")
+    ok = service.upsert_stage_intake(
+        case_id,
+        body.stage,
+        body.values or {},
+        source=body.source,
+        updated_by=body.updated_by,
+    )
+    if not ok:
+        raise HTTPException(status_code=500, detail="Failed to save stage intake")
+    return {"success": True, "case_id": case_id, "stage": body.stage, "saved_fields": len(body.values or {})}
+
+
+@app.post("/api/cases/{case_id}/stage-intake/extract")
+async def extract_stage_intake(case_id: str, body: StageIntakeExtractRequest):
+    service = get_case_service()
+    c = service.get_case(case_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Case not found")
+    proposed = _extract_stage_fields_heuristic(body.stage, body.free_text, body.existing_values or {})
+    return {
+        "case_id": case_id,
+        "stage": body.stage,
+        "proposed_values": proposed,
+        "note": "Heuristic extraction. Human confirmation required before saving.",
+    }
+
+
+@app.post("/api/cases/{case_id}/stage-intake/generation-check")
+async def stage_generation_check(case_id: str, body: StageGenerationCheckRequest):
+    service = get_case_service()
+    c = service.get_case(case_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Case not found")
+    required = _required_generation_keys(body.stage)
+    values = body.values or {}
+    missing = [k for k in required if not str(values.get(k, "")).strip()]
+    can_generate = len(missing) == 0
+    return {
+        "case_id": case_id,
+        "stage": body.stage,
+        "can_generate": can_generate,
+        "required_fields": required,
+        "missing_fields": missing,
+    }
 
 
 @app.get("/api/s2c/performance/metrics")
