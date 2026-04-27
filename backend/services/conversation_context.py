@@ -16,6 +16,7 @@ from datetime import datetime
 from backend.persistence.database import get_db_session
 from backend.persistence.models import ChatMessage as ChatMessageModel
 from backend.services.case_service import CaseService
+from backend.services.llm_provider import get_langchain_chat_model
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,8 @@ class ConversationContextManager:
         self.recent_messages_count = int(os.getenv("RECENT_MESSAGES_COUNT", "10"))
         self.summarize_threshold = int(os.getenv("SUMMARIZE_THRESHOLD", "20"))
         self.enable_summarization = os.getenv("ENABLE_SUMMARIZATION", "true").lower() == "true"
+        self.summary_intent_key = "memory_summary_v1"
+        self.max_structured_memory_chars = int(os.getenv("MAX_STRUCTURED_MEMORY_CHARS", "2400"))
         
         # Initialize tiktoken encoding if available
         self.encoding = None
@@ -123,7 +126,21 @@ class ConversationContextManager:
         all_messages = self.get_recent_messages(case_id, limit=100)
         
         if not all_messages:
-            return []
+            structured_memory = self._build_structured_case_memory(case_id)
+            if not structured_memory:
+                return []
+            return [{"role": "system", "content": structured_memory}]
+
+        # Exclude summary-cache rows from normal chat replay; they are injected explicitly.
+        all_messages = [
+            m for m in all_messages
+            if str(getattr(m, "intent_classified", "") or "") != self.summary_intent_key
+        ]
+        if not all_messages:
+            structured_memory = self._build_structured_case_memory(case_id)
+            if not structured_memory:
+                return []
+            return [{"role": "system", "content": structured_memory}]
         
         # Start with most recent messages
         recent_messages = all_messages[-self.recent_messages_count:]
@@ -137,6 +154,11 @@ class ConversationContextManager:
         # Estimate tokens
         estimated_tokens = self.estimate_context_tokens(context)
         
+        summary_context: List[Dict[str, str]] = []
+        structured_memory = self._build_structured_case_memory(case_id)
+        if structured_memory:
+            summary_context.append({"role": "system", "content": structured_memory})
+
         # If we have more messages and tokens are under budget, try to include more
         if len(all_messages) > self.recent_messages_count:
             older_messages = all_messages[:-self.recent_messages_count]
@@ -147,7 +169,7 @@ class ConversationContextManager:
                     summary = self.summarize_conversation(case_id, [m.message_id for m in older_messages])
                     if summary:
                         # Add summary as a system message
-                        summary_context = [{"role": "system", "content": f"Previous conversation summary: {summary}"}]
+                        summary_context.append({"role": "system", "content": f"Previous conversation summary: {summary}"})
                         full_context = summary_context + context
                         full_tokens = self.estimate_context_tokens(full_context)
                         
@@ -156,6 +178,10 @@ class ConversationContextManager:
                         # If summary + recent is still too large, just use recent
                 except Exception as e:
                     logger.warning(f"Summarization failed: {e}, using only recent messages")
+                    if summary_context:
+                        test_context = summary_context + context
+                        if self.estimate_context_tokens(test_context) <= max_tokens:
+                            context = test_context
             else:
                 # Try to include more messages if under token limit
                 for msg in reversed(older_messages):
@@ -165,6 +191,14 @@ class ConversationContextManager:
                         context = test_context
                     else:
                         break
+                if summary_context:
+                    test_context = summary_context + context
+                    if self.estimate_context_tokens(test_context) <= max_tokens:
+                        context = test_context
+        elif summary_context:
+            test_context = summary_context + context
+            if self.estimate_context_tokens(test_context) <= max_tokens:
+                context = test_context
         
         # Final check: trim if still over limit
         while self.estimate_context_tokens(context) > max_tokens and len(context) > 1:
@@ -181,13 +215,184 @@ class ConversationContextManager:
         Create cost-effective summary of older messages.
         Uses cheaper model (gpt-4o-mini) for summarization.
         
-        TODO: Implement LLM-based summarization (future enhancement)
-        For now, returns None (summarization not implemented yet).
-        This allows the system to work without summarization.
+        Uses a summary cache row keyed by the latest covered message_id to avoid
+        regenerating summaries on every turn.
         """
-        # Future: Implement with LLM call to gpt-4o-mini
-        # For now, return None to allow system to work without summarization
-        return None
+        if not message_ids:
+            return None
+
+        # 1) Reuse cached summary when the covered history has not changed.
+        target_last_id = str(message_ids[-1])
+        cached = self._get_cached_summary(case_id, target_last_id)
+        if cached:
+            return cached
+
+        # 2) Load older messages and build compact transcript.
+        all_messages = self.get_recent_messages(case_id, limit=150)
+        idx = set(str(m) for m in message_ids)
+        selected = [m for m in all_messages if str(getattr(m, "message_id", "")) in idx]
+        if not selected:
+            return None
+
+        transcript_lines: List[str] = []
+        for m in selected:
+            role = str(getattr(m, "role", "user") or "user")
+            content = str(getattr(m, "content", "") or "").strip()
+            if not content:
+                continue
+            transcript_lines.append(f"{role}: {content[:800]}")
+            if len("\n".join(transcript_lines)) > 24000:
+                break
+        if not transcript_lines:
+            return None
+        transcript = "\n".join(transcript_lines)
+
+        # 3) Ask a cheap model for durable memory summary; fallback to heuristic.
+        prompt_system = (
+            "You summarize procurement copilots for long-term memory.\n"
+            "Output plain text with concise bullets under these headings:\n"
+            "Decisions, Constraints, User preferences, Open questions.\n"
+            "Keep only durable facts and explicit commitments.\n"
+            "Do not include transient chatter."
+        )
+        prompt_user = f"Summarize this prior conversation:\n\n{transcript}"
+
+        summary_text: Optional[str] = None
+        try:
+            from langchain_core.messages import HumanMessage, SystemMessage
+            llm = get_langchain_chat_model(
+                default_model="gpt-4o-mini",
+                temperature=0.1,
+                max_tokens=450,
+                deployment_env="AZURE_OPENAI_SUMMARY_DEPLOYMENT",
+            )
+            if llm is not None:
+                out = llm.invoke(
+                    [SystemMessage(content=prompt_system), HumanMessage(content=prompt_user)]
+                )
+                summary_text = str(getattr(out, "content", "") or "").strip()[:4000] or None
+        except Exception as e:
+            logger.warning(f"LLM summarization failed: {e}")
+            summary_text = None
+
+        if not summary_text:
+            # Deterministic fallback summary for reliability without LLM creds.
+            tail = transcript_lines[-18:]
+            summary_text = "Decisions/constraints/preferences/open questions (fallback memory):\n- " + "\n- ".join(tail[:12])
+
+        self._save_summary_cache(case_id, summary_text, target_last_id, len(selected))
+        return summary_text
+
+    def _build_structured_case_memory(self, case_id: str) -> Optional[str]:
+        """
+        Compact snapshot of human-editable case memory (stage intake + working docs).
+        Injected as system context so edits remain sticky across long chats.
+        """
+        try:
+            state = self.case_service.get_case_state(case_id) or {}
+        except Exception:
+            return None
+
+        hd = state.get("human_decision") or {}
+        if not isinstance(hd, dict):
+            hd = {}
+
+        lines: List[str] = []
+        lines.append("Structured memory snapshot (human-confirmed inputs):")
+        dtp_stage = str(state.get("dtp_stage") or "DTP-01")
+        lines.append(f"- Current stage: {dtp_stage}")
+
+        for stage, row in hd.items():
+            if not isinstance(row, dict):
+                continue
+            intake = row.get("_stage_intake")
+            if not isinstance(intake, dict):
+                continue
+            vals = intake.get("values")
+            if not isinstance(vals, dict) or not vals:
+                continue
+            lines.append(f"- {stage} intake:")
+            for k, v in list(vals.items())[:24]:
+                sv = str(v).strip()
+                if sv:
+                    lines.append(f"  - {k}: {sv[:160]}")
+
+        wd = state.get("working_documents") or {}
+        if hasattr(wd, "model_dump"):
+            try:
+                wd = wd.model_dump()
+            except Exception:
+                wd = {}
+        if isinstance(wd, dict):
+            for role in ("rfx", "contract"):
+                slot = wd.get(role)
+                if not isinstance(slot, dict):
+                    continue
+                plain = str(slot.get("plain_text") or "").strip()
+                if plain:
+                    lines.append(f"- Working {role} draft exists ({len(plain)} chars)")
+
+        text = "\n".join(lines).strip()
+        if len(text) > self.max_structured_memory_chars:
+            text = text[: self.max_structured_memory_chars] + "..."
+        return text if len(text) > 60 else None
+
+    def _get_cached_summary(self, case_id: str, covered_last_message_id: str) -> Optional[str]:
+        session = get_db_session()
+        try:
+            row = session.exec(
+                select(ChatMessageModel)
+                .where(ChatMessageModel.case_id == case_id)
+                .where(ChatMessageModel.intent_classified == self.summary_intent_key)
+                .order_by(ChatMessageModel.created_at.desc())
+                .limit(1)
+            ).first()
+            if not row:
+                return None
+            meta_raw = str(getattr(row, "agents_called", "") or "").strip()
+            if not meta_raw:
+                return None
+            try:
+                meta = json.loads(meta_raw)
+            except json.JSONDecodeError:
+                return None
+            if str(meta.get("covered_last_message_id") or "") != covered_last_message_id:
+                return None
+            content = str(getattr(row, "content", "") or "").strip()
+            return content or None
+        finally:
+            session.close()
+
+    def _save_summary_cache(
+        self,
+        case_id: str,
+        summary: str,
+        covered_last_message_id: str,
+        covered_message_count: int,
+    ) -> None:
+        session = get_db_session()
+        try:
+            msg = ChatMessageModel(
+                message_id=str(uuid4()),
+                case_id=case_id,
+                role="assistant",
+                content=summary,
+                intent_classified=self.summary_intent_key,
+                agents_called=json.dumps(
+                    {
+                        "covered_last_message_id": covered_last_message_id,
+                        "covered_message_count": int(covered_message_count),
+                    }
+                ),
+                created_at=datetime.now().isoformat(),
+            )
+            session.add(msg)
+            session.commit()
+        except Exception as e:
+            logger.warning(f"Failed to persist summary cache: {e}")
+            session.rollback()
+        finally:
+            session.close()
     
     def estimate_execution_cost(
         self,
