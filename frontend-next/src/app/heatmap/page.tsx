@@ -1239,21 +1239,21 @@ export default function HeatmapPriorityPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
             <h3 className="text-sm font-medium text-slate-500 mb-1">
-              <HeatmapAbbr term="t1">High</HeatmapAbbr> - Immediate
+              <HeatmapAbbr term="t1">High</HeatmapAbbr>
             </h3>
             <p className="text-3xl font-bold text-mit-red">{loading ? "..." : tier1}</p>
             <div className="mt-3 w-full bg-slate-100 rounded-full h-1"><div className="bg-mit-red h-1 rounded-full" style={{width: `${Math.min((tier1 / Math.max(totalMonitored, 1)) * 100, 100)}%`}}></div></div>
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
             <h3 className="text-sm font-medium text-slate-500 mb-1">
-              <HeatmapAbbr term="t2">Medium</HeatmapAbbr> - Benchmark
+              <HeatmapAbbr term="t2">Medium</HeatmapAbbr>
             </h3>
             <p className="text-3xl font-bold text-orange-500">{loading ? "..." : tier2}</p>
             <div className="mt-3 w-full bg-slate-100 rounded-full h-1"><div className="bg-orange-500 h-1 rounded-full" style={{width: `${Math.min((tier2 / Math.max(totalMonitored, 1)) * 100, 100)}%`}}></div></div>
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
             <h3 className="text-sm font-medium text-slate-500 mb-1">
-              <HeatmapAbbr term="t3">Low</HeatmapAbbr> - Monitor
+              <HeatmapAbbr term="t3">Low</HeatmapAbbr>
             </h3>
             <p className="text-3xl font-bold text-blue-500">{loading ? "..." : tier3}</p>
             <div className="mt-3 w-full bg-slate-100 rounded-full h-1"><div className="bg-blue-500 h-1 rounded-full" style={{width: `${Math.min((tier3 / Math.max(totalMonitored, 1)) * 100, 100)}%`}}></div></div>
@@ -1393,19 +1393,19 @@ export default function HeatmapPriorityPage() {
             <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-4 text-xs font-medium text-slate-500">
               <span className="flex items-center gap-2 cursor-help" title={HEATMAP_GLOSSARY.t1}>
                 <div className="w-3 h-3 rounded-full bg-mit-red opacity-80" />
-                High — Immediate
+                High
               </span>
               <span className="flex items-center gap-2 cursor-help" title={HEATMAP_GLOSSARY.t2}>
                 <div className="w-3 h-3 rounded-full bg-orange-500 opacity-80" />
-                Medium — Benchmark
+                Medium
               </span>
               <span className="flex items-center gap-2 cursor-help" title={HEATMAP_GLOSSARY.t3}>
                 <div className="w-3 h-3 rounded-full bg-blue-500 opacity-80" />
-                Low — Monitor
+                Low
               </span>
               <span className="flex items-center gap-2 cursor-help" title={HEATMAP_GLOSSARY.t4}>
                 <div className="w-3 h-3 rounded-full bg-slate-500 opacity-80" />
-                Lowest — Defer
+                Lowest
               </span>
             </div>
             <p className="mt-3 text-[11px] text-slate-400 text-center flex flex-wrap justify-center gap-x-1 gap-y-0.5">
@@ -2312,14 +2312,6 @@ export default function HeatmapPriorityPage() {
                           </option>
                         ))}
                       </select>
-                      <div className="my-4 border-t border-slate-100" />
-                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Adjust Priority</label>
-                      <div className="w-full border border-slate-300 rounded-lg shadow-sm py-2.5 px-3 text-sm font-medium bg-slate-50 text-slate-700">
-                        {heatmapTierLabel(weightAdjustPreview?.mathTier || reviewOpp?.tier || feedbackTier)}
-                      </div>
-                      <p className="text-[11px] text-slate-500 mt-2">
-                        Derived from weighted score to keep the dashboard ranking consistent.
-                      </p>
                     </div>
                     <div className="lg:col-span-2 space-y-4">
                       <div>
@@ -2348,14 +2340,7 @@ export default function HeatmapPriorityPage() {
                         <p className="text-xs text-slate-500 mb-3">
                           {reviewPursuitDecision === "not_pursue"
                             ? "Why are we stopping this opportunity now? Select all reasons that apply."
-                            : (
-                              <>
-                                Why does this row deserve a different priority than the scored rank? Options align with{" "}
-                                <strong className="text-slate-600">PS_new</strong> (IUS, ES, CSIS, SAS) and{" "}
-                                <strong className="text-slate-600">PS_contract</strong> (EUS, FIS, RSS, SCS, SAS). Select all
-                                that apply.
-                              </>
-                            )}
+                            : "Capture the rationale that supports this pursue decision. The selected reasons also guide explanation quality and follow-up actions."}
                         </p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2.5 mb-1">
                           {activeReviewReasonOptions.map((r) => (

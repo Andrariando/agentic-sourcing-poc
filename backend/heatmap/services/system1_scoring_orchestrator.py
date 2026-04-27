@@ -401,6 +401,9 @@ def _derive_completeness_annotations(row: Dict[str, Any]) -> Dict[str, Any]:
         missing_critical.append("category")
     if row_type == "renewal" and months_to_expiry is None and contract_end_date is None:
         missing_critical.append("months_to_expiry_or_contract_end_date")
+    # Safety guard: for new business rows, supplier_name must never reduce completeness.
+    if row_type != "renewal" and "supplier_name" in missing_critical:
+        missing_critical = [x for x in missing_critical if x != "supplier_name"]
 
     # Heuristic completeness score (0-100) for ranking and triage.
     score = 100.0

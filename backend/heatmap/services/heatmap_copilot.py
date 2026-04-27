@@ -73,6 +73,20 @@ def _format_opportunity_line(o: Opportunity) -> str:
         if len(brief) > 180:
             brief = brief[:177] + "..."
         parts.append(f"justification={brief}")
+    try:
+        w = json.loads(o.weights_used_json or "{}")
+        if isinstance(w, dict) and w:
+            parts.append(f"weights={w}")
+    except Exception:
+        pass
+    try:
+        sp = json.loads(o.score_provenance_json or "{}")
+        if isinstance(sp, dict):
+            scoring_inputs = sp.get("scoring_inputs")
+            if isinstance(scoring_inputs, dict) and scoring_inputs:
+                parts.append(f"scoring_inputs={scoring_inputs}")
+    except Exception:
+        pass
     return " | ".join(str(p) for p in parts)
 
 
@@ -221,8 +235,17 @@ Rules (must follow):
 3) For comparisons ("why is X above Y"), locate both rows in <DATA> by supplier name and/or request_id/contract_id/id. Compare total_score and tier; briefly cite relevant sub-scores if present.
 4) If you cannot find an entity in <DATA>, say so clearly instead of guessing.
 5) If asked about expiry timing, use `window` and `EUS` (expiry urgency score) to explain when action is needed.
-6) If asked for score details, provide a short breakdown using total + available component scores (EUS/IUS/FIS/ES/RSS/SCS/CSIS/SAS) and mention the tier.
-7) Be concise (2–6 short paragraphs or bullet list). Plain English.
+6) If asked for score details, provide a detailed rationale using:
+   - total score + tier
+   - all available component scores (EUS/IUS/FIS/ES/RSS/SCS/CSIS/SAS)
+   - weighting impact from available weights (identify biggest contributors)
+   - key source inputs from scoring_inputs where available.
+7) For rationale questions, use this structure:
+   A) Score summary
+   B) Component-by-component reasoning
+   C) Why this row ranks above/below compared rows
+   D) Risks/warnings and recommended actions
+8) Be concrete and evidence-based; avoid generic statements.
 
 <DATA>
 {context}

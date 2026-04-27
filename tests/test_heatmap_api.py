@@ -3,6 +3,7 @@ API smoke tests for heatmap KPI/KLI, intake meta, approve idempotency, metrics d
 Run from repo root: pytest tests/test_heatmap_api.py -q
 """
 import json
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -610,6 +611,32 @@ def test_system1_preview_new_business_without_supplier_can_still_be_complete(cli
     assert row["row_type"] == "new_business"
     assert row.get("completeness_score") == 100.0
     assert "supplier_name" not in (row.get("missing_critical_fields") or [])
+
+
+def test_heatmap_qa_feedback_counts_only_once_per_response_user(client: TestClient):
+    before = client.get("/api/heatmap/metrics/dashboard")
+    assert before.status_code == 200
+    before_fb = before.json().get("copilot_feedback") or {}
+    before_total = int(before_fb.get("thumbs_total") or 0)
+    before_up = int(before_fb.get("thumbs_up") or 0)
+
+    payload = {
+        "response_id": f"resp-once-{uuid4().hex[:10]}",
+        "question": "Why is this top ranked?",
+        "answer": "Because the weighted total is highest.",
+        "vote": "up",
+        "user_id": "human-manager",
+    }
+    r1 = client.post("/api/heatmap/qa/feedback", json=payload)
+    assert r1.status_code == 200
+    r2 = client.post("/api/heatmap/qa/feedback", json=payload)
+    assert r2.status_code == 200
+
+    metrics = client.get("/api/heatmap/metrics/dashboard")
+    assert metrics.status_code == 200
+    fb = metrics.json().get("copilot_feedback") or {}
+    assert int(fb.get("thumbs_total") or 0) == before_total + 1
+    assert int(fb.get("thumbs_up") or 0) == before_up + 1
 
 
 def test_system1_preview_erp_adapter_normalizes_rows(client: TestClient):

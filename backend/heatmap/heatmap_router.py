@@ -334,14 +334,27 @@ def heatmap_qa(req: HeatmapQARequest):
 def heatmap_qa_feedback(req: HeatmapQAFeedbackRequest):
     session = heatmap_db.get_db_session()
     try:
-        row = HeatmapProcuraBotFeedback(
-            response_id=req.response_id.strip(),
-            question=req.question.strip(),
-            answer=req.answer.strip(),
-            vote=req.vote.strip(),
-            user_id=req.user_id.strip() or "human-user",
-        )
-        session.add(row)
+        response_id = req.response_id.strip()
+        user_id = req.user_id.strip() or "human-user"
+        existing = session.exec(
+            select(HeatmapProcuraBotFeedback)
+            .where(HeatmapProcuraBotFeedback.response_id == response_id)
+            .where(HeatmapProcuraBotFeedback.user_id == user_id)
+        ).first()
+        if existing:
+            existing.question = req.question.strip()
+            existing.answer = req.answer.strip()
+            existing.vote = req.vote.strip()
+            row = existing
+        else:
+            row = HeatmapProcuraBotFeedback(
+                response_id=response_id,
+                question=req.question.strip(),
+                answer=req.answer.strip(),
+                vote=req.vote.strip(),
+                user_id=user_id,
+            )
+            session.add(row)
         session.commit()
         session.refresh(row)
         return HeatmapQAFeedbackResponse(success=True, feedback_id=int(row.id or 0))

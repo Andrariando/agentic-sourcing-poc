@@ -13,6 +13,7 @@ import ProcuraBotIdentity from "@/components/branding/ProcuraBotIdentity";
 import { PROCURABOT_BRAND } from "@/lib/procurabot-brand";
 import DtpStepper, { type DtpStage } from "@/components/workflow/DtpStepper";
 import OpportunityContextRail from "@/components/workflow/OpportunityContextRail";
+import FutureStageRequirements from "@/components/workflow/FutureStageRequirements";
 
 /** Normalize common LLM quirks so chat reads cleanly before Markdown pass. */
 function normalizeAssistantText(text: string): string {
@@ -81,6 +82,13 @@ function formatHintForField(key: string): string | null {
   if (k.includes("started") || k.includes("confirmed") || k.includes("signed")) return "Format: yes/no";
   if (k.includes("reference") || k.includes("id")) return "Format: short code (example: CT-2026-001)";
   return null;
+}
+
+function usageHintForField(field: DtpFieldSchema): string {
+  if (field.document_dependency) return `Used to populate ${field.document_dependency.toUpperCase()} draft outputs.`;
+  if (field.critical) return "Used for stage readiness gating and approval progression.";
+  if (field.ai_extractable) return "Used by ProcuraBot extraction and long-chat memory grounding.";
+  return "Used as supporting context for recommendations and handoff quality.";
 }
 
 type ArtifactPackSummaryRow = {
@@ -789,6 +797,10 @@ export default function CaseProcuraBotPage() {
   const displayCategory = caseDetails?.category_id || "Category";
   const displayStage = caseDetails?.dtp_stage || "DTP-01";
   const activeStageFields = stageSchema(displayStage);
+  const prioritizedStageFields = [...activeStageFields].sort((a, b) => {
+    const rank = (f: DtpFieldSchema) => (f.critical ? 0 : f.required ? 1 : 2);
+    return rank(a) - rank(b);
+  });
   const readinessState = computeStageReadiness(displayStage, stageInputValues);
   const fieldBuckets = splitStageFields(displayStage, stageInputValues);
   const missingRequiredFields = readinessState.missingRequired;
@@ -817,6 +829,21 @@ export default function CaseProcuraBotPage() {
   const topFindings = keyFindings.slice(0, 3);
   const focus = caseDetails?.copilot_focus;
   const stageDecisionTemplate = buildDecisionDataForStage(displayStage, supplierId);
+  const stageValuesByStage: Record<string, Record<string, string>> = {};
+  if (caseDetails?.human_decision && typeof caseDetails.human_decision === "object") {
+    Object.entries(caseDetails.human_decision as Record<string, unknown>).forEach(([stageKey, rowVal]) => {
+      if (!rowVal || typeof rowVal !== "object") return;
+      const intake = (rowVal as Record<string, unknown>)["_stage_intake"];
+      if (!intake || typeof intake !== "object") return;
+      const vals = (intake as Record<string, unknown>)["values"];
+      if (!vals || typeof vals !== "object") return;
+      stageValuesByStage[stageKey] = vals as Record<string, string>;
+    });
+  }
+  stageValuesByStage[displayStage] = {
+    ...(stageValuesByStage[displayStage] || {}),
+    ...stageInputValues,
+  };
   const suggestedChatPrompts: string[] = (focus?.suggested_chat_prompts as string[]) || [];
   const perfInsight = hasLiveCase
     ? getMockCasePerformanceInsight({
@@ -1322,6 +1349,19 @@ export default function CaseProcuraBotPage() {
                   {readinessState.readiness === "ready" && <>Ready: required fields are complete for {displayStage}.</>}
                 </div>
 
+                {readinessState.readiness === "blocked" && readinessState.missingCritical.length > 0 && (
+                  <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-900">
+                    <p className="font-semibold mb-1">Why blocked</p>
+                    <ul className="list-disc pl-4 space-y-0.5">
+                      {readinessState.missingCritical.map((f) => (
+                        <li key={`blocked-${f.key}`}>
+                          {f.label} ({f.key})
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 {missingRequiredFields.length > 0 && (
                   <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                     Missing required fields: {missingRequiredFields.map((f) => f.label).join(", ")}
@@ -1340,7 +1380,7 @@ export default function CaseProcuraBotPage() {
                 )}
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                  {activeStageFields.map((f: DtpFieldSchema) => (
+                  {prioritizedStageFields.map((f: DtpFieldSchema) => (
                     <div key={f.key} className={f.multiline ? "lg:col-span-2" : ""}>
                       <label className="block text-xs font-semibold text-slate-600 mb-1.5">
                         {f.label} {f.required ? <span className="text-red-500">*</span> : null}
@@ -1368,6 +1408,7 @@ export default function CaseProcuraBotPage() {
                       {formatHintForField(f.key) ? (
                         <p className="mt-1 text-[11px] text-slate-500">{formatHintForField(f.key)}</p>
                       ) : null}
+                      <p className="mt-1 text-[11px] text-slate-400">How this is used: {usageHintForField(f)}</p>
                     </div>
                   ))}
                 </div>
@@ -1504,6 +1545,16 @@ export default function CaseProcuraBotPage() {
                   ) : null}
                 </div>
               </div>
+            </motion.div>
+          )}
+
+          {hasLiveCase && (
+            <motion.div variants={item}>
+              <FutureStageRequirements
+                stages={DTP_STAGES}
+                currentStageId={displayStage}
+                stageValuesByStage={stageValuesByStage}
+              />
             </motion.div>
           )}
 
@@ -1796,6 +1847,22 @@ export default function CaseProcuraBotPage() {
               {hasLiveCase ? `Case-level (${displayStage})` : "Portfolio-level"}
             </span>
           </div>
+          {hasLiveCase && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">What ProcuraBot remembers</p>
+              <div className="flex flex-wrap gap-1.5">
+                <span className="text-[10px] px-2 py-0.5 rounded-full border border-slate-200 bg-white text-slate-700">
+                  Stage fields: {Object.keys(stageInputValues).filter((k) => String(stageInputValues[k] || "").trim()).length}
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full border border-slate-200 bg-white text-slate-700">
+                  Extraction: {extractPreview ? "proposal pending confirm" : "none pending"}
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full border border-slate-200 bg-white text-slate-700">
+                  Working drafts: {((caseDetails?.working_documents?.rfx?.plain_text ? 1 : 0) + (caseDetails?.working_documents?.contract?.plain_text ? 1 : 0))}/2
+                </span>
+              </div>
+            </div>
+          )}
           {hasLiveCase && suggestedChatPrompts.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {suggestedChatPrompts.map((q, i) => (
