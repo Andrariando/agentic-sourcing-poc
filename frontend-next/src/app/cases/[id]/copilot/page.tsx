@@ -72,6 +72,17 @@ function parseSimpleMarkdown(text: string): React.ReactNode {
   );
 }
 
+function formatHintForField(key: string): string | null {
+  const k = (key || "").toLowerCase();
+  if (k.includes("date")) return "Format: YYYY-MM-DD (example: 2026-08-01)";
+  if (k.includes("usd") || k.includes("value") || k.includes("amount")) return "Format: numeric only, no commas (example: 4200000)";
+  if (k.includes("received") || k.includes("count")) return "Format: x/y or integer (example: 3/5)";
+  if (k.includes("signoff")) return "Format: name and date (example: Jane Doe - 2026-09-15)";
+  if (k.includes("started") || k.includes("confirmed") || k.includes("signed")) return "Format: yes/no";
+  if (k.includes("reference") || k.includes("id")) return "Format: short code (example: CT-2026-001)";
+  return null;
+}
+
 type ArtifactPackSummaryRow = {
   pack_id: string;
   agent_name?: string;
@@ -1287,6 +1298,12 @@ export default function CaseProcuraBotPage() {
                 </p>
               </div>
               <div className="p-4 space-y-4">
+                <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+                  Manual entry is captured and persisted when you click <span className="font-semibold">Save stage input</span>. The same values are reused by ProcuraBot, generation checks, and stage progression.
+                  <div className="mt-1 text-blue-800/90">
+                    Examples: dates use <span className="font-mono">YYYY-MM-DD</span>, currency fields are numeric only, and boolean confirmations use <span className="font-mono">yes/no</span>.
+                  </div>
+                </div>
                 <div
                   className={`rounded-md px-3 py-2 text-xs border ${
                     readinessState.readiness === "blocked"
@@ -1341,12 +1358,16 @@ export default function CaseProcuraBotPage() {
                         />
                       ) : (
                         <input
+                          type={f.key.toLowerCase().includes("date") ? "date" : "text"}
                           value={stageInputValues[f.key] || ""}
                           onChange={(e) => setStageInputValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
                           placeholder={f.placeholder}
                           className="w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm text-slate-700"
                         />
                       )}
+                      {formatHintForField(f.key) ? (
+                        <p className="mt-1 text-[11px] text-slate-500">{formatHintForField(f.key)}</p>
+                      ) : null}
                     </div>
                   ))}
                 </div>
