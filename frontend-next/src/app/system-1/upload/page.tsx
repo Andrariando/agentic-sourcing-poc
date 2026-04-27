@@ -12,7 +12,6 @@ import {
   exportPreviewXlsx,
   type ExportScope,
 } from "@/lib/system1-export";
-import DtpStepper, { type DtpStage } from "@/components/workflow/DtpStepper";
 import DecisionActionBar from "@/components/workflow/DecisionActionBar";
 
 type PreviewRow = {
@@ -169,14 +168,6 @@ function buildRowOverrides(
 }
 
 const PREVIEW_PAGE_SIZE = 20;
-const DTP_STAGES: DtpStage[] = [
-  { id: "DTP-01", label: "Sourcing Pathway", shortLabel: "Pathway" },
-  { id: "DTP-02", label: "Evaluation Setup", shortLabel: "Eval setup" },
-  { id: "DTP-03", label: "RFP Issue", shortLabel: "RFP issue" },
-  { id: "DTP-04", label: "Evaluate & Negotiate", shortLabel: "Evaluate" },
-  { id: "DTP-05", label: "Contracting", shortLabel: "Contract" },
-  { id: "DTP-06", label: "Implementation", shortLabel: "Implement" },
-];
 
 function normalizeWarnings(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
@@ -718,12 +709,6 @@ export default function System1UploadPage() {
             </a>
           </p>
         </header>
-
-        <DtpStepper
-          stages={DTP_STAGES}
-          currentStageId="DTP-01"
-          completedStageIds={[]}
-        />
 
         <section className="bg-white border border-slate-200 rounded-xl shadow-sm p-6 space-y-4">
           <div>
