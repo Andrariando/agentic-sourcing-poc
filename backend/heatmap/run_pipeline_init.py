@@ -1,4 +1,5 @@
 import csv
+import json
 import random
 import time
 from pathlib import Path
@@ -20,6 +21,10 @@ from backend.heatmap.persistence.heatmap_database import heatmap_db, get_engine
 from backend.heatmap.persistence.heatmap_models import Opportunity, ReviewFeedback
 from backend.heatmap.services.seed_kpi_demo_data import seed_demo_feedback_and_pipeline_audit
 from backend.heatmap.services.learned_weights import load_learned_weights, weights_for_supervisor_state
+from backend.heatmap.services.pipeline_score_provenance import (
+    build_langgraph_batch_provenance,
+    parse_contract_end_datetime,
+)
 
 
 def run_init():
@@ -122,7 +127,7 @@ def run_init():
         session.commit()
 
         new_idx = 0
-        for opp in final_state["scored_opportunities"]:
+        for idx, opp in enumerate(final_state["scored_opportunities"]):
             is_new = opp.get("contract_id") is None
             est = None
             impl_mo = None
@@ -131,6 +136,9 @@ def run_init():
                     est = new_estimates[new_idx]
                     impl_mo = timeline_choices[new_idx % len(timeline_choices)]
                 new_idx += 1
+            details = (final_state["contracts"][idx].get("contract_details") or {})
+            contract_end = None if is_new else parse_contract_end_datetime(details)
+            prov = build_langgraph_batch_provenance(final_state, idx, opp)
             db_opp = Opportunity(
                 contract_id=opp.get("contract_id"),
                 request_id=opp.get("request_id"),
@@ -157,6 +165,9 @@ def run_init():
                 implementation_timeline_months=impl_mo,
                 request_title=None,
                 preferred_supplier_status=None,
+                contract_end_date=contract_end,
+                weights_used_json=json.dumps(prov.get("weights_used") or {}),
+                score_provenance_json=json.dumps(prov),
             )
             session.add(db_opp)
         session.commit()

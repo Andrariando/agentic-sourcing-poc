@@ -22,6 +22,20 @@ MAX_OPPS_IN_CONTEXT = 80
 MAX_TARGETED_OPPS_IN_CONTEXT = 40
 MAX_FEEDBACK_ROWS = 40
 CHROMA_QA_TOP_K = 8
+# Full per-component provenance is verbose; attach for top-ranked + targeted rows only.
+PROVENANCE_DETAIL_LIMIT = 24
+PROVENANCE_TARGETED_DETAIL_LIMIT = 8
+
+_SCORE_COMPONENT_KEYS = (
+    "eus_score",
+    "ius_score",
+    "fis_score",
+    "es_score",
+    "rss_score",
+    "scs_score",
+    "csis_score",
+    "sas_score",
+)
 
 
 def _copilot_model() -> str:
@@ -42,6 +56,7 @@ def _format_opportunity_line(o: Opportunity) -> str:
         f"supplier={sup}",
         f"category={o.category}",
         f"subcat={o.subcategory or '—'}",
+        f"disposition={o.disposition or '—'}",
         f"contract_id={cid}",
         f"request_id={rid}",
         f"tier={o.tier}",
@@ -90,6 +105,160 @@ def _format_opportunity_line(o: Opportunity) -> str:
     return " | ".join(str(p) for p in parts)
 
 
+def _format_stored_provenance_lines(o: Opportunity, sp: Dict[str, Any]) -> List[str]:
+    """Lines from persisted score_provenance_json (or [] if nothing usable)."""
+    if not sp:
+        return []
+    oid = o.id
+    out: List[str] = [f"--- COMP_PROVENANCE id={oid} ---"]
+    rt = sp.get("row_type")
+    if rt:
+        out.append(f"row_type={rt}")
+    sk = sp.get("source_kind")
+    if sk:
+        out.append(f"source_kind={sk}")
+    sf = sp.get("source_filename")
+    if sf:
+        out.append(f"source_filename={sf}")
+
+    any_component = False
+    sc = sp.get("score_components")
+    if isinstance(sc, dict) and sc:
+        out.append("score_components (deterministic metadata per sub-score):")
+        for key in _SCORE_COMPONENT_KEYS:
+            if key not in sc:
+                continue
+            meta = sc[key]
+            if not isinstance(meta, dict):
+                continue
+            val = meta.get("value")
+            if val is None:
+                continue
+            any_component = True
+            st = str(meta.get("source_type") or "")
+            conf = meta.get("confidence", "")
+            refs = meta.get("evidence_refs")
+            if not isinstance(refs, list):
+                refs = [refs] if refs is not None else []
+            expl = str(meta.get("explanation") or "").replace("\n", " ").strip()
+            if len(expl) > 320:
+                expl = expl[:317] + "..."
+            out.append(
+                f"  {key}: value={val} | source_type={st} | confidence={conf} | evidence_refs={refs}"
+            )
+            if expl:
+                out.append(f"    rationale: {expl}")
+
+    any_si = False
+    si = sp.get("scoring_inputs")
+    if isinstance(si, dict) and si:
+        out.append("scoring_inputs (intake fields fused into this score run):")
+        for k in sorted(si.keys()):
+            v = si[k]
+            out.append(f"  {k}={v if v is not None and v != '' else '—'}")
+            any_si = True
+
+    any_wu = False
+    wu = sp.get("weights_used")
+    if isinstance(wu, dict) and wu:
+        out.append(f"weights_used_in_run={wu}")
+        any_wu = True
+
+    if not any_component and not any_si and not rt and not sk and not sf and not any_wu:
+        return []
+    return out
+
+
+def _reconstructed_provenance_block(o: Opportunity) -> str:
+    """
+    When upload orchestration did not persist score_components, rebuild a minimal
+    grounding block from Opportunity columns + justification (Explain-only).
+    """
+    oid = o.id
+    lines: List[str] = [
+        f"--- COMP_PROVENANCE id={oid} (RECONSTRUCTED_FOR_EXPLAIN) ---",
+        "NOTE: Full per-component provenance JSON was not stored for this row (typical for "
+        "`source=batch` LangGraph demo seed, or older intake rows). Sub-scores below are copied "
+        "from the opportunity record; source_type=reconstructed means no orchestration audit trail.",
+    ]
+    lines.append("scoring_inputs (from Opportunity table columns):")
+    lines.append(f"  disposition={o.disposition or '—'}")
+    lines.append(f"  source={o.source or '—'}")
+    lines.append(f"  contract_id={o.contract_id or '—'}")
+    lines.append(f"  request_id={o.request_id or '—'}")
+    lines.append(f"  contract_end_date={o.contract_end_date.isoformat() if o.contract_end_date else '—'}")
+    lines.append(f"  estimated_spend_usd={o.estimated_spend_usd}")
+    lines.append(f"  implementation_timeline_months={o.implementation_timeline_months}")
+    lines.append(f"  preferred_supplier_status={o.preferred_supplier_status or '—'}")
+    lines.append(f"  request_title={o.request_title or '—'}")
+    if o.contract_end_date:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        end_dt = o.contract_end_date
+        if end_dt.tzinfo is not None:
+            end_dt = end_dt.astimezone(tz=None).replace(tzinfo=None)
+        days = int((end_dt - now).total_seconds() // 86400)
+        lines.append(f"  days_to_expiry_computed={days}")
+
+    lines.append("score_components (reconstructed — persisted numeric only):")
+    col_scores = [
+        ("eus_score", o.eus_score),
+        ("ius_score", o.ius_score),
+        ("fis_score", o.fis_score),
+        ("es_score", o.es_score),
+        ("rss_score", o.rss_score),
+        ("scs_score", o.scs_score),
+        ("csis_score", o.csis_score),
+        ("sas_score", o.sas_score),
+    ]
+    any_score = False
+    for key, val in col_scores:
+        if val is None:
+            continue
+        any_score = True
+        lines.append(
+            f"  {key}: value={val} | source_type=reconstructed | confidence=n/a | "
+            "evidence_refs=[opportunity_table_column,justification_summary]"
+        )
+        lines.append(
+            "    rationale: Orchestrator detail not in DB; use justification_summary for formula text "
+            "and scoring_inputs for business drivers."
+        )
+    if not any_score:
+        lines.append("  (no sub-scores on row)")
+
+    just = (o.justification_summary or "").replace("\n", " ").strip()
+    if len(just) > 480:
+        just = just[:477] + "..."
+    if just:
+        lines.append(f"justification_summary: {just}")
+
+    try:
+        w = json.loads(o.weights_used_json or "{}")
+        if isinstance(w, dict) and w:
+            lines.append(f"weights_used_json_on_row={w}")
+    except Exception:
+        pass
+    return "\n".join(lines)
+
+
+def _format_opportunity_provenance_detail(o: Opportunity) -> str:
+    """
+    Expand persisted score_provenance_json for the LLM, or reconstruct a fallback
+    when batch/legacy rows never stored score_components.
+    """
+    try:
+        sp = json.loads(o.score_provenance_json or "{}")
+    except Exception:
+        sp = {}
+    if not isinstance(sp, dict):
+        sp = {}
+
+    stored = _format_stored_provenance_lines(o, sp)
+    if stored:
+        return "\n".join(stored)
+    return _reconstructed_provenance_block(o)
+
+
 def _extract_query_terms(question: str) -> List[str]:
     q = (question or "").strip()
     if not q:
@@ -136,7 +305,19 @@ def build_opportunities_context(session: Session, question: str = "") -> str:
         return "(No opportunities in database.)"
 
     top_rows = rows[:MAX_OPPS_IN_CONTEXT]
-    lines = [_format_opportunity_line(o) for o in top_rows]
+    lines: List[str] = [
+        "Format: each row starts with a compact `id=...` summary. "
+        f"For the top {PROVENANCE_DETAIL_LIMIT} rows (and targeted matches), a following "
+        "`--- COMP_PROVENANCE id=...` block lists score_components (value, source_type, confidence, "
+        "evidence_refs, rationale) plus scoring_inputs — use these as the authoritative explanation of "
+        "what underlying data drove each sub-score.",
+    ]
+    for i, o in enumerate(top_rows):
+        lines.append(_format_opportunity_line(o))
+        if i < PROVENANCE_DETAIL_LIMIT:
+            det = _format_opportunity_provenance_detail(o)
+            if det:
+                lines.append(det)
 
     query_terms = _extract_query_terms(question)
     if query_terms:
@@ -153,7 +334,12 @@ def build_opportunities_context(session: Session, question: str = "") -> str:
         if targeted:
             lines.append("")
             lines.append("=== TARGETED MATCHES FOR QUESTION TERMS ===")
-            lines.extend(_format_opportunity_line(o) for o in targeted)
+            for j, o in enumerate(targeted):
+                lines.append(_format_opportunity_line(o))
+                if j < PROVENANCE_TARGETED_DETAIL_LIMIT:
+                    det = _format_opportunity_provenance_detail(o)
+                    if det:
+                        lines.append(det)
 
     if len(rows) > MAX_OPPS_IN_CONTEXT:
         lines.append(f"... and {len(rows) - MAX_OPPS_IN_CONTEXT} more rows not shown.")
@@ -234,18 +420,17 @@ Rules (must follow):
 2) You MUST NOT change, recalculate, or contradict the stored total_score or tier — treat them as ground truth.
 3) For comparisons ("why is X above Y"), locate both rows in <DATA> by supplier name and/or request_id/contract_id/id. Compare total_score and tier; briefly cite relevant sub-scores if present.
 4) If you cannot find an entity in <DATA>, say so clearly instead of guessing.
-5) If asked about expiry timing, use `window` and `EUS` (expiry urgency score) to explain when action is needed.
-6) If asked for score details, provide a detailed rationale using:
-   - total score + tier
-   - all available component scores (EUS/IUS/FIS/ES/RSS/SCS/CSIS/SAS)
-   - weighting impact from available weights (identify biggest contributors)
-   - key source inputs from scoring_inputs where available.
-7) For rationale questions, use this structure:
-   A) Score summary
-   B) Component-by-component reasoning
+5) Expiry / contract timing (usually **EUS** on renewals): when you mention urgency tied to contract end, you MUST quote from that row's line: `contract_end_date`, `days_to_expiry` (if present), and `window` (recommended_action_window). If any show `—`, say the source data did not include that field — do not invent dates.
+6) **IUS** (implementation urgency on **new sourcing / PS_new** style rows): tie the score to **`impl_months`** (implementation_timeline_months) from the same line. State the numeric months and how that maps to the IUS score. If `impl_months` is `—` or missing, say IUS relied on a default because timeline was not in intake — do not invent a timeline.
+7) If a row looks like a **renewal** (has contract_id, disposition not `new_request`), prioritize **EUS** + contract dates for time pressure; only discuss **IUS** if the line shows a non-null IUS with supporting fields.
+8) **Per-component grounding (critical):** When a `--- COMP_PROVENANCE id=N` block exists for an opportunity, your Section **B** MUST cover **every** `score_components` entry listed under that id (each of eus_score, ius_score, fis_score, es_score, rss_score, scs_score, csis_score, sas_score that appears). For each, explicitly state: numeric **value**, **source_type** (provided / derived / defaulted / reconstructed), **evidence_refs**, and the stored **rationale** line. Then connect to **scoring_inputs** (same block): quote the relevant intake keys (e.g. estimated_spend_usd, preferred_supplier_status, months_to_expiry, contract_end_date, implementation_timeline_months) that align with evidence_refs. If source_type is **defaulted**, say so and name what was missing. If the block header includes **`RECONSTRUCTED_FOR_EXPLAIN`**, follow the NOTE in that block: say that full orchestration provenance was not stored (e.g. batch seed); treat sub-scores as persisted DB values only; use **justification_summary** in that block for formula text; do not claim richer evidence than the NOTE allows. Do not hand-wave sub-scores.
+9) If there is **no** `COMP_PROVENANCE` block after a row (should be rare), use only the compact summary line + any `scoring_inputs=` on that line and state that no expandable provenance was attached.
+10) For rationale questions, use this structure:
+   A) Score summary (total, tier, weights if on summary line)
+   B) Component-by-component reasoning (per rule 8)
    C) Why this row ranks above/below compared rows
    D) Risks/warnings and recommended actions
-8) Be concrete and evidence-based; avoid generic statements.
+11) Be concrete and evidence-based; avoid generic statements.
 
 <DATA>
 {context}
@@ -260,7 +445,7 @@ USER QUESTION:
             model=_copilot_model(),
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2,
-            max_tokens=900,
+            max_tokens=1400,
         )
         text = (resp.choices[0].message.content or "").strip()
         return text or "(No content returned.)", True

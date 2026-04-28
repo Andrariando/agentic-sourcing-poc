@@ -3,6 +3,7 @@ Score new sourcing requests (PS_new) per framework; used by API preview + submit
 """
 from __future__ import annotations
 
+import json
 from typing import Any, Dict, Optional, Tuple
 from uuid import uuid4
 
@@ -18,6 +19,7 @@ from backend.heatmap.context_builder import build_heatmap_context
 from backend.heatmap.persistence.heatmap_models import Opportunity
 from backend.heatmap.services.feedback_memory import apply_learning_nudge
 from backend.heatmap.services.learned_weights import merge_intake_ps_new_weights
+from backend.heatmap.services.pipeline_score_provenance import build_intake_ps_new_provenance
 
 
 def tier_from_total(total: float) -> str:
@@ -137,12 +139,25 @@ def score_intake_payload(
         justification = f"{justification} | Learning: {mem_note}"
     total_r = total_adj
     tier = tier_adj
+    score_provenance = build_intake_ps_new_provenance(
+        ctx=ctx,
+        merged_weights=merged_w,
+        scores=scores,
+        category=category,
+        subcategory=subcategory,
+        supplier_name=supplier_name,
+        estimated_spend_usd=candidate,
+        implementation_timeline_months=float(implementation_timeline_months),
+        preferred_supplier_status=preferred_supplier_status,
+        request_title=None,
+    )
     meta = {
         "max_estimated_spend_pipeline": max_pipeline,
         "category_spend_used": (ctx.get("category_spend_total") or {}).get(category),
         "fis_field_note": ctx.get("fis_contract_value_field"),
         "feedback_memory_delta": mem_delta,
         "weights_used": merged_w,
+        "score_provenance": score_provenance,
     }
     return meta, scores, total_r, tier, justification
 
@@ -172,6 +187,19 @@ def persist_intake_opportunity(
     if justification_summary_text:
         justification = justification + " | " + justification_summary_text[:500]
 
+    prov_raw = meta.get("score_provenance")
+    prov_obj: Dict[str, Any] = dict(prov_raw) if isinstance(prov_raw, dict) else {}
+    si = prov_obj.get("scoring_inputs")
+    if isinstance(si, dict):
+        si = dict(si)
+        si["request_title"] = request_title
+        prov_obj["scoring_inputs"] = si
+    aux_weights = {
+        "pipeline_max_estimated": meta["max_estimated_spend_pipeline"],
+        "feedback_memory_delta": meta.get("feedback_memory_delta"),
+        "ps_new_weights": meta.get("weights_used"),
+    }
+
     opp = Opportunity(
         contract_id=None,
         request_id=req_id,
@@ -198,13 +226,8 @@ def persist_intake_opportunity(
         implementation_timeline_months=float(implementation_timeline_months),
         request_title=request_title,
         preferred_supplier_status=preferred_supplier_status,
-        weights_used_json=str(
-            {
-                "pipeline_max_estimated": meta["max_estimated_spend_pipeline"],
-                "feedback_memory_delta": meta.get("feedback_memory_delta"),
-                "ps_new_weights": meta.get("weights_used"),
-            }
-        ),
+        weights_used_json=json.dumps(aux_weights),
+        score_provenance_json=json.dumps(prov_obj) if prov_obj else "{}",
     )
     session.add(opp)
     session.commit()
