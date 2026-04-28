@@ -105,6 +105,8 @@ type JobStatus = {
   warning_rows_count?: number;
 };
 
+const ACTIVE_UPLOAD_JOB_KEY = "system1_active_upload_job_id";
+
 function mergeRow(base: PreviewRow, edit?: RowEdit): PreviewRow {
   if (!edit) return base;
   const spend =
@@ -428,6 +430,30 @@ export default function System1UploadPage() {
 
   const tableScrollRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    const restore = async () => {
+      if (typeof window === "undefined") return;
+      const savedJobId = window.localStorage.getItem(ACTIVE_UPLOAD_JOB_KEY);
+      if (!savedJobId) return;
+      try {
+        const res = await apiFetch(`${getApiBaseUrl()}/api/system1/upload/jobs/${savedJobId}/preview`, {
+          cache: "no-store",
+        });
+        if (!res.ok) {
+          window.localStorage.removeItem(ACTIVE_UPLOAD_JOB_KEY);
+          return;
+        }
+        const restored = (await res.json()) as PreviewResponse;
+        setPreview(restored);
+        const st = await apiFetch(`${getApiBaseUrl()}/api/system1/upload/jobs/${savedJobId}`, { cache: "no-store" });
+        if (st.ok) setStatus((await st.json()) as JobStatus);
+      } catch {
+        // no-op
+      }
+    };
+    void restore();
+  }, []);
+
   const selectedCount = useMemo(
     () => Object.entries(selected).filter(([, v]) => v).length,
     [selected]
@@ -561,6 +587,9 @@ export default function System1UploadPage() {
       }
       const p = data as PreviewResponse;
       setPreview(p);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(ACTIVE_UPLOAD_JOB_KEY, p.job_id);
+      }
       setEdits({});
       setSelected({});
       setMessage(
@@ -864,6 +893,27 @@ export default function System1UploadPage() {
                 </button>
                 <button
                   type="button"
+                  onClick={async () => {
+                    if (!preview) return;
+                    await apiFetch(`${getApiBaseUrl()}/api/system1/upload/jobs/${preview.job_id}`, {
+                      method: "DELETE",
+                    });
+                    if (typeof window !== "undefined") {
+                      window.localStorage.removeItem(ACTIVE_UPLOAD_JOB_KEY);
+                    }
+                    setPreview(null);
+                    setStatus(null);
+                    setSelected({});
+                    setEdits({});
+                    setAckWarnings(false);
+                    setMessage("Staged preview cleared.");
+                  }}
+                  className="text-xs px-3 py-1.5 rounded-md border border-rose-200 text-rose-700 bg-white hover:bg-rose-50"
+                >
+                  Clear staged preview
+                </button>
+                <button
+                  type="button"
                   onClick={() =>
                     setEdits((prev) => {
                       const next = { ...prev };
@@ -916,68 +966,6 @@ export default function System1UploadPage() {
               secondaryDisabled={selectedCount === 0}
             />
 
-            <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-4 space-y-3">
-              <div>
-                <h3 className="text-sm font-semibold text-slate-800">Export preview</h3>
-                <p className="text-xs text-slate-600 mt-1">
-                  Download what you see (including inline edits) as CSV or Excel with all columns. PDF and Word use a
-                  compact summary table. For sponsor demos, use{" "}
-                  <strong>Top renewals (ready)</strong> — highest-scoring renewal rows, deduplicated by contract (up to
-                  10).
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <label className="text-xs text-slate-600">
-                  Scope:{" "}
-                  <select
-                    value={exportScope}
-                    onChange={(e) => setExportScope(e.target.value as ExportScope)}
-                    className="ml-1 border border-slate-200 rounded-md px-2 py-1 bg-white text-slate-800"
-                  >
-                    <option value="all">Full preview (all rows)</option>
-                    <option value="renewal_showcase">Top renewals (ready, up to 10)</option>
-                  </select>
-                </label>
-                <span className="text-xs text-slate-500">
-                  {exportRows.length.toLocaleString()} row(s) in this export
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled={!!exporting}
-                  onClick={() => void runExport("csv")}
-                  className="text-xs px-3 py-1.5 rounded-md border border-slate-200 bg-white text-slate-800 hover:bg-slate-50 disabled:opacity-50"
-                >
-                  {exporting === "csv" ? "Working…" : "CSV"}
-                </button>
-                <button
-                  type="button"
-                  disabled={!!exporting}
-                  onClick={() => void runExport("xlsx")}
-                  className="text-xs px-3 py-1.5 rounded-md border border-slate-200 bg-white text-slate-800 hover:bg-slate-50 disabled:opacity-50"
-                >
-                  {exporting === "xlsx" ? "Working…" : "Excel (.xlsx)"}
-                </button>
-                <button
-                  type="button"
-                  disabled={!!exporting}
-                  onClick={() => void runExport("pdf")}
-                  className="text-xs px-3 py-1.5 rounded-md border border-slate-200 bg-white text-slate-800 hover:bg-slate-50 disabled:opacity-50"
-                >
-                  {exporting === "pdf" ? "Working…" : "PDF"}
-                </button>
-                <button
-                  type="button"
-                  disabled={!!exporting}
-                  onClick={() => void runExport("docx")}
-                  className="text-xs px-3 py-1.5 rounded-md border border-slate-200 bg-white text-slate-800 hover:bg-slate-50 disabled:opacity-50"
-                >
-                  {exporting === "docx" ? "Working…" : "Word (.docx)"}
-                </button>
-              </div>
-            </div>
-
             {preview.parsing_notes.length > 0 && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
                 {preview.parsing_notes.map((n, idx) => (
@@ -1023,13 +1011,32 @@ export default function System1UploadPage() {
                     </div>
                   )}
                 {preview.analysis.readiness_breakdown && (
-                  <div className="text-xs text-slate-700">
-                    <p className="font-medium">Readiness breakdown</p>
-                    <p>
-                      {Object.entries(preview.analysis.readiness_breakdown)
-                        .map(([k, v]) => `${k}: ${v}`)
-                        .join(" | ")}
-                    </p>
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-slate-800">Readiness breakdown</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {[
+                        { key: "ready", label: "Ready", tone: "emerald" },
+                        { key: "ready_with_warnings", label: "Ready with warnings", tone: "amber" },
+                        { key: "needs_review", label: "Needs review", tone: "rose" },
+                      ].map((item) => {
+                        const count = Number(preview.analysis?.readiness_breakdown?.[item.key] ?? 0);
+                        const total = Number(preview.analysis?.total_rows_analyzed ?? preview.total_candidates ?? 0);
+                        const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                        const toneCls =
+                          item.tone === "emerald"
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                            : item.tone === "amber"
+                              ? "border-amber-200 bg-amber-50 text-amber-900"
+                              : "border-rose-200 bg-rose-50 text-rose-900";
+                        return (
+                          <div key={item.key} className={`rounded-lg border p-3 ${toneCls}`}>
+                            <p className="text-[11px] uppercase tracking-wide font-semibold">{item.label}</p>
+                            <p className="text-2xl font-bold leading-tight mt-1">{count}</p>
+                            <p className="text-xs opacity-80 mt-0.5">{pct}% of analyzed rows</p>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>

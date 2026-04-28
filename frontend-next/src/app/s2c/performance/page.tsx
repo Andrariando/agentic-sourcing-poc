@@ -7,59 +7,38 @@ import { apiFetch } from "@/lib/api-fetch";
 import { getApiBaseUrl, apiConnectivityHint } from "@/lib/api-base";
 import S2CExecutionMatrix from "@/components/s2c/S2CExecutionMatrix";
 
-interface CaseSummary {
-  case_id: string;
-  name: string;
-  category_id: string;
-  dtp_stage: string;
-  status: string;
-  supplier_id?: string | null;
-  trigger_source?: string;
-}
-
 interface S2CPerformanceMetrics {
   overall?: {
     ai_reliability_score_pct?: number | null;
     signal_attribution_accuracy_pct?: number | null;
+    signal_coverage_rate_pct?: number | null;
     thumbs_up?: number;
     thumbs_down?: number;
     thumbs_total?: number;
+    signal_coverage_cases_with_all_inputs?: number;
+    signal_coverage_active_cases_total?: number;
   };
-  detailed?: Array<{
-    case_id: string;
-    name: string;
-    dtp_stage: string;
-    status: string;
-    ai_reliability_pct: number;
-    human_change_count: number;
-  }>;
 }
 
 export default function S2CPerformanceDashboardPage() {
-  const [cases, setCases] = useState<CaseSummary[]>([]);
   const [metrics, setMetrics] = useState<S2CPerformanceMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function fetchCases() {
+    async function fetchMetrics() {
       try {
         const base = getApiBaseUrl();
-        const [caseRes, metricsRes] = await Promise.all([
-          apiFetch(`${base}/api/cases`, { cache: "no-store" }),
-          apiFetch(`${base}/api/s2c/performance/metrics`, { cache: "no-store" }),
-        ]);
-        const caseData = await caseRes.json();
-        if (caseData.cases) setCases(caseData.cases);
+        const metricsRes = await apiFetch(`${base}/api/s2c/performance/metrics`, { cache: "no-store" });
         if (metricsRes.ok) setMetrics(await metricsRes.json());
         setError(null);
       } catch {
-        setError("Could not load cases.");
+        setError("Could not load metrics.");
       } finally {
         setLoading(false);
       }
     }
-    fetchCases();
+    fetchMetrics();
   }, []);
 
   return (
@@ -76,7 +55,7 @@ export default function S2CPerformanceDashboardPage() {
             </Link>
             <h1 className="text-3xl font-bold text-slate-900 tracking-tight">S2C Performance Dashboard</h1>
             <p className="text-slate-500 mt-2 text-sm max-w-3xl leading-relaxed">
-              Global and detailed KPI view focused on AI reliability and copilot signal attribution quality.
+              High-level KPI view for AI reliability, explanation acceptance, and scoring input coverage.
             </p>
           </div>
         </header>
@@ -87,19 +66,19 @@ export default function S2CPerformanceDashboardPage() {
           </summary>
           <div className="mt-3 space-y-3 leading-relaxed">
             <p>
-              <strong className="text-slate-800">AI Reliability Score (global):</strong> average of all per-case AI
-              reliability scores.
+              <strong className="text-slate-800">AI Reliability Score:</strong> overall score based on how many human
+              edits are made across opportunities.
             </p>
             <p>
-              <strong className="text-slate-800">Signal Attribution Accuracy:</strong> copilot thumbs-up rate
-              (thumbs up / total thumbs responses).
+              <strong className="text-slate-800">KLI - Signal Attribution Accuracy:</strong> acceptance rate of
+              ProcuraBot explanations (thumbs up / total feedback).
             </p>
             <p>
-              <strong className="text-slate-800">Detailed AI reliability (per case):</strong> derived from human change
-              count in governance decisions/activity logs.
+              <strong className="text-slate-800">KPI - Signal Coverage Rate:</strong> active cases with all four
+              required scoring inputs available before scoring begins.
             </p>
             <p className="text-xs text-slate-500">
-              Thumbs feedback is captured from case copilot response cards (up/down).
+              Required inputs: contract expiry, spend, category strategy, and supplier risk.
             </p>
           </div>
         </details>
@@ -112,7 +91,7 @@ export default function S2CPerformanceDashboardPage() {
             {apiConnectivityHint()}
           </div>
         ) : (
-          <S2CExecutionMatrix cases={cases} metrics={metrics || undefined} />
+          <S2CExecutionMatrix metrics={metrics || undefined} />
         )}
       </div>
     </div>

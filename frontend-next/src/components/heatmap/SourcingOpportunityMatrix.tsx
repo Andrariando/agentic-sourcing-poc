@@ -1,18 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { HEATMAP_GLOSSARY, type HeatmapGlossaryKey } from "@/lib/heatmap-glossary";
-import { heatmapTierLabel } from "@/lib/heatmap-tier-display";
-
-const TIER_TOOLTIP: Record<string, HeatmapGlossaryKey> = {
-  T1: "t1",
-  T2: "t2",
-  T3: "t3",
-  T4: "t4",
-};
-
-const DETAIL_PAGE_SIZES = [25, 50, 100] as const;
+import React from "react";
 
 export interface SourcingOpportunityMatrixProps {
   /** Raw opportunity rows from `/api/heatmap/opportunities`. */
@@ -25,30 +13,23 @@ export interface SourcingOpportunityMatrixProps {
       signal_attribution_accuracy_pct?: number | null;
     };
   };
+  activePreviewSummary?: {
+    job_id?: string | null;
+    status?: string;
+    total_rows?: number;
+    covered_rows?: number;
+    ready_rows?: number;
+    ready_with_warnings_rows?: number;
+    needs_review_rows?: number;
+  };
 }
 
-/**
- * Performance dashboard split into:
- * 1) Overall performance
- * 2) Detailed performance per opportunity
- */
-export default function SourcingOpportunityMatrix({ opportunities, summary }: SourcingOpportunityMatrixProps) {
+export default function SourcingOpportunityMatrix({
+  opportunities,
+  summary,
+  activePreviewSummary,
+}: SourcingOpportunityMatrixProps) {
   const rows = opportunities;
-  const [detailPage, setDetailPage] = useState(1);
-  const [detailPageSize, setDetailPageSize] = useState<number>(DETAIL_PAGE_SIZES[0]);
-
-  const totalDetailPages = Math.max(1, Math.ceil(rows.length / detailPageSize));
-  useEffect(() => {
-    setDetailPage((p) => Math.min(Math.max(1, p), totalDetailPages));
-  }, [totalDetailPages, rows.length, detailPageSize]);
-
-  const safeDetailPage = Math.min(detailPage, totalDetailPages);
-  const detailStart = rows.length === 0 ? 0 : (safeDetailPage - 1) * detailPageSize + 1;
-  const detailEnd = Math.min(safeDetailPage * detailPageSize, rows.length);
-  const pagedRows = useMemo(
-    () => rows.slice((safeDetailPage - 1) * detailPageSize, safeDetailPage * detailPageSize),
-    [rows, safeDetailPage, detailPageSize]
-  );
   const reliabilities = rows
     .map((o) => Number(o?.kli_metrics?.ai_reliability_pct))
     .filter((v) => !Number.isNaN(v));
@@ -66,182 +47,65 @@ export default function SourcingOpportunityMatrix({ opportunities, summary }: So
         ? Number(((thumbsUp / thumbsTotal) * 100).toFixed(1))
         : null;
 
+  // Combined coverage:
+  // numerator   = covered staged upload rows + covered rows in main table
+  // denominator = total staged upload rows + total rows in main table
+  // Main table rows are already approved/scored, so they count as covered.
+  const mainTotal = rows.length;
+  const mainCovered = mainTotal;
+  const stagedTotal = Number(activePreviewSummary?.total_rows ?? 0);
+  const stagedCovered = Number(activePreviewSummary?.covered_rows ?? 0);
+  const combinedTotal = mainTotal + stagedTotal;
+  const combinedCovered = mainCovered + stagedCovered;
+  const coveragePct = combinedTotal > 0 ? Number(((combinedCovered / combinedTotal) * 100).toFixed(1)) : null;
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
       <div className="p-5 border-b border-slate-200 bg-slate-50/50 flex justify-between items-center flex-wrap gap-3">
         <div>
           <h2 className="text-lg font-bold text-slate-900 tracking-tight">Performance Dashboard</h2>
           <p className="text-sm text-slate-500 mt-1">
-            Overall performance plus detailed AI reliability tracking for each sourcing opportunity.
+            Three high-level metrics for reliability, explanation acceptance, and signal coverage.
           </p>
         </div>
       </div>
 
-      <div className="px-5 py-4 border-b border-slate-200 bg-white">
-        <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-3">1. Overall Performance</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="px-5 py-4 bg-white">
+        <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-3">Overall Metrics</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">AI Reliability Score</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">KPI: AI Reliability Rate</p>
             <p className="text-3xl font-bold text-slate-900 mt-2">
               {avgReliability == null ? "—" : `${avgReliability}%`}
             </p>
             <p className="text-xs text-slate-500 mt-1">
-              Average of per-opportunity AI reliability scores.
+              Overall level based on how many human edits happen across opportunities.
             </p>
           </div>
           <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Signal Attribution Accuracy
+              KLI - Signal Attribution Accuracy
             </p>
             <p className="text-3xl font-bold text-slate-900 mt-2">
               {signalAcc == null ? "—" : `${signalAcc.toFixed(1)}%`}
             </p>
             <p className="text-xs text-slate-500 mt-1">
-              ProcuraBot thumbs up / total thumbs responses ({thumbsUp}/{thumbsTotal}).
+              Acceptance rate of ProcuraBot explanations ({thumbsUp}/{thumbsTotal} thumbs up).
             </p>
           </div>
-        </div>
-      </div>
-
-      <div className="overflow-x-auto px-0">
-        <div className="px-5 py-3 border-b border-slate-200 bg-slate-50/50 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">2. Detailed Performance</h3>
+          <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">KPI - Signal Coverage Rate</p>
+            <p className="text-3xl font-bold text-slate-900 mt-2">
+              {coveragePct == null ? "—" : `${coveragePct}%`}
+            </p>
             <p className="text-xs text-slate-500 mt-1">
-              AI reliability decreases as humans edit/override more during review.
+              Combined staged + main table coverage ({combinedCovered}/{combinedTotal}).
             </p>
           </div>
-          {rows.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs text-slate-600 whitespace-nowrap">
-                {detailStart.toLocaleString()}–{detailEnd.toLocaleString()} of {rows.length.toLocaleString()}
-              </span>
-              <label className="flex items-center gap-1.5 text-xs text-slate-600">
-                <span className="whitespace-nowrap">Per page</span>
-                <select
-                  value={detailPageSize}
-                  onChange={(e) => {
-                    setDetailPageSize(Number(e.target.value));
-                    setDetailPage(1);
-                  }}
-                  className="border border-slate-200 rounded-md px-2 py-1 bg-white text-slate-800 text-xs font-medium"
-                >
-                  {DETAIL_PAGE_SIZES.map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="flex items-center gap-0.5 border border-slate-200 rounded-md bg-white px-0.5">
-                <button
-                  type="button"
-                  onClick={() => setDetailPage((p) => Math.max(1, p - 1))}
-                  disabled={safeDetailPage <= 1}
-                  className="p-1 rounded text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                  aria-label="Previous page"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <span className="text-[11px] text-slate-600 px-1.5 tabular-nums min-w-[4.5rem] text-center">
-                  {safeDetailPage}/{totalDetailPages}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setDetailPage((p) => Math.min(totalDetailPages, p + 1))}
-                  disabled={safeDetailPage >= totalDetailPages}
-                  className="p-1 rounded text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                  aria-label="Next page"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          )}
         </div>
-        <table className="w-full text-left border-collapse text-sm min-w-[760px]">
-          <thead>
-            <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold uppercase tracking-widest text-slate-500">
-              <th className="px-4 py-3 border-r border-slate-200 w-72">
-                Sourcing Opportunity
-              </th>
-              <th className="px-3 py-3 border-r border-slate-200 text-center cursor-help" title={HEATMAP_GLOSSARY.tier}>
-                Priority
-              </th>
-              <th className="px-3 py-3 text-center border-r border-slate-200">
-                AI Reliability
-              </th>
-              <th className="px-3 py-3 text-center border-r border-slate-200">
-                Human Score Changes
-              </th>
-              <th className="px-3 py-3 text-center">
-                Status
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 bg-white">
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-slate-500 text-sm">
-                  No opportunities to display.
-                </td>
-              </tr>
-            ) : (
-              pagedRows.map((opp, i) => {
-                const km = opp.kli_metrics as { ai_reliability_pct?: number; override_count?: number } | undefined;
-                const reliability = Number(km?.ai_reliability_pct ?? 0);
-                const humanChanges = Number(km?.override_count ?? 0);
-                return (
-                  <tr key={`perf-${opp.id ?? `${safeDetailPage}-${i}`}`} className="hover:bg-slate-50 transition-colors">
-                    <td
-                      className="px-4 py-3 font-semibold text-slate-800 border-r border-slate-100 truncate max-w-[200px]"
-                      title={opp.supplier_name || "New Request"}
-                    >
-                      {opp.supplier_name || "New Sourcing Request"}
-                      <div className="font-mono text-[10px] text-slate-400 font-normal">{opp.contract_id || opp.request_id}</div>
-                    </td>
-                    <td className="px-3 py-3 text-center border-r border-slate-100">
-                      <span
-                        className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold cursor-help ${
-                          opp.tier === "T1"
-                            ? "bg-red-100 text-mit-red"
-                            : opp.tier === "T2"
-                              ? "bg-orange-100 text-orange-700"
-                              : "bg-slate-100 text-slate-600"
-                        }`}
-                        title={HEATMAP_GLOSSARY[TIER_TOOLTIP[opp.tier] ?? "tier"]}
-                      >
-                        {heatmapTierLabel(opp.tier)}
-                      </span>
-                    </td>
-                    <td
-                      className={`px-3 py-3 text-center font-mono text-xs font-semibold border-r border-slate-100 ${
-                        reliability >= 90
-                          ? "text-emerald-700"
-                          : reliability >= 75
-                            ? "text-amber-700"
-                            : "text-rose-700"
-                      }`}
-                    >
-                      {Number.isFinite(reliability) && reliability > 0 ? `${reliability.toFixed(0)}%` : "—"}
-                    </td>
-                    <td className="px-3 py-3 text-center border-r border-slate-100 font-mono text-xs text-slate-700">
-                      {humanChanges}
-                    </td>
-                    <td className="px-3 py-3 text-center text-xs text-slate-600">
-                      {opp.status || "Pending"}
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
       </div>
       <div className="bg-slate-50 px-5 py-3 border-t border-slate-200 text-[11px] text-slate-500 text-center leading-snug">
-        * AI Reliability uses feedback-derived metrics (<code className="text-slate-600">kli_metrics.ai_reliability_pct</code>);
-        Human Score Changes uses review override count per opportunity. Signal Attribution Accuracy uses thumbs up / total
-        thumbs responses from Heatmap ProcuraBot feedback.
+        * Formula: (covered staged upload rows + main table rows) / (total staged upload rows + main table rows) x 100.
       </div>
     </div>
   );

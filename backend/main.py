@@ -325,6 +325,22 @@ class System1UploadJobStatusResponse(BaseModel):
     warning_rows_count: int = 0
 
 
+class System1UploadJobDeleteResponse(BaseModel):
+    success: bool
+    job_id: str
+    removed: bool
+
+
+class System1ActivePreviewSummaryResponse(BaseModel):
+    job_id: Optional[str] = None
+    status: str = "none"
+    total_rows: int = 0
+    covered_rows: int = 0
+    ready_rows: int = 0
+    ready_with_warnings_rows: int = 0
+    needs_review_rows: int = 0
+
+
 class System1ErpPreviewRequest(BaseModel):
     source_system: str = "erp"
     rows: List[Dict[str, Any]] = Field(default_factory=list)
@@ -1000,9 +1016,10 @@ async def stage_generation_check(case_id: str, body: StageGenerationCheckRequest
 @app.get("/api/s2c/performance/metrics")
 async def get_s2c_performance_metrics():
     """
-    S2C performance metrics:
-    - overall: avg AI reliability + signal attribution accuracy (thumbs up / total)
-    - detailed: per-case reliability based on human change events
+    S2C high-level performance metrics:
+    - AI reliability score (overall): average reliability derived from human edits
+    - KLI Signal Attribution Accuracy: thumbs-up / total copilot explanation feedback
+    - KPI Signal Coverage Rate: active cases with all required scoring inputs present
     """
     session = get_app_db().get_db_session()
     try:
@@ -1048,6 +1065,51 @@ async def get_s2c_performance_metrics():
                 }
             )
 
+        # Signal Coverage Rate
+        # Required inputs before scoring:
+        # - contract_expiry (renewals: contract_id present; new requests: required_start_date intake present)
+        # - spend (estimated_annual_value_usd intake)
+        # - category strategy (category_id present)
+        # - supplier risk (supplier_id present OR supplier_longlist intake provided)
+        active_rows = [
+            c for c in case_rows if str(getattr(c, "status", "") or "").strip().lower() not in {"cancelled", "closed"}
+        ]
+        covered_active = 0
+        for c in active_rows:
+            hd: Dict[str, Any] = {}
+            try:
+                hd = json.loads(c.human_decision) if c.human_decision else {}
+            except json.JSONDecodeError:
+                hd = {}
+            dtp01_values: Dict[str, Any] = {}
+            dtp02_values: Dict[str, Any] = {}
+            try:
+                dtp01_values = (
+                    ((hd.get("DTP-01") or {}).get("_stage_intake") or {}).get("values") or {}
+                    if isinstance(hd, dict)
+                    else {}
+                )
+                dtp02_values = (
+                    ((hd.get("DTP-02") or {}).get("_stage_intake") or {}).get("values") or {}
+                    if isinstance(hd, dict)
+                    else {}
+                )
+            except Exception:
+                dtp01_values = {}
+                dtp02_values = {}
+
+            has_contract_expiry = bool(c.contract_id) or bool(str(dtp01_values.get("required_start_date") or "").strip())
+            has_spend = bool(str(dtp01_values.get("estimated_annual_value_usd") or "").strip())
+            has_category_strategy = bool(str(c.category_id or "").strip())
+            has_supplier_risk = bool(str(c.supplier_id or "").strip()) or bool(
+                str(dtp02_values.get("supplier_longlist") or "").strip()
+            )
+            if has_contract_expiry and has_spend and has_category_strategy and has_supplier_risk:
+                covered_active += 1
+
+        active_total = len(active_rows)
+        signal_coverage_rate = (covered_active / active_total * 100.0) if active_total else None
+
         overall_reliability = (
             round(sum(reliability_vals) / len(reliability_vals), 1)
             if reliability_vals
@@ -1063,6 +1125,9 @@ async def get_s2c_performance_metrics():
                 "thumbs_up": thumbs_up,
                 "thumbs_down": int(thumbs.get("down", 0)),
                 "thumbs_total": thumbs_total,
+                "signal_coverage_rate_pct": round(signal_coverage_rate, 2) if signal_coverage_rate is not None else None,
+                "signal_coverage_cases_with_all_inputs": int(covered_active),
+                "signal_coverage_active_cases_total": int(active_total),
             },
             "detailed": detailed,
         }
@@ -2240,6 +2305,14 @@ async def system1_upload_approve(body: System1UploadApproveRequest):
         job["created_opportunity_ids"] = created_ids
         job["run_triggered"] = run_triggered
         job["warning_rows_count"] = len([r for r in selected if r.readiness_status == "ready_with_warnings"])
+        approved_set = set(body.approved_row_ids or [])
+        kept = [
+            r for r in (job.get("candidates") or [])
+            if str(r.get("row_id") or "") not in approved_set
+        ]
+        job["candidates"] = kept
+        job["total_candidates"] = len(kept)
+        job["valid_candidates"] = sum(1 for r in kept if bool(r.get("valid_for_approval")))
         _system1_upload_jobs[body.job_id] = job
 
     return System1UploadApproveResponse(
@@ -2268,6 +2341,68 @@ async def system1_upload_job_status(job_id: str):
         run_triggered=bool(job.get("run_triggered", False)),
         parsing_notes=list(job.get("parsing_notes", [])),
         warning_rows_count=int(job.get("warning_rows_count", 0)),
+    )
+
+
+@app.get("/api/system1/upload/jobs/{job_id}/preview", response_model=System1UploadPreviewResponse)
+async def system1_upload_job_preview(job_id: str):
+    with _system1_upload_lock:
+        job = _system1_upload_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Preview job not found or expired.")
+    candidates = [System1UploadPreviewRow(**r) for r in (job.get("candidates") or [])]
+    valid_candidates = sum(1 for c in candidates if c.valid_for_approval)
+    return System1UploadPreviewResponse(
+        job_id=job.get("job_id", job_id),
+        status=job.get("status", "unknown"),
+        total_candidates=len(candidates),
+        valid_candidates=valid_candidates,
+        candidates=candidates,
+        parsing_notes=list(job.get("parsing_notes") or []),
+        analysis=dict(job.get("analysis") or {}),
+    )
+
+
+@app.delete("/api/system1/upload/jobs/{job_id}", response_model=System1UploadJobDeleteResponse)
+async def system1_upload_job_delete(job_id: str):
+    with _system1_upload_lock:
+        removed = _system1_upload_jobs.pop(job_id, None) is not None
+    return System1UploadJobDeleteResponse(success=True, job_id=job_id, removed=removed)
+
+
+@app.get("/api/system1/upload/active-preview-summary", response_model=System1ActivePreviewSummaryResponse)
+async def system1_upload_active_preview_summary():
+    with _system1_upload_lock:
+        jobs = list(_system1_upload_jobs.values())
+    if not jobs:
+        return System1ActivePreviewSummaryResponse()
+
+    def _created_key(j: Dict[str, Any]) -> str:
+        return str(j.get("created_at") or "")
+
+    latest = sorted(jobs, key=_created_key, reverse=True)[0]
+    raw_rows = list(latest.get("candidates") or [])
+    total_rows = len(raw_rows)
+    ready_rows = 0
+    ready_warn_rows = 0
+    needs_review_rows = 0
+    for r in raw_rows:
+        st = str(r.get("readiness_status") or "ready")
+        if st == "needs_review":
+            needs_review_rows += 1
+        elif st == "ready_with_warnings":
+            ready_warn_rows += 1
+        else:
+            ready_rows += 1
+    covered_rows = ready_rows + ready_warn_rows
+    return System1ActivePreviewSummaryResponse(
+        job_id=str(latest.get("job_id") or ""),
+        status=str(latest.get("status") or "unknown"),
+        total_rows=total_rows,
+        covered_rows=covered_rows,
+        ready_rows=ready_rows,
+        ready_with_warnings_rows=ready_warn_rows,
+        needs_review_rows=needs_review_rows,
     )
 
 

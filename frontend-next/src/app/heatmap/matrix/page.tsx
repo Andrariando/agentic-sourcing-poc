@@ -21,9 +21,20 @@ type HeatmapPerformanceSummary = {
   };
 };
 
+type ActivePreviewSummary = {
+  job_id?: string | null;
+  status?: string;
+  total_rows?: number;
+  covered_rows?: number;
+  ready_rows?: number;
+  ready_with_warnings_rows?: number;
+  needs_review_rows?: number;
+};
+
 export default function HeatmapMatrixPage() {
   const [opportunities, setOpportunities] = useState<any[]>([]);
   const [summary, setSummary] = useState<HeatmapPerformanceSummary | null>(null);
+  const [activePreviewSummary, setActivePreviewSummary] = useState<ActivePreviewSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,15 +42,17 @@ export default function HeatmapMatrixPage() {
     async function fetchData() {
       try {
         const base = getApiBaseUrl();
-        const [oppRes, sumRes] = await Promise.all([
+        const [oppRes, sumRes, stagedRes] = await Promise.all([
           apiFetch(`${base}/api/heatmap/opportunities`, { cache: "no-store" }),
           apiFetch(`${base}/api/heatmap/metrics/dashboard`, { cache: "no-store" }),
+          apiFetch(`${base}/api/system1/upload/active-preview-summary`, { cache: "no-store" }),
         ]);
         const oppData = await oppRes.json();
         if (oppData.opportunities) {
           setOpportunities(rankOpportunities(oppData.opportunities));
         }
         if (sumRes.ok) setSummary(await sumRes.json());
+        if (stagedRes.ok) setActivePreviewSummary(await stagedRes.json());
         setError(null);
       } catch (err) {
         console.error(err);
@@ -65,7 +78,7 @@ export default function HeatmapMatrixPage() {
             </Link>
             <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Performance Dashboard</h1>
             <p className="text-slate-500 mt-2 text-sm">
-              Overall and detailed performance for sourcing prioritization quality.
+              High-level KPI view for AI reliability, explanation acceptance, and signal coverage.
             </p>
           </div>
         </header>
@@ -78,7 +91,11 @@ export default function HeatmapMatrixPage() {
             {apiConnectivityHint()}
           </div>
         ) : (
-          <SourcingOpportunityMatrix opportunities={opportunities} summary={summary || undefined} />
+          <SourcingOpportunityMatrix
+            opportunities={opportunities}
+            summary={summary || undefined}
+            activePreviewSummary={activePreviewSummary || undefined}
+          />
         )}
       </div>
     </div>
