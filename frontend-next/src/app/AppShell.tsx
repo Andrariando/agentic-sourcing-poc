@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { PanelLeftClose, PanelLeftOpen, Settings2 } from "lucide-react";
 import SidebarNav from "./SidebarNav";
 
 type AppShellProps = {
@@ -11,6 +12,25 @@ type AppShellProps = {
 
 export default function AppShell({ children }: AppShellProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
+  const pathname = usePathname();
+
+  useEffect(() => {
+    setAccountMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      const el = accountMenuRef.current;
+      if (el && !el.contains(e.target as Node)) {
+        setAccountMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [accountMenuOpen]);
 
   useEffect(() => {
     try {
@@ -61,18 +81,46 @@ export default function AppShell({ children }: AppShellProps) {
 
         <SidebarNav collapsed={sidebarCollapsed} />
 
-        <div className="p-4 border-t border-white/10 shrink-0">
-          <div className={`flex items-center ${sidebarCollapsed ? "justify-center" : "gap-3"}`}>
-            <div className="w-8 h-8 rounded-full bg-sponsor-blue flex items-center justify-center text-white font-bold text-xs">
+        <div className="p-4 border-t border-white/10 shrink-0 relative" ref={accountMenuRef}>
+          <button
+            type="button"
+            className={`w-full text-left rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 transition-colors ${
+              sidebarCollapsed ? "flex justify-center p-1 hover:bg-white/5" : "flex items-center gap-3 p-2 -m-2 hover:bg-white/5"
+            }`}
+            onClick={() => setAccountMenuOpen((o) => !o)}
+            aria-expanded={accountMenuOpen}
+            aria-haspopup="menu"
+            title="Account settings"
+          >
+            <div className="w-8 h-8 shrink-0 rounded-full bg-sponsor-blue flex items-center justify-center text-white font-bold text-xs">
               DR
             </div>
             {!sidebarCollapsed ? (
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-medium text-white">Sourcing Mgr</p>
                 <p className="text-xs text-slate-400">IT Infrastructure</p>
               </div>
             ) : null}
-          </div>
+          </button>
+
+          {accountMenuOpen ? (
+            <div
+              className={`absolute bottom-full z-40 mb-2 rounded-lg border border-white/10 bg-slate-800 py-2 shadow-xl ${
+                sidebarCollapsed ? "left-1/2 w-56 -translate-x-1/2" : "left-4 right-4"
+              }`}
+              role="menu"
+            >
+              <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Settings</p>
+              <Link
+                href="/heatmap/scoring-parameters"
+                role="menuitem"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-slate-200 hover:bg-slate-700/80 hover:text-white"
+              >
+                <Settings2 className="w-4 h-4 shrink-0 text-slate-400" aria-hidden />
+                Scoring Parameters
+              </Link>
+            </div>
+          ) : null}
         </div>
       </aside>
 

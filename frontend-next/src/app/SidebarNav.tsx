@@ -6,7 +6,6 @@ import {
   Home,
   ListChecks,
   BarChart3,
-  SlidersHorizontal,
   ClipboardPenLine,
   Upload,
   BriefcaseBusiness,
@@ -29,7 +28,6 @@ export default function SidebarNav({ collapsed = false }: SidebarNavProps) {
   const onWelcome = pathname === "/welcome";
   const onHeatmap = pathname === "/heatmap";
   const onHeatmapMatrix = pathname === "/heatmap/matrix";
-  const onScoringParameters = pathname === "/heatmap/scoring-parameters";
   const onIntake = pathname === "/intake";
   const onSystem1Upload = pathname === "/system-1/upload";
   const onCases = pathname === "/cases";
@@ -62,9 +60,6 @@ export default function SidebarNav({ collapsed = false }: SidebarNavProps) {
           </Link>
           <Link href="/heatmap/matrix" className={navCls(onHeatmapMatrix)} title="Performance Dashboard">
             {collapsed ? <BarChart3 className="w-4 h-4 mx-auto" /> : "Performance Dashboard"}
-          </Link>
-          <Link href="/heatmap/scoring-parameters" className={navCls(onScoringParameters)} title="Scoring Parameters">
-            {collapsed ? <SlidersHorizontal className="w-4 h-4 mx-auto" /> : "Scoring Parameters"}
           </Link>
           <Link href="/intake" className={navCls(onIntake)} title="Sourcing Intake Form (New Request)">
             {collapsed ? <ClipboardPenLine className="w-4 h-4 mx-auto" /> : "Sourcing Intake Form (New Request)"}
